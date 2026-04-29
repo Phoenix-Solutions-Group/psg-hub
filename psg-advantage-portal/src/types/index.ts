@@ -138,6 +138,8 @@ export interface MarketMapData {
   }
 }
 
+export type MarketMapSearchResult = MarketMapPoint
+
 export interface MarketViewportTopZip {
   zip: string
   state: string
@@ -177,6 +179,72 @@ export interface MarketViewportIntelligence {
   storm_demand_score: number
   top_zips: MarketViewportTopZip[]
   top_customers: MarketViewportTopCustomer[]
+}
+
+export type CustomerGeoPreset = 'all' | 'nyc5' | 'nyc_nassau_suffolk'
+
+export interface CustomerGeoShopOption {
+  shop_id: string
+  shop_name: string
+  repair_count: number
+}
+
+export interface CustomerGeoZipPoint {
+  zip: string | null
+  city: string | null
+  state: string | null
+  county_name: string | null
+  latitude: number
+  longitude: number
+  repair_count: number
+  unique_household_count: number
+  shop_count: number
+}
+
+export type CustomerGeoPin = CustomerGeoZipPoint
+
+export interface CustomerGeoPinsResponse {
+  filters: {
+    startDate: string
+    endDate: string
+    preset: CustomerGeoPreset
+    shopIds: string[]
+  }
+  summary: {
+    pin_count: number
+    unique_households: number
+    unique_zips: number
+    total_repairs: number
+  }
+  pins: CustomerGeoZipPoint[]
+}
+
+export interface CustomerGeoZipIncomeRow {
+  zip: string
+  state: string | null
+  county_name: string | null
+  repair_count: number
+  unique_household_count: number
+  mean_household_income: number | null
+  median_household_income: number | null
+  avg_repair_total: number | null
+  total_repair_value: number | null
+}
+
+export interface CustomerGeoZipIncomeResponse {
+  filters: {
+    startDate: string
+    endDate: string
+    preset: CustomerGeoPreset
+    shopIds: string[]
+  }
+  summary: {
+    zip_count: number
+    total_repairs: number
+    total_households: number
+    weighted_mean_household_income: number | null
+  }
+  rows: CustomerGeoZipIncomeRow[]
 }
 
 export interface ShopComment {
