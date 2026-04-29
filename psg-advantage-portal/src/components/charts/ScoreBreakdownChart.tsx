@@ -30,11 +30,11 @@ export default function ScoreBreakdownChart({ scores }: ScoreBreakdownChartProps
   }))
 
   return (
-    <div className="rounded-lg border border-iron/20 bg-white p-4">
-      <h3 className="mb-3 text-sm font-semibold text-navy">Score Breakdown</h3>
+    <div className="border border-stone bg-white p-5 shadow-[0_1px_2px_rgba(22,21,20,0.04)]">
+      <h3 className="mb-3 font-heading text-base font-medium text-navy">Score Breakdown</h3>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} layout="vertical" margin={{ left: 80, right: 16, top: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E4DED5" />
           <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
           <YAxis
             type="category"

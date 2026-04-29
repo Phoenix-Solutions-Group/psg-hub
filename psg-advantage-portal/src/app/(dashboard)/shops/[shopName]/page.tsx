@@ -71,25 +71,28 @@ export default async function ShopDetailPage({ params }: PageProps) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-2">
+      <div className="mb-8 flex flex-col gap-3 border-b border-stone pb-6">
+        <p className="font-heading text-xs font-medium uppercase text-phoenix-red">
+          Shop detail
+        </p>
         <div className="flex items-center gap-3">
-          <h2 className="font-heading text-xl font-bold text-navy">{shop.shop_name}</h2>
+          <h2 className="font-heading text-3xl font-light text-navy">{shop.shop_name}</h2>
           <TrendBadge trend={shop.trend} delta={shop.emi_delta} />
         </div>
         {(shop.psg_id || shop.invoiced_id) && (
-          <div className="flex flex-wrap gap-2 text-xs font-semibold text-iron">
+          <div className="flex flex-wrap gap-2 font-heading text-xs font-medium text-slate">
             {shop.psg_id && (
-              <span className="rounded-md bg-white px-2.5 py-1 ring-1 ring-iron/15">
+              <span className="border border-stone bg-white px-2.5 py-1">
                 PSG {shop.psg_id}
               </span>
             )}
             {shop.invoiced_id && (
-              <span className="rounded-md bg-white px-2.5 py-1 ring-1 ring-iron/15">
+              <span className="border border-stone bg-white px-2.5 py-1">
                 Invoiced {shop.invoiced_id}
               </span>
             )}
             {(shop.invoiced_city || shop.invoiced_state) && (
-              <span className="rounded-md bg-white px-2.5 py-1 ring-1 ring-iron/15">
+              <span className="border border-stone bg-white px-2.5 py-1">
                 {[shop.invoiced_city, shop.invoiced_state].filter(Boolean).join(', ')}
               </span>
             )}
@@ -101,7 +104,7 @@ export default async function ShopDetailPage({ params }: PageProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KpiCard label="EMI Score" value={shop.avg_emi_pct} format="percent" />
         <KpiCard label="Total Surveys" value={shop.total_surveys} />
-        <div className="rounded-lg border border-iron/20 bg-white p-4">
+        <div className="border border-stone bg-white p-5 shadow-[0_1px_2px_rgba(22,21,20,0.04)]">
           <ScoreBar
             label="Communication"
             value={shop.avg_communication}
@@ -113,7 +116,7 @@ export default async function ShopDetailPage({ params }: PageProps) {
             </p>
           )}
         </div>
-        <div className="rounded-lg border border-iron/20 bg-white p-4">
+        <div className="border border-stone bg-white p-5 shadow-[0_1px_2px_rgba(22,21,20,0.04)]">
           <ScoreBar label="Courtesy" value={shop.avg_courtesy} />
         </div>
       </div>

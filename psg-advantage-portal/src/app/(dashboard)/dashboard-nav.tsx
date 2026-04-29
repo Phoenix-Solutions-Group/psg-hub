@@ -23,7 +23,7 @@ export default function DashboardNav({ role, shopId }: DashboardNavProps) {
         ]
 
   return (
-    <nav className="flex items-center gap-4 -mb-px">
+    <nav className="-mb-px flex items-center gap-6 overflow-x-auto">
       {links.map((link) => {
         const isActive =
           link.href === '/'
@@ -34,10 +34,10 @@ export default function DashboardNav({ role, shopId }: DashboardNavProps) {
           <Link
             key={link.href}
             href={link.href}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`whitespace-nowrap border-b-2 pb-3 font-heading text-sm font-medium transition-colors duration-[220ms] ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
               isActive
-                ? 'border-white text-white'
-                : 'border-transparent text-white/60 hover:text-white/80'
+                ? 'border-phoenix-red text-navy'
+                : 'border-transparent text-slate hover:text-phoenix-red'
             }`}
           >
             {link.label}

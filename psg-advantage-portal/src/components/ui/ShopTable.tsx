@@ -56,25 +56,25 @@ export function ShopTable({ shops }: { shops: ShopListItem[] }) {
   }, [shops, shopSearch, sortKey, sortDir])
 
   return (
-    <div className="rounded-lg border border-iron/20 bg-white">
-      <div className="p-4 border-b border-iron/10">
+    <div className="border border-stone bg-white shadow-[0_1px_2px_rgba(22,21,20,0.04)]">
+      <div className="border-b border-stone p-4">
         <input
           type="text"
           placeholder="Search shops..."
           value={shopSearch}
           onChange={(e) => setShopSearch(e.target.value)}
-          className="w-full max-w-xs px-3 py-1.5 text-sm border border-iron/20 rounded bg-white text-navy placeholder:text-iron/50 focus:outline-none focus:border-navy"
+          className="w-full max-w-xs border border-stone bg-paper px-3 py-2 text-sm text-navy placeholder:text-mist shadow-[inset_0_1px_2px_rgba(22,21,20,0.05)] focus:border-phoenix-red focus:bg-white focus:outline-none focus:ring-2 focus:ring-phoenix-red focus:ring-offset-2"
         />
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-iron/10">
+            <tr className="border-b border-stone bg-bone/50">
               {COLUMNS.map((col) => (
                 <th
                   key={col.key}
                   onClick={() => handleSort(col.key)}
-                  className="px-4 py-2.5 text-left text-xs font-medium text-iron uppercase tracking-wide cursor-pointer hover:text-navy select-none"
+                  className="cursor-pointer select-none px-4 py-3 text-left font-heading text-xs font-medium uppercase text-slate hover:text-phoenix-red"
                 >
                   {col.label}
                   {sortKey === col.key && (
@@ -91,14 +91,14 @@ export function ShopTable({ shops }: { shops: ShopListItem[] }) {
               return (
                 <tr
                   key={shop.place_id || shop.shop_name}
-                  className="border-b border-iron/5 hover:bg-canvas/50"
+                  className="border-b border-stone/60 hover:bg-paper/80"
                 >
                   <td className="px-4 py-2.5">
                     <div>
                       {hasSurveyDetail ? (
                         <Link
                           href={`/shops/${encodeURIComponent(shop.shop_name)}`}
-                          className="font-medium text-navy hover:underline"
+                          className="font-heading font-medium text-navy underline-offset-4 hover:text-phoenix-red hover:underline"
                         >
                           {shop.shop_name}
                         </Link>
@@ -108,18 +108,18 @@ export function ShopTable({ shops }: { shops: ShopListItem[] }) {
                         </span>
                       )}
                       {shop.address && (
-                        <p className="mt-0.5 max-w-md text-xs text-iron">
+                        <p className="mt-1 max-w-md text-xs leading-5 text-slate">
                           {shop.address}
                         </p>
                       )}
                       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                        {shop.phone && <span className="text-iron">{shop.phone}</span>}
+                        {shop.phone && <span className="text-slate">{shop.phone}</span>}
                         {shop.website && (
                           <a
                             href={shop.website}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-clarity hover:underline"
+                            className="text-phoenix-red underline-offset-4 hover:underline"
                           >
                             Website
                           </a>
@@ -127,21 +127,21 @@ export function ShopTable({ shops }: { shops: ShopListItem[] }) {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 text-iron">
+                  <td className="px-4 py-2.5 text-slate">
                     {shop.rating ? shop.rating.toFixed(1) : 'n/a'}
                   </td>
-                  <td className="px-4 py-2.5 text-iron">
+                  <td className="px-4 py-2.5 text-slate">
                     {shop.total_surveys.toLocaleString()}
                   </td>
                   <td className="px-4 py-2.5">
-                    <span style={{ color: EMI_TIER_COLORS[tier] }} className="font-semibold">
+                    <span style={{ color: EMI_TIER_COLORS[tier] }} className="font-medium">
                       {shop.avg_emi_pct}%
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
                     <TrendBadge trend={shop.trend || 'stable'} delta={shop.emi_delta} />
                   </td>
-                  <td className="px-4 py-2.5 text-iron">
+                  <td className="px-4 py-2.5 text-slate">
                     {shop.latest_survey_date}
                   </td>
                 </tr>
@@ -149,8 +149,8 @@ export function ShopTable({ shops }: { shops: ShopListItem[] }) {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-iron">
-                  No shops found
+                <td colSpan={6} className="px-4 py-8 text-center text-slate">
+                  No shops found.
                 </td>
               </tr>
             )}

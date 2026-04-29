@@ -14,12 +14,12 @@ export function KpiCard({ label, value, delta, format = 'number' }: KpiCardProps
         : value
 
   return (
-    <div className="rounded-lg border border-iron/20 bg-white p-4">
-      <p className="text-xs font-medium text-iron uppercase tracking-wide">{label}</p>
-      <p className="mt-1 text-2xl font-bold font-heading text-navy">{displayValue}</p>
+    <div className="border border-stone bg-white p-5 shadow-[0_1px_2px_rgba(22,21,20,0.04)]">
+      <p className="font-heading text-xs font-medium uppercase text-slate">{label}</p>
+      <p className="mt-2 font-heading text-3xl font-light text-navy">{displayValue}</p>
       {delta !== undefined && (
         <p
-          className={`mt-1 text-xs font-medium ${
+          className={`mt-2 text-xs font-medium ${
             delta > 0
               ? 'text-clarity'
               : delta < 0

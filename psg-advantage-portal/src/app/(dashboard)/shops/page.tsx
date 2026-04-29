@@ -62,12 +62,15 @@ export default async function ShopsPage({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-8 flex flex-col gap-5 border-b border-stone pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="font-heading text-xl font-bold text-navy">
+          <p className="font-heading text-xs font-medium uppercase text-phoenix-red">
+            Customer network
+          </p>
+          <h2 className="mt-3 font-heading text-3xl font-light text-navy">
             Shop Performance
           </h2>
-          <p className="mt-1 text-sm text-iron">
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate">
             Showing top {shops.length.toLocaleString()} shops from Supabase,
             prioritized by matched survey activity.
           </p>

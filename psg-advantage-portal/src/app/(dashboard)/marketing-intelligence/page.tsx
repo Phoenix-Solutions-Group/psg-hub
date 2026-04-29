@@ -176,59 +176,59 @@ export default async function MarketingIntelligencePage({ searchParams }: PagePr
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+      <div className="mb-8 flex flex-col gap-5 border-b border-stone pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-clarity">
+          <p className="font-heading text-xs font-medium uppercase text-phoenix-red">
             Customer targeting
           </p>
-          <h2 className="font-heading text-2xl font-bold text-navy">
+          <h2 className="mt-3 font-heading text-3xl font-light text-navy">
             Marketing Intelligence
           </h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-iron">
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate">
             Turn accident volume, ZIP coverage, repair capacity, and customer
             experience into practical media and outreach decisions.
           </p>
         </div>
-        <div className="rounded-lg border border-iron/20 bg-white px-4 py-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-iron">
+        <div className="border border-stone bg-white px-4 py-3 shadow-[0_1px_2px_rgba(22,21,20,0.04)]">
+          <p className="font-heading text-xs font-medium uppercase text-slate">
             Recommended refresh
           </p>
-          <p className="mt-1 font-heading text-lg font-bold text-navy">
+          <p className="mt-1 font-heading text-lg font-light text-navy">
             Weekly by market
           </p>
         </div>
       </div>
 
-      <form className="mb-6 grid grid-cols-1 gap-3 rounded-lg border border-iron/20 bg-white p-4 md:grid-cols-[1fr_120px_auto]">
+      <form className="mb-6 grid grid-cols-1 gap-3 border border-stone bg-white p-4 shadow-[0_1px_2px_rgba(22,21,20,0.04)] md:grid-cols-[1fr_120px_auto]">
         <label className="block">
-          <span className="text-xs font-medium uppercase tracking-wide text-iron">City</span>
+          <span className="font-heading text-xs font-medium uppercase text-slate">City</span>
           <input
             name="city"
             defaultValue={city}
             placeholder="e.g. Miami"
-            className="mt-1 w-full rounded-lg border border-iron/20 px-3 py-2 text-sm text-navy focus:border-clarity focus:outline-none"
+            className="mt-1 w-full border border-stone bg-paper px-3 py-2 text-sm text-navy placeholder:text-mist focus:border-phoenix-red focus:bg-white focus:outline-none focus:ring-2 focus:ring-phoenix-red focus:ring-offset-2"
           />
         </label>
         <label className="block">
-          <span className="text-xs font-medium uppercase tracking-wide text-iron">State</span>
+          <span className="font-heading text-xs font-medium uppercase text-slate">State</span>
           <input
             name="state"
             defaultValue={state}
             placeholder="FL"
             maxLength={2}
-            className="mt-1 w-full rounded-lg border border-iron/20 px-3 py-2 text-sm uppercase text-navy focus:border-clarity focus:outline-none"
+            className="mt-1 w-full border border-stone bg-paper px-3 py-2 text-sm uppercase text-navy placeholder:text-mist focus:border-phoenix-red focus:bg-white focus:outline-none focus:ring-2 focus:ring-phoenix-red focus:ring-offset-2"
           />
         </label>
         <div className="flex items-end gap-2">
           <button
             type="submit"
-            className="rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-navy/90"
+            className="border border-navy bg-navy px-4 py-2 font-heading text-sm font-medium text-white transition-colors hover:bg-[#142838]"
           >
             Apply
           </button>
           <a
             href="/marketing-intelligence"
-            className="rounded-lg border border-iron/20 px-4 py-2 text-sm font-medium text-iron transition-colors hover:text-navy"
+            className="border border-stone px-4 py-2 font-heading text-sm font-medium text-slate transition-colors hover:border-phoenix-red hover:text-phoenix-red"
           >
             Clear
           </a>

@@ -33,18 +33,18 @@ export function CompetitorOverlay({
 
   if (!anchor) {
     return (
-      <section className="rounded-lg border border-iron/20 bg-white p-5">
+      <section className="rounded-lg border border-stone bg-white p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-clarity">
+            <p className="text-xs font-medium uppercase text-phoenix-red">
               Competitor Overlay
             </p>
-            <h3 className="mt-1 font-heading text-base font-bold text-navy">
+            <h3 className="mt-1 font-heading text-base font-medium text-navy">
               Location match needed
             </h3>
           </div>
         </div>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-iron">
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate">
           {shopName} has survey responses, but the directory match is missing or ambiguous.
           Add a unique mapped location before plotting competitors from the body shop directory.
         </p>
@@ -55,30 +55,30 @@ export function CompetitorOverlay({
   const bounds = getBounds(points)
 
   return (
-    <section className="rounded-lg border border-iron/20 bg-white">
-      <div className="border-b border-iron/10 p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-clarity">
+    <section className="rounded-lg border border-stone bg-white">
+      <div className="border-b border-stone p-5">
+        <p className="text-xs font-medium uppercase text-phoenix-red">
           Competitor Overlay
         </p>
         <div className="mt-1 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h3 className="font-heading text-base font-bold text-navy">
+            <h3 className="font-heading text-base font-medium text-navy">
               {anchor.shop_name}
             </h3>
             {anchor.address && (
-              <p className="mt-1 text-sm text-iron">{anchor.address}</p>
+              <p className="mt-1 text-sm text-slate">{anchor.address}</p>
             )}
           </div>
-          <div className="text-sm text-iron">
+          <div className="text-sm text-slate">
             {competitors.length} competitors within 25 miles
           </div>
         </div>
       </div>
 
       <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="border-b border-iron/10 p-5 lg:border-b-0 lg:border-r">
-          <div className="relative h-[360px] overflow-hidden rounded-lg border border-iron/10 bg-canvas">
-            <div className="absolute inset-4 rounded-lg border border-dashed border-iron/20" />
+        <div className="border-b border-stone p-5 lg:border-b-0 lg:border-r">
+          <div className="relative h-[360px] overflow-hidden rounded-lg border border-stone bg-paper">
+            <div className="absolute inset-4 rounded-lg border border-dashed border-stone" />
             {points.map((point, index) => {
               const left = ((point.longitude - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 86 + 7
               const top = (1 - (point.latitude - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * 86 + 7
@@ -100,7 +100,7 @@ export function CompetitorOverlay({
                 </div>
               )
             })}
-            <div className="absolute bottom-3 left-3 rounded-md bg-white/95 px-3 py-2 text-xs text-iron shadow-sm">
+            <div className="absolute bottom-3 left-3 rounded-md bg-white/95 px-3 py-2 text-xs text-slate shadow-sm">
               <div className="flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-phoenix-red" />
                 Surveyed shop
@@ -117,22 +117,22 @@ export function CompetitorOverlay({
           {competitors.length ? competitors.map((competitor) => (
             <div
               key={competitor.place_id || `${competitor.shop_name}-${competitor.distance_miles}`}
-              className="border-b border-iron/10 p-4 last:border-b-0"
+              className="border-b border-stone p-4 last:border-b-0"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-heading text-sm font-bold text-navy">
+                  <p className="font-heading text-sm font-medium text-navy">
                     {competitor.shop_name}
                   </p>
                   {competitor.address && (
-                    <p className="mt-1 text-xs leading-5 text-iron">{competitor.address}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate">{competitor.address}</p>
                   )}
                 </div>
-                <span className="whitespace-nowrap rounded-md bg-horizon px-2 py-1 text-xs font-semibold text-navy">
+                <span className="whitespace-nowrap rounded-md bg-bone px-2 py-1 text-xs font-medium text-navy">
                   {formatDistance(competitor.distance_miles)}
                 </span>
               </div>
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-iron">
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate">
                 {competitor.rating !== null && <span>{competitor.rating.toFixed(1)} rating</span>}
                 {competitor.phone && <span>{competitor.phone}</span>}
                 {competitor.website && (
@@ -140,7 +140,7 @@ export function CompetitorOverlay({
                     href={competitor.website}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-clarity hover:underline"
+                    className="text-phoenix-red hover:underline"
                   >
                     Website
                   </a>
@@ -148,7 +148,7 @@ export function CompetitorOverlay({
               </div>
             </div>
           )) : (
-            <div className="p-5 text-sm leading-6 text-iron">
+            <div className="p-5 text-sm leading-6 text-slate">
               No competitors from the directory are mapped within 25 miles.
             </div>
           )}

@@ -23,7 +23,7 @@ export default function ScoreBar({ label, value, isFlagged = false }: ScoreBarPr
       <div className="flex items-center justify-between">
         <span className={`text-xs font-medium ${textColor}`}>{label}</span>
         <div className="flex items-center gap-1.5">
-          <span className={`text-xs font-semibold ${textColor}`}>
+          <span className={`text-xs font-medium ${textColor}`}>
             {value.toFixed(1)}%
           </span>
           {isFlagged && (

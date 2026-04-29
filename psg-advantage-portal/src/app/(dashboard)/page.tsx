@@ -159,19 +159,22 @@ export default async function NetworkDashboard({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-8 flex flex-col gap-5 border-b border-stone pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="font-heading text-xl font-bold text-navy">
+          <p className="font-heading text-xs font-medium uppercase text-phoenix-red">
+            Network performance
+          </p>
+          <h2 className="mt-3 font-heading text-3xl font-light text-navy">
             Network Dashboard
           </h2>
-          <p className="text-sm text-iron mt-0.5">Welcome, {displayName}</p>
+          <p className="mt-2 text-sm text-slate">Welcome, {displayName}.</p>
         </div>
         <DateRangePicker />
       </div>
 
       {isDemoData && (
-        <div className="mb-6 rounded-lg border border-catalyst/40 bg-white px-4 py-3 text-sm text-iron">
-          <span className="font-semibold text-navy">Demo mode:</span>{' '}
+        <div className="mb-6 border border-catalyst/40 bg-white px-4 py-3 text-sm leading-6 text-slate">
+          <span className="font-heading font-medium text-navy">Demo mode:</span>{' '}
           Supabase data is not available locally, so this dashboard is
           showing sample data. Marketing Intelligence is still available from
           the navigation.
@@ -206,7 +209,7 @@ export default async function NetworkDashboard({
         <div className="lg:col-span-2">
           <Suspense
             fallback={
-              <div className="rounded-lg border border-iron/20 bg-white p-4 h-[400px] animate-pulse" />
+              <div className="h-[400px] animate-pulse border border-stone bg-white p-4" />
             }
           >
             <EmiTrendChart data={trend} />

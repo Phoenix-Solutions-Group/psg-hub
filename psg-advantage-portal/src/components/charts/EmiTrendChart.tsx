@@ -16,11 +16,11 @@ import type { TrendPoint } from '@/types'
 
 export function EmiTrendChart({ data }: { data: TrendPoint[] }) {
   return (
-    <div className="rounded-lg border border-iron/20 bg-white p-4">
-      <h3 className="text-sm font-semibold text-navy mb-4">EMI Trend</h3>
+    <div className="border border-stone bg-white p-5 shadow-[0_1px_2px_rgba(22,21,20,0.04)]">
+      <h3 className="mb-4 font-heading text-base font-medium text-navy">EMI Trend</h3>
       <ResponsiveContainer width="100%" height={320}>
         <ComposedChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E4DED5" />
           <XAxis dataKey="month" tick={{ fontSize: 12 }} />
           <YAxis yAxisId="left" domain={[80, 100]} tick={{ fontSize: 12 }} />
           <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />

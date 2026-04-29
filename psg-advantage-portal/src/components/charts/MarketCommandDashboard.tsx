@@ -107,29 +107,29 @@ export default function MarketCommandDashboard({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-iron/20 bg-white">
+      <section className="rounded-lg border border-stone bg-white">
         <div className="grid gap-5 p-5 lg:grid-cols-[1fr_420px] lg:items-end">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-clarity">
+            <p className="text-xs font-medium uppercase text-phoenix-red">
               Market Command
             </p>
-            <h2 className="mt-1 font-heading text-2xl font-bold text-navy">
+            <h2 className="mt-1 font-heading text-2xl font-medium text-navy">
               {data.filter.label}
             </h2>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
-              <span className="rounded-md bg-horizon px-2.5 py-1 text-navy">
+            <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
+              <span className="rounded-md bg-bone px-2.5 py-1 text-navy">
                 {compactNumber(data.summary.accident_rows)} accident rows
               </span>
-              <span className="rounded-md bg-canvas px-2.5 py-1 text-iron">
+              <span className="rounded-md bg-paper px-2.5 py-1 text-slate">
                 {data.summary.severe_accident_rate}% severe
               </span>
-              <span className="rounded-md bg-canvas px-2.5 py-1 text-iron">
+              <span className="rounded-md bg-paper px-2.5 py-1 text-slate">
                 {data.summary.weather_related_rate}% weather-linked
               </span>
               <span className={`rounded-md px-2.5 py-1 ${
                 data.summary.storm_layer_available
-                  ? 'bg-horizon text-navy'
-                  : 'bg-canvas text-iron'
+                  ? 'bg-bone text-navy'
+                  : 'bg-paper text-slate'
               }`}>
                 Storm layer {data.summary.storm_layer_available ? 'live' : 'pending'}
               </span>
@@ -138,22 +138,22 @@ export default function MarketCommandDashboard({
 
           <form onSubmit={onSubmit} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_88px_auto_auto]">
             <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-iron">City</span>
+              <span className="text-xs font-medium uppercase text-slate">City</span>
               <input
                 value={city}
                 onChange={(event) => setCity(event.target.value)}
                 placeholder="Los Angeles"
-                className="mt-1 w-full rounded-lg border border-iron/20 px-3 py-2 text-sm text-navy focus:border-clarity focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-stone px-3 py-2 text-sm text-navy focus:border-phoenix-red focus:outline-none"
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-iron">State</span>
+              <span className="text-xs font-medium uppercase text-slate">State</span>
               <input
                 value={state}
                 onChange={(event) => setState(event.target.value.toUpperCase())}
                 placeholder="CA"
                 maxLength={2}
-                className="mt-1 w-full rounded-lg border border-iron/20 px-3 py-2 text-sm uppercase text-navy focus:border-clarity focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-stone px-3 py-2 text-sm uppercase text-navy focus:border-phoenix-red focus:outline-none"
               />
             </label>
             <button
@@ -167,7 +167,7 @@ export default function MarketCommandDashboard({
               type="button"
               onClick={clearMarket}
               disabled={isLoading}
-              className="mt-5 rounded-lg border border-iron/20 px-4 py-2 text-sm font-medium text-iron transition-colors hover:text-navy disabled:opacity-60"
+              className="mt-5 rounded-lg border border-stone px-4 py-2 text-sm font-medium text-slate transition-colors hover:text-navy disabled:opacity-60"
             >
               Clear
             </button>
@@ -302,43 +302,43 @@ export default function MarketCommandDashboard({
                 key={row.state}
                 type="button"
                 onClick={() => pickState(row.state)}
-                className="grid grid-cols-[32px_52px_1fr_70px] items-center gap-3 rounded-lg border border-iron/10 px-3 py-2 text-left transition-colors hover:border-clarity/40 hover:bg-horizon/50"
+                className="grid grid-cols-[32px_52px_1fr_70px] items-center gap-3 rounded-lg border border-stone px-3 py-2 text-left transition-colors hover:border-clarity/40 hover:bg-bone/50"
               >
-                <span className="text-xs font-semibold text-iron">{index + 1}</span>
-                <span className="font-heading text-sm font-bold text-navy">{row.state}</span>
-                <span className="h-2 overflow-hidden rounded-full bg-canvas">
+                <span className="text-xs font-medium text-slate">{index + 1}</span>
+                <span className="font-heading text-sm font-medium text-navy">{row.state}</span>
+                <span className="h-2 overflow-hidden rounded-full bg-paper">
                   <span
                     className="block h-full rounded-full bg-clarity"
                     style={{ width: `${Math.min(100, row.opportunity_score)}%` }}
                   />
                 </span>
-                <span className="text-right text-xs font-semibold text-iron">
+                <span className="text-right text-xs font-medium text-slate">
                   {compactNumber(row.total_accidents)}
                 </span>
               </button>
             )) : (
-              <div className="rounded-lg border border-iron/10 bg-canvas p-4 text-sm text-iron">
+              <div className="rounded-lg border border-stone bg-paper p-4 text-sm text-slate">
                 State rollup migration is pending.
               </div>
             )}
           </div>
         </Panel>
 
-        <section className="rounded-lg border border-iron/20 bg-white">
-          <div className="border-b border-iron/10 p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-clarity">
+        <section className="rounded-lg border border-stone bg-white">
+          <div className="border-b border-stone p-5">
+            <p className="text-xs font-medium uppercase text-phoenix-red">
               Report Extract
             </p>
-            <h3 className="mt-1 font-heading text-base font-bold text-navy">
+            <h3 className="mt-1 font-heading text-base font-medium text-navy">
               Market Moves
             </h3>
           </div>
           <div className="divide-y divide-iron/10">
             {data.actions.map((action) => (
               <div key={action.title} className="grid gap-3 p-5 md:grid-cols-[0.8fr_1fr_1.4fr]">
-                <p className="font-heading text-sm font-bold text-navy">{action.title}</p>
-                <p className="text-sm font-semibold text-clarity">{action.value}</p>
-                <p className="text-sm leading-6 text-iron">{action.detail}</p>
+                <p className="font-heading text-sm font-medium text-navy">{action.title}</p>
+                <p className="text-sm font-medium text-phoenix-red">{action.value}</p>
+                <p className="text-sm leading-6 text-slate">{action.detail}</p>
               </div>
             ))}
           </div>
@@ -358,10 +358,10 @@ function Metric({
   detail: string
 }) {
   return (
-    <div className="rounded-lg border border-iron/20 bg-white p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-iron">{label}</p>
-      <p className="mt-2 font-heading text-2xl font-bold text-navy">{value}</p>
-      <p className="mt-1 text-sm text-iron">{detail}</p>
+    <div className="rounded-lg border border-stone bg-white p-4">
+      <p className="text-xs font-medium uppercase text-slate">{label}</p>
+      <p className="mt-2 font-heading text-2xl font-medium text-navy">{value}</p>
+      <p className="mt-1 text-sm text-slate">{detail}</p>
     </div>
   )
 }
@@ -378,11 +378,11 @@ function Panel({
   children: ReactNode
 }) {
   return (
-    <section className={`rounded-lg border border-iron/20 bg-white p-5 ${className}`}>
+    <section className={`rounded-lg border border-stone bg-white p-5 ${className}`}>
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-clarity">{kicker}</p>
-          <h3 className="mt-1 font-heading text-base font-bold text-navy">{title}</h3>
+          <p className="text-xs font-medium uppercase text-phoenix-red">{kicker}</p>
+          <h3 className="mt-1 font-heading text-base font-medium text-navy">{title}</h3>
         </div>
       </div>
       {children}

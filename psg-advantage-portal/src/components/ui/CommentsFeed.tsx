@@ -52,17 +52,17 @@ export default function CommentsFeed({ shopName }: CommentsFeedProps) {
   }, [fetchComments])
 
   const tierColorMap: Record<string, string> = {
-    excellent: 'bg-clarity/10 text-clarity',
+    excellent: 'bg-clarity/10 text-phoenix-red',
     good: 'bg-green-50 text-green-700',
     poor: 'bg-phoenix-red/10 text-phoenix-red',
   }
 
   return (
-    <div className="rounded-lg border border-iron/20 bg-white p-4">
+    <div className="rounded-lg border border-stone bg-white p-4">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-navy">Customer Comments</h3>
+        <h3 className="text-sm font-medium text-navy">Customer Comments</h3>
         {data && (
-          <span className="text-xs text-iron">{data.total} total</span>
+          <span className="text-xs text-slate">{data.total} total</span>
         )}
       </div>
 
@@ -71,13 +71,13 @@ export default function CommentsFeed({ shopName }: CommentsFeedProps) {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search comments..."
-        className="mb-4 w-full rounded border border-iron/20 bg-canvas px-3 py-1.5 text-sm text-navy placeholder:text-iron/50 focus:border-clarity focus:outline-none"
+        className="mb-4 w-full rounded border border-stone bg-paper px-3 py-1.5 text-sm text-navy placeholder:text-slate/50 focus:border-phoenix-red focus:outline-none"
       />
 
       {loading ? (
-        <div className="py-8 text-center text-sm text-iron">Loading...</div>
+        <div className="py-8 text-center text-sm text-slate">Loading...</div>
       ) : !data || data.comments.length === 0 ? (
-        <div className="py-8 text-center text-sm text-iron">No comments found</div>
+        <div className="py-8 text-center text-sm text-slate">No comments found</div>
       ) : (
         <div className="space-y-3">
           {data.comments.map((comment, i) => {
@@ -85,14 +85,14 @@ export default function CommentsFeed({ shopName }: CommentsFeedProps) {
             return (
               <div
                 key={`${comment.survey_date}-${i}`}
-                className="rounded border border-iron/10 p-3"
+                className="rounded border border-stone p-3"
               >
                 <div className="mb-1.5 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-iron">
+                    <span className="text-xs text-slate">
                       {formatDate(comment.survey_date)}
                     </span>
-                    <span className="text-xs text-iron/60">
+                    <span className="text-xs text-slate/60">
                       Customer Feedback
                     </span>
                   </div>
@@ -115,17 +115,17 @@ export default function CommentsFeed({ shopName }: CommentsFeedProps) {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
-            className="rounded border border-iron/20 px-3 py-1 text-xs text-navy disabled:opacity-40"
+            className="rounded border border-stone px-3 py-1 text-xs text-navy disabled:opacity-40"
           >
             Previous
           </button>
-          <span className="text-xs text-iron">
+          <span className="text-xs text-slate">
             Page {data.page} of {data.totalPages}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
             disabled={page >= data.totalPages}
-            className="rounded border border-iron/20 px-3 py-1 text-xs text-navy disabled:opacity-40"
+            className="rounded border border-stone px-3 py-1 text-xs text-navy disabled:opacity-40"
           >
             Next
           </button>

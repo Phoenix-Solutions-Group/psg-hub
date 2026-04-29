@@ -18,11 +18,11 @@ interface YearOverYearChartProps {
 
 export default function YearOverYearChart({ data }: YearOverYearChartProps) {
   return (
-    <div className="rounded-lg border border-iron/20 bg-white p-4">
-      <h3 className="mb-3 text-sm font-semibold text-navy">EMI Trend</h3>
+    <div className="border border-stone bg-white p-5 shadow-[0_1px_2px_rgba(22,21,20,0.04)]">
+      <h3 className="mb-3 font-heading text-base font-medium text-navy">EMI Trend</h3>
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={data} margin={{ left: 8, right: 16, top: 8, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E4DED5" />
           <XAxis
             dataKey="month"
             tick={{ fontSize: 11, fill: PSG_COLORS.iron }}

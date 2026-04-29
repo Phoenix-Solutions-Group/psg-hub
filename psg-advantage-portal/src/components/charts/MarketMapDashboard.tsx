@@ -599,16 +599,16 @@ export default function MarketMapDashboard() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-iron/20 bg-white">
+      <section className="rounded-lg border border-stone bg-white">
         <div className="grid gap-5 p-5 xl:grid-cols-[1fr_420px] xl:items-end">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-clarity">
+            <p className="text-xs font-medium uppercase text-phoenix-red">
               Customer geography
             </p>
-            <h2 className="mt-1 font-heading text-2xl font-bold text-navy">
+            <h2 className="mt-1 font-heading text-2xl font-medium text-navy">
               PSG Customers vs Directory Shops
             </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-iron">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate">
               PSG customers are anchored from Invoiced IDs and displayed against the
               national body shop directory.
             </p>
@@ -622,7 +622,7 @@ export default function MarketMapDashboard() {
                 setSelectedPoint(null)
                 setCompetitorOverlay([])
               }}
-              className="rounded-lg border border-iron/20 px-3 py-2 text-sm text-navy focus:border-clarity focus:outline-none"
+              className="rounded-lg border border-stone px-3 py-2 text-sm text-navy focus:border-phoenix-red focus:outline-none"
             >
               <option value="">All states</option>
               {states.map((state) => (
@@ -633,7 +633,7 @@ export default function MarketMapDashboard() {
               type="button"
               onClick={() => setShowPsg((value) => !value)}
               className={`rounded-lg px-3 py-2 text-sm font-medium ring-1 ring-iron/15 ${
-                showPsg ? 'bg-navy text-white' : 'bg-white text-iron'
+                showPsg ? 'bg-navy text-white' : 'bg-white text-slate'
               }`}
             >
               PSG
@@ -642,7 +642,7 @@ export default function MarketMapDashboard() {
               type="button"
               onClick={() => setShowDirectory((value) => !value)}
               className={`rounded-lg px-3 py-2 text-sm font-medium ring-1 ring-iron/15 ${
-                showDirectory ? 'bg-clarity text-white' : 'bg-white text-iron'
+                showDirectory ? 'bg-clarity text-white' : 'bg-white text-slate'
               }`}
             >
               Directory
@@ -670,8 +670,8 @@ export default function MarketMapDashboard() {
       </section>
 
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
-        <div className="overflow-hidden rounded-lg border border-iron/20 bg-white">
-          <div className="flex items-center justify-between border-b border-iron/10 px-5 py-3 text-xs text-iron">
+        <div className="overflow-hidden rounded-lg border border-stone bg-white">
+          <div className="flex items-center justify-between border-b border-stone px-5 py-3 text-xs text-slate">
             <div className="flex flex-wrap items-center gap-4">
               <span className="inline-flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-phoenix-red" />
@@ -688,28 +688,28 @@ export default function MarketMapDashboard() {
             </div>
             <span>{isLoading ? 'Loading map...' : `${compact(filteredPoints.length)} points`}</span>
           </div>
-          <div className="relative h-[620px] w-full bg-canvas">
+          <div className="relative h-[620px] w-full bg-paper">
             <div ref={mapNodeRef} className="h-full w-full" />
             {isLoading && (
-              <div className="absolute inset-x-4 top-4 rounded-md border border-iron/10 bg-white/90 px-4 py-3 text-sm font-medium text-navy shadow-sm backdrop-blur">
+              <div className="absolute inset-x-4 top-4 rounded-md border border-stone bg-white/90 px-4 py-3 text-sm font-medium text-navy shadow-sm backdrop-blur">
                 Loading geography
               </div>
             )}
           </div>
         </div>
 
-        <aside className="rounded-lg border border-iron/20 bg-white">
-          <div className="border-b border-iron/10 p-4">
+        <aside className="rounded-lg border border-stone bg-white">
+          <div className="border-b border-stone p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-clarity">
+                <p className="text-xs font-medium uppercase text-phoenix-red">
                   Map Intelligence
                 </p>
-                <h3 className="mt-2 font-heading text-base font-bold text-navy">
+                <h3 className="mt-2 font-heading text-base font-medium text-navy">
                   {viewportIntel?.viewport_label || 'Current view'}
                 </h3>
               </div>
-              <span className="rounded-md bg-horizon px-2 py-1 text-xs font-semibold text-navy">
+              <span className="rounded-md bg-bone px-2 py-1 text-xs font-medium text-navy">
                 {isViewportIntelLoading ? 'Updating' : `z${Math.round(viewportIntel?.zoom || mapRef.current?.getZoom() || 0)}`}
               </span>
             </div>
@@ -724,19 +724,19 @@ export default function MarketMapDashboard() {
             </div>
           </div>
 
-          <div className="border-b border-iron/10 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-clarity">
+          <div className="border-b border-stone p-4">
+            <p className="text-xs font-medium uppercase text-phoenix-red">
               Selected Point
             </p>
             {selectedPoint ? (
               <div className="mt-2">
-                <h3 className="font-heading text-base font-bold text-navy">
+                <h3 className="font-heading text-base font-medium text-navy">
                   {pointLabel(selectedPoint)}
                 </h3>
                 {selectedPoint.address && (
-                  <p className="mt-1 text-sm leading-5 text-iron">{selectedPoint.address}</p>
+                  <p className="mt-1 text-sm leading-5 text-slate">{selectedPoint.address}</p>
                 )}
-                <div className="mt-2 flex flex-wrap gap-2 text-xs text-iron">
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate">
                   {selectedPoint.invoiced_id && <span>Invoiced {selectedPoint.invoiced_id}</span>}
                   {selectedPoint.avg_emi_pct !== null && <span>{selectedPoint.avg_emi_pct}% EMI</span>}
                   {selectedPoint.survey_count !== null && <span>{selectedPoint.survey_count} surveys</span>}
@@ -749,13 +749,13 @@ export default function MarketMapDashboard() {
                     setCompetitorOverlay([])
                     fitPoints(mapRef.current, filteredPoints, selectedState)
                   }}
-                  className="mt-3 rounded-md border border-iron/15 px-2.5 py-1.5 text-xs font-semibold text-iron transition-colors hover:bg-canvas"
+                  className="mt-3 rounded-md border border-iron/15 px-2.5 py-1.5 text-xs font-medium text-slate transition-colors hover:bg-paper"
                 >
                   Choose another customer
                 </button>
               </div>
             ) : (
-              <p className="mt-2 text-sm leading-6 text-iron">
+              <p className="mt-2 text-sm leading-6 text-slate">
                 Select a PSG customer to show its local competitor set.
               </p>
             )}
@@ -764,17 +764,17 @@ export default function MarketMapDashboard() {
           <div className="max-h-[500px] overflow-y-auto">
             {selectedPoint?.layer === 'psg_customer' ? (
               <div>
-                <div className="border-b border-iron/10 bg-canvas/70 px-4 py-3">
+                <div className="border-b border-stone bg-paper/70 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-iron">
+                    <p className="text-xs font-medium uppercase text-slate">
                       Competitors within 25 miles
                     </p>
-                    <span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-navy ring-1 ring-iron/10">
+                    <span className="rounded-md bg-white px-2 py-1 text-xs font-medium text-navy ring-1 ring-iron/10">
                       {isCompetitorLoading ? 'Loading' : competitors.length}
                     </span>
                   </div>
                   {competitorAnchor?.address && (
-                    <p className="mt-2 text-xs leading-5 text-iron">
+                    <p className="mt-2 text-xs leading-5 text-slate">
                       Anchored at {competitorAnchor.address}
                     </p>
                   )}
@@ -785,22 +785,22 @@ export default function MarketMapDashboard() {
                 {competitors.length ? competitors.map((competitor) => (
                   <div
                     key={competitor.place_id || `${competitor.shop_name}-${competitor.distance_miles}`}
-                    className="border-b border-iron/10 p-4 last:border-b-0"
+                    className="border-b border-stone p-4 last:border-b-0"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-heading text-sm font-bold text-navy">
+                        <p className="font-heading text-sm font-medium text-navy">
                           {competitor.shop_name}
                         </p>
                         {competitor.address && (
-                          <p className="mt-1 text-xs leading-5 text-iron">{competitor.address}</p>
+                          <p className="mt-1 text-xs leading-5 text-slate">{competitor.address}</p>
                         )}
                       </div>
-                      <span className="whitespace-nowrap rounded-md bg-horizon px-2 py-1 text-xs font-semibold text-navy">
+                      <span className="whitespace-nowrap rounded-md bg-bone px-2 py-1 text-xs font-medium text-navy">
                         {formatDistance(competitor.distance_miles)}
                       </span>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-iron">
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate">
                       {competitor.rating !== null && <span>{competitor.rating.toFixed(1)} rating</span>}
                       {competitor.phone && <span>{competitor.phone}</span>}
                       {competitor.website && (
@@ -808,7 +808,7 @@ export default function MarketMapDashboard() {
                           href={competitor.website}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-clarity hover:underline"
+                          className="text-phoenix-red hover:underline"
                         >
                           Website
                         </a>
@@ -816,7 +816,7 @@ export default function MarketMapDashboard() {
                     </div>
                   </div>
                 )) : (
-                  <div className="p-4 text-sm leading-6 text-iron">
+                  <div className="p-4 text-sm leading-6 text-slate">
                     {isCompetitorLoading
                       ? 'Loading competitor set...'
                       : 'No competitors from the directory are mapped within 25 miles.'}
@@ -827,25 +827,25 @@ export default function MarketMapDashboard() {
               <div>
                 {viewportIntel?.top_zips.length ? (
                   <div>
-                    <div className="border-b border-iron/10 bg-canvas/70 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-iron">
+                    <div className="border-b border-stone bg-paper/70 px-4 py-3">
+                      <p className="text-xs font-medium uppercase text-slate">
                         Priority ZIPs in View
                       </p>
                     </div>
                     {viewportIntel.top_zips.map((zip) => (
-                      <div key={`${zip.year}-${zip.zip}`} className="border-b border-iron/10 p-4">
+                      <div key={`${zip.year}-${zip.zip}`} className="border-b border-stone p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="font-heading text-sm font-bold text-navy">{zip.zip}</p>
-                            <p className="mt-1 text-xs text-iron">
+                            <p className="font-heading text-sm font-medium text-navy">{zip.zip}</p>
+                            <p className="mt-1 text-xs text-slate">
                               {[zip.city, zip.state, zip.year].filter(Boolean).join(', ')}
                             </p>
                           </div>
-                          <span className="rounded-md bg-horizon px-2 py-1 text-xs font-semibold text-navy">
+                          <span className="rounded-md bg-bone px-2 py-1 text-xs font-medium text-navy">
                             {Math.round(zip.targeting_score).toLocaleString()}
                           </span>
                         </div>
-                        <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-iron">
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate">
                           <span>{compact(zip.total_crashes)} crashes</span>
                           <span>{compact(zip.injury_crashes)} injury</span>
                           <span>{compact(zip.storm_events)} storms</span>
@@ -854,8 +854,8 @@ export default function MarketMapDashboard() {
                     ))}
                   </div>
                 ) : null}
-                <div className="border-b border-iron/10 bg-canvas/70 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-iron">
+                <div className="border-b border-stone bg-paper/70 px-4 py-3">
+                  <p className="text-xs font-medium uppercase text-slate">
                     PSG Customers in View
                   </p>
                 </div>
@@ -867,29 +867,29 @@ export default function MarketMapDashboard() {
                       setSelectedPoint(point)
                       focusOnPoint(mapRef.current, point)
                     }}
-                    className="block w-full border-b border-iron/10 p-4 text-left transition-colors hover:bg-horizon/40"
+                    className="block w-full border-b border-stone p-4 text-left transition-colors hover:bg-bone/40"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-heading text-sm font-bold text-navy">{point.shop_name}</p>
-                        <p className="mt-1 text-xs text-iron">
+                        <p className="font-heading text-sm font-medium text-navy">{point.shop_name}</p>
+                        <p className="mt-1 text-xs text-slate">
                           {[point.city, point.state].filter(Boolean).join(', ') || point.address || 'Mapped customer'}
                         </p>
                       </div>
                       {point.psg_id && (
-                        <span className="rounded-md bg-canvas px-2 py-1 text-xs font-semibold text-iron">
+                        <span className="rounded-md bg-paper px-2 py-1 text-xs font-medium text-slate">
                           {point.psg_id}
                         </span>
                       )}
                     </div>
-                    <div className="mt-2 flex gap-3 text-xs text-iron">
+                    <div className="mt-2 flex gap-3 text-xs text-slate">
                       <span>{compact(point.survey_count || 0)} surveys</span>
                       {point.avg_emi_pct !== null && <span>{point.avg_emi_pct}% EMI</span>}
                     </div>
                   </button>
                 ))}
                 {!topCustomers.length && (
-                  <div className="p-4 text-sm leading-6 text-iron">
+                  <div className="p-4 text-sm leading-6 text-slate">
                     No mapped PSG customers in this view.
                   </div>
                 )}
@@ -904,18 +904,18 @@ export default function MarketMapDashboard() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-iron/20 bg-white p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-iron">{label}</p>
-      <p className="mt-2 font-heading text-2xl font-bold text-navy">{value}</p>
+    <div className="rounded-lg border border-stone bg-white p-4">
+      <p className="text-xs font-medium uppercase text-slate">{label}</p>
+      <p className="mt-2 font-heading text-2xl font-medium text-navy">{value}</p>
     </div>
   )
 }
 
 function SmallMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-iron/10 bg-canvas/60 p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-iron">{label}</p>
-      <p className="mt-1 font-heading text-lg font-bold text-navy">{value}</p>
+    <div className="rounded-md border border-stone bg-paper/60 p-3">
+      <p className="text-[11px] font-medium uppercase text-slate">{label}</p>
+      <p className="mt-1 font-heading text-lg font-medium text-navy">{value}</p>
     </div>
   )
 }

@@ -38,15 +38,15 @@ export function DateRangePicker() {
   const active = getActivePreset()
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1 border border-stone bg-white p-1">
       {PRESETS.map((preset) => (
         <button
           key={preset.value}
           onClick={() => applyPreset(preset.value)}
-          className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+          className={`px-3 py-1.5 font-heading text-xs font-medium transition-colors duration-[220ms] ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
             active === preset.value
               ? 'bg-navy text-white'
-              : 'bg-white text-iron border border-iron/20 hover:border-iron/40'
+              : 'text-slate hover:bg-bone hover:text-navy'
           }`}
         >
           {preset.label}
