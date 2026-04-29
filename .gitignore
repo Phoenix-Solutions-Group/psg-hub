@@ -1,0 +1,35 @@
+.DS_Store
+
+# local credentials and environment
+.env
+.env.*
+*.pem
+*.key
+*credential*.json
+*credentials*.json
+*service-account*.json
+bigQuery-*.json
+
+# dependencies and build outputs
+node_modules/
+.next/
+out/
+build/
+dist/
+coverage/
+*.tsbuildinfo
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+
+# local/editor state
+.vscode/
+.idea/
+.vercel/
+supabase/.temp/
+*/supabase/.temp/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
