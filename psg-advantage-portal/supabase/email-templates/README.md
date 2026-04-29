@@ -4,6 +4,10 @@ These templates are for Supabase Auth emails used by the PSG Advantage portal.
 They are intentionally restrained: inline CSS, table layout, no tracking, no
 remote CSS, no promotional copy, and one primary action where needed.
 
+The templates use the email-safe PNG logo hosted by the portal:
+
+`https://data-psg-digital.vercel.app/brand/assets/psg-logo-primary-email.png`
+
 ## Templates
 
 | Supabase template | File | Subject |
