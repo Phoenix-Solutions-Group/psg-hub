@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     50000
   )
   const state = filters.value.state || null
-  const cacheKey = `market-map:v3:${state || '*'}:${directoryLimit}`
+  const cacheKey = `market-map:v4:${state || '*'}:${directoryLimit}`
   const cached = await getCached<MarketMapData>(cacheKey)
   if (cached) return NextResponse.json(cached)
 
