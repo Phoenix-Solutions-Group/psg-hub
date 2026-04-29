@@ -47,6 +47,7 @@ export interface TrendPoint {
 
 export interface ShopListItem {
   shop_name: string
+  canonical_shop_name?: string | null
   total_surveys: number
   avg_emi_pct: number
   trend?: 'improving' | 'stable' | 'declining'

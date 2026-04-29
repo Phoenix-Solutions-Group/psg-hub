@@ -45,6 +45,7 @@ export async function getShopListFromPostgres(
 
   return result.rows.map((row) => ({
     shop_name: String(row.shop_name || ''),
+    canonical_shop_name: row.canonical_shop_name ? String(row.canonical_shop_name) : null,
     total_surveys: toNumber(row.total_surveys),
     avg_emi_pct: toNumber(row.avg_emi_pct),
     latest_survey_date: row.latest_survey_date ? String(row.latest_survey_date) : '',

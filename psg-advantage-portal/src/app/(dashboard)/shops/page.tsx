@@ -51,7 +51,7 @@ export default async function ShopsPage({
     ? dateRange.value
     : { startDate: defaultStartDate, endDate: defaultEndDate }
 
-  const cacheKey = `shops:geo:list:v4:${startDate}:${endDate}`
+  const cacheKey = `shops:geo:list:v5:${startDate}:${endDate}`
   let shops = await getCached<ShopListItem[]>(cacheKey)
 
   if (!shops) {

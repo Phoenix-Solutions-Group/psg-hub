@@ -80,6 +80,38 @@ describe('supabase data helpers', () => {
     })
   })
 
+  it('getShopList maps Google profile display name and canonical survey name', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{
+        shop_name: 'Flower Hill Auto Body of Roslyn',
+        canonical_shop_name: 'Flower Hill Auto Body - Roslyn',
+        total_surveys: '28',
+        avg_emi_pct: '93.0',
+        latest_survey_date: '2025-10-29',
+        place_id: 'gbp-roslyn',
+        address: '12 Middle Neck Rd, Roslyn, NY 11576',
+        rating: '5',
+      }],
+      error: null,
+    })
+
+    const { getShopList } = await import('@/lib/supabase/data')
+    const result = await getShopList('2025-01-01', '2025-12-31')
+
+    expect(mockRpc).toHaveBeenCalledWith('shop_list', {
+      start_date: '2025-01-01',
+      end_date: '2025-12-31',
+    })
+    expect(result[0]).toMatchObject({
+      shop_name: 'Flower Hill Auto Body of Roslyn',
+      canonical_shop_name: 'Flower Hill Auto Body - Roslyn',
+      total_surveys: 28,
+      avg_emi_pct: 93,
+      place_id: 'gbp-roslyn',
+      rating: 5,
+    })
+  })
+
   it('getMarketingMetadata maps optional storm demand fields', async () => {
     mockRpc.mockResolvedValueOnce({
       data: [{

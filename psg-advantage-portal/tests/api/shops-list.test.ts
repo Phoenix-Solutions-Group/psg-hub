@@ -118,7 +118,7 @@ describe('GET /api/shops', () => {
 
     await GET(makeRequest({ startDate: '2025-01-01', endDate: '2025-03-31' }))
     expect(setCached).toHaveBeenCalledWith(
-      'shops:list:v4:2025-01-01:2025-03-31',
+      'shops:list:v5:2025-01-01:2025-03-31',
       mockShops,
       86400
     )

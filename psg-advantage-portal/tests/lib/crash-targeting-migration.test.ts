@@ -44,4 +44,21 @@ describe('crash targeting migration', () => {
     expect(migration).not.toContain('TRUNCATE accidents')
     expect(migration).not.toContain('DROP TABLE accidents')
   })
+
+  it('matches PSG branch names to Google Business Profile branch names', () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        'supabase',
+        'migrations',
+        '20260429170000_google_profile_shop_matching.sql'
+      ),
+      'utf-8'
+    )
+
+    expect(migration).toContain('CREATE OR REPLACE FUNCTION google_profile_shop_name_key')
+    expect(migration).toContain("' of '")
+    expect(migration).toContain('canonical_shop_name')
+    expect(migration).toContain('google_profile_branch_match')
+  })
 })

@@ -88,6 +88,7 @@ export function ShopTable({ shops }: { shops: ShopListItem[] }) {
             {filtered.map((shop) => {
               const tier = getEmiTier(shop.avg_emi_pct)
               const hasSurveyDetail = shop.total_surveys > 0
+              const detailShopName = shop.canonical_shop_name || shop.shop_name
               return (
                 <tr
                   key={shop.place_id || shop.shop_name}
@@ -97,7 +98,7 @@ export function ShopTable({ shops }: { shops: ShopListItem[] }) {
                     <div>
                       {hasSurveyDetail ? (
                         <Link
-                          href={`/shops/${encodeURIComponent(shop.shop_name)}`}
+                          href={`/shops/${encodeURIComponent(detailShopName)}`}
                           className="font-heading font-medium text-navy underline-offset-4 hover:text-phoenix-red hover:underline"
                         >
                           {shop.shop_name}

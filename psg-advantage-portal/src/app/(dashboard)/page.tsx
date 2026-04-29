@@ -142,7 +142,7 @@ export default async function NetworkDashboard({
           || await getNetworkAlerts(88, 3)
       ),
       fetchWithCache<ShopListItem[]>(
-        `shops:list:v4:${startDate}:${endDate}`,
+        `shops:list:v5:${startDate}:${endDate}`,
         async () =>
           await getShopListFromPostgres(startDate, endDate)
           || await getShopList(startDate, endDate)

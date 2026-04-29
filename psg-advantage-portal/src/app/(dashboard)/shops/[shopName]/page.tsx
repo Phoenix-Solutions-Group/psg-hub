@@ -34,7 +34,7 @@ export default async function ShopDetailPage({ params }: PageProps) {
   const startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
   // Fetch shop detail with cache
-  const detailCacheKey = `shop:detail:v2:${decodedShopName}:${startDate}:${endDate}`
+  const detailCacheKey = `shop:detail:v3:${decodedShopName}:${startDate}:${endDate}`
   let shopData = await getCached<ShopDetail>(detailCacheKey)
 
   if (!shopData) {
@@ -55,7 +55,7 @@ export default async function ShopDetailPage({ params }: PageProps) {
     await setCached(trendCacheKey, trend)
   }
 
-  const competitorCacheKey = `shop:competitors:v2:${decodedShopName}:25`
+  const competitorCacheKey = `shop:competitors:v3:${decodedShopName}:25`
   let competitorOverlay = await getCached<ShopCompetitorPoint[]>(competitorCacheKey)
 
   if (!competitorOverlay) {

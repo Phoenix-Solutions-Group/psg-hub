@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   }
   const { startDate, endDate } = dateRange.value
 
-  const cacheKey = `shops:list:v4:${startDate}:${endDate}`
+  const cacheKey = `shops:list:v5:${startDate}:${endDate}`
   const cached = await getCached<ShopListItem[]>(cacheKey)
   if (cached) return NextResponse.json(cached)
 
