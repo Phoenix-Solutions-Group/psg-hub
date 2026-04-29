@@ -6,7 +6,7 @@ remote CSS, no promotional copy, and one primary action where needed.
 
 The templates use the email-safe PNG logo hosted by the portal:
 
-`https://data-psg-digital.vercel.app/brand/assets/psg-logo-primary-email.png`
+`https://gylkkzmcmbdftxieyabw.supabase.co/storage/v1/object/public/public-assets/brand/psg-logo-primary-email.png`
 
 ## Templates
 
