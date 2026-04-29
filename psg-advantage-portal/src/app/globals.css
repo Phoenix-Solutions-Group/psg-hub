@@ -1,15 +1,53 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Gotham';
+  src: url('/brand/fonts/Gotham-Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gotham';
+  src: url('/brand/fonts/Gotham-Book.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gotham';
+  src: url('/brand/fonts/Gotham-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Didact Gothic';
+  src: url('/brand/fonts/DidactGothic-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 @theme {
   --color-navy: #1E3A52;
   --color-phoenix-red: #B8483E;
+  --color-slate: #4A4257;
+  --color-paper: #FAF8F5;
+  --color-bone: #F2EEE8;
+  --color-stone: #E4DED5;
+  --color-graphite: #2A2826;
+  --color-mist: #9A958E;
   --color-clarity: #0EA5A5;
-  --color-canvas: #F8F6F3;
-  --color-iron: #4A4E57;
+  --color-canvas: #FAF8F5;
+  --color-iron: #2A2826;
   --color-catalyst: #D4A847;
   --color-horizon: #E6F7F7;
   --color-hermes: #FF8700;
 
-  --font-heading: 'Outfit', system-ui, sans-serif;
-  --font-body: 'Inter', system-ui, sans-serif;
+  --font-heading: 'Gotham', system-ui, sans-serif;
+  --font-body: 'Didact Gothic', 'Gotham', system-ui, sans-serif;
 }
