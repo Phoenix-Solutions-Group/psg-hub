@@ -36,18 +36,86 @@
   --color-navy: #1E3A52;
   --color-phoenix-red: #B8483E;
   --color-slate: #4A4257;
-  --color-paper: #FAF8F5;
-  --color-bone: #F2EEE8;
-  --color-stone: #E4DED5;
-  --color-graphite: #2A2826;
-  --color-mist: #9A958E;
+  --color-paper: #FAFAFA;
+  --color-bone: #F0F0F0;
+  --color-stone: #E0E0E0;
+  --color-graphite: #2A2A2A;
+  --color-mist: #949494;
   --color-clarity: #0EA5A5;
-  --color-canvas: #FAF8F5;
-  --color-iron: #2A2826;
+  --color-canvas: #FAFAFA;
+  --color-iron: #161616;
   --color-catalyst: #D4A847;
   --color-horizon: #E6F7F7;
   --color-hermes: #FF8700;
 
   --font-heading: 'Gotham', system-ui, sans-serif;
   --font-body: 'Didact Gothic', 'Gotham', system-ui, sans-serif;
+}
+
+.market-map-location-popup .maplibregl-popup-content {
+  border: 1px solid var(--color-stone);
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgb(30 58 82 / 16%);
+  padding: 0;
+}
+
+.market-map-location-popup .maplibregl-popup-close-button {
+  color: #4A4257;
+  font-size: 18px;
+  padding: 6px 8px;
+}
+
+.market-map-popup {
+  min-width: 220px;
+  padding: 12px;
+  color: var(--color-navy);
+  font-family: 'Didact Gothic', 'Gotham', system-ui, sans-serif;
+}
+
+.market-map-popup-badge {
+  color: var(--color-phoenix-red);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.market-map-popup-title {
+  margin-top: 4px;
+  font-family: 'Gotham', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.market-map-popup-address {
+  margin-top: 6px;
+  color: var(--color-slate);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.market-map-popup-row {
+  align-items: baseline;
+  border-top: 1px solid var(--color-bone);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 7px;
+}
+
+.market-map-popup-row span {
+  color: var(--color-mist);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.market-map-popup-row strong {
+  color: var(--color-navy);
+  font-size: 12px;
+  font-weight: 500;
+  max-width: 150px;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
