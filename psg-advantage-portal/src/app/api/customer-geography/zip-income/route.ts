@@ -5,6 +5,19 @@ import { getCustomerGeoZipIncome } from '@/lib/customerGeographyData'
 import { normalizeCustomerGeoFilters } from '@/app/api/customer-geography/_shared'
 import type { CustomerGeoZipIncomeResponse } from '@/types'
 
+function percentileRanks(values: (number | null)[]): number[] {
+  const validEntries = values
+    .map((v, i) => ({ v, i }))
+    .filter((e): e is { v: number; i: number } => e.v !== null)
+  validEntries.sort((a, b) => a.v - b.v)
+  const result = new Array(values.length).fill(0)
+  const maxRank = Math.max(validEntries.length - 1, 1)
+  for (let rank = 0; rank < validEntries.length; rank++) {
+    result[validEntries[rank].i] = (rank / maxRank) * 100
+  }
+  return result
+}
+
 export async function GET(request: NextRequest) {
   const result = await getAuthenticatedProfile(request)
   if (result instanceof NextResponse) return result
@@ -30,11 +43,11 @@ export async function GET(request: NextRequest) {
   )
 
   const { startDate, endDate, preset, shopIds } = normalized.value
-  const cacheKey = `customer-geo:zip-income:v3:${startDate}:${endDate}:${preset}:${shopIds.join('|')}:${limit}`
+  const cacheKey = `customer-geo:zip-income:v4:${startDate}:${endDate}:${preset}:${shopIds.join('|')}:${limit}`
   const cached = await getCached<CustomerGeoZipIncomeResponse>(cacheKey)
   if (cached) return NextResponse.json(cached)
 
-  let rows: CustomerGeoZipIncomeResponse['rows']
+  let rows: Awaited<ReturnType<typeof getCustomerGeoZipIncome>>
   try {
     rows = await getCustomerGeoZipIncome({
       startDate,
@@ -71,6 +84,38 @@ export async function GET(request: NextRequest) {
     return sum + row.registered_vehicles
   }, 0)
 
+  // Opportunity score: percentile-based composite (0-100)
+  const vehiclePercentiles = percentileRanks(rows.map((r) => r.registered_vehicles))
+  const incomePercentiles = percentileRanks(rows.map((r) => r.mean_household_income))
+  const demandPercentiles = percentileRanks(
+    rows.map((r) => {
+      const crash = r.crash_demand_score ?? 0
+      const storm = r.storm_demand_score ?? 0
+      return crash + storm > 0 ? crash + storm : null
+    })
+  )
+  const competitionPercentiles = percentileRanks(rows.map((r) => r.competitor_shop_count))
+  const headroomValues = rows.map((r) => {
+    if (r.registered_vehicles === null || r.registered_vehicles <= 0) return null
+    return 1 - r.repair_count / r.registered_vehicles
+  })
+  const headroomPercentiles = percentileRanks(headroomValues)
+  const tractionPercentiles = percentileRanks(rows.map((r) => r.repair_count))
+
+  const scoredRows = rows.map((row, i) => ({
+    ...row,
+    opportunity_score: Number(
+      (
+        vehiclePercentiles[i] * 0.25 +
+        incomePercentiles[i] * 0.15 +
+        demandPercentiles[i] * 0.15 +
+        (100 - competitionPercentiles[i]) * 0.15 +
+        headroomPercentiles[i] * 0.15 +
+        tractionPercentiles[i] * 0.15
+      ).toFixed(1)
+    ),
+  }))
+
   const payload: CustomerGeoZipIncomeResponse = {
     filters: {
       startDate,
@@ -101,8 +146,14 @@ export async function GET(request: NextRequest) {
         weightedIncomeDenominator > 0
           ? Number((weightedIncomeNumerator / weightedIncomeDenominator).toFixed(2))
           : null,
+      avg_opportunity_score:
+        scoredRows.length > 0
+          ? Number(
+              (scoredRows.reduce((sum, r) => sum + (r.opportunity_score ?? 0), 0) / scoredRows.length).toFixed(1)
+            )
+          : null,
     },
-    rows,
+    rows: scoredRows,
   }
 
   await setCached(cacheKey, payload, 3600)
