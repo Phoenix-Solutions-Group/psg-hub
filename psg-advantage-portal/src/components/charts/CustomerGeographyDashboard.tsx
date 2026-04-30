@@ -545,6 +545,7 @@ export default function CustomerGeographyDashboard() {
                     <th className="px-3 py-2">Registered Vehicles</th>
                     <th className="px-3 py-2">Vehicle Pen% (HH)</th>
                     <th className="px-3 py-2">Vehicle Pen% (RO)</th>
+                    <th className="px-3 py-2">Competitor Shops</th>
                     <th className="px-3 py-2">Mean Income</th>
                     <th className="px-3 py-2">Median Income</th>
                   </tr>
@@ -568,6 +569,9 @@ export default function CustomerGeographyDashboard() {
                       </td>
                       <td className="px-3 py-2">{pctNullable(row.vehicle_penetration_pct)}</td>
                       <td className="px-3 py-2">{pctNullable(row.vehicle_repair_penetration_pct)}</td>
+                      <td className="px-3 py-2">
+                        {row.competitor_shop_count === null ? '—' : row.competitor_shop_count.toLocaleString()}
+                      </td>
                       <td className="px-3 py-2">
                         {row.mean_household_income === null
                           ? 'Income unavailable'
