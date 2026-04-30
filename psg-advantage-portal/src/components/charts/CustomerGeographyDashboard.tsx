@@ -526,7 +526,7 @@ export default function CustomerGeographyDashboard() {
                 <thead className="bg-bone">
                   <tr className="text-left text-[10px] uppercase tracking-wide text-slate">
                     <th className="px-3 py-2">ZIP</th>
-                    <th className="px-3 py-2">County</th>
+                    <th className="px-3 py-2">City</th>
                     <th className="px-3 py-2">Repair Orders</th>
                     <th className="px-3 py-2">Registered Vehicles</th>
                     <th className="px-3 py-2">Vehicle Pen% (RO)</th>
@@ -545,7 +545,7 @@ export default function CustomerGeographyDashboard() {
                       className="border-t border-stone/70 text-graphite"
                     >
                       <td className="px-3 py-2 font-heading text-navy">{row.zip}</td>
-                      <td className="px-3 py-2">{row.county_name || '—'}</td>
+                      <td className="px-3 py-2">{row.city_name || '—'}</td>
                       <td className="px-3 py-2">{row.repair_count.toLocaleString()}</td>
                       <td className="px-3 py-2">
                         {row.registered_vehicles === null ? 'DMV unavailable' : row.registered_vehicles.toLocaleString()}

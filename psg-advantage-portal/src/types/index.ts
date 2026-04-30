@@ -223,6 +223,7 @@ export interface CustomerGeoZipIncomeRow {
   zip: string
   state: string | null
   county_name: string | null
+  city_name: string | null
   repair_count: number
   unique_household_count: number
   registered_vehicles: number | null

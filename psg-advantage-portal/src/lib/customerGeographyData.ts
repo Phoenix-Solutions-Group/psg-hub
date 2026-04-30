@@ -34,6 +34,7 @@ export interface CustomerGeoZipIncomeRow {
   zip: string
   state: string | null
   county_name: string | null
+  city_name: string | null
   repair_count: number
   unique_household_count: number
   registered_vehicles: number | null
@@ -314,6 +315,7 @@ export async function getCustomerGeoZipIncome(
           c.zip,
           MAX(c.state) AS state,
           MAX(c.county_name) AS county_name,
+          MAX(zm.city_name) AS city_name,
           SUM(c.repair_count)::int AS repair_count,
           SUM(c.unique_household_count)::int AS unique_household_count,
           MAX(c.mean_household_income)::float8 AS mean_household_income,
@@ -326,6 +328,12 @@ export async function getCustomerGeoZipIncome(
           MAX(c.storm_demand_score)::float8 AS storm_demand_score,
           MAX(ev.ev_vehicle_count)::int AS ev_vehicle_count
         FROM public.customer_zip_report_monthly c
+        LEFT JOIN LATERAL (
+          SELECT zm2.city_name
+          FROM public.zcta_zip_mapping zm2
+          WHERE zm2.zip_code = c.zip
+          LIMIT 1
+        ) zm ON TRUE
         LEFT JOIN LATERAL (
           SELECT SUM(vehicle_count)::int AS ev_vehicle_count
           FROM public.ev_registrations er
@@ -349,6 +357,7 @@ export async function getCustomerGeoZipIncome(
     zip: String(row.zip || ''),
     state: row.state ? String(row.state) : null,
     county_name: row.county_name ? String(row.county_name) : null,
+    city_name: row.city_name ? String(row.city_name) : null,
     repair_count: Number(row.repair_count || 0),
     unique_household_count: Number(row.unique_household_count || 0),
     mean_household_income:
