@@ -12,6 +12,13 @@ CA_DMV_KEY = "ca_dmv"
 
 ATLAS_BASE_URL = "https://www.atlasevhub.com/public/dmv/"
 FHWA_MV1_ENDPOINT = "https://datahub.transportation.gov/resource/hwtm-7xmz.json"
+CA_CKAN_API = "https://data.ca.gov/api/3/action/datastore_search_sql"
+
+CA_RESOURCE_IDS: dict[int, str] = {
+    2023: "d599c3d3-87af-4e8c-8694-9c01f49e3d93",
+    2024: "66b0121e-5eab-4fcf-aa0d-2b1dfb5510ab",
+    2025: "b459d957-5d94-4b10-999d-770419870364",
+}
 
 ATLAS_STATES = {
     "CO", "CT", "ME", "MN", "MT", "NJ", "NM",
@@ -80,13 +87,13 @@ VEHICLE_SOURCES: dict[str, VehicleSource] = {
     CA_DMV_KEY: VehicleSource(
         key=CA_DMV_KEY,
         name="California Vehicle Fuel Type Count by ZIP Code",
-        base_url="https://data.ca.gov/dataset/vehicle-fuel-type-count-by-zip-code",
+        base_url=CA_CKAN_API,
         geography="CA",
         data_type="all_vehicles",
         granularity="zip",
         cadence="annual",
         license_note="California Open Data.",
-        adapter_status="planned",
+        adapter_status="implementing",
         priority=3,
     ),
 }
