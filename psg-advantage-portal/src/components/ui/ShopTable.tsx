@@ -85,13 +85,13 @@ export function ShopTable({ shops }: { shops: ShopListItem[] }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((shop) => {
+            {filtered.map((shop, idx) => {
               const tier = getEmiTier(shop.avg_emi_pct)
               const hasSurveyDetail = shop.total_surveys > 0
               const detailShopName = shop.canonical_shop_name || shop.shop_name
               return (
                 <tr
-                  key={shop.place_id || shop.shop_name}
+                  key={`${shop.place_id || shop.shop_name}-${idx}`}
                   className="border-b border-stone/60 hover:bg-paper/80"
                 >
                   <td className="px-4 py-2.5">
