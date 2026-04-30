@@ -36,7 +36,7 @@ REGIONS = {
     "south_central": {"TX", "LA", "OK", "AR", "TN", "KY"},
 }
 
-GROUND_TRUTH_ZIP_STATES = {"CA", "NY"}
+GROUND_TRUTH_ZIP_STATES = {"CA"}
 
 COUNTY_DISAGG_STATES = {"TX", "MD", "WA"}
 
