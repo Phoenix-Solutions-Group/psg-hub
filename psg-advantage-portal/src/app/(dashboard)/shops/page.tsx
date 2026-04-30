@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
+import { hasDemoAuthCookie } from '@/lib/demoAuth'
 import { getCached, setCached } from '@/lib/cache'
 import { getShopList } from '@/lib/supabase/data'
 import { getShopListFromPostgres } from '@/lib/postgres/shops'
@@ -16,9 +17,7 @@ export default async function ShopsPage({
   searchParams: Promise<{ startDate?: string; endDate?: string }>
 }) {
   const cookieStore = await cookies()
-  const demoAuth =
-    process.env.NODE_ENV !== 'production' &&
-    cookieStore.get('psg_demo_auth')?.value === '1'
+  const demoAuth = hasDemoAuthCookie(cookieStore.get('psg_demo_auth')?.value)
 
   if (!demoAuth) {
     const supabase = await createClient()

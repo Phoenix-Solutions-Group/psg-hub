@@ -1,13 +1,12 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { hasDemoAuthCookie } from '@/lib/demoAuth'
 import MarketMapDashboard from '@/components/charts/MarketMapDashboard'
 
 export default async function MarketMapPage() {
   const cookieStore = await cookies()
-  const demoAuth =
-    process.env.NODE_ENV !== 'production' &&
-    cookieStore.get('psg_demo_auth')?.value === '1'
+  const demoAuth = hasDemoAuthCookie(cookieStore.get('psg_demo_auth')?.value)
 
   if (!demoAuth) {
     const supabase = await createClient()

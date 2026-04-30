@@ -72,6 +72,7 @@ def test_sanitize_identifier_rejects_sql_fragments():
 
 def test_sanitize_relation_allows_known_sensitive_tables_only():
     assert sanitize_relation("sensitive.survey_pii") == "sensitive.survey_pii"
+    assert sanitize_relation("sensitive.repair_customer_locations") == "sensitive.repair_customer_locations"
 
     try:
         sanitize_relation("sensitive.survey_pii; drop schema sensitive")

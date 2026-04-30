@@ -334,6 +334,71 @@ describe('supabase data helpers', () => {
     })
   })
 
+  it('searchMarketMapShops maps directory and PSG search rows', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{
+        layer: 'directory_shop',
+        id: 'place-2',
+        shop_name: 'Rockaway Express Auto Body',
+        place_id: 'place-2',
+        address: '7 E New St, Rockaway, NJ 07866',
+        phone: '+1 201-874-7953',
+        website: 'https://example.com',
+        rating: '4.6',
+        latitude: '40.901',
+        longitude: '-74.515',
+        state: 'NJ',
+      }],
+      error: null,
+    })
+
+    const { searchMarketMapShops } = await import('@/lib/supabase/data')
+    const result = await searchMarketMapShops('Rockaway', 10)
+
+    expect(mockRpc).toHaveBeenCalledWith('market_map_search', {
+      p_query: 'Rockaway',
+      p_limit: 10,
+    })
+    expect(result[0]).toMatchObject({
+      layer: 'directory_shop',
+      shop_name: 'Rockaway Express Auto Body',
+      address: '7 E New St, Rockaway, NJ 07866',
+      phone: '+1 201-874-7953',
+      rating: 4.6,
+    })
+  })
+
+  it('getShopCompetitorOverlayByPlaceId calls the place-id competitor RPC', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{
+        is_anchor: true,
+        shop_name: 'Rockaway Express Auto Body',
+        place_id: 'place-2',
+        address: '7 E New St',
+        rating: '4.6',
+        latitude: '40.901',
+        longitude: '-74.515',
+        distance_miles: '0',
+      }],
+      error: null,
+    })
+
+    const { getShopCompetitorOverlayByPlaceId } = await import('@/lib/supabase/data')
+    const result = await getShopCompetitorOverlayByPlaceId('place-2', 25, 10)
+
+    expect(mockRpc).toHaveBeenCalledWith('shop_competitor_overlay_by_place_id', {
+      p_place_id: 'place-2',
+      p_radius_miles: 25,
+      p_limit: 10,
+    })
+    expect(result[0]).toMatchObject({
+      is_anchor: true,
+      shop_name: 'Rockaway Express Auto Body',
+      rating: 4.6,
+      distance_miles: 0,
+    })
+  })
+
   it('getMarketViewportIntelligence maps map-bounds demand context', async () => {
     mockRpc.mockResolvedValueOnce({
       data: [{

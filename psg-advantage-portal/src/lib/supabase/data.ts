@@ -5,6 +5,7 @@ import type {
   AlertShop,
   MarketMapData,
   MarketMapPoint,
+  MarketMapSearchResult,
   MarketViewportIntelligence,
   MarketViewportTopCustomer,
   MarketViewportTopZip,
@@ -143,8 +144,10 @@ function buildMarketLabel(city: string | null, state: string | null) {
 }
 
 async function callRpc<T>(fn: string, args: RpcArgs = {}): Promise<T[]> {
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const supabase = serviceRoleKey && process.env.NODE_ENV !== 'production'
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY
+  const supabase = serviceRoleKey
     ? createBrowserlessClient(getSupabaseUrl(), serviceRoleKey, {
         auth: {
           autoRefreshToken: false,
@@ -306,6 +309,58 @@ export async function getShopCompetitorOverlay(
     .filter((row) => row.latitude !== 0 && row.longitude !== 0)
 }
 
+export async function getShopCompetitorOverlayByPlaceId(
+  placeId: string,
+  radiusMiles = 25,
+  resultLimit = 25
+): Promise<ShopCompetitorPoint[]> {
+  const rows = await callRpc<Record<string, unknown>>('shop_competitor_overlay_by_place_id', {
+    p_place_id: placeId,
+    p_radius_miles: radiusMiles,
+    p_limit: resultLimit,
+  })
+
+  return rows
+    .map((row) => ({
+      is_anchor: Boolean(row.is_anchor),
+      shop_name: String(row.shop_name || ''),
+      place_id: row.place_id ? String(row.place_id) : null,
+      address: row.address ? String(row.address) : null,
+      phone: row.phone ? String(row.phone) : null,
+      website: row.website ? String(row.website) : null,
+      rating: toNullableNumber(row.rating),
+      category: row.category ? String(row.category) : null,
+      latitude: toNumber(row.latitude),
+      longitude: toNumber(row.longitude),
+      distance_miles: toNumber(row.distance_miles),
+    }))
+    .filter((row) => row.latitude !== 0 && row.longitude !== 0)
+}
+
+function mapMarketMapPoint(row: Record<string, unknown>): MarketMapPoint {
+  const layer = (row.layer === 'psg_customer' ? 'psg_customer' : 'directory_shop') as MarketMapPoint['layer']
+
+  return {
+    layer,
+    id: String(row.id || row.place_id || row.shop_name || ''),
+    shop_name: String(row.shop_name || ''),
+    psg_id: row.psg_id ? String(row.psg_id) : null,
+    invoiced_id: toNullableNumber(row.invoiced_id),
+    place_id: row.place_id ? String(row.place_id) : null,
+    address: row.address ? String(row.address) : null,
+    phone: row.phone ? String(row.phone) : null,
+    website: row.website ? String(row.website) : null,
+    rating: toNullableNumber(row.rating),
+    latitude: toNumber(row.latitude),
+    longitude: toNumber(row.longitude),
+    state: row.state ? String(row.state) : null,
+    city: row.city ? String(row.city) : null,
+    survey_count: toNullableNumber(row.survey_count),
+    avg_emi_pct: toNullableNumber(row.avg_emi_pct),
+    match_status: String(row.match_status || ''),
+  }
+}
+
 export async function getMarketMapData(
   state: string | null = null,
   directoryLimit = 40000
@@ -323,30 +378,7 @@ export async function getMarketMapData(
       })
 
   const points: MarketMapPoint[] = rows
-    .map((row) => {
-      const layer = (row.layer === 'psg_customer' ? 'psg_customer' : 'directory_shop') as MarketMapPoint['layer']
-      const isCustomer = layer === 'psg_customer'
-
-      return {
-        layer,
-        id: String(row.id || row.place_id || row.shop_name || ''),
-        shop_name: String(row.shop_name || ''),
-        psg_id: row.psg_id ? String(row.psg_id) : null,
-        invoiced_id: toNullableNumber(row.invoiced_id),
-        place_id: row.place_id ? String(row.place_id) : null,
-        address: isCustomer && row.address ? String(row.address) : null,
-        phone: isCustomer && row.phone ? String(row.phone) : null,
-        website: isCustomer && row.website ? String(row.website) : null,
-        rating: toNullableNumber(row.rating),
-        latitude: toNumber(row.latitude),
-        longitude: toNumber(row.longitude),
-        state: row.state ? String(row.state) : null,
-        city: row.city ? String(row.city) : null,
-        survey_count: toNullableNumber(row.survey_count),
-        avg_emi_pct: toNullableNumber(row.avg_emi_pct),
-        match_status: isCustomer ? String(row.match_status || '') : '',
-      }
-    })
+    .map(mapMarketMapPoint)
     .filter((point) => point.id && point.latitude !== 0 && point.longitude !== 0)
 
   const states = Array.from(
@@ -364,6 +396,20 @@ export async function getMarketMapData(
       states,
     },
   }
+}
+
+export async function searchMarketMapShops(
+  query: string,
+  resultLimit = 20
+): Promise<MarketMapSearchResult[]> {
+  const rows = await callRpc<Record<string, unknown>>('market_map_search', {
+    p_query: query,
+    p_limit: resultLimit,
+  })
+
+  return rows
+    .map(mapMarketMapPoint)
+    .filter((point) => point.id && point.latitude !== 0 && point.longitude !== 0)
 }
 
 function mapViewportZip(row: Record<string, unknown>): MarketViewportTopZip {

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import Image from 'next/image'
+import { hasDemoAuthCookie } from '@/lib/demoAuth'
 import LogoutButton from './logout-button'
 import DashboardNav from './dashboard-nav'
 
@@ -11,9 +12,7 @@ export default async function DashboardLayout({
   children: React.ReactNode
 }) {
   const cookieStore = await cookies()
-  const demoAuth =
-    process.env.NODE_ENV !== 'production' &&
-    cookieStore.get('psg_demo_auth')?.value === '1'
+  const demoAuth = hasDemoAuthCookie(cookieStore.get('psg_demo_auth')?.value)
 
   let userEmail = 'demo@psg.local'
   let role: 'psg_admin' | 'shop_owner' | 'read_only' = 'psg_admin'

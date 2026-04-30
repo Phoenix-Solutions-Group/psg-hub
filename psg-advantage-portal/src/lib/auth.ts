@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { AuthProfile } from '@/types'
+import { hasDemoAuthCookie } from '@/lib/demoAuth'
 
 export type { AuthProfile }
 
@@ -20,17 +21,13 @@ function getDemoProfile(): AuthProfile {
 }
 
 async function hasDemoAuth(request?: NextRequest) {
-  if (process.env.NODE_ENV === 'production') {
-    return false
-  }
-
   if (request) {
-    return request.cookies.get('psg_demo_auth')?.value === '1'
+    return hasDemoAuthCookie(request.cookies.get('psg_demo_auth')?.value)
   }
 
   try {
     const cookieStore = await cookies()
-    return cookieStore.get('psg_demo_auth')?.value === '1'
+    return hasDemoAuthCookie(cookieStore.get('psg_demo_auth')?.value)
   } catch {
     return false
   }

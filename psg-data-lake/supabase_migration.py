@@ -53,6 +53,7 @@ KNOWN_TABLES = {
 KNOWN_RELATIONS = KNOWN_TABLES | {
     "sensitive.survey_pii",
     "sensitive.repair_customers",
+    "sensitive.repair_customer_locations",
 }
 
 ACCIDENT_SAMPLE_IDS = ["A-1", "A-2", "A-3", "A-10", "A-100", "A-1000"]

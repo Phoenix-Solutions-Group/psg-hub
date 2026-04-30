@@ -61,4 +61,40 @@ describe('crash targeting migration', () => {
     expect(migration).toContain('canonical_shop_name')
     expect(migration).toContain('google_profile_branch_match')
   })
+
+  it('adds private customer geocodes and zip report aggregate tables', () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        'supabase',
+        'migrations',
+        '20260429193000_customer_geography_locations.sql'
+      ),
+      'utf-8'
+    )
+
+    expect(migration).toContain('CREATE TABLE IF NOT EXISTS sensitive.repair_customer_locations')
+    expect(migration).toContain('ALTER TABLE sensitive.repair_customer_locations ENABLE ROW LEVEL SECURITY')
+    expect(migration).toContain('CREATE TABLE IF NOT EXISTS public.customer_zip_report_monthly')
+    expect(migration).toContain('REVOKE ALL ON sensitive.repair_customer_locations FROM anon')
+    expect(migration).not.toContain('TRUNCATE accidents')
+    expect(migration).not.toContain('DROP TABLE accidents')
+  })
+
+  it('adds annual zcta income table for zip-level household income overlays', () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        'supabase',
+        'migrations',
+        '20260429195000_zcta_income_annual.sql'
+      ),
+      'utf-8'
+    )
+
+    expect(migration).toContain('CREATE TABLE IF NOT EXISTS public.zcta_income_annual')
+    expect(migration).toContain('mean_household_income')
+    expect(migration).toContain('median_household_income')
+    expect(migration).toContain('PRIMARY KEY (year, zip)')
+  })
 })

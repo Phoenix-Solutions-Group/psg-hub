@@ -87,6 +87,63 @@ function pointLabel(point: MarketMapPoint) {
   return point.shop_name
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function referenceRows(rows: Array<[string, string | number | null | undefined]>) {
+  return rows
+    .filter(([, value]) => value !== null && value !== undefined && value !== '')
+    .map(([label, value]) => (
+      `<div class="market-map-popup-row">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(String(value))}</strong>
+      </div>`
+    ))
+    .join('')
+}
+
+function marketPointPopupHtml(point: MarketMapPoint) {
+  const badge = point.layer === 'psg_customer' ? 'PSG customer' : 'Directory shop'
+  return `
+    <div class="market-map-popup">
+      <div class="market-map-popup-badge">${escapeHtml(badge)}</div>
+      <div class="market-map-popup-title">${escapeHtml(point.shop_name)}</div>
+      ${point.address ? `<div class="market-map-popup-address">${escapeHtml(point.address)}</div>` : ''}
+      ${referenceRows([
+        ['City', [point.city, point.state].filter(Boolean).join(', ')],
+        ['PSG ID', point.psg_id],
+        ['Invoiced', point.invoiced_id],
+        ['Surveys', point.survey_count],
+        ['EMI', point.avg_emi_pct !== null ? `${point.avg_emi_pct}%` : null],
+        ['Rating', point.rating !== null ? point.rating.toFixed(1) : null],
+        ['Phone', point.phone],
+      ])}
+    </div>
+  `
+}
+
+function competitorPopupHtml(point: ShopCompetitorPoint) {
+  return `
+    <div class="market-map-popup">
+      <div class="market-map-popup-badge">Competitor</div>
+      <div class="market-map-popup-title">${escapeHtml(point.shop_name)}</div>
+      ${point.address ? `<div class="market-map-popup-address">${escapeHtml(point.address)}</div>` : ''}
+      ${referenceRows([
+        ['Distance', formatDistance(point.distance_miles)],
+        ['Rating', point.rating !== null ? point.rating.toFixed(1) : null],
+        ['Phone', point.phone],
+        ['Category', point.category],
+      ])}
+    </div>
+  `
+}
+
 function toFeature(point: MarketMapPoint): PointFeature {
   return {
     type: 'Feature',
@@ -109,6 +166,18 @@ function toFeatureCollection(points: MarketMapPoint[]): PointFeatureCollection {
     type: 'FeatureCollection',
     features: points.map(toFeature),
   }
+}
+
+function dedupeMarketMapPoints(points: MarketMapPoint[]) {
+  const seen = new Set<string>()
+  const deduped: MarketMapPoint[] = []
+  for (const point of points) {
+    const key = `${point.layer}:${point.id}:${point.latitude}:${point.longitude}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(point)
+  }
+  return deduped
 }
 
 function competitorKey(point: ShopCompetitorPoint) {
@@ -211,7 +280,10 @@ function viewportIntelligenceUrl(map: MapLibreMap) {
 export default function MarketMapDashboard() {
   const mapNodeRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
+  const popupRef = useRef<maplibregl.Popup | null>(null)
   const pointLookupRef = useRef<Map<string, MarketMapPoint>>(new Map())
+  const competitorLookupRef = useRef<Map<string, ShopCompetitorPoint>>(new Map())
+  const selectedPointRef = useRef<MarketMapPoint | null>(null)
   const [data, setData] = useState<MarketMapData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isMapReady, setIsMapReady] = useState(false)
@@ -226,6 +298,11 @@ export default function MarketMapDashboard() {
   const [viewportIntel, setViewportIntel] = useState<MarketViewportIntelligence | null>(null)
   const [isViewportIntelLoading, setIsViewportIntelLoading] = useState(false)
   const [viewportIntelError, setViewportIntelError] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [searchResults, setSearchResults] = useState<MarketMapPoint[]>([])
+  const [isSearchMenuOpen, setIsSearchMenuOpen] = useState(false)
+  const [isSearchLoading, setIsSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState('')
 
   useEffect(() => {
     if (!mapNodeRef.current || mapRef.current) return
@@ -340,19 +417,6 @@ export default function MarketMapDashboard() {
       })
 
       map.addLayer({
-        id: 'competitor-points',
-        type: 'circle',
-        source: 'competitor-points-source',
-        paint: {
-          'circle-color': '#D4A847',
-          'circle-opacity': 0.96,
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 4.5, 9, 7, 12, 9],
-          'circle-stroke-color': '#FFFFFF',
-          'circle-stroke-width': 1.6,
-        },
-      })
-
-      map.addLayer({
         id: 'selected-point-halo',
         type: 'circle',
         source: 'selected-market-point',
@@ -366,10 +430,53 @@ export default function MarketMapDashboard() {
         },
       })
 
+      map.addLayer({
+        id: 'competitor-points',
+        type: 'circle',
+        source: 'competitor-points-source',
+        paint: {
+          'circle-color': '#D4A847',
+          'circle-opacity': 0.96,
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 4.5, 9, 7, 12, 9],
+          'circle-stroke-color': '#FFFFFF',
+          'circle-stroke-width': 1.6,
+        },
+      })
+
+      const showPopup = (coordinates: [number, number], html: string) => {
+        popupRef.current?.remove()
+        popupRef.current = new maplibregl.Popup({
+          closeButton: true,
+          closeOnClick: false,
+          maxWidth: '280px',
+          offset: 14,
+          className: 'market-map-location-popup',
+        })
+          .setLngLat(coordinates)
+          .setHTML(html)
+          .addTo(map)
+      }
+
       const handleClick = (event: maplibregl.MapLayerMouseEvent) => {
         const key = event.features?.[0] ? featureKey(event.features[0]) : ''
         const point = pointLookupRef.current.get(key)
-        if (point) setSelectedPoint(point)
+        if (!point) return
+
+        setSelectedPoint(point)
+        showPopup([point.longitude, point.latitude], marketPointPopupHtml(point))
+      }
+      const handleSelectedClick = () => {
+        const point = selectedPointRef.current
+        if (!point) return
+
+        showPopup([point.longitude, point.latitude], marketPointPopupHtml(point))
+      }
+      const handleCompetitorClick = (event: maplibregl.MapLayerMouseEvent) => {
+        const key = event.features?.[0] ? featureKey(event.features[0]) : ''
+        const point = competitorLookupRef.current.get(key)
+        if (!point) return
+
+        showPopup([point.longitude, point.latitude], competitorPopupHtml(point))
       }
       const handleClusterClick = async (event: maplibregl.MapLayerMouseEvent) => {
         const feature = event.features?.[0]
@@ -403,6 +510,12 @@ export default function MarketMapDashboard() {
         map.on('mouseenter', layer, setPointer)
         map.on('mouseleave', layer, clearPointer)
       }
+      map.on('click', 'selected-point-halo', handleSelectedClick)
+      map.on('click', 'competitor-points', handleCompetitorClick)
+      map.on('mouseenter', 'selected-point-halo', setPointer)
+      map.on('mouseleave', 'selected-point-halo', clearPointer)
+      map.on('mouseenter', 'competitor-points', setPointer)
+      map.on('mouseleave', 'competitor-points', clearPointer)
 
       setIsMapReady(true)
     })
@@ -410,6 +523,7 @@ export default function MarketMapDashboard() {
     mapRef.current = map
 
     return () => {
+      popupRef.current?.remove()
       map.remove()
       mapRef.current = null
     }
@@ -448,6 +562,43 @@ export default function MarketMapDashboard() {
     }
   }, [selectedState])
 
+  useEffect(() => {
+    const query = searchTerm.trim()
+    if (query.length < 2) {
+      setSearchResults([])
+      setSearchError('')
+      setIsSearchLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(async () => {
+      setIsSearchLoading(true)
+      setSearchError('')
+      try {
+        const params = new URLSearchParams({ q: query, limit: '18' })
+        const response = await fetch(`/api/market-map/search?${params.toString()}`, {
+          signal: controller.signal,
+        })
+        if (!response.ok) {
+          throw new Error(`Search failed: ${response.status}`)
+        }
+        setSearchResults(dedupeMarketMapPoints(await response.json() as MarketMapPoint[]))
+      } catch (err) {
+        if (controller.signal.aborted) return
+        setSearchResults([])
+        setSearchError(err instanceof Error ? err.message : 'Search failed')
+      } finally {
+        if (!controller.signal.aborted) setIsSearchLoading(false)
+      }
+    }, 220)
+
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [searchTerm])
+
   const filteredPoints = useMemo(() => {
     const points = data?.points || []
     return points.filter((point) => {
@@ -484,7 +635,19 @@ export default function MarketMapDashboard() {
   }, [filteredPoints])
 
   useEffect(() => {
-    if (selectedPoint?.layer !== 'psg_customer') {
+    competitorLookupRef.current = new Map(competitors.map((point) => [competitorKey(point), point]))
+  }, [competitors])
+
+  useEffect(() => {
+    selectedPointRef.current = selectedPoint
+    if (!selectedPoint) {
+      popupRef.current?.remove()
+      popupRef.current = null
+    }
+  }, [selectedPoint])
+
+  useEffect(() => {
+    if (!selectedPoint) {
       setCompetitorOverlay([])
       setCompetitorError('')
       setIsCompetitorLoading(false)
@@ -499,10 +662,18 @@ export default function MarketMapDashboard() {
       setIsCompetitorLoading(true)
       setCompetitorError('')
       try {
-        const response = await fetch(
-          `/api/shops/${encodeURIComponent(point.shop_name)}/competitors?radiusMiles=25&limit=25`,
-          { signal: controller.signal }
-        )
+        const params = new URLSearchParams({
+          radiusMiles: '25',
+          limit: '25',
+        })
+        if (point.place_id) {
+          params.set('placeId', point.place_id)
+        } else {
+          params.set('shopName', point.shop_name)
+        }
+        const response = await fetch(`/api/market-map/competitors?${params.toString()}`, {
+          signal: controller.signal,
+        })
         if (!response.ok) {
           throw new Error(`Competitor request failed: ${response.status}`)
         }
@@ -612,6 +783,69 @@ export default function MarketMapDashboard() {
               PSG customers are anchored from Invoiced IDs and displayed against the
               national body shop directory.
             </p>
+            <div className="relative mt-4 max-w-2xl">
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => {
+                  setSearchTerm(event.target.value)
+                  setIsSearchMenuOpen(true)
+                }}
+                onFocus={() => {
+                  if (searchTerm.trim().length >= 2) setIsSearchMenuOpen(true)
+                }}
+                placeholder="Search any body shop, PSG ID, city, address, or phone"
+                className="w-full rounded-lg border border-stone bg-white px-3 py-2.5 text-sm text-navy shadow-sm focus:border-phoenix-red focus:outline-none"
+              />
+              {isSearchMenuOpen && (searchTerm.trim().length >= 2 || searchError) && (
+                <div className="absolute z-20 mt-2 max-h-96 w-full overflow-y-auto rounded-lg border border-stone bg-white shadow-lg">
+                  <div className="border-b border-stone px-3 py-2 text-xs font-medium uppercase text-slate">
+                    {isSearchLoading ? 'Searching' : `${searchResults.length} results`}
+                  </div>
+                  {searchError && (
+                    <div className="px-3 py-2 text-sm text-phoenix-red">{searchError}</div>
+                  )}
+                  {!isSearchLoading && !searchError && !searchResults.length && (
+                    <div className="px-3 py-3 text-sm text-slate">No body shops found.</div>
+                  )}
+                  {searchResults.map((point, index) => (
+                    <button
+                      key={`${point.layer}-${point.id}-${point.latitude}-${point.longitude}-${index}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPoint(point)
+                        setSearchTerm(point.shop_name)
+                        setSearchResults([])
+                        setIsSearchMenuOpen(false)
+                        popupRef.current?.remove()
+                        focusOnPoint(mapRef.current, point)
+                      }}
+                      className="block w-full border-b border-stone px-3 py-3 text-left last:border-b-0 hover:bg-bone/40"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-heading text-sm font-medium text-navy">
+                            {point.shop_name}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-slate">
+                            {[point.city, point.state].filter(Boolean).join(', ') || point.address || 'Mapped shop'}
+                          </p>
+                        </div>
+                        <span
+                          className={`whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium ${
+                            point.layer === 'psg_customer'
+                              ? 'bg-phoenix-red/10 text-phoenix-red'
+                              : 'bg-bone text-navy'
+                          }`}
+                        >
+                          {point.layer === 'psg_customer' ? 'PSG' : 'Directory'}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_auto_auto]">
@@ -669,7 +903,7 @@ export default function MarketMapDashboard() {
         />
       </section>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
+      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px] xl:items-start">
         <div className="overflow-hidden rounded-lg border border-stone bg-white">
           <div className="flex items-center justify-between border-b border-stone px-5 py-3 text-xs text-slate">
             <div className="flex flex-wrap items-center gap-4">
@@ -733,36 +967,60 @@ export default function MarketMapDashboard() {
                 <h3 className="font-heading text-base font-medium text-navy">
                   {pointLabel(selectedPoint)}
                 </h3>
+                <div className="mt-2">
+                  <span
+                    className={`rounded-md px-2 py-1 text-xs font-medium ${
+                      selectedPoint.layer === 'psg_customer'
+                        ? 'bg-phoenix-red/10 text-phoenix-red'
+                        : 'bg-bone text-navy'
+                    }`}
+                  >
+                    {selectedPoint.layer === 'psg_customer' ? 'PSG customer' : 'Directory shop'}
+                  </span>
+                </div>
                 {selectedPoint.address && (
                   <p className="mt-1 text-sm leading-5 text-slate">{selectedPoint.address}</p>
                 )}
                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate">
+                  {selectedPoint.psg_id && <span>PSG {selectedPoint.psg_id}</span>}
                   {selectedPoint.invoiced_id && <span>Invoiced {selectedPoint.invoiced_id}</span>}
                   {selectedPoint.avg_emi_pct !== null && <span>{selectedPoint.avg_emi_pct}% EMI</span>}
                   {selectedPoint.survey_count !== null && <span>{selectedPoint.survey_count} surveys</span>}
                   {selectedPoint.rating !== null && <span>{selectedPoint.rating.toFixed(1)} rating</span>}
+                  {selectedPoint.phone && <span>{selectedPoint.phone}</span>}
+                  {selectedPoint.website && (
+                    <a
+                      href={selectedPoint.website}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-phoenix-red hover:underline"
+                    >
+                      Website
+                    </a>
+                  )}
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedPoint(null)
                     setCompetitorOverlay([])
+                    popupRef.current?.remove()
                     fitPoints(mapRef.current, filteredPoints, selectedState)
                   }}
                   className="mt-3 rounded-md border border-iron/15 px-2.5 py-1.5 text-xs font-medium text-slate transition-colors hover:bg-paper"
                 >
-                  Choose another customer
+                  Choose another shop
                 </button>
               </div>
             ) : (
               <p className="mt-2 text-sm leading-6 text-slate">
-                Select a PSG customer to show its local competitor set.
+                Search or select any body shop to show its details and local competitor set.
               </p>
             )}
           </div>
 
           <div className="max-h-[500px] overflow-y-auto">
-            {selectedPoint?.layer === 'psg_customer' ? (
+            {selectedPoint ? (
               <div>
                 <div className="border-b border-stone bg-paper/70 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
@@ -784,7 +1042,7 @@ export default function MarketMapDashboard() {
                 </div>
                 {competitors.length ? competitors.map((competitor) => (
                   <div
-                    key={competitor.place_id || `${competitor.shop_name}-${competitor.distance_miles}`}
+                    key={`${competitor.place_id || competitor.shop_name}-${competitor.latitude}-${competitor.longitude}-${competitor.distance_miles}`}
                     className="border-b border-stone p-4 last:border-b-0"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -861,10 +1119,11 @@ export default function MarketMapDashboard() {
                 </div>
                 {topCustomers.map((point) => (
                   <button
-                    key={point.id}
+                    key={`${pointKey(point)}:${point.latitude}:${point.longitude}`}
                     type="button"
                     onClick={() => {
                       setSelectedPoint(point)
+                      popupRef.current?.remove()
                       focusOnPoint(mapRef.current, point)
                     }}
                     className="block w-full border-b border-stone p-4 text-left transition-colors hover:bg-bone/40"

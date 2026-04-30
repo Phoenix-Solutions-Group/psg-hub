@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev --port 3001",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/start-standalone.mjs",
+    "start:standalone": "node scripts/start-standalone.mjs",
+    "verify:customer-geography-parity": "node scripts/verify-customer-geography-parity.mjs",
     "lint": "eslint",
     "test": "vitest run",
     "email:templates": "node scripts/build-supabase-email-config.mjs"

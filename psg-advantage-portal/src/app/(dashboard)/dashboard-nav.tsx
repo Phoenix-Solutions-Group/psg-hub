@@ -13,11 +13,12 @@ export default function DashboardNav({ role, shopId }: DashboardNavProps) {
 
   const links =
     role === 'shop_owner' && shopId
-      ? [{ href: `/shops/${encodeURIComponent(shopId)}`, label: 'My Shop' }]
+        ? [{ href: `/shops/${encodeURIComponent(shopId)}`, label: 'My Shop' }]
       : [
           { href: '/', label: 'Dashboard' },
           { href: '/market-command', label: 'Market Command' },
           { href: '/market-map', label: 'Market Map' },
+          { href: '/customer-geography', label: 'Customer Geography' },
           { href: '/shops', label: 'Shops' },
           { href: '/marketing-intelligence', label: 'Marketing Intelligence' },
         ]

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
+import { hasDemoAuthCookie } from '@/lib/demoAuth'
 import {
   getCollisionTargetingExamples,
   getMarketingDaypart,
@@ -150,9 +151,7 @@ async function fetchMarketingIntelligenceData(
 
 export default async function MarketingIntelligencePage({ searchParams }: PageProps) {
   const cookieStore = await cookies()
-  const demoAuth =
-    process.env.NODE_ENV !== 'production' &&
-    cookieStore.get('psg_demo_auth')?.value === '1'
+  const demoAuth = hasDemoAuthCookie(cookieStore.get('psg_demo_auth')?.value)
 
   if (!demoAuth) {
     const supabase = await createClient()
