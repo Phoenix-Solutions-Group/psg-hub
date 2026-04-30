@@ -41,6 +41,7 @@ export interface CustomerGeoZipIncomeRow {
   registered_vehicles: number | null
   vehicle_penetration_pct: number | null
   vehicle_repair_penetration_pct: number | null
+  competitor_shop_count: number | null
   mean_household_income: number | null
   median_household_income: number | null
   avg_repair_total: number | null
@@ -320,7 +321,8 @@ export async function getCustomerGeoZipIncome(
           MAX(c.median_household_income)::float8 AS median_household_income,
           AVG(c.avg_repair_total)::float8 AS avg_repair_total,
           SUM(c.total_repair_value)::float8 AS total_repair_value,
-          MAX(c.registered_vehicles)::int AS registered_vehicles
+          MAX(c.registered_vehicles)::int AS registered_vehicles,
+          MAX(c.competitor_shop_count)::int AS competitor_shop_count
         FROM public.customer_zip_report_monthly c
         LEFT JOIN LATERAL (
           SELECT z.households
@@ -386,5 +388,9 @@ export async function getCustomerGeoZipIncome(
       row.registered_vehicles === null || row.registered_vehicles === undefined || Number(row.registered_vehicles) <= 0
         ? null
         : Number(((Number(row.repair_count || 0) / Number(row.registered_vehicles)) * 100).toFixed(2)),
+    competitor_shop_count:
+      row.competitor_shop_count === null || row.competitor_shop_count === undefined
+        ? null
+        : Number(row.competitor_shop_count),
   }))
 }

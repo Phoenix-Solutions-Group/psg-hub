@@ -234,6 +234,7 @@ export interface CustomerGeoZipIncomeRow {
   median_household_income: number | null
   avg_repair_total: number | null
   total_repair_value: number | null
+  competitor_shop_count: number | null
 }
 
 export interface CustomerGeoZipIncomeResponse {
