@@ -427,17 +427,14 @@ async function getMarketDataFallback(
   try {
     const result = await db.query(
       `
-        WITH shop_zips AS (
+        WITH shop_name AS (
+          SELECT shop_name FROM sensitive.repair_customers
+          WHERE shop_id = ANY($1::text[]) LIMIT 1
+        ),
+        shop_zips AS (
           SELECT DISTINCT SUBSTRING(bs.address FROM '([0-9]{5})') AS zip
-          FROM public.body_shops bs
-          WHERE EXISTS (
-            SELECT 1 FROM sensitive.repair_customers rc
-            WHERE rc.shop_id = ANY($1::text[])
-              AND (
-                bs.normalized_name = LOWER(REGEXP_REPLACE(rc.shop_name, '[^a-zA-Z0-9]', '', 'g'))
-                OR bs.address ILIKE '%' || SUBSTRING(rc.shop_name FROM 1 FOR 10) || '%'
-              )
-          )
+          FROM public.body_shops bs, shop_name sn
+          WHERE bs.shop_name ILIKE SPLIT_PART(sn.shop_name, ' ', 1) || '%'
         ),
         shop_counties AS (
           SELECT DISTINCT zr.county_fips
