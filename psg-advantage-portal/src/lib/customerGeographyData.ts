@@ -42,6 +42,8 @@ export interface CustomerGeoZipIncomeRow {
   vehicle_penetration_pct: number | null
   vehicle_repair_penetration_pct: number | null
   competitor_shop_count: number | null
+  crash_demand_score: number | null
+  storm_demand_score: number | null
   mean_household_income: number | null
   median_household_income: number | null
   avg_repair_total: number | null
@@ -322,7 +324,9 @@ export async function getCustomerGeoZipIncome(
           AVG(c.avg_repair_total)::float8 AS avg_repair_total,
           SUM(c.total_repair_value)::float8 AS total_repair_value,
           MAX(c.registered_vehicles)::int AS registered_vehicles,
-          MAX(c.competitor_shop_count)::int AS competitor_shop_count
+          MAX(c.competitor_shop_count)::int AS competitor_shop_count,
+          MAX(c.crash_demand_score)::float8 AS crash_demand_score,
+          MAX(c.storm_demand_score)::float8 AS storm_demand_score
         FROM public.customer_zip_report_monthly c
         LEFT JOIN LATERAL (
           SELECT z.households
@@ -392,5 +396,13 @@ export async function getCustomerGeoZipIncome(
       row.competitor_shop_count === null || row.competitor_shop_count === undefined
         ? null
         : Number(row.competitor_shop_count),
+    crash_demand_score:
+      row.crash_demand_score === null || row.crash_demand_score === undefined
+        ? null
+        : Number(row.crash_demand_score),
+    storm_demand_score:
+      row.storm_demand_score === null || row.storm_demand_score === undefined
+        ? null
+        : Number(row.storm_demand_score),
   }))
 }

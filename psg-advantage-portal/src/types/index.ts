@@ -235,6 +235,9 @@ export interface CustomerGeoZipIncomeRow {
   avg_repair_total: number | null
   total_repair_value: number | null
   competitor_shop_count: number | null
+  crash_demand_score: number | null
+  storm_demand_score: number | null
+  opportunity_score: number | null
 }
 
 export interface CustomerGeoZipIncomeResponse {
@@ -255,6 +258,7 @@ export interface CustomerGeoZipIncomeResponse {
     vehicle_penetration_pct: number | null
     vehicle_repair_penetration_pct: number | null
     weighted_mean_household_income: number | null
+    avg_opportunity_score: number | null
   }
   rows: CustomerGeoZipIncomeRow[]
 }
