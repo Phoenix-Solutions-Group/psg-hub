@@ -323,8 +323,14 @@ export async function getCustomerGeoZipIncome(
           MAX(c.registered_vehicles)::int AS registered_vehicles,
           MAX(c.competitor_shop_count)::int AS competitor_shop_count,
           MAX(c.crash_demand_score)::float8 AS crash_demand_score,
-          MAX(c.storm_demand_score)::float8 AS storm_demand_score
+          MAX(c.storm_demand_score)::float8 AS storm_demand_score,
+          MAX(ev.ev_vehicle_count)::int AS ev_vehicle_count
         FROM public.customer_zip_report_monthly c
+        LEFT JOIN LATERAL (
+          SELECT SUM(vehicle_count)::int AS ev_vehicle_count
+          FROM public.ev_registrations er
+          WHERE er.zip = c.zip
+        ) ev ON TRUE
         WHERE ${conditions.join('\n        AND ')}
         GROUP BY c.zip
         ORDER BY repair_count DESC, c.zip ASC
@@ -385,5 +391,9 @@ export async function getCustomerGeoZipIncome(
       row.storm_demand_score === null || row.storm_demand_score === undefined
         ? null
         : Number(row.storm_demand_score),
+    ev_vehicle_count:
+      row.ev_vehicle_count === null || row.ev_vehicle_count === undefined
+        ? null
+        : Number(row.ev_vehicle_count),
   }))
 }

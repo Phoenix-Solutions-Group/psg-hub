@@ -236,6 +236,7 @@ export interface CustomerGeoZipIncomeRow {
   crash_demand_score: number | null
   storm_demand_score: number | null
   opportunity_score: number | null
+  ev_vehicle_count: number | null
 }
 
 export interface CustomerGeoZipIncomeResponse {

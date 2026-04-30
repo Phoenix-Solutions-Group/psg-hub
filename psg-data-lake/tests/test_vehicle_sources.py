@@ -54,6 +54,18 @@ def test_atlas_csv_url_accepts_custom_month():
     assert "CO_EV_Registrations_12.csv" in url
 
 
+def test_atlas_csv_url_nc_no_month_suffix():
+    url = atlas_csv_url("NC")
+    assert url.endswith("NC_EV_Registrations.csv")
+
+
+def test_atlas_csv_url_uses_state_specific_month():
+    url = atlas_csv_url("NJ")
+    assert "_12.csv" in url
+    url_mn = atlas_csv_url("MN")
+    assert "_11.csv" in url_mn
+
+
 def test_prioritized_vehicle_sources_returns_ordered():
     sources = prioritized_vehicle_sources()
     keys = [s.key for s in sources]

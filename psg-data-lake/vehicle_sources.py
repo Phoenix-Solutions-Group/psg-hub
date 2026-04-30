@@ -103,11 +103,28 @@ def atlas_ev_hub_states() -> set[str]:
     return set(ATLAS_STATES)
 
 
-ATLAS_LATEST_MONTH = "03"
+ATLAS_STATE_MONTHS: dict[str, str | None] = {
+    "CO": "03",
+    "CT": "03",
+    "ME": "09",
+    "MN": "11",
+    "MT": "05",
+    "NC": None,
+    "NJ": "12",
+    "NM": "03",
+    "NY": "03",
+    "OR": "02",
+    "TN": "11",
+    "TX": "03",
+    "VA": "05",
+    "VT": "11",
+}
 
 
 def atlas_csv_url(state_abbr: str, month: str | None = None) -> str:
-    m = month or ATLAS_LATEST_MONTH
+    m = month or ATLAS_STATE_MONTHS.get(state_abbr, "03")
+    if m is None:
+        return f"{ATLAS_BASE_URL}{state_abbr}_EV_Registrations.csv"
     return f"{ATLAS_BASE_URL}{state_abbr}_EV_Registrations_{m}.csv"
 
 
