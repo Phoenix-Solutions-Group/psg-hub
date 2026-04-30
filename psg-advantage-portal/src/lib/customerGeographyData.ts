@@ -355,7 +355,7 @@ export async function getCustomerGeoZipIncome(
     return []
   }
 
-  return rows.map((row) => ({
+  const mapped = rows.map((row): CustomerGeoZipIncomeRow => ({
     zip: String(row.zip || ''),
     state: row.state ? String(row.state) : null,
     county_name: row.county_name ? String(row.county_name) : null,
@@ -406,7 +406,122 @@ export async function getCustomerGeoZipIncome(
       row.ev_vehicle_count === null || row.ev_vehicle_count === undefined
         ? null
         : Number(row.ev_vehicle_count),
-    // TODO: populate from estimated_zip_vehicles once customer_zip_report_monthly has the column
     data_quality_flag: null,
+  }))
+
+  if (mapped.length === 0 && filters.shopIds.length > 0) {
+    return getMarketDataFallback(db, filters)
+  }
+
+  return mapped
+}
+
+async function getMarketDataFallback(
+  db: Pool,
+  filters: CustomerGeoFilters
+): Promise<CustomerGeoZipIncomeRow[]> {
+  const params: unknown[] = [filters.shopIds]
+  const limitVal = Math.max(25, Math.min(filters.limit || 500, 5000))
+
+  let rows: Array<Record<string, unknown>> = []
+  try {
+    const result = await db.query(
+      `
+        WITH shop_zips AS (
+          SELECT DISTINCT SUBSTRING(bs.address FROM '([0-9]{5})') AS zip
+          FROM public.body_shops bs
+          WHERE EXISTS (
+            SELECT 1 FROM sensitive.repair_customers rc
+            WHERE rc.shop_id = ANY($1::text[])
+              AND (
+                bs.normalized_name = LOWER(REGEXP_REPLACE(rc.shop_name, '[^a-zA-Z0-9]', '', 'g'))
+                OR bs.address ILIKE '%' || SUBSTRING(rc.shop_name FROM 1 FOR 10) || '%'
+              )
+          )
+        ),
+        shop_counties AS (
+          SELECT DISTINCT zr.county_fips
+          FROM shop_zips sz
+          JOIN public.zip_references zr ON zr.zip_code = sz.zip
+        )
+        SELECT
+          e.zip,
+          zm.state_abbr AS state,
+          cr.county_name,
+          zm.city_name,
+          0::int AS repair_count,
+          0::int AS unique_household_count,
+          i.mean_household_income::float8,
+          i.median_household_income::float8,
+          NULL::float8 AS avg_repair_total,
+          NULL::float8 AS total_repair_value,
+          e.estimated_total_vehicles::int AS registered_vehicles,
+          bs_count.shop_count::int AS competitor_shop_count,
+          cza.crash_demand_score::float8,
+          szm.storm_demand_score::float8,
+          e.ev_count::int AS ev_vehicle_count
+        FROM public.estimated_zip_vehicles e
+        JOIN public.zip_references zr ON zr.zip_code = e.zip
+        JOIN shop_counties sc ON sc.county_fips = zr.county_fips
+        LEFT JOIN LATERAL (
+          SELECT zm2.city_name, zm2.state_abbr
+          FROM public.zcta_zip_mapping zm2
+          WHERE zm2.zip_code = e.zip LIMIT 1
+        ) zm ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT cr2.county_name
+          FROM public.county_references cr2
+          WHERE cr2.county_fips = zr.county_fips LIMIT 1
+        ) cr ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT MAX(z.mean_household_income) AS mean_household_income,
+                 MAX(z.median_household_income) AS median_household_income
+          FROM public.zcta_income_annual z
+          WHERE z.zip = e.zip
+        ) i ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT SUM(weighted_crash_demand_score)::numeric AS crash_demand_score
+          FROM public.crash_zip_annual cz WHERE cz.zip = e.zip
+        ) cza ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT SUM(weighted_storm_demand_score)::numeric AS storm_demand_score
+          FROM public.storm_zip_monthly sm WHERE sm.zip = e.zip
+        ) szm ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*)::int AS shop_count
+          FROM public.body_shops b
+          WHERE b.address LIKE '%' || e.zip || '%'
+        ) bs_count ON TRUE
+        WHERE e.estimated_total_vehicles > 0
+        ORDER BY e.estimated_total_vehicles DESC
+        LIMIT ${limitVal}
+      `,
+      params
+    )
+    rows = result.rows
+  } catch (error) {
+    if (!isMissingGeoDependency(error)) throw error
+    return []
+  }
+
+  return rows.map((row) => ({
+    zip: String(row.zip || ''),
+    state: row.state ? String(row.state) : null,
+    county_name: row.county_name ? String(row.county_name) : null,
+    city_name: row.city_name ? String(row.city_name) : null,
+    repair_count: 0,
+    unique_household_count: 0,
+    mean_household_income: row.mean_household_income != null ? Number(row.mean_household_income) : null,
+    median_household_income: row.median_household_income != null ? Number(row.median_household_income) : null,
+    avg_repair_total: null,
+    total_repair_value: null,
+    registered_vehicles: row.registered_vehicles != null ? Number(row.registered_vehicles) : null,
+    vehicle_repair_penetration_pct: null,
+    market_share_pct: null,
+    competitor_shop_count: row.competitor_shop_count != null ? Number(row.competitor_shop_count) : null,
+    crash_demand_score: row.crash_demand_score != null ? Number(row.crash_demand_score) : null,
+    storm_demand_score: row.storm_demand_score != null ? Number(row.storm_demand_score) : null,
+    ev_vehicle_count: row.ev_vehicle_count != null ? Number(row.ev_vehicle_count) : null,
+    data_quality_flag: 'market_only',
   }))
 }
