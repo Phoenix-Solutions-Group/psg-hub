@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   )
 
   const { startDate, endDate, preset, shopIds } = normalized.value
-  const cacheKey = `customer-geo:zip-income:v4:${startDate}:${endDate}:${preset}:${shopIds.join('|')}:${limit}`
+  const cacheKey = `customer-geo:zip-income:v5:${startDate}:${endDate}:${preset}:${shopIds.join('|')}:${limit}`
   const cached = await getCached<CustomerGeoZipIncomeResponse>(cacheKey)
   if (cached) return NextResponse.json(cached)
 
@@ -65,11 +65,6 @@ export async function GET(request: NextRequest) {
   }
 
   const totalRepairs = rows.reduce((sum, row) => sum + row.repair_count, 0)
-  const totalServiceAddresses = rows.reduce((sum, row) => sum + row.unique_household_count, 0)
-  const totalMarketHouseholds = rows.reduce((sum, row) => {
-    if (row.market_households === null) return sum
-    return sum + row.market_households
-  }, 0)
   const weightedIncomeNumerator = rows.reduce((sum, row) => {
     if (row.mean_household_income === null) return sum
     return sum + row.mean_household_income * row.repair_count
@@ -126,21 +121,14 @@ export async function GET(request: NextRequest) {
     summary: {
       zip_count: rows.length,
       total_repairs: totalRepairs,
-      total_households: totalServiceAddresses,
-      total_service_addresses: totalServiceAddresses,
-      total_market_households: totalMarketHouseholds > 0 ? totalMarketHouseholds : null,
-      service_address_penetration_pct:
-        totalMarketHouseholds > 0
-          ? Number(((totalServiceAddresses / totalMarketHouseholds) * 100).toFixed(2))
-          : null,
       total_registered_vehicles: totalRegisteredVehicles > 0 ? totalRegisteredVehicles : null,
-      vehicle_penetration_pct:
-        totalRegisteredVehicles > 0
-          ? Number(((totalServiceAddresses / totalRegisteredVehicles) * 100).toFixed(2))
-          : null,
       vehicle_repair_penetration_pct:
         totalRegisteredVehicles > 0
           ? Number(((totalRepairs / totalRegisteredVehicles) * 100).toFixed(2))
+          : null,
+      market_share_pct:
+        totalRegisteredVehicles > 0
+          ? Number(((totalRepairs / (totalRegisteredVehicles * 0.06)) * 100).toFixed(2))
           : null,
       weighted_mean_household_income:
         weightedIncomeDenominator > 0

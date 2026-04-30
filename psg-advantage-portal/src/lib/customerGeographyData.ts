@@ -36,11 +36,9 @@ export interface CustomerGeoZipIncomeRow {
   county_name: string | null
   repair_count: number
   unique_household_count: number
-  market_households: number | null
-  service_address_penetration_pct: number | null
   registered_vehicles: number | null
-  vehicle_penetration_pct: number | null
   vehicle_repair_penetration_pct: number | null
+  market_share_pct: number | null
   competitor_shop_count: number | null
   crash_demand_score: number | null
   storm_demand_score: number | null
@@ -318,7 +316,6 @@ export async function getCustomerGeoZipIncome(
           MAX(c.county_name) AS county_name,
           SUM(c.repair_count)::int AS repair_count,
           SUM(c.unique_household_count)::int AS unique_household_count,
-          MAX(zi.households)::bigint AS market_households,
           MAX(c.mean_household_income)::float8 AS mean_household_income,
           MAX(c.median_household_income)::float8 AS median_household_income,
           AVG(c.avg_repair_total)::float8 AS avg_repair_total,
@@ -328,14 +325,6 @@ export async function getCustomerGeoZipIncome(
           MAX(c.crash_demand_score)::float8 AS crash_demand_score,
           MAX(c.storm_demand_score)::float8 AS storm_demand_score
         FROM public.customer_zip_report_monthly c
-        LEFT JOIN LATERAL (
-          SELECT z.households
-          FROM public.zcta_income_annual z
-          WHERE z.zip = c.zip
-            AND z.year <= EXTRACT(YEAR FROM $2::date)::int
-          ORDER BY z.year DESC
-          LIMIT 1
-        ) zi ON TRUE
         WHERE ${conditions.join('\n        AND ')}
         GROUP BY c.zip
         ORDER BY repair_count DESC, c.zip ASC
@@ -351,14 +340,6 @@ export async function getCustomerGeoZipIncome(
   }
 
   return rows.map((row) => ({
-    market_households:
-      row.market_households === null || row.market_households === undefined
-        ? null
-        : Number(row.market_households),
-    service_address_penetration_pct:
-      row.market_households === null || row.market_households === undefined || Number(row.market_households) <= 0
-        ? null
-        : Number((((Number(row.unique_household_count || 0) / Number(row.market_households)) * 100)).toFixed(2)),
     zip: String(row.zip || ''),
     state: row.state ? String(row.state) : null,
     county_name: row.county_name ? String(row.county_name) : null,
@@ -384,14 +365,14 @@ export async function getCustomerGeoZipIncome(
       row.registered_vehicles === null || row.registered_vehicles === undefined
         ? null
         : Number(row.registered_vehicles),
-    vehicle_penetration_pct:
-      row.registered_vehicles === null || row.registered_vehicles === undefined || Number(row.registered_vehicles) <= 0
-        ? null
-        : Number(((Number(row.unique_household_count || 0) / Number(row.registered_vehicles)) * 100).toFixed(2)),
     vehicle_repair_penetration_pct:
       row.registered_vehicles === null || row.registered_vehicles === undefined || Number(row.registered_vehicles) <= 0
         ? null
         : Number(((Number(row.repair_count || 0) / Number(row.registered_vehicles)) * 100).toFixed(2)),
+    market_share_pct:
+      row.registered_vehicles === null || row.registered_vehicles === undefined || Number(row.registered_vehicles) <= 0
+        ? null
+        : Number(((Number(row.repair_count || 0) / (Number(row.registered_vehicles) * 0.06)) * 100).toFixed(2)),
     competitor_shop_count:
       row.competitor_shop_count === null || row.competitor_shop_count === undefined
         ? null

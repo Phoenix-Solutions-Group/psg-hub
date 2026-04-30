@@ -225,11 +225,9 @@ export interface CustomerGeoZipIncomeRow {
   county_name: string | null
   repair_count: number
   unique_household_count: number
-  market_households: number | null
-  service_address_penetration_pct: number | null
   registered_vehicles: number | null
-  vehicle_penetration_pct: number | null
   vehicle_repair_penetration_pct: number | null
+  market_share_pct: number | null
   mean_household_income: number | null
   median_household_income: number | null
   avg_repair_total: number | null
@@ -250,13 +248,9 @@ export interface CustomerGeoZipIncomeResponse {
   summary: {
     zip_count: number
     total_repairs: number
-    total_households: number
-    total_service_addresses: number
-    total_market_households: number | null
-    service_address_penetration_pct: number | null
     total_registered_vehicles: number | null
-    vehicle_penetration_pct: number | null
     vehicle_repair_penetration_pct: number | null
+    market_share_pct: number | null
     weighted_mean_household_income: number | null
     avg_opportunity_score: number | null
   }
