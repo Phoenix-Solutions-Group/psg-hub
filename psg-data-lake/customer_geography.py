@@ -807,6 +807,14 @@ def refresh_zip_report(conn, *, start_date: str, end_date: str, import_batch_id:
             FROM public.dmv_vehicle_registrations d2
             WHERE d2.zip = d.zip
           )
+        ),
+        shops AS (
+          SELECT
+            SUBSTRING(bs.address FROM '([0-9]{5})') AS zip,
+            COUNT(*)::int AS shop_count
+          FROM public.body_shops bs
+          WHERE bs.address ~ '[0-9]{5}'
+          GROUP BY SUBSTRING(bs.address FROM '([0-9]{5})')
         )
         INSERT INTO public.customer_zip_report_monthly (
           month,
@@ -826,6 +834,7 @@ def refresh_zip_report(conn, *, start_date: str, end_date: str, import_batch_id:
           storm_demand_score,
           market_opportunity_score,
           registered_vehicles,
+          competitor_shop_count,
           import_batch_id
         )
         SELECT
@@ -861,6 +870,7 @@ def refresh_zip_report(conn, *, start_date: str, end_date: str, import_batch_id:
             2
           ) AS market_opportunity_score,
           dmv.vehicle_count AS registered_vehicles,
+          shops.shop_count AS competitor_shop_count,
           %s::text AS import_batch_id
         FROM rollup r
         LEFT JOIN LATERAL (
@@ -889,6 +899,8 @@ def refresh_zip_report(conn, *, start_date: str, end_date: str, import_batch_id:
           )
         LEFT JOIN dmv
           ON dmv.zip = r.zip
+        LEFT JOIN shops
+          ON shops.zip = r.zip
         ON CONFLICT (month, shop_id, zip)
         DO UPDATE SET
           shop_name = EXCLUDED.shop_name,
@@ -905,6 +917,7 @@ def refresh_zip_report(conn, *, start_date: str, end_date: str, import_batch_id:
           storm_demand_score = EXCLUDED.storm_demand_score,
           market_opportunity_score = EXCLUDED.market_opportunity_score,
           registered_vehicles = EXCLUDED.registered_vehicles,
+          competitor_shop_count = EXCLUDED.competitor_shop_count,
           import_batch_id = EXCLUDED.import_batch_id;
     """
     conn.execute(sql, (start_date, end_date, import_batch_id))
