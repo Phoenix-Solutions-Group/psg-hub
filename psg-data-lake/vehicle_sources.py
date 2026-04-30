@@ -103,8 +103,12 @@ def atlas_ev_hub_states() -> set[str]:
     return set(ATLAS_STATES)
 
 
-def atlas_csv_url(state_abbr: str) -> str:
-    return f"{ATLAS_BASE_URL}{state_abbr}_EV_Registrations.csv"
+ATLAS_LATEST_MONTH = "03"
+
+
+def atlas_csv_url(state_abbr: str, month: str | None = None) -> str:
+    m = month or ATLAS_LATEST_MONTH
+    return f"{ATLAS_BASE_URL}{state_abbr}_EV_Registrations_{m}.csv"
 
 
 def region_states(region: str) -> list[str]:

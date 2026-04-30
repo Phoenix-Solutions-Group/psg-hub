@@ -12,7 +12,7 @@ import sys
 from dataclasses import asdict
 from datetime import UTC, date, datetime
 from typing import Any, Iterable
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from supabase_migration import connect
 from utils.normalize import normalize_zip
@@ -71,8 +71,8 @@ def prepare_ev_registration_record(
         "vehicle_count": vehicle_count,
         "make": (str(row.get("Vehicle Make") or row.get("make") or "").strip() or None),
         "model": (str(row.get("Vehicle Model") or row.get("model") or "").strip() or None),
-        "powertrain_type": (str(row.get("Powertrain Type") or row.get("powertrain_type") or "").strip() or None),
-        "vehicle_category": (str(row.get("Vehicle Category") or row.get("vehicle_category") or "").strip() or None),
+        "powertrain_type": (str(row.get("Drivetrain Type") or row.get("Powertrain Type") or row.get("powertrain_type") or "").strip() or None),
+        "vehicle_category": (str(row.get("Vehicle GVWR Category") or row.get("Vehicle Category") or row.get("vehicle_category") or "").strip() or None),
         "snapshot_date": snapshot_date,
         "source": ATLAS_EV_HUB_KEY,
         "source_dataset": "atlas_ev_hub",
@@ -81,37 +81,25 @@ def prepare_ev_registration_record(
     }
 
 
-def atlas_csv_url_for_state(state_abbr: str) -> str:
-    return atlas_csv_url(state_abbr)
+def atlas_csv_url_for_state(state_abbr: str, month: str | None = None) -> str:
+    return atlas_csv_url(state_abbr, month=month)
 
 
-def fetch_atlas_csv_rows(state_abbr: str) -> list[dict[str, Any]]:
-    url = atlas_csv_url_for_state(state_abbr)
-    with urlopen(url, timeout=120) as response:
-        text = response.read().decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(text))
-    return list(reader)
+def fetch_atlas_csv_rows(state_abbr: str, *, month: str | None = None, latest_only: bool = True) -> Iterable[dict[str, Any]]:
+    url = atlas_csv_url_for_state(state_abbr, month=month)
+    req = Request(url, headers={"User-Agent": "PSG-DataLake/1.0"})
+    with urlopen(req, timeout=300) as response:
+        text_stream = io.TextIOWrapper(response, encoding="utf-8-sig", newline="")
+        for row in csv.DictReader(text_stream):
+            if latest_only and row.get("Latest DMV Snapshot Flag", "").strip().lower() == "false":
+                continue
+            yield row
 
 
-def load_ev_registration_rows(
-    conn,
-    *,
-    rows: list[dict[str, Any]],
-    state_abbr: str,
-    snapshot_date: str,
-    import_batch_id: str,
-) -> dict[str, int]:
-    prepared = [
-        record
-        for record in (
-            prepare_ev_registration_record(row, snapshot_date=snapshot_date, import_batch_id=import_batch_id)
-            for row in rows
-        )
-        if record
-    ]
-    if not prepared:
-        return {"rows_prepared": 0}
+BATCH_SIZE = 50_000
 
+
+def _upsert_ev_batch(conn, prepared: list[dict[str, Any]]) -> int:
     conn.execute(
         "CREATE TEMP TABLE ev_reg_stage"
         " (LIKE public.ev_registrations INCLUDING DEFAULTS)"
@@ -130,16 +118,43 @@ def load_ev_registration_rows(
         for col in EV_REG_COPY_COLUMNS
         if col not in {"zip", "source", "snapshot_date", "make", "model", "powertrain_type"}
     )
+    conflict_expr = "zip, source, snapshot_date, COALESCE(make, ''), COALESCE(model, ''), COALESCE(powertrain_type, '')"
     conn.execute(
         f"""
         INSERT INTO public.ev_registrations ({columns})
-        SELECT {columns}
+        SELECT DISTINCT ON ({conflict_expr}) {columns}
         FROM ev_reg_stage
+        ORDER BY {conflict_expr}, vehicle_count DESC
         ON CONFLICT (zip, source, snapshot_date, COALESCE(make, ''), COALESCE(model, ''), COALESCE(powertrain_type, ''))
         DO UPDATE SET {update_columns}, imported_at = NOW()
         """
     )
-    return {"rows_prepared": len(prepared)}
+    conn.commit()
+    return len(prepared)
+
+
+def load_ev_registration_rows(
+    conn,
+    *,
+    rows: Iterable[dict[str, Any]],
+    state_abbr: str,
+    snapshot_date: str,
+    import_batch_id: str,
+    batch_size: int = BATCH_SIZE,
+) -> dict[str, int]:
+    total = 0
+    batch: list[dict[str, Any]] = []
+    for row in rows:
+        record = prepare_ev_registration_record(row, snapshot_date=snapshot_date, import_batch_id=import_batch_id)
+        if record:
+            batch.append(record)
+        if len(batch) >= batch_size:
+            total += _upsert_ev_batch(conn, batch)
+            print(f"  {state_abbr}: {total} rows", file=sys.stderr, flush=True)
+            batch = []
+    if batch:
+        total += _upsert_ev_batch(conn, batch)
+    return {"rows_prepared": total}
 
 
 def load_atlas_state(
@@ -160,14 +175,12 @@ def load_atlas_state(
         snapshot_date=snapshot,
         import_batch_id=batch_id,
     )
-    conn.commit()
     print(f"{source.key} {state_abbr}: {result['rows_prepared']} rows", file=sys.stderr, flush=True)
     return {
         "source": asdict(source),
         "state": state_abbr,
         "import_batch_id": batch_id,
         "snapshot_date": snapshot,
-        "fetched_rows": len(rows),
         **result,
     }
 

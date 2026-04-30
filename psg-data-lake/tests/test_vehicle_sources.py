@@ -46,7 +46,12 @@ def test_atlas_csv_url_builds_correct_pattern():
     url = atlas_csv_url("NY")
     assert url.startswith("https://www.atlasevhub.com/public/dmv/")
     assert "NY" in url
-    assert url.endswith(".csv")
+    assert url.endswith("_03.csv")
+
+
+def test_atlas_csv_url_accepts_custom_month():
+    url = atlas_csv_url("CO", month="12")
+    assert "CO_EV_Registrations_12.csv" in url
 
 
 def test_prioritized_vehicle_sources_returns_ordered():

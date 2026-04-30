@@ -62,10 +62,33 @@ def test_prepare_ev_registration_record_handles_short_zip():
     assert prepared["zip"] == "06510"
 
 
+def test_prepare_ev_registration_record_handles_actual_csv_columns():
+    row = {
+        "State": "NY",
+        "ZIP Code": "10805",
+        "Registration Date": "12/1/2018",
+        "Vehicle Make": "TESLA",
+        "Vehicle Model": "MODEL 3",
+        "Vehicle Model Year": "2018",
+        "Drivetrain Type": "BEV",
+        "Vehicle GVWR Class": "1",
+        "Vehicle GVWR Category": "Light-Duty (Class 1-2A)",
+        "Vehicle Count": "1",
+        "DMV Snapshot ID": "33",
+        "DMV Snapshot (Date)": "DMV Snapshot (12/2/2019)",
+        "Latest DMV Snapshot Flag": "True",
+    }
+    prepared = prepare_ev_registration_record(row, snapshot_date="2024-07-01")
+    assert prepared is not None
+    assert prepared["powertrain_type"] == "BEV"
+    assert prepared["vehicle_category"] == "Light-Duty (Class 1-2A)"
+
+
 def test_atlas_csv_url_for_state_builds_correct_url():
     url = atlas_csv_url_for_state("NY")
     assert "atlasevhub.com" in url
     assert "NY" in url
+    assert "_03.csv" in url
 
 
 def test_inspect_source_info_returns_metadata():
