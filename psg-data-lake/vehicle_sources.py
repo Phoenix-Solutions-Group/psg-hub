@@ -9,6 +9,10 @@ ATLAS_EV_HUB_KEY = "atlas_ev_hub"
 FHWA_MV1_KEY = "fhwa_mv1"
 NY_DMV_KEY = "ny_dmv"
 CA_DMV_KEY = "ca_dmv"
+CENSUS_VEHICLES_KEY = "acs5_zcta_vehicles"
+TX_DMV_KEY = "tx_dmv"
+MD_MVA_KEY = "md_mva"
+WA_DOL_KEY = "wa_dol"
 
 ATLAS_BASE_URL = "https://www.atlasevhub.com/public/dmv/"
 FHWA_MV1_ENDPOINT = "https://datahub.transportation.gov/resource/hwtm-7xmz.json"
@@ -95,6 +99,54 @@ VEHICLE_SOURCES: dict[str, VehicleSource] = {
         license_note="California Open Data.",
         adapter_status="implementing",
         priority=3,
+    ),
+    CENSUS_VEHICLES_KEY: VehicleSource(
+        key=CENSUS_VEHICLES_KEY,
+        name="Census ACS5 Household Vehicle Availability (B25046/B25044)",
+        base_url="https://api.census.gov/data/{year}/acs/acs5",
+        geography="national",
+        data_type="household_vehicles",
+        granularity="zcta",
+        cadence="annual",
+        license_note="Public federal data via Census Bureau API.",
+        adapter_status="implemented",
+        priority=0,
+    ),
+    TX_DMV_KEY: VehicleSource(
+        key=TX_DMV_KEY,
+        name="Texas DMV Registered Vehicles by County",
+        base_url="https://data.texas.gov/resource/j5fk-64au.json",
+        geography="TX",
+        data_type="all_vehicles",
+        granularity="county",
+        cadence="monthly",
+        license_note="Texas Open Data.",
+        adapter_status="implemented",
+        priority=4,
+    ),
+    MD_MVA_KEY: VehicleSource(
+        key=MD_MVA_KEY,
+        name="Maryland MVA Vehicle Registrations by County",
+        base_url="https://opendata.maryland.gov/resource/db8v-9ewn.json",
+        geography="MD",
+        data_type="all_vehicles",
+        granularity="county",
+        cadence="monthly",
+        license_note="Maryland Open Data.",
+        adapter_status="implemented",
+        priority=5,
+    ),
+    WA_DOL_KEY: VehicleSource(
+        key=WA_DOL_KEY,
+        name="Washington DOL Vehicle Registrations by Class and County",
+        base_url="https://data.wa.gov/resource/hmzg-s6q4.json",
+        geography="WA",
+        data_type="all_vehicles",
+        granularity="county",
+        cadence="quarterly",
+        license_note="Washington Open Data.",
+        adapter_status="implemented",
+        priority=6,
     ),
 }
 

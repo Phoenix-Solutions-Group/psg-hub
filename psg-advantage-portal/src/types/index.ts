@@ -238,6 +238,7 @@ export interface CustomerGeoZipIncomeRow {
   storm_demand_score: number | null
   opportunity_score: number | null
   ev_vehicle_count: number | null
+  data_quality_flag?: string | null
 }
 
 export interface CustomerGeoZipIncomeResponse {

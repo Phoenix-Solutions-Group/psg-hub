@@ -47,6 +47,8 @@ export interface CustomerGeoZipIncomeRow {
   median_household_income: number | null
   avg_repair_total: number | null
   total_repair_value: number | null
+  ev_vehicle_count: number | null
+  data_quality_flag: string | null
 }
 
 let pool: Pool | null = null
@@ -404,5 +406,7 @@ export async function getCustomerGeoZipIncome(
       row.ev_vehicle_count === null || row.ev_vehicle_count === undefined
         ? null
         : Number(row.ev_vehicle_count),
+    // TODO: populate from estimated_zip_vehicles once customer_zip_report_monthly has the column
+    data_quality_flag: null,
   }))
 }

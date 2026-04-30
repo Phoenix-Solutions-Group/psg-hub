@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   )
 
   const { startDate, endDate, preset, shopIds } = normalized.value
-  const cacheKey = `customer-geo:zip-income:v5:${startDate}:${endDate}:${preset}:${shopIds.join('|')}:${limit}`
+  const cacheKey = `customer-geo:zip-income:v6:${startDate}:${endDate}:${preset}:${shopIds.join('|')}:${limit}`
   const cached = await getCached<CustomerGeoZipIncomeResponse>(cacheKey)
   if (cached) return NextResponse.json(cached)
 

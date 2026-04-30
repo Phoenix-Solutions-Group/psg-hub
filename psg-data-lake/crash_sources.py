@@ -10,6 +10,9 @@ COLORADO_CDOT_CRASHES_KEY = "colorado_cdot_crash_listing"
 NYC_MOTOR_VEHICLE_COLLISIONS_KEY = "nyc_motor_vehicle_collisions"
 MISSOURI_CRASH_REFERENCES_KEY = "missouri_modot_mshp_crash_references"
 CALIFORNIA_CCRS_TIMS_KEY = "california_ccrs_tims"
+FARS_CRASHES_KEY = "fars_crashes"
+FARS_CRASHES_API_BASE = "https://crashviewer.nhtsa.dot.gov/CrashAPI"
+FARS_CRASHES_LANDING_URL = "https://www.nhtsa.gov/research-data/fatality-analysis-reporting-system-fars"
 CHICAGO_TRAFFIC_CRASHES_DATASET_ID = "85ca-t3if"
 CHICAGO_TRAFFIC_CRASHES_ENDPOINT = "https://data.cityofchicago.org/resource/85ca-t3if.json"
 CHICAGO_TRAFFIC_CRASHES_LANDING_URL = "https://data.cityofchicago.org/d/85ca-t3if"
@@ -125,6 +128,32 @@ CRASH_SOURCES: dict[str, CrashSource] = {
         ),
         adapter_status="planned",
         priority=4,
+    ),
+    FARS_CRASHES_KEY: CrashSource(
+        key=FARS_CRASHES_KEY,
+        name="NHTSA FARS - Fatality Analysis Reporting System",
+        source_url=FARS_CRASHES_LANDING_URL,
+        api_url=FARS_CRASHES_API_BASE,
+        geography="United States",
+        update_cadence=(
+            "Annual final data typically released 8-12 months after the crash year; "
+            "annual preliminary data released within the year following the crash year."
+        ),
+        license_note=(
+            "Public NHTSA open data. FARS contains only fatal crashes (at least one "
+            "fatality within 30 days of the crash). Preserve source attribution."
+        ),
+        expected_lag=(
+            "Final data lags by ~8-12 months; suitable for annual and multi-year "
+            "national fatal crash trend analysis."
+        ),
+        notes=(
+            "National fatal crash coverage across all 50 states and DC. All records "
+            "carry severity='fatal'. Provides PSG with nationwide baseline demand "
+            "signal beyond state-specific adapters."
+        ),
+        adapter_status="implemented",
+        priority=5,
     )
 }
 

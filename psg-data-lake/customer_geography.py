@@ -797,6 +797,11 @@ def refresh_zip_report(conn, *, start_date: str, end_date: str, import_batch_id:
           WHERE s.zip <> '__UNMATCHED__'
           GROUP BY EXTRACT(YEAR FROM s.month)::int, s.zip
         ),
+        est_veh AS (
+          SELECT e.zip, e.estimated_total_vehicles, e.data_quality_flag, e.ev_count, e.ev_pct
+          FROM public.estimated_zip_vehicles e
+          WHERE e.year = (SELECT MAX(year) FROM public.estimated_zip_vehicles)
+        ),
         dmv AS (
           SELECT
             d.zip,
@@ -834,6 +839,7 @@ def refresh_zip_report(conn, *, start_date: str, end_date: str, import_batch_id:
           storm_demand_score,
           market_opportunity_score,
           registered_vehicles,
+          ev_vehicle_count,
           competitor_shop_count,
           import_batch_id
         )
@@ -869,7 +875,8 @@ def refresh_zip_report(conn, *, start_date: str, end_date: str, import_batch_id:
             ),
             2
           ) AS market_opportunity_score,
-          dmv.vehicle_count AS registered_vehicles,
+          COALESCE(est_veh.estimated_total_vehicles, dmv.vehicle_count) AS registered_vehicles,
+          est_veh.ev_count AS ev_vehicle_count,
           shops.shop_count AS competitor_shop_count,
           %s::text AS import_batch_id
         FROM rollup r
@@ -897,6 +904,8 @@ def refresh_zip_report(conn, *, start_date: str, end_date: str, import_batch_id:
             WHERE zr.zip_code = r.zip
             LIMIT 1
           )
+        LEFT JOIN est_veh
+          ON est_veh.zip = r.zip
         LEFT JOIN dmv
           ON dmv.zip = r.zip
         LEFT JOIN shops
@@ -917,6 +926,7 @@ def refresh_zip_report(conn, *, start_date: str, end_date: str, import_batch_id:
           storm_demand_score = EXCLUDED.storm_demand_score,
           market_opportunity_score = EXCLUDED.market_opportunity_score,
           registered_vehicles = EXCLUDED.registered_vehicles,
+          ev_vehicle_count = EXCLUDED.ev_vehicle_count,
           competitor_shop_count = EXCLUDED.competitor_shop_count,
           import_batch_id = EXCLUDED.import_batch_id;
     """

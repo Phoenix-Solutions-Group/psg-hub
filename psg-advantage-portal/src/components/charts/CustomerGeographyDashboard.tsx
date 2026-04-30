@@ -548,7 +548,21 @@ export default function CustomerGeographyDashboard() {
                       <td className="px-3 py-2">{row.city_name || '—'}</td>
                       <td className="px-3 py-2">{row.repair_count.toLocaleString()}</td>
                       <td className="px-3 py-2">
-                        {row.registered_vehicles === null ? 'DMV unavailable' : row.registered_vehicles.toLocaleString()}
+                        <span className="inline-flex items-center gap-1.5">
+                          {row.registered_vehicles === null ? 'DMV unavailable' : row.registered_vehicles.toLocaleString()}
+                          {row.data_quality_flag === 'ground_truth' && (
+                            <span
+                              className="inline-block h-2 w-2 rounded-full bg-green-500"
+                              title="Ground truth: DMV registered vehicle data"
+                            />
+                          )}
+                          {row.data_quality_flag === 'model_estimate' && (
+                            <span
+                              className="inline-block h-2 w-2 rounded-full bg-amber-400"
+                              title="Model estimate: vehicle count is modeled, not sourced from DMV"
+                            />
+                          )}
+                        </span>
                       </td>
                       <td className="px-3 py-2">{pctNullable(row.vehicle_repair_penetration_pct)}</td>
                       <td className="px-3 py-2">{pctNullable(row.market_share_pct)}</td>

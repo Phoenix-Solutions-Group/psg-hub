@@ -50,6 +50,9 @@ KNOWN_TABLES = {
     "crash_events_stage",
     "ev_registrations",
     "state_vehicle_registrations",
+    "zcta_vehicle_availability",
+    "estimated_zip_vehicles",
+    "county_vehicle_registrations",
 }
 
 KNOWN_RELATIONS = KNOWN_TABLES | {
