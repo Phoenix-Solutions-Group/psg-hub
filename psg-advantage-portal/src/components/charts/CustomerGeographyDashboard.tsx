@@ -494,6 +494,14 @@ export default function CustomerGeographyDashboard() {
                 {formatMoney(zipResponse?.summary.weighted_mean_household_income ?? null)}
               </p>
             </article>
+            <article className="border border-stone bg-white px-4 py-3">
+              <p className="text-[10px] uppercase tracking-wide text-mist">Avg Opportunity</p>
+              <p className="mt-1 font-heading text-xl text-navy">
+                {zipResponse?.summary.avg_opportunity_score !== null && zipResponse?.summary.avg_opportunity_score !== undefined
+                  ? zipResponse.summary.avg_opportunity_score.toFixed(1)
+                  : '\u2014'}
+              </p>
+            </article>
           </section>
 
           <section className="grid gap-3 md:grid-cols-3">
@@ -546,6 +554,7 @@ export default function CustomerGeographyDashboard() {
                     <th className="px-3 py-2">Vehicle Pen% (HH)</th>
                     <th className="px-3 py-2">Vehicle Pen% (RO)</th>
                     <th className="px-3 py-2">Competitor Shops</th>
+                    <th className="px-3 py-2">Opportunity</th>
                     <th className="px-3 py-2">Mean Income</th>
                     <th className="px-3 py-2">Median Income</th>
                   </tr>
@@ -571,6 +580,16 @@ export default function CustomerGeographyDashboard() {
                       <td className="px-3 py-2">{pctNullable(row.vehicle_repair_penetration_pct)}</td>
                       <td className="px-3 py-2">
                         {row.competitor_shop_count === null ? '—' : row.competitor_shop_count.toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 font-heading">
+                        {row.opportunity_score === null
+                          ? '—'
+                          : <span className={
+                              row.opportunity_score >= 70 ? 'text-green-700' :
+                              row.opportunity_score >= 40 ? 'text-amber-600' :
+                              'text-red-600'
+                            }>{row.opportunity_score.toFixed(1)}</span>
+                        }
                       </td>
                       <td className="px-3 py-2">
                         {row.mean_household_income === null
