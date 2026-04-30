@@ -107,13 +107,19 @@ def canonical_vehicle_source() -> CensusVehicleSource:
     )
 
 
+CENSUS_SENTINELS = {-666666666, -999999999, -888888888, -222222222, -333333333}
+
+
 def parse_int(value: Any) -> int | None:
     if value in (None, "", "null"):
         return None
     try:
-        return int(str(value))
+        v = int(str(value))
     except ValueError:
         return None
+    if v in CENSUS_SENTINELS:
+        return None
+    return v
 
 
 def fetch_census_vehicle_rows(

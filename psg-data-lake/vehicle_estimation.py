@@ -54,14 +54,15 @@ ESTIMATE_COPY_COLUMNS = [
 
 
 def _load_fhwa_state_totals(conn, year: int) -> dict[str, int]:
-    """Load FHWA MV-1 state totals for the closest available year."""
+    """Load FHWA MV-1 state totals, mapped to 2-letter abbreviations."""
     rows = conn.execute(
         """
-        SELECT state,
-               COALESCE(auto_count, 0) + COALESCE(bus_count, 0)
-               + COALESCE(truck_count, 0) + COALESCE(motorcycle_count, 0) AS total
-        FROM state_vehicle_registrations
-        WHERE year = (
+        SELECT sr.state_abbr,
+               COALESCE(svr.auto_count, 0) + COALESCE(svr.bus_count, 0)
+               + COALESCE(svr.truck_count, 0) + COALESCE(svr.motorcycle_count, 0) AS total
+        FROM state_vehicle_registrations svr
+        JOIN state_references sr ON LOWER(sr.state_name) = LOWER(svr.state)
+        WHERE svr.year = (
             SELECT MAX(year) FROM state_vehicle_registrations WHERE year <= %s
         )
         """,
