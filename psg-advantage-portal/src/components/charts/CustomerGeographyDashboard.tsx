@@ -320,10 +320,9 @@ export default function CustomerGeographyDashboard() {
         <p className="text-[10px] uppercase tracking-wide text-mist">What This Page Shows</p>
         <p className="mt-1 text-sm text-graphite">
           This view is ZIP-level demand intelligence. Map markers and table rows are ZIP aggregates, not
-          individual households. Repair Orders are observed repair records. Service Addresses come from
-          monthly ZIP rollups of repair data and can count the same address again in different months.
-          Market Households use the latest available ACS ZIP household estimate, not registered vehicle
-          addresses.
+          individual households. Repair Orders are observed repair records. Market Share % estimates what
+          share of collision-likely vehicles in each ZIP you are repairing, based on a 6% annual collision
+          claim rate applied to registered vehicles.
         </p>
       </section>
 
@@ -453,39 +452,21 @@ export default function CustomerGeographyDashboard() {
               </p>
             </article>
             <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Service Addresses</p>
-              <p className="mt-1 font-heading text-xl text-navy">
-                {compact(zipResponse?.summary.total_service_addresses || 0)}
-              </p>
-            </article>
-            <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Market Households</p>
-              <p className="mt-1 font-heading text-xl text-navy">
-                {compactNullable(zipResponse?.summary.total_market_households ?? null)}
-              </p>
-            </article>
-            <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Reach Vs Market</p>
-              <p className="mt-1 font-heading text-xl text-navy">
-                {pctNullable(zipResponse?.summary.service_address_penetration_pct ?? null)}
-              </p>
-            </article>
-            <article className="border border-stone bg-white px-4 py-3">
               <p className="text-[10px] uppercase tracking-wide text-mist">Registered Vehicles</p>
               <p className="mt-1 font-heading text-xl text-navy">
                 {compactNullable(zipResponse?.summary.total_registered_vehicles ?? null)}
               </p>
             </article>
             <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Vehicle Pen% (HH)</p>
-              <p className="mt-1 font-heading text-xl text-navy">
-                {pctNullable(zipResponse?.summary.vehicle_penetration_pct ?? null)}
-              </p>
-            </article>
-            <article className="border border-stone bg-white px-4 py-3">
               <p className="text-[10px] uppercase tracking-wide text-mist">Vehicle Pen% (RO)</p>
               <p className="mt-1 font-heading text-xl text-navy">
                 {pctNullable(zipResponse?.summary.vehicle_repair_penetration_pct ?? null)}
+              </p>
+            </article>
+            <article className="border border-stone bg-white px-4 py-3">
+              <p className="text-[10px] uppercase tracking-wide text-mist">Market Share</p>
+              <p className="mt-1 font-heading text-xl text-navy">
+                {pctNullable(zipResponse?.summary.market_share_pct ?? null)}
               </p>
             </article>
             <article className="border border-stone bg-white px-4 py-3">
@@ -499,7 +480,7 @@ export default function CustomerGeographyDashboard() {
               <p className="mt-1 font-heading text-xl text-navy">
                 {zipResponse?.summary.avg_opportunity_score !== null && zipResponse?.summary.avg_opportunity_score !== undefined
                   ? zipResponse.summary.avg_opportunity_score.toFixed(1)
-                  : '\u2014'}
+                  : '—'}
               </p>
             </article>
           </section>
@@ -547,12 +528,9 @@ export default function CustomerGeographyDashboard() {
                     <th className="px-3 py-2">ZIP</th>
                     <th className="px-3 py-2">County</th>
                     <th className="px-3 py-2">Repair Orders</th>
-                    <th className="px-3 py-2">Service Addresses</th>
-                    <th className="px-3 py-2">Market Households</th>
-                    <th className="px-3 py-2">Reach %</th>
                     <th className="px-3 py-2">Registered Vehicles</th>
-                    <th className="px-3 py-2">Vehicle Pen% (HH)</th>
                     <th className="px-3 py-2">Vehicle Pen% (RO)</th>
+                    <th className="px-3 py-2">Market Share %</th>
                     <th className="px-3 py-2">Competitor Shops</th>
                     <th className="px-3 py-2">Opportunity</th>
                     <th className="px-3 py-2">Mean Income</th>
@@ -568,16 +546,11 @@ export default function CustomerGeographyDashboard() {
                       <td className="px-3 py-2 font-heading text-navy">{row.zip}</td>
                       <td className="px-3 py-2">{row.county_name || '—'}</td>
                       <td className="px-3 py-2">{row.repair_count.toLocaleString()}</td>
-                      <td className="px-3 py-2">{row.unique_household_count.toLocaleString()}</td>
-                      <td className="px-3 py-2">
-                        {row.market_households === null ? 'ACS unavailable' : row.market_households.toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2">{pctNullable(row.service_address_penetration_pct)}</td>
                       <td className="px-3 py-2">
                         {row.registered_vehicles === null ? 'DMV unavailable' : row.registered_vehicles.toLocaleString()}
                       </td>
-                      <td className="px-3 py-2">{pctNullable(row.vehicle_penetration_pct)}</td>
                       <td className="px-3 py-2">{pctNullable(row.vehicle_repair_penetration_pct)}</td>
+                      <td className="px-3 py-2">{pctNullable(row.market_share_pct)}</td>
                       <td className="px-3 py-2">
                         {row.competitor_shop_count === null ? '—' : row.competitor_shop_count.toLocaleString()}
                       </td>
