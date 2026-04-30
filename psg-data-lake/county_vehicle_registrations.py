@@ -133,7 +133,7 @@ def _prepare_md_row(row: dict[str, Any], *, import_batch_id: str) -> dict[str, A
     county = str(row.get("county", "")).strip()
     if not county:
         return None
-    count = parse_int(row.get("total") or row.get("count") or row.get("registration_count"))
+    count = parse_int(row.get("vehicle_count") or row.get("total") or row.get("count"))
     if count is None or count <= 0:
         return None
     date_val = str(row.get("year_month") or row.get("date") or "").strip()
