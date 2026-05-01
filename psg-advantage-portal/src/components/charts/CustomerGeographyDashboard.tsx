@@ -135,7 +135,7 @@ export default function CustomerGeographyDashboard() {
   const [shopError, setShopError] = useState('')
   const [dataError, setDataError] = useState('')
 
-  const shopParam = useMemo(() => selectedShopIds.join(','), [selectedShopIds])
+  const shopParam = useMemo(() => selectedShopIds.join('|'), [selectedShopIds])
   const filteredShops = useMemo(() => {
     const query = shopQuery.trim().toLowerCase()
     let next = shops

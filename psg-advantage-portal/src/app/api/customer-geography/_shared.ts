@@ -24,7 +24,7 @@ export function normalizePreset(value: string | null): ValidationResult<Customer
 export function normalizeShopIds(value: string | null): string[] {
   if (!value) return []
   return value
-    .split(',')
+    .split('|')
     .map((item) => item.trim())
     .filter(Boolean)
     .slice(0, 50)

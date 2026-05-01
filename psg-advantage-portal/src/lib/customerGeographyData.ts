@@ -410,7 +410,10 @@ export async function getCustomerGeoZipIncome(
   }))
 
   if (mapped.length === 0 && filters.shopIds.length > 0) {
-    return getMarketDataFallback(db, filters)
+    console.log('[customer-geo] No repair data found, trying market data fallback for', filters.shopIds)
+    const fallbackRows = await getMarketDataFallback(db, filters)
+    console.log('[customer-geo] Fallback returned', fallbackRows.length, 'rows')
+    return fallbackRows
   }
 
   return mapped
@@ -497,6 +500,7 @@ async function getMarketDataFallback(
     )
     rows = result.rows
   } catch (error) {
+    console.error('[customer-geo] Fallback query error:', error)
     if (!isMissingGeoDependency(error)) throw error
     return []
   }
