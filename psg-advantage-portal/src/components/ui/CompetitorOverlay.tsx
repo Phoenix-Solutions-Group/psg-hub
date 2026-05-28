@@ -1,4 +1,5 @@
 import type { ShopCompetitorPoint } from '@/types'
+import { EmptyState } from './EmptyState'
 
 function formatDistance(value: number) {
   if (value === 0) return 'Here'
@@ -33,7 +34,7 @@ export function CompetitorOverlay({
 
   if (!anchor) {
     return (
-      <section className="rounded-lg border border-stone bg-white p-5">
+      <section className="border border-stone bg-white p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-medium uppercase text-phoenix-red">
@@ -55,7 +56,7 @@ export function CompetitorOverlay({
   const bounds = getBounds(points)
 
   return (
-    <section className="rounded-lg border border-stone bg-white">
+    <section className="border border-stone bg-white">
       <div className="border-b border-stone p-5">
         <p className="text-xs font-medium uppercase text-phoenix-red">
           Competitor Overlay
@@ -77,8 +78,8 @@ export function CompetitorOverlay({
 
       <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="border-b border-stone p-5 lg:border-b-0 lg:border-r">
-          <div className="relative h-[360px] overflow-hidden rounded-lg border border-stone bg-paper">
-            <div className="absolute inset-4 rounded-lg border border-dashed border-stone" />
+          <div className="relative h-[360px] overflow-hidden border border-stone bg-paper">
+            <div className="absolute inset-4 border border-dashed border-stone" />
             {points.map((point, index) => {
               const left = ((point.longitude - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 86 + 7
               const top = (1 - (point.latitude - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * 86 + 7
@@ -100,7 +101,7 @@ export function CompetitorOverlay({
                 </div>
               )
             })}
-            <div className="absolute bottom-3 left-3 rounded-md bg-white/95 px-3 py-2 text-xs text-slate shadow-sm">
+            <div className="absolute bottom-3 left-3 bg-white/95 px-3 py-2 text-xs text-slate shadow-sm">
               <div className="flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-phoenix-red" />
                 Surveyed shop
@@ -128,7 +129,7 @@ export function CompetitorOverlay({
                     <p className="mt-1 text-xs leading-5 text-slate">{competitor.address}</p>
                   )}
                 </div>
-                <span className="whitespace-nowrap rounded-md bg-bone px-2 py-1 text-xs font-medium text-navy">
+                <span className="whitespace-nowrap bg-bone px-2 py-1 text-xs font-medium text-navy">
                   {formatDistance(competitor.distance_miles)}
                 </span>
               </div>
@@ -148,8 +149,11 @@ export function CompetitorOverlay({
               </div>
             </div>
           )) : (
-            <div className="p-5 text-sm leading-6 text-slate">
-              No competitors from the directory are mapped within 25 miles.
+            <div className="p-4">
+              <EmptyState
+                title="No competitors within 25 miles"
+                description="The body shop directory contains no other locations near this shop. Try widening the radius or check that the directory has coverage in this region."
+              />
             </div>
           )}
         </div>

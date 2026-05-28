@@ -281,3 +281,83 @@ export interface AuthProfile {
   shopId: string
   role: 'shop_owner' | 'psg_admin' | 'read_only'
 }
+
+// Flower Hill market report types
+export interface FlowerHillCustomerRow {
+  customer_first_name: string | null
+  customer_last_name: string | null
+  vehicle_year: number | null
+  vehicle_make: string | null
+  vehicle_model: string | null
+  repair_total: number | null
+  pay_type: string | null
+  insurance_company: string | null
+  date_in: string | null
+  date_out: string | null
+  shop_name: string
+  customer_zip: string | null
+  customer_city: string | null
+  customer_state: string | null
+  latitude: number | null
+  longitude: number | null
+  formatted_address: string | null
+  is_target_vehicle: boolean
+}
+
+export interface FlowerHillZipRow {
+  zip: string
+  city: string | null
+  psg_customer_count: number
+  target_vehicle_matches: number
+  consumer_db_count: number
+  penetration_pct: number | null
+}
+
+export interface FlowerHillMakeRow {
+  make: string
+  psg_customer_count: number
+  consumer_db_count: number
+  penetration_pct: number | null
+}
+
+export interface FlowerHillMetrics {
+  total_repairs: number
+  unique_customers: number
+  total_revenue: number
+  avg_repair_value: number
+  target_vehicle_matches: number
+  target_vehicle_match_rate: number
+  consumer_db_total: number
+  overall_penetration_pct: number
+  shop_names: string[]
+  first_date: string | null
+  last_date: string | null
+  household_penetration_pct: number | null
+  market_penetration_radius_pct: number | null
+  registered_vehicles_in_radius: number
+  top_insurance: Array<{ name: string; count: number }>
+  pay_type_distribution: Array<{ name: string; count: number }>
+}
+
+export interface FlowerHillReportData {
+  metrics: FlowerHillMetrics
+  customers: FlowerHillCustomerRow[]
+  zip_breakdown: FlowerHillZipRow[]
+  make_breakdown: FlowerHillMakeRow[]
+  market_zips: FlowerHillMarketZipRow[]
+}
+
+export interface FlowerHillMarketZipRow {
+  zip: string
+  city: string | null
+  repair_orders: number
+  unique_households: number
+  registered_vehicles: number | null
+  vehicle_pen_pct: number | null
+  market_share_pct: number | null
+  competitor_shops: number | null
+  ev_vehicles: number | null
+  opportunity_score: number | null
+  mean_income: number | null
+  median_income: number | null
+}

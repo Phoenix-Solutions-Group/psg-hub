@@ -22,7 +22,7 @@ export default function YearOverYearChart({ data }: YearOverYearChartProps) {
       <h3 className="mb-3 font-heading text-base font-medium text-navy">EMI Trend</h3>
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={data} margin={{ left: 8, right: 16, top: 8, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E4DED5" />
+          <CartesianGrid strokeDasharray="3 3" stroke={PSG_COLORS.stone} />
           <XAxis
             dataKey="month"
             tick={{ fontSize: 11, fill: PSG_COLORS.iron }}

@@ -221,7 +221,7 @@ export default async function MarketingIntelligencePage({ searchParams }: PagePr
         <div className="flex items-end gap-2">
           <button
             type="submit"
-            className="border border-navy bg-navy px-4 py-2 font-heading text-sm font-medium text-white transition-colors hover:bg-[#142838]"
+            className="border border-navy bg-navy px-4 py-2 font-heading text-sm font-medium text-white transition-colors hover:bg-navy-deep"
           >
             Apply
           </button>

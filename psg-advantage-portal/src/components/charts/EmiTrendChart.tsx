@@ -20,7 +20,7 @@ export function EmiTrendChart({ data }: { data: TrendPoint[] }) {
       <h3 className="mb-4 font-heading text-base font-medium text-navy">EMI Trend</h3>
       <ResponsiveContainer width="100%" height={320}>
         <ComposedChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E4DED5" />
+          <CartesianGrid strokeDasharray="3 3" stroke={PSG_COLORS.stone} />
           <XAxis dataKey="month" tick={{ fontSize: 12 }} />
           <YAxis yAxisId="left" domain={[80, 100]} tick={{ fontSize: 12 }} />
           <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />

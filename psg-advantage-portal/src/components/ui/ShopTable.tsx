@@ -70,18 +70,29 @@ export function ShopTable({ shops }: { shops: ShopListItem[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-stone bg-bone/50">
-              {COLUMNS.map((col) => (
-                <th
-                  key={col.key}
-                  onClick={() => handleSort(col.key)}
-                  className="cursor-pointer select-none px-4 py-3 text-left font-heading text-xs font-medium uppercase text-slate hover:text-phoenix-red"
-                >
-                  {col.label}
-                  {sortKey === col.key && (
-                    <span className="ml-1">{sortDir === 'asc' ? '\u2191' : '\u2193'}</span>
-                  )}
-                </th>
-              ))}
+              {COLUMNS.map((col) => {
+                const isActive = sortKey === col.key
+                const ariaSort = isActive ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'
+                return (
+                  <th
+                    key={col.key}
+                    scope="col"
+                    aria-sort={ariaSort}
+                    className="px-4 py-3 text-left font-heading text-xs font-medium uppercase text-slate"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleSort(col.key)}
+                      className="inline-flex select-none items-center gap-1 text-left text-slate hover:text-navy focus-visible:rounded-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phoenix-red"
+                    >
+                      {col.label}
+                      {isActive && (
+                        <span aria-hidden="true">{sortDir === 'asc' ? '\u2191' : '\u2193'}</span>
+                      )}
+                    </button>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
@@ -92,7 +103,7 @@ export function ShopTable({ shops }: { shops: ShopListItem[] }) {
               return (
                 <tr
                   key={`${shop.place_id || shop.shop_name}-${idx}`}
-                  className="border-b border-stone/60 hover:bg-paper/80"
+                  className="border-b border-stone/60 transition-colors hover:bg-bone/60"
                 >
                   <td className="px-4 py-2.5">
                     <div>
@@ -120,7 +131,7 @@ export function ShopTable({ shops }: { shops: ShopListItem[] }) {
                             href={shop.website}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-phoenix-red underline-offset-4 hover:underline"
+                            className="text-slate underline-offset-4 hover:text-navy hover:underline"
                           >
                             Website
                           </a>
@@ -150,8 +161,15 @@ export function ShopTable({ shops }: { shops: ShopListItem[] }) {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate">
-                  No shops found.
+                <td colSpan={6} className="px-4 py-12">
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <p className="font-heading text-base font-medium text-navy">
+                      No shops match your search
+                    </p>
+                    <p className="max-w-md text-sm text-slate">
+                      Try a different name, clear the search field, or adjust the date range above.
+                    </p>
+                  </div>
                 </td>
               </tr>
             )}

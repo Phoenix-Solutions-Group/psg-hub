@@ -34,7 +34,7 @@ export default function ScoreBreakdownChart({ scores }: ScoreBreakdownChartProps
       <h3 className="mb-3 font-heading text-base font-medium text-navy">Score Breakdown</h3>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} layout="vertical" margin={{ left: 80, right: 16, top: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E4DED5" />
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={PSG_COLORS.stone} />
           <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
           <YAxis
             type="category"
@@ -48,7 +48,6 @@ export default function ScoreBreakdownChart({ scores }: ScoreBreakdownChartProps
           <Bar
             dataKey="score"
             fill={PSG_COLORS.foundationNavy}
-            radius={[0, 4, 4, 0]}
             barSize={18}
           />
           {data.some((d) => d.networkAvg !== undefined) && (

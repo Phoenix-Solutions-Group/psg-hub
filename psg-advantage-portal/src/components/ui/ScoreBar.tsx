@@ -27,7 +27,7 @@ export default function ScoreBar({ label, value, isFlagged = false }: ScoreBarPr
             {value.toFixed(1)}%
           </span>
           {isFlagged && (
-            <span className="rounded bg-phoenix-red/10 px-1.5 py-0.5 text-[10px] font-medium text-phoenix-red">
+            <span className="bg-danger-bg px-1.5 py-0.5 text-[10px] font-medium text-danger-deep">
               Below avg
             </span>
           )}

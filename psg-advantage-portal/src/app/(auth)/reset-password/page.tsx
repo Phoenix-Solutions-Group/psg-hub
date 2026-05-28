@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import PsgAuthFrame from '@/components/auth/PsgAuthFrame'
+import { Button, Input } from '@/components/ui'
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('')
@@ -54,11 +55,10 @@ export default function ResetPasswordPage() {
           <p className="mt-4 text-sm leading-[1.65] text-iron/75">
             If the email matches a portal account, a password reset link is on the way.
           </p>
-          <Link
-            href="/login"
-            className="mt-8 inline-flex w-full items-center justify-center border border-navy bg-navy px-4 py-3 font-heading text-sm font-medium text-white transition-all duration-[220ms] ease-[cubic-bezier(0.22,0.61,0.36,1)] hover:bg-[#142838] focus:outline-none focus:ring-2 focus:ring-phoenix-red focus:ring-offset-2 focus:ring-offset-white active:translate-y-px"
-          >
-            Return to login
+          <Link href="/login" className="mt-8 block">
+            <Button type="button" variant="primary" size="lg" className="w-full">
+              Return to login
+            </Button>
           </Link>
         </div>
       ) : (
@@ -73,34 +73,32 @@ export default function ResetPasswordPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-            <div>
-              <label htmlFor="email" className="block font-heading text-xs font-medium uppercase text-slate">
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="mt-2 w-full border border-stone bg-paper px-3.5 py-3 text-base text-iron shadow-[inset_0_1px_2px_rgba(22,21,20,0.05)] transition-all duration-[220ms] ease-[cubic-bezier(0.22,0.61,0.36,1)] placeholder:text-mist focus:border-phoenix-red focus:bg-white focus:outline-none focus:ring-2 focus:ring-phoenix-red focus:ring-offset-2 focus:ring-offset-white"
-                placeholder="you@company.com"
-              />
-            </div>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              label="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@company.com"
+            />
 
             {error && (
-              <p className="border-l-2 border-phoenix-red bg-[#FAEEEC] px-3 py-2 text-sm leading-[1.55] text-[#8C362D]">
+              <p className="border-l-2 border-danger bg-danger-bg px-3 py-2 text-sm leading-[1.55] text-danger-deep">
                 {error}
               </p>
             )}
 
-            <button
+            <Button
               type="submit"
+              variant="primary"
+              size="lg"
               disabled={loading}
-              className="w-full border border-navy bg-navy px-4 py-3 font-heading text-sm font-medium text-white transition-all duration-[220ms] ease-[cubic-bezier(0.22,0.61,0.36,1)] hover:bg-[#142838] focus:outline-none focus:ring-2 focus:ring-phoenix-red focus:ring-offset-2 focus:ring-offset-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"
+              className="w-full"
             >
-              {loading ? 'Sending reset link.' : 'Send reset link'}
-            </button>
+              {loading ? 'Sending reset link…' : 'Send reset link'}
+            </Button>
           </form>
 
           <div className="mt-6 border-t border-stone pt-5 text-center">

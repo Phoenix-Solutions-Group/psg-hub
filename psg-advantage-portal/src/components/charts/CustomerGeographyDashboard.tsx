@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Metric } from '@/components/ui'
+import { PSG_TOKENS } from '@/lib/psgTokens'
 import maplibregl, {
   type GeoJSONSource,
   type LngLatBoundsLike,
@@ -250,7 +252,7 @@ export default function CustomerGeographyDashboard() {
         source: 'customer-pins',
         filter: ['has', 'point_count'],
         paint: {
-          'circle-color': '#B8483E',
+          'circle-color': PSG_TOKENS.phoenixRed,
           'circle-radius': ['step', ['get', 'point_count'], 16, 25, 20, 100, 24, 300, 28],
           'circle-opacity': 0.74,
         },
@@ -265,7 +267,7 @@ export default function CustomerGeographyDashboard() {
           'text-size': 11,
           'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
         },
-        paint: { 'text-color': '#ffffff' },
+        paint: { 'text-color': PSG_TOKENS.white },
       })
       map.addLayer({
         id: 'customer-pin',
@@ -274,8 +276,8 @@ export default function CustomerGeographyDashboard() {
         filter: ['!', ['has', 'point_count']],
         paint: {
           'circle-radius': 4.5,
-          'circle-color': '#1E3A52',
-          'circle-stroke-color': '#FAF8F5',
+          'circle-color': PSG_TOKENS.navy,
+          'circle-stroke-color': PSG_TOKENS.paper,
           'circle-stroke-width': 1.2,
           'circle-opacity': 0.9,
         },
@@ -438,77 +440,43 @@ export default function CustomerGeographyDashboard() {
         </aside>
 
         <div className="space-y-4">
-          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-            <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">ZIP Markers</p>
-              <p className="mt-1 font-heading text-xl text-navy">
-                {compact(pinsResponse?.summary.pin_count || 0)}
-              </p>
-            </article>
-            <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Repair Orders</p>
-              <p className="mt-1 font-heading text-xl text-navy">
-                {compact(zipResponse?.summary.total_repairs || 0)}
-              </p>
-            </article>
-            <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Registered Vehicles</p>
-              <p className="mt-1 font-heading text-xl text-navy">
-                {compactNullable(zipResponse?.summary.total_registered_vehicles ?? null)}
-              </p>
-            </article>
-            <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Vehicle Pen% (RO)</p>
-              <p className="mt-1 font-heading text-xl text-navy">
-                {pctNullable(zipResponse?.summary.vehicle_repair_penetration_pct ?? null)}
-              </p>
-            </article>
-            <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Market Share</p>
-              <p className="mt-1 font-heading text-xl text-navy">
-                {pctNullable(zipResponse?.summary.market_share_pct ?? null)}
-              </p>
-            </article>
-            <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Weighted Mean Income</p>
-              <p className="mt-1 font-heading text-xl text-navy">
-                {formatMoney(zipResponse?.summary.weighted_mean_household_income ?? null)}
-              </p>
-            </article>
-            <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Avg Opportunity</p>
-              <p className="mt-1 font-heading text-xl text-navy">
-                {zipResponse?.summary.avg_opportunity_score !== null && zipResponse?.summary.avg_opportunity_score !== undefined
+          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+            <Metric compact label="ZIP Markers" value={compact(pinsResponse?.summary.pin_count || 0)} />
+            <Metric compact label="Repair Orders" value={compact(zipResponse?.summary.total_repairs || 0)} />
+            <Metric compact label="Registered Vehicles" value={compactNullable(zipResponse?.summary.total_registered_vehicles ?? null)} />
+            <Metric compact label="Vehicle Pen% (RO)" value={pctNullable(zipResponse?.summary.vehicle_repair_penetration_pct ?? null)} />
+            <Metric compact label="Market Share" value={pctNullable(zipResponse?.summary.market_share_pct ?? null)} />
+            <Metric compact label="Weighted Mean Income" value={formatMoney(zipResponse?.summary.weighted_mean_household_income ?? null)} />
+            <Metric
+              compact
+              label="Avg Opportunity"
+              value={
+                zipResponse?.summary.avg_opportunity_score !== null && zipResponse?.summary.avg_opportunity_score !== undefined
                   ? zipResponse.summary.avg_opportunity_score.toFixed(1)
-                  : '—'}
-              </p>
-            </article>
+                  : '—'
+              }
+            />
           </section>
 
           <section className="grid gap-3 md:grid-cols-3">
-            <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Income Coverage</p>
-              <p className="mt-1 font-heading text-xl text-navy">{pct(incomeCoveragePct)}</p>
-              <p className="mt-1 text-xs text-slate">
-                {rowsWithIncome.toLocaleString()} of {zipRows.length.toLocaleString()} ZIP rows have income.
-              </p>
-            </article>
-            <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">ZIPs</p>
-              <p className="mt-1 font-heading text-xl text-navy">
-                {compact(zipResponse?.summary.zip_count || 0)}
-              </p>
-              <p className="mt-1 text-xs text-slate">
-                ZIP rows shown in the current geography and client scope.
-              </p>
-            </article>
-            <article className="border border-stone bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Selected Clients</p>
-              <p className="mt-1 font-heading text-xl text-navy">{compact(selectedShopIds.length)}</p>
-              <p className="mt-1 text-xs text-slate">
-                Empty selection means all clients in this date and geography scope.
-              </p>
-            </article>
+            <Metric
+              compact
+              label="Income Coverage"
+              value={pct(incomeCoveragePct)}
+              detail={`${rowsWithIncome.toLocaleString()} of ${zipRows.length.toLocaleString()} ZIP rows have income.`}
+            />
+            <Metric
+              compact
+              label="ZIPs"
+              value={compact(zipResponse?.summary.zip_count || 0)}
+              detail="ZIP rows shown in the current geography and client scope."
+            />
+            <Metric
+              compact
+              label="Selected Clients"
+              value={compact(selectedShopIds.length)}
+              detail="Empty selection means all clients in this date and geography scope."
+            />
           </section>
 
           <section className="border border-stone bg-white">
@@ -552,13 +520,13 @@ export default function CustomerGeographyDashboard() {
                           {row.registered_vehicles === null ? 'DMV unavailable' : row.registered_vehicles.toLocaleString()}
                           {row.data_quality_flag === 'ground_truth' && (
                             <span
-                              className="inline-block h-2 w-2 rounded-full bg-green-500"
+                              className="inline-block h-2 w-2 rounded-full bg-success"
                               title="Ground truth: DMV registered vehicle data"
                             />
                           )}
                           {row.data_quality_flag === 'model_estimate' && (
                             <span
-                              className="inline-block h-2 w-2 rounded-full bg-amber-400"
+                              className="inline-block h-2 w-2 rounded-full bg-warning"
                               title="Model estimate: vehicle count is modeled, not sourced from DMV"
                             />
                           )}
@@ -576,9 +544,9 @@ export default function CustomerGeographyDashboard() {
                         {row.opportunity_score === null
                           ? '—'
                           : <span className={
-                              row.opportunity_score >= 70 ? 'text-green-700' :
-                              row.opportunity_score >= 40 ? 'text-amber-600' :
-                              'text-red-600'
+                              row.opportunity_score >= 70 ? 'text-success-deep' :
+                              row.opportunity_score >= 40 ? 'text-warning-deep' :
+                              'text-danger-deep'
                             }>{row.opportunity_score.toFixed(1)}</span>
                         }
                       </td>

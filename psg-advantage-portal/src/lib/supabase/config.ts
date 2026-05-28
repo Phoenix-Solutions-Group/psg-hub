@@ -7,13 +7,9 @@ export function getSupabaseUrl() {
 }
 
 export function getSupabasePublicKey() {
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!key) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is required')
+    throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is required')
   }
-
   return key
 }

@@ -1,9 +1,9 @@
 type Trend = 'improving' | 'stable' | 'declining'
 
 const TREND_CONFIG: Record<Trend, { label: string; color: string; arrow: string }> = {
-  improving: { label: 'Improving', color: 'border-[#4A6B4D]/25 bg-[#4A6B4D]/10 text-[#4A6B4D]', arrow: '\u2191' },
+  improving: { label: 'Improving', color: 'border-grove/25 bg-grove-bg text-grove', arrow: '\u2191' },
   stable: { label: 'Stable', color: 'border-stone bg-bone text-slate', arrow: '\u2192' },
-  declining: { label: 'Declining', color: 'border-phoenix-red/25 bg-[#FAEEEC] text-phoenix-red', arrow: '\u2193' },
+  declining: { label: 'Declining', color: 'border-danger/25 bg-danger-bg text-danger-deep', arrow: '\u2193' },
 }
 
 export function TrendBadge({ trend, delta }: { trend?: Trend; delta?: number }) {

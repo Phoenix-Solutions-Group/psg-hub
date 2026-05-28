@@ -17,7 +17,7 @@ import {
 } from '@/lib/postgres/network'
 import { getShopListFromPostgres } from '@/lib/postgres/shops'
 import type { NetworkSummary, TrendPoint, AlertShop, ShopListItem } from '@/types'
-import { KpiCard } from '@/components/ui/KpiCard'
+import { Metric } from '@/components/ui'
 import { AlertPanel } from '@/components/ui/AlertPanel'
 import { DateRangePicker } from '@/components/ui/DateRangePicker'
 import { ShopTable } from '@/components/ui/ShopTable'
@@ -172,34 +172,51 @@ export default async function NetworkDashboard({
       </div>
 
       {isDemoData && (
-        <div className="mb-6 border border-catalyst/40 bg-white px-4 py-3 text-sm leading-6 text-slate">
+        <div className="mb-6 border border-warning/40 bg-warning-bg px-4 py-3 text-sm leading-6 text-slate">
           <span className="font-heading font-medium text-navy">Demo mode:</span>{' '}
-          Supabase data is not available locally, so this dashboard is
-          showing sample data. Marketing Intelligence is still available from
-          the navigation.
+          Live data is unavailable right now, so this dashboard is showing
+          sample numbers. Marketing Intelligence remains available from the
+          navigation.
         </div>
       )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
+        <Metric
+          size="lg"
           label="Total Surveys"
-          value={summary.total_surveys}
+          value={summary.total_surveys.toLocaleString()}
           delta={summary.total_surveys_delta}
+          detail="vs prior period"
         />
-        <KpiCard
+        <Metric
+          size="lg"
           label="Avg EMI"
-          value={summary.avg_emi_pct}
-          format="percent"
+          value={`${summary.avg_emi_pct}%`}
           delta={summary.avg_emi_delta}
+          detail={
+            summary.avg_emi_pct >= 88
+              ? `${(summary.avg_emi_pct - 88).toFixed(1)} pts above 88% threshold`
+              : `${(88 - summary.avg_emi_pct).toFixed(1)} pts below 88% threshold`
+          }
+          tone={summary.avg_emi_pct >= 88 ? 'success' : 'danger'}
         />
-        <KpiCard
+        <Metric
+          size="lg"
           label="Active Shops"
-          value={summary.active_shops}
+          value={summary.active_shops.toLocaleString()}
+          detail="Shops with surveys in range"
         />
-        <KpiCard
+        <Metric
+          size="lg"
           label="Alerts"
-          value={summary.alert_count}
+          value={summary.alert_count.toLocaleString()}
+          tone={summary.alert_count > 0 ? 'accent' : 'default'}
+          detail={
+            summary.alert_count === 0
+              ? 'All shops above 88% threshold'
+              : `Shops 3+ months below 88%`
+          }
         />
       </div>
 

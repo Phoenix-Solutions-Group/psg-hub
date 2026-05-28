@@ -1,6 +1,7 @@
 'use client'
 
-import { FormEvent, type ReactNode, useMemo, useState } from 'react'
+import { FormEvent, useMemo, useState } from 'react'
+import { Metric, Panel, Button, Input, EmptyState } from '@/components/ui'
 import {
   Area,
   AreaChart,
@@ -107,7 +108,7 @@ export default function MarketCommandDashboard({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-stone bg-white">
+      <section className="border border-stone bg-white">
         <div className="grid gap-5 p-5 lg:grid-cols-[1fr_420px] lg:items-end">
           <div>
             <p className="text-xs font-medium uppercase text-phoenix-red">
@@ -117,16 +118,16 @@ export default function MarketCommandDashboard({
               {data.filter.label}
             </h2>
             <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
-              <span className="rounded-md bg-bone px-2.5 py-1 text-navy">
+              <span className="bg-bone px-2.5 py-1 text-navy">
                 {compactNumber(data.summary.accident_rows)} accident rows
               </span>
-              <span className="rounded-md bg-paper px-2.5 py-1 text-slate">
+              <span className="bg-paper px-2.5 py-1 text-slate">
                 {data.summary.severe_accident_rate}% severe
               </span>
-              <span className="rounded-md bg-paper px-2.5 py-1 text-slate">
+              <span className="bg-paper px-2.5 py-1 text-slate">
                 {data.summary.weather_related_rate}% weather-linked
               </span>
-              <span className={`rounded-md px-2.5 py-1 ${
+              <span className={`px-2.5 py-1 ${
                 data.summary.storm_layer_available
                   ? 'bg-bone text-navy'
                   : 'bg-paper text-slate'
@@ -136,41 +137,29 @@ export default function MarketCommandDashboard({
             </div>
           </div>
 
-          <form onSubmit={onSubmit} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_88px_auto_auto]">
-            <label className="block">
-              <span className="text-xs font-medium uppercase text-slate">City</span>
-              <input
-                value={city}
-                onChange={(event) => setCity(event.target.value)}
-                placeholder="Los Angeles"
-                className="mt-1 w-full rounded-lg border border-stone px-3 py-2 text-sm text-navy focus:border-phoenix-red focus:outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium uppercase text-slate">State</span>
-              <input
-                value={state}
-                onChange={(event) => setState(event.target.value.toUpperCase())}
-                placeholder="CA"
-                maxLength={2}
-                className="mt-1 w-full rounded-lg border border-stone px-3 py-2 text-sm uppercase text-navy focus:border-phoenix-red focus:outline-none"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="mt-5 rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-navy/90 disabled:opacity-60"
-            >
+          <form onSubmit={onSubmit} className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_88px_auto_auto]">
+            <Input
+              name="city"
+              label="City"
+              value={city}
+              onChange={(event) => setCity(event.target.value)}
+              placeholder="Los Angeles"
+            />
+            <Input
+              name="state"
+              label="State"
+              value={state}
+              onChange={(event) => setState(event.target.value.toUpperCase())}
+              placeholder="CA"
+              maxLength={2}
+              className="uppercase"
+            />
+            <Button type="submit" variant="primary" disabled={isLoading}>
               Run
-            </button>
-            <button
-              type="button"
-              onClick={clearMarket}
-              disabled={isLoading}
-              className="mt-5 rounded-lg border border-stone px-4 py-2 text-sm font-medium text-slate transition-colors hover:text-navy disabled:opacity-60"
-            >
+            </Button>
+            <Button type="button" variant="secondary" onClick={clearMarket} disabled={isLoading}>
               Clear
-            </button>
+            </Button>
           </form>
         </div>
         {error && (
@@ -191,13 +180,13 @@ export default function MarketCommandDashboard({
         <Panel title="ZIP Demand Stack" kicker="Prioritized local demand" className="xl:col-span-3">
           <ResponsiveContainer width="100%" height={330}>
             <ComposedChart data={data.top_zips}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <CartesianGrid strokeDasharray="3 3" stroke={PSG_COLORS.stone} />
               <XAxis dataKey="zip" tick={{ fontSize: 12 }} />
               <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
               <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 12 }} />
               <Tooltip />
               <Legend />
-              <Bar yAxisId="left" dataKey="accidents" name="Accidents" radius={[5, 5, 0, 0]}>
+              <Bar yAxisId="left" dataKey="accidents" name="Accidents">
                 {data.top_zips.map((entry, index) => (
                   <Cell key={entry.zip} fill={zipColors[index % zipColors.length]} />
                 ))}
@@ -218,7 +207,7 @@ export default function MarketCommandDashboard({
         <Panel title="Signal Fit" kicker="Demand quality" className="xl:col-span-2">
           <ResponsiveContainer width="100%" height={330}>
             <RadarChart data={data.signal_fit}>
-              <PolarGrid stroke="#E5E7EB" />
+              <PolarGrid stroke={PSG_COLORS.stone} />
               <PolarAngleAxis dataKey="signal" tick={{ fontSize: 11 }} />
               <Radar
                 name="Current"
@@ -245,7 +234,7 @@ export default function MarketCommandDashboard({
         <Panel title="Daypart Pressure" kicker="Accident timing">
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={data.dayparts}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <CartesianGrid strokeDasharray="3 3" stroke={PSG_COLORS.stone} />
               <XAxis dataKey="time" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip />
@@ -284,11 +273,11 @@ export default function MarketCommandDashboard({
           </div>
           <ResponsiveContainer width="100%" height={246}>
             <BarChart data={channelBudget} layout="vertical" margin={{ left: 38 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <CartesianGrid strokeDasharray="3 3" stroke={PSG_COLORS.stone} />
               <XAxis type="number" tick={{ fontSize: 12 }} />
               <YAxis dataKey="channel" type="category" width={118} tick={{ fontSize: 12 }} />
               <Tooltip formatter={(value, name) => name === 'budget' ? dollars(Number(value)) : value} />
-              <Bar dataKey="budget" name="Budget" fill={PSG_COLORS.clarity} radius={[0, 5, 5, 0]} />
+              <Bar dataKey="budget" name="Budget" fill={PSG_COLORS.clarity} />
             </BarChart>
           </ResponsiveContainer>
         </Panel>
@@ -302,7 +291,7 @@ export default function MarketCommandDashboard({
                 key={row.state}
                 type="button"
                 onClick={() => pickState(row.state)}
-                className="grid grid-cols-[32px_52px_1fr_70px] items-center gap-3 rounded-lg border border-stone px-3 py-2 text-left transition-colors hover:border-clarity/40 hover:bg-bone/50"
+                className="grid grid-cols-[32px_52px_1fr_70px] items-center gap-3 border border-stone px-3 py-2 text-left transition-colors hover:border-clarity/40 hover:bg-bone/50"
               >
                 <span className="text-xs font-medium text-slate">{index + 1}</span>
                 <span className="font-heading text-sm font-medium text-navy">{row.state}</span>
@@ -317,14 +306,15 @@ export default function MarketCommandDashboard({
                 </span>
               </button>
             )) : (
-              <div className="rounded-lg border border-stone bg-paper p-4 text-sm text-slate">
-                State rollup migration is pending.
-              </div>
+              <EmptyState
+                title="State rollup unavailable"
+                description="The national state-level opportunity ranking is being rebuilt. Filter by city or state above to see local intelligence in the meantime."
+              />
             )}
           </div>
         </Panel>
 
-        <section className="rounded-lg border border-stone bg-white">
+        <section className="border border-stone bg-white">
           <div className="border-b border-stone p-5">
             <p className="text-xs font-medium uppercase text-phoenix-red">
               Report Extract
@@ -348,44 +338,3 @@ export default function MarketCommandDashboard({
   )
 }
 
-function Metric({
-  label,
-  value,
-  detail,
-}: {
-  label: string
-  value: string
-  detail: string
-}) {
-  return (
-    <div className="rounded-lg border border-stone bg-white p-4">
-      <p className="text-xs font-medium uppercase text-slate">{label}</p>
-      <p className="mt-2 font-heading text-2xl font-medium text-navy">{value}</p>
-      <p className="mt-1 text-sm text-slate">{detail}</p>
-    </div>
-  )
-}
-
-function Panel({
-  title,
-  kicker,
-  className = '',
-  children,
-}: {
-  title: string
-  kicker: string
-  className?: string
-  children: ReactNode
-}) {
-  return (
-    <section className={`rounded-lg border border-stone bg-white p-5 ${className}`}>
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium uppercase text-phoenix-red">{kicker}</p>
-          <h3 className="mt-1 font-heading text-base font-medium text-navy">{title}</h3>
-        </div>
-      </div>
-      {children}
-    </section>
-  )
-}

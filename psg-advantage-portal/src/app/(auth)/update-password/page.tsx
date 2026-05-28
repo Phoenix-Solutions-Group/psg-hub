@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import PsgAuthFrame from '@/components/auth/PsgAuthFrame'
+import { Button, Input } from '@/components/ui'
 
 export default function UpdatePasswordPage() {
   const [password, setPassword] = useState('')
@@ -60,50 +61,44 @@ export default function UpdatePasswordPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-        <div>
-          <label htmlFor="password" className="block font-heading text-xs font-medium uppercase text-slate">
-            New password
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={8}
-            className="mt-2 w-full border border-stone bg-paper px-3.5 py-3 text-base text-iron shadow-[inset_0_1px_2px_rgba(22,21,20,0.05)] transition-all duration-[220ms] ease-[cubic-bezier(0.22,0.61,0.36,1)] placeholder:text-mist focus:border-phoenix-red focus:bg-white focus:outline-none focus:ring-2 focus:ring-phoenix-red focus:ring-offset-2 focus:ring-offset-white"
-            placeholder="At least 8 characters"
-          />
-        </div>
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          label="New password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          minLength={8}
+          placeholder="At least 8 characters"
+        />
 
-        <div>
-          <label htmlFor="confirmPassword" className="block font-heading text-xs font-medium uppercase text-slate">
-            Confirm password
-          </label>
-          <input
-            id="confirmPassword"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            className="mt-2 w-full border border-stone bg-paper px-3.5 py-3 text-base text-iron shadow-[inset_0_1px_2px_rgba(22,21,20,0.05)] transition-all duration-[220ms] ease-[cubic-bezier(0.22,0.61,0.36,1)] placeholder:text-mist focus:border-phoenix-red focus:bg-white focus:outline-none focus:ring-2 focus:ring-phoenix-red focus:ring-offset-2 focus:ring-offset-white"
-            placeholder="Repeat your password"
-          />
-        </div>
+        <Input
+          id="confirmPassword"
+          name="confirmPassword"
+          type="password"
+          label="Confirm password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          required
+          placeholder="Repeat your password"
+        />
 
         {error && (
-          <p className="border-l-2 border-phoenix-red bg-[#FAEEEC] px-3 py-2 text-sm leading-[1.55] text-[#8C362D]">
+          <p className="border-l-2 border-danger bg-danger-bg px-3 py-2 text-sm leading-[1.55] text-danger-deep">
             {error}
           </p>
         )}
 
-        <button
+        <Button
           type="submit"
+          variant="primary"
+          size="lg"
           disabled={loading}
-          className="w-full border border-navy bg-navy px-4 py-3 font-heading text-sm font-medium text-white transition-all duration-[220ms] ease-[cubic-bezier(0.22,0.61,0.36,1)] hover:bg-[#142838] focus:outline-none focus:ring-2 focus:ring-phoenix-red focus:ring-offset-2 focus:ring-offset-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"
+          className="w-full"
         >
-          {loading ? 'Updating password.' : 'Update password'}
-        </button>
+          {loading ? 'Updating password…' : 'Update password'}
+        </Button>
       </form>
     </PsgAuthFrame>
   )

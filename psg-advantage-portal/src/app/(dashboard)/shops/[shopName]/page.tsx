@@ -3,7 +3,7 @@ import { getAuthenticatedProfile, canAccessShop } from '@/lib/auth'
 import { getCached, setCached } from '@/lib/cache'
 import { getShopCompetitorOverlay, getShopDetail, getShopTrend } from '@/lib/supabase/data'
 import { getTrend } from '@/lib/formatters'
-import { KpiCard } from '@/components/ui/KpiCard'
+import { Metric, EmptyState } from '@/components/ui'
 import { TrendBadge } from '@/components/ui/TrendBadge'
 import ScoreBar from '@/components/ui/ScoreBar'
 import ScoreBreakdownChart from '@/components/charts/ScoreBreakdownChart'
@@ -100,10 +100,17 @@ export default async function ShopDetailPage({ params }: PageProps) {
         )}
       </div>
 
+      {shop.total_surveys === 0 ? (
+        <EmptyState
+          title="No survey data yet"
+          description="Surveys typically appear in this dashboard 24 to 48 hours after they are completed and synced from PSG's intake pipeline. If you expected data and don't see it, contact your PSG account manager."
+        />
+      ) : null}
+
       {/* KPI row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <KpiCard label="EMI Score" value={shop.avg_emi_pct} format="percent" />
-        <KpiCard label="Total Surveys" value={shop.total_surveys} />
+        <Metric size="lg" label="EMI Score" value={`${shop.avg_emi_pct}%`} delta={shop.emi_delta} />
+        <Metric size="lg" label="Total Surveys" value={shop.total_surveys.toLocaleString()} />
         <div className="border border-stone bg-white p-5 shadow-[0_1px_2px_rgba(22,21,20,0.04)]">
           <ScoreBar
             label="Communication"

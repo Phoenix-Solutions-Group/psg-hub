@@ -21,6 +21,7 @@ export default function DashboardNav({ role, shopId }: DashboardNavProps) {
           { href: '/customer-geography', label: 'Customer Geography' },
           { href: '/shops', label: 'Shops' },
           { href: '/marketing-intelligence', label: 'Marketing Intelligence' },
+          { href: '/flower-hill', label: 'Flower Hill' },
         ]
 
   return (

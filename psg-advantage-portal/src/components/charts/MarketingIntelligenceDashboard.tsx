@@ -21,6 +21,7 @@ import {
 } from 'recharts'
 import { PSG_COLORS } from '@/lib/psgTheme'
 import { marketingIntelligenceData } from '@/lib/marketingIntelligenceData'
+import { Metric } from '@/components/ui'
 
 export interface MarketingIntelligenceData {
   metadata: {
@@ -120,23 +121,26 @@ export function MarketingIntelligenceDashboard({
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Metric
+          size="lg"
           label="Full accident rows loaded"
           value={metadata.rowCount.toLocaleString()}
           detail={`${metadata.source} ${metadata.split}`}
         />
         <Metric
+          size="lg"
           label="Top ZIP accident demand"
           value={metrics.targetableAccidentDemand.toLocaleString()}
           detail="Top 5 ZIPs from full split"
         />
         <Metric
+          size="lg"
           label="Coverage gap"
           value={`${metrics.coverageGap}%`}
           detail={`Best next channel: ${metrics.bestNextChannel}`}
         />
       </div>
 
-      <div className="rounded-lg border border-clarity/20 bg-bone px-4 py-3 text-sm text-navy">
+      <div className="border border-clarity/20 bg-bone px-4 py-3 text-sm text-navy">
         This view is built from <span className="font-medium">{filterLabel}</span> using
         <span className="font-medium"> {metadata.source}</span>. Weather-linked
         records: <span className="font-medium">{metadata.weatherRelatedCount.toLocaleString()}</span>,
@@ -145,7 +149,7 @@ export function MarketingIntelligenceDashboard({
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
-        <section className="rounded-lg border border-stone bg-white p-5 xl:col-span-3">
+        <section className="border border-stone bg-white p-5 xl:col-span-3">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <h3 className="font-heading text-base font-medium text-navy">
@@ -156,19 +160,19 @@ export function MarketingIntelligenceDashboard({
                 indicate where media dollars can work hardest.
               </p>
             </div>
-            <span className="rounded-md bg-bone px-3 py-1 text-xs font-medium text-navy">
+            <span className="bg-bone px-3 py-1 text-xs font-medium text-navy">
               Full HF split
             </span>
           </div>
           <ResponsiveContainer width="100%" height={330}>
             <ComposedChart data={opportunityByZip}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <CartesianGrid strokeDasharray="3 3" stroke={PSG_COLORS.stone} />
               <XAxis dataKey="zip" tick={{ fontSize: 12 }} />
               <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
               <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 12 }} />
               <Tooltip />
               <Legend />
-              <Bar yAxisId="left" dataKey="accidents" name="Accidents" radius={[5, 5, 0, 0]}>
+              <Bar yAxisId="left" dataKey="accidents" name="Accidents">
                 {opportunityByZip.map((entry, index) => (
                   <Cell key={entry.zip} fill={zipColors[index]} />
                 ))}
@@ -186,7 +190,7 @@ export function MarketingIntelligenceDashboard({
           </ResponsiveContainer>
         </section>
 
-        <section className="rounded-lg border border-stone bg-white p-5 xl:col-span-2">
+        <section className="border border-stone bg-white p-5 xl:col-span-2">
           <h3 className="font-heading text-base font-medium text-navy">
             Customer Signal Fit
           </h3>
@@ -196,7 +200,7 @@ export function MarketingIntelligenceDashboard({
           </p>
           <ResponsiveContainer width="100%" height={330}>
             <RadarChart data={customerSignals}>
-              <PolarGrid stroke="#E5E7EB" />
+              <PolarGrid stroke={PSG_COLORS.stone} />
               <PolarAngleAxis dataKey="signal" tick={{ fontSize: 11 }} />
               <Radar
                 name="Current market"
@@ -220,7 +224,7 @@ export function MarketingIntelligenceDashboard({
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <section className="rounded-lg border border-stone bg-white p-5">
+        <section className="border border-stone bg-white p-5">
           <h3 className="font-heading text-base font-medium text-navy">
             Timing Intelligence
           </h3>
@@ -230,7 +234,7 @@ export function MarketingIntelligenceDashboard({
           </p>
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={daypartDemand}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <CartesianGrid strokeDasharray="3 3" stroke={PSG_COLORS.stone} />
               <XAxis dataKey="time" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip />
@@ -255,7 +259,7 @@ export function MarketingIntelligenceDashboard({
           </ResponsiveContainer>
         </section>
 
-        <section className="rounded-lg border border-stone bg-white p-5">
+        <section className="border border-stone bg-white p-5">
           <h3 className="font-heading text-base font-medium text-navy">
             Channel Allocation
           </h3>
@@ -265,17 +269,17 @@ export function MarketingIntelligenceDashboard({
           </p>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={marketMix} layout="vertical" margin={{ left: 32 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <CartesianGrid strokeDasharray="3 3" stroke={PSG_COLORS.stone} />
               <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} />
               <YAxis dataKey="channel" type="category" tick={{ fontSize: 12 }} width={110} />
               <Tooltip />
-              <Bar dataKey="score" name="Priority score" fill={PSG_COLORS.clarity} radius={[0, 5, 5, 0]} />
+              <Bar dataKey="score" name="Priority score" fill={PSG_COLORS.clarity} />
             </BarChart>
           </ResponsiveContainer>
         </section>
       </div>
 
-      <section className="rounded-lg border border-stone bg-white">
+      <section className="border border-stone bg-white">
         <div className="border-b border-stone p-5">
           <h3 className="font-heading text-base font-medium text-navy">
             Intelligence Customers Can Act On
@@ -301,7 +305,7 @@ export function MarketingIntelligenceDashboard({
       </section>
 
       {crashTargetingExamples.length > 0 && (
-        <section className="rounded-lg border border-stone bg-white">
+        <section className="border border-stone bg-white">
           <div className="flex flex-col gap-2 border-b border-stone p-5 md:flex-row md:items-start md:justify-between">
             <div>
               <h3 className="font-heading text-base font-medium text-navy">
@@ -312,7 +316,7 @@ export function MarketingIntelligenceDashboard({
                 as ZIP-level marketing priorities.
               </p>
             </div>
-            <span className="rounded-md bg-bone px-3 py-1 text-xs font-medium text-navy">
+            <span className="bg-bone px-3 py-1 text-xs font-medium text-navy">
               Crash + storm + shops
             </span>
           </div>
@@ -362,20 +366,3 @@ export function MarketingIntelligenceDashboard({
   )
 }
 
-function Metric({
-  label,
-  value,
-  detail,
-}: {
-  label: string
-  value: string
-  detail: string
-}) {
-  return (
-    <div className="rounded-lg border border-stone bg-white p-4">
-      <p className="text-xs font-medium uppercase text-slate">{label}</p>
-      <p className="mt-2 font-heading text-3xl font-medium text-navy">{value}</p>
-      <p className="mt-1 text-sm text-slate">{detail}</p>
-    </div>
-  )
-}
