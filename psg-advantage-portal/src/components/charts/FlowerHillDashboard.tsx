@@ -51,6 +51,15 @@ function shortDate(iso: string | null) {
   return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
 
 const FLOWER_HILL_LOCATIONS = [
   { name: 'Roslyn', address: '12 Middle Neck Rd, Roslyn, NY 11576', lat: 40.7991373, lng: -73.6640659 },
@@ -248,7 +257,7 @@ export default function FlowerHillDashboard() {
         if (!f || f.geometry.type !== 'Point') return
         new maplibregl.Popup({ offset: 8, maxWidth: '300px' })
           .setLngLat(f.geometry.coordinates as [number, number])
-          .setHTML(`<div style="font-size:12px;line-height:1.6;font-family:Didact Gothic, system-ui"><div style="font-weight:600;color:${PSG_TOKENS.navy};margin-bottom:4px">${String(f.properties.name)}</div><div style="color:${PSG_TOKENS.slate}">${String(f.properties.vehicle)}</div>${f.properties.address ? `<div style="color:${PSG_TOKENS.slate};margin-top:2px">${String(f.properties.address)}</div>` : ''}<div style="color:${PSG_TOKENS.mist};margin-top:4px;font-size:11px">${String(f.properties.shop)}</div></div>`)
+          .setHTML(`<div style="font-size:12px;line-height:1.6;font-family:Didact Gothic, system-ui"><div style="font-weight:600;color:${PSG_TOKENS.navy};margin-bottom:4px">${escapeHtml(f.properties.name)}</div><div style="color:${PSG_TOKENS.slate}">${escapeHtml(f.properties.vehicle)}</div>${f.properties.address ? `<div style="color:${PSG_TOKENS.slate};margin-top:2px">${escapeHtml(f.properties.address)}</div>` : ''}<div style="color:${PSG_TOKENS.mist};margin-top:4px;font-size:11px">${escapeHtml(f.properties.shop)}</div></div>`)
           .addTo(map)
       }
       map.on('click', 'fh-target-pin', customerPopup)
@@ -259,7 +268,7 @@ export default function FlowerHillDashboard() {
         if (!f || f.geometry.type !== 'Point') return
         new maplibregl.Popup({ offset: 12, maxWidth: '280px' })
           .setLngLat(f.geometry.coordinates as [number, number])
-          .setHTML(`<div style="font-size:13px;line-height:1.5;font-family:Didact Gothic, system-ui"><div style="font-weight:600;color:${PSG_TOKENS.phoenixRed};font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Flower Hill</div><div style="font-weight:600;color:${PSG_TOKENS.navy};margin-bottom:2px">${String(f.properties.name)}</div><div style="color:${PSG_TOKENS.slate}">${String(f.properties.address)}</div></div>`)
+          .setHTML(`<div style="font-size:13px;line-height:1.5;font-family:Didact Gothic, system-ui"><div style="font-weight:600;color:${PSG_TOKENS.phoenixRed};font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Flower Hill</div><div style="font-weight:600;color:${PSG_TOKENS.navy};margin-bottom:2px">${escapeHtml(f.properties.name)}</div><div style="color:${PSG_TOKENS.slate}">${escapeHtml(f.properties.address)}</div></div>`)
           .addTo(map)
       })
 
