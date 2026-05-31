@@ -5,27 +5,27 @@
 See: .paul/PROJECT.md (updated 2026-05-29)
 
 **Core value:** Consolidates fragmented PSG tooling into one branded `hub.psgweb.me` surface that customers, internal staff, and superadmins all use — replacing logins and tooling sprawl with role-gated unified access.
-**Current focus:** Phase 1 Wave 1 complete (01-01..04 LOOP CLOSED 2026-05-31). Next: Wave 2 — 01-05 (BSM relocation), recommended gated on git-strategy decision. Then 01-06/07.
+**Current focus:** Wave 2 — 01-05 LOOP CLOSED 2026-05-31 (BSM anchor app, build green, IDOR secured). Next: 01-06 (BSM siblings → packages), then 01-07.
 
 ## Current Position
 
 Milestone: v0.1 Foundation (v0.1.0) — In progress
 Phase: 1 of 5 (Workspace consolidation + multi-repo relocation) — In progress
-Plan: 01-04 LOOP CLOSED ✓ (UNIFY 2026-05-31); 01-01..04 all LOOP CLOSED; Wave 2 pending (01-05/06/07 ready)
-Status: Ready for next plan — 01-05 (Wave 2 BSM relocation)
-Last activity: 2026-05-31 — 01-04 UNIFY complete, loop closed. (APPLY: local_reach 3.6G → archive/local_reach/ 3.1G, -507.6MB regenerable; Tracy's outputs + 96M sidecar archived.)
+Plan: 01-05 LOOP CLOSED ✓ (UNIFY 2026-05-31); 01-01..05 LOOP CLOSED; 01-06/07 pending
+Status: Ready for next plan — 01-06 (BSM siblings → packages/*)
+Last activity: 2026-05-31 — 01-05 UNIFY complete, loop closed. BSM anchor app merged (build green, 24/24 pages); Stripe apiVersion fixed; 2 HIGH IDOR content routes secured.
 
 Progress:
 - Milestone: [░░░░░░░░░░] 0%
-- Phase 1: [██████░░░░] 57% (4 of 7 loop-closed; Wave 1 done; Wave 2 01-05/06/07 pending APPLY)
+- Phase 1: [███████░░░] 71% (5 of 7 loop-closed; 01-06/07 pending APPLY)
 
 ## Loop Position
 
 ```
 PLAN ──▶ APPLY ──▶ UNIFY
-  ✓        ✓        ✓     [01-04 LOOP CLOSED 2026-05-31 — Wave 1 complete]
+  ✓        ✓        ✓     [01-05 LOOP CLOSED 2026-05-31 — BSM anchor app live, build green]
 ```
-Ready for next PLAN: 01-05 (Wave 2 — BSM relocation).
+Next: /paul:apply 01-06 (BSM siblings → packages), then 01-07.
 
 Carry-over to track in next plans:
 - Resolved 2026-05-31: workspace-root git strategy = single monorepo (collapse). `apps/psg/.git` is THE monorepo; psg-hub `.git` absorbed (history bundled); `/archive/` + `/psg-import/` + `/api-psghub/` + `/psg-data-lake/` gitignored (root-anchored). Wave 1 committed on branch `chore/phase-1-workspace-consolidation` (NOT pushed).
@@ -41,7 +41,7 @@ Carry-over to track in next plans:
 | 01-02 | Kill list + non-code relocation to `~/apps/_psg-archive/` (Q23–25) | 1 | none | 377 | PLAN ✓ |
 | 01-03 | ads-dashboard PAUL absorb + codebase archive + GitHub archive flag (D70) | 1 | none | 311 | LOOP CLOSED ✓ |
 | 01-04 | local_reach archive + active client outputs extracted (D69) + `local-reach-content/` addendum (carryover from 01-02) | 1 | none | 351 | LOOP CLOSED ✓ |
-| 01-05 | BSM dashboard relocated to `apps/psg/apps/psg-hub/`; pnpm-lock generated | 2 | 01-01 | 401 | PLAN ✓ |
+| 01-05 | BSM dashboard relocated to `apps/psg/apps/psg-hub/`; pnpm-lock generated | 2 | 01-01 | 401 | LOOP CLOSED ✓ |
 | 01-06 | BSM siblings → `apps/psg/packages/*` scoped `@psg/*` | 2 | 01-01, 01-05 | 390 | PLAN ✓ |
 | 01-07 | `apps/ads/` → `apps/psg/apps/psg-ads-mutations/` Python worker | 2 | 01-01 | 350 | PLAN ✓ |
 
@@ -77,6 +77,9 @@ Carry-over to track in next plans:
 | Domain coexistence (`hub.psgweb.me` + `psgweb.me` marketing) | SEED v7 | S | v2.0 launch readiness |
 | Workspace-root git strategy — RESOLVED 2026-05-31 → collapse to single monorepo | 01-01 planning | S | Done (see Decisions); not pushed — operator merges to main |
 | `apps/psg/psg-agentic-os-dev-packet.docx` (32K loose) — classify | 01-02 APPLY post-state | XS | Decide before Phase 1 close |
+| psg-hub build Stripe `apiVersion` — RESOLVED 2026-05-31 | 01-05 build | XS | Set → `"2026-05-27.dahlia"` (match SDK stripe@^22); build green |
+| Stray `~/package-lock.json` mis-roots Next builds | 01-05 build | XS | Set `turbopack.root` in next.config.ts, or remove home lockfile |
+| BSM `middleware.ts` deprecated in Next 16 (→ proxy) | 01-05 build | S | Rename convention in later phase |
 
 ### Blockers/Concerns
 None yet.
@@ -96,9 +99,9 @@ From 01-01-PLAN.md:
 ## Session Continuity
 
 Last session: 2026-05-31
-Stopped at: 01-04 LOOP CLOSED (UNIFY complete). Wave 1 done (01-01..04). 4 of 7 Phase-1 plans closed.
-Next action: `/paul:apply .paul/phases/01-workspace-consolidation/01-05-PLAN.md` (Wave 2 — BSM relocation). Git strategy RESOLVED (monorepo collapse; Wave 1 committed on branch `chore/phase-1-workspace-consolidation`, not pushed). 01-05 lands BSM as a tracked monorepo app under `apps/`.
-Resume file: `.paul/phases/01-workspace-consolidation/01-04-SUMMARY.md`
+Stopped at: 01-05 LOOP CLOSED (UNIFY complete). BSM anchor app live (build green); 2 IDOR routes secured. 5 of 7 Phase-1 plans closed.
+Next action: `/paul:apply .paul/phases/01-workspace-consolidation/01-06-PLAN.md` (BSM siblings → packages/*, gated 01-01+01-05 ✓). Then 01-07 (apps/ads → Python worker), then Phase 1 close + transition.
+Resume file: `.paul/phases/01-workspace-consolidation/01-05-SUMMARY.md`
 Resume context:
 - Wave 1 complete: 01-01 (scaffold), 01-02 (kill list), 01-03 (ads-dashboard absorb), 01-04 (local_reach + sidecar archive) all LOOP CLOSED. Committed 2026-05-31 as monorepo on branch `chore/phase-1-workspace-consolidation` (not pushed).
 - Wave 2: 01-05 (BSM relocation, gated 01-01 ✓), 01-06 (BSM siblings → packages, gated 01-01+01-05), 01-07 (apps/ads → psg-ads-mutations, gated 01-01 ✓).
