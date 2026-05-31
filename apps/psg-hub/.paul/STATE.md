@@ -99,12 +99,12 @@ From 01-01-PLAN.md:
 ## Session Continuity
 
 Last session: 2026-05-31
-Stopped at: 01-05 LOOP CLOSED (UNIFY complete). BSM anchor app live (build green); 2 IDOR routes secured. 5 of 7 Phase-1 plans closed.
+Stopped at: 01-05 LOOP CLOSED (UNIFY complete) — BSM anchor app live (build green); 2 IDOR routes secured; Wave 2 pt1 committed (956c256). **PAUSED 2026-05-31 (context clear).** 5 of 7 Phase-1 plans closed.
 Next action: `/paul:apply .paul/phases/01-workspace-consolidation/01-06-PLAN.md` (BSM siblings → packages/*, gated 01-01+01-05 ✓). Then 01-07 (apps/ads → Python worker), then Phase 1 close + transition.
-Resume file: `.paul/phases/01-workspace-consolidation/01-05-SUMMARY.md`
+Resume file: `.paul/HANDOFF-2026-05-31-wave2-next-01-06.md`
 Resume context:
 - Wave 1 complete: 01-01 (scaffold), 01-02 (kill list), 01-03 (ads-dashboard absorb), 01-04 (local_reach + sidecar archive) all LOOP CLOSED. Committed 2026-05-31 as monorepo on branch `chore/phase-1-workspace-consolidation` (not pushed).
-- Wave 2: 01-05 (BSM relocation, gated 01-01 ✓), 01-06 (BSM siblings → packages, gated 01-01+01-05), 01-07 (apps/ads → psg-ads-mutations, gated 01-01 ✓).
+- Wave 2: 01-05 LOOP CLOSED (BSM anchor app, build green, IDOR fixed; committed 956c256). NEXT: 01-06 (BSM siblings → packages/*, gated ✓), then 01-07 (apps/ads → psg-ads-mutations, gated 01-01 ✓).
 - Git monorepo: `apps/psg/.git` is THE repo; psg-hub absorbed; `/archive/`, `/psg-import/`, `/api-psghub/`, `/psg-data-lake/` gitignored (root-anchored). psg-hub history bundled at `archive/_repo-bundles/`. Not pushed — operator merges to main when ready.
 Git strategy: RESOLVED 2026-05-31 — single monorepo (collapse). `apps/psg/.git` = THE monorepo. **Home repo = `github.com/Phoenix-Solutions-Group/data` CONFIRMED by operator 2026-05-31** (repo already held psg-advantage-portal + prior history; operator confirmed it as the monorepo home). Wave 1 committed on branch `chore/phase-1-workspace-consolidation`; NOT pushed — operator reviews/merges to main. psg-hub `.git` absorbed (bundle at `archive/_repo-bundles/psg-hub-pre-collapse-20260531.bundle`). Trap neutralized: `/archive/` root-anchored in `.gitignore`.
 
