@@ -1,0 +1,339 @@
+{
+  "workspace": "psg",
+  "created": "2026-05-28",
+  "groom_cadence": "weekly",
+  "groom_day": "Friday",
+  "areas": {
+    "projects": {
+      "type": "directory",
+      "description": "Project tracking directory",
+      "paths": [
+        "projects/"
+      ],
+      "groom": "weekly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 14
+        }
+      }
+    },
+    "psg-data-lake": {
+      "type": "directory",
+      "description": "PSG data lake assets and exports",
+      "paths": [
+        "psg-data-lake/"
+      ],
+      "groom": "weekly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 30
+        }
+      }
+    },
+    "psg-advantage-portal": {
+      "type": "directory",
+      "description": "Active client portal app",
+      "paths": [
+        "psg-advantage-portal/"
+      ],
+      "groom": "weekly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 14
+        }
+      }
+    },
+    "api-psghub": {
+      "type": "directory",
+      "description": "PSG hub API app",
+      "paths": [
+        "api-psghub/"
+      ],
+      "groom": "weekly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 30
+        }
+      }
+    },
+    "dashboard-psgdigital": {
+      "type": "directory",
+      "description": "PSG digital dashboard app",
+      "paths": [
+        "dashboard-psgdigital/"
+      ],
+      "groom": "weekly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 30
+        }
+      }
+    },
+    "invoice-psgdigital": {
+      "type": "directory",
+      "description": "PSG digital invoice app",
+      "paths": [
+        "invoice-psgdigital/"
+      ],
+      "groom": "weekly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 30
+        }
+      }
+    },
+    "local-reach-content": {
+      "type": "directory",
+      "description": "LocalReach content app",
+      "paths": [
+        "local-reach-content/"
+      ],
+      "groom": "weekly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 30
+        }
+      }
+    },
+    "pipedrive": {
+      "type": "directory",
+      "description": "Pipedrive integration",
+      "paths": [
+        "pipedrive/"
+      ],
+      "groom": "weekly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 30
+        }
+      }
+    },
+    "portal": {
+      "type": "directory",
+      "description": "Portal app",
+      "paths": [
+        "portal/"
+      ],
+      "groom": "weekly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 30
+        }
+      }
+    },
+    "psg": {
+      "type": "directory",
+      "description": "PSG core app",
+      "paths": [
+        "psg/"
+      ],
+      "groom": "weekly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 30
+        }
+      }
+    },
+    "shop-theacrb": {
+      "type": "directory",
+      "description": "Shop ACRB app",
+      "paths": [
+        "shop-theacrb/"
+      ],
+      "groom": "weekly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 30
+        }
+      }
+    },
+    "sst-psgdigital": {
+      "type": "directory",
+      "description": "SST PSG digital app",
+      "paths": [
+        "sst-psgdigital/"
+      ],
+      "groom": "weekly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 30
+        }
+      }
+    },
+    "web-dev-skills": {
+      "type": "directory",
+      "description": "Web dev skills app",
+      "paths": [
+        "web-dev-skills/"
+      ],
+      "groom": "monthly",
+      "audit": {
+        "strategy": "staleness",
+        "config": {
+          "threshold_days": 60
+        }
+      }
+    }
+  },
+  "carl_hygiene": {
+    "proactive": true,
+    "cadence": "monthly",
+    "staleness_threshold_days": 60,
+    "max_rules_per_domain": 15,
+    "last_run": null
+  },
+  "surfaces": {
+    "projects": {
+      "file": "data/projects.json",
+      "description": "Unified active work + backlog tracking",
+      "hook": true,
+      "silent": true,
+      "schema": {
+        "id_prefix": "PROJ",
+        "required_fields": [
+          "id",
+          "title",
+          "status",
+          "priority"
+        ],
+        "priority_levels": [
+          "P0",
+          "P1",
+          "P2",
+          "P3"
+        ],
+        "status_values": [
+          "active",
+          "backlog",
+          "blocked",
+          "done",
+          "archived"
+        ]
+      }
+    },
+    "entities": {
+      "file": "data/entities.json",
+      "description": "People, organizations, systems",
+      "hook": false,
+      "silent": true,
+      "schema": {
+        "id_prefix": "ENT",
+        "required_fields": [
+          "id",
+          "name",
+          "type"
+        ],
+        "priority_levels": [],
+        "status_values": [
+          "active",
+          "inactive",
+          "archived"
+        ]
+      }
+    },
+    "state": {
+      "file": "data/state.json",
+      "description": "Workspace health, drift, groom tracking",
+      "hook": true,
+      "silent": true,
+      "schema": {
+        "id_prefix": "ST",
+        "required_fields": [
+          "last_groom",
+          "next_groom"
+        ],
+        "priority_levels": [],
+        "status_values": []
+      }
+    },
+    "psmm": {
+      "file": "data/psmm.json",
+      "description": "Per-session meta memory",
+      "hook": true,
+      "silent": true,
+      "schema": {
+        "id_prefix": "PSMM",
+        "required_fields": [
+          "session_id"
+        ],
+        "priority_levels": [],
+        "status_values": []
+      }
+    },
+    "staging": {
+      "file": "data/staging.json",
+      "description": "Proposed changes staging",
+      "hook": false,
+      "silent": true,
+      "schema": {
+        "id_prefix": "STG",
+        "required_fields": [
+          "id",
+          "type",
+          "proposed_at"
+        ],
+        "priority_levels": [],
+        "status_values": [
+          "proposed",
+          "approved",
+          "rejected",
+          "applied"
+        ]
+      }
+    }
+  },
+  "satellites": {
+    "psg-import": {
+      "path": "psg-import",
+      "engine": "paul",
+      "state": "psg-import/.paul/paul.json",
+      "registered": "2026-05-28",
+      "groom_check": true,
+      "last_activity": "2026-05-01T00:00:00Z",
+      "phase_name": "Verification & Polish",
+      "phase_number": 11,
+      "phase_status": "complete",
+      "loop_position": "IDLE",
+      "handoff": false,
+      "last_plan_completed_at": null
+    },
+    "psg-hub": {
+      "path": "apps/psg-hub",
+      "engine": "paul",
+      "state": "apps/psg-hub/.paul/STATE.md",
+      "registered": "2026-05-29",
+      "groom_check": true,
+      "last_activity": "2026-05-29T17:50:00Z",
+      "phase_name": "Workspace consolidation + multi-repo relocation",
+      "phase_number": 1,
+      "phase_status": "in_progress",
+      "loop_position": "APPLY_PAUSED",
+      "handoff": false
+    },
+    "ads-dashboard": {
+      "path": "archive/ads-dashboard",
+      "engine": "paul",
+      "state": "archive/ads-dashboard/.paul/STATE.md",
+      "registered": "2026-05-29",
+      "groom_check": true,
+      "last_activity": "2026-05-20T00:00:00Z",
+      "phase_name": "None",
+      "phase_number": 0,
+      "phase_status": "not_started",
+      "loop_position": "IDLE",
+      "handoff": false
+    }
+  }
+}
