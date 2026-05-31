@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wallace Collision Center - Google Ads Audit | 2026-05-27</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface-2: #242836;
+    --border: #2e3345;
+    --text: #e1e4ed;
+    --text-muted: #8b90a0;
+    --accent: #6c8aff;
+    --accent-dim: rgba(108,138,255,0.12);
+    --green: #34d399;
+    --green-dim: rgba(52,211,153,0.12);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.12);
+    --yellow: #fbbf24;
+    --yellow-dim: rgba(251,191,36,0.12);
+    --orange: #fb923c;
+    --orange-dim: rgba(251,146,60,0.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  /* Header */
+  .header { margin-bottom: 48px; }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+  .header .meta {
+    color: var(--text-muted);
+    font-size: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+  }
+  .header .meta span { white-space: nowrap; }
+
+  /* Score Hero */
+  .score-hero {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 40px;
+  }
+  .score-ring {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    flex-shrink: 0;
+  }
+  .score-ring svg { transform: rotate(-90deg); }
+  .score-ring .track { fill: none; stroke: var(--border); stroke-width: 10; }
+  .score-ring .fill { fill: none; stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 1s ease; }
+  .score-ring .value {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -1px;
+  }
+  .score-ring .value small { font-size: 13px; font-weight: 500; color: var(--text-muted); letter-spacing: 0; }
+  .score-details { flex: 1; }
+  .score-details .grade-label {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .score-details .grade-sub { color: var(--text-muted); font-size: 14px; margin-bottom: 16px; }
+  .score-details .delta-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--green-dim);
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+  .score-note { color: var(--text-muted); font-size: 12px; margin-top: 12px; font-style: italic; line-height: 1.5; }
+
+  /* Category bars */
+  .cat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 48px;
+  }
+  .cat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .cat-card .cat-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .cat-card .cat-name { font-size: 13px; font-weight: 600; }
+  .cat-card .cat-score { font-size: 13px; color: var(--text-muted); }
+  .cat-card .cat-score b { color: var(--text); }
+  .cat-bar-bg {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .cat-bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+  .cat-card .cat-delta { font-size: 11px; color: var(--green); font-weight: 600; }
+  .cat-card .cat-weight { font-size: 11px; color: var(--text-muted); float: right; }
+
+  /* Sections */
+  section { margin-bottom: 48px; }
+  section > h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  section > h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 24px 0 12px;
+    color: var(--accent);
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  thead th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+  .tbl-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow-x: auto;
+    margin-bottom: 20px;
+  }
+  .tbl-wrap table { margin-bottom: 0; }
+  .tbl-wrap thead th:first-child, .tbl-wrap tbody td:first-child { padding-left: 20px; }
+  .tbl-wrap thead th:last-child, .tbl-wrap tbody td:last-child { padding-right: 20px; }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .badge-pass { background: var(--green-dim); color: var(--green); }
+  .badge-fail { background: var(--red-dim); color: var(--red); }
+  .badge-warn { background: var(--yellow-dim); color: var(--yellow); }
+  .badge-unknown { background: rgba(139,144,160,0.15); color: var(--text-muted); }
+  .badge-done { background: var(--green-dim); color: var(--green); }
+  .badge-pending { background: var(--red-dim); color: var(--red); }
+  .badge-critical { background: var(--red-dim); color: var(--red); }
+  .badge-high { background: var(--orange-dim); color: var(--orange); }
+  .badge-medium { background: var(--yellow-dim); color: var(--yellow); }
+  .badge-low { background: rgba(139,144,160,0.15); color: var(--text-muted); }
+
+  /* Callouts */
+  .callout {
+    padding: 16px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  .callout-red { background: var(--red-dim); border-left: 3px solid var(--red); }
+  .callout-yellow { background: var(--yellow-dim); border-left: 3px solid var(--yellow); }
+  .callout-green { background: var(--green-dim); border-left: 3px solid var(--green); }
+  .callout strong { font-weight: 700; }
+
+  /* Quick Wins */
+  .qw-list { display: flex; flex-direction: column; gap: 12px; }
+  .qw-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    gap: 16px;
+    align-items: start;
+  }
+  .qw-num {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .qw-body h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .qw-body p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+  .qw-body code { background: var(--surface-2); padding: 1px 6px; border-radius: 4px; font-size: 12px; color: var(--accent); }
+  .qw-meta { text-align: right; white-space: nowrap; }
+  .qw-meta .qw-time { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+
+  /* Action plan */
+  .action-week {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .action-week h4 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: var(--accent);
+  }
+  .action-week ol {
+    list-style: none;
+    counter-reset: action;
+  }
+  .action-week ol li {
+    counter-increment: action;
+    padding: 8px 0;
+    font-size: 13px;
+    line-height: 1.6;
+    border-bottom: 1px solid var(--border);
+    padding-left: 32px;
+    position: relative;
+  }
+  .action-week ol li:last-child { border-bottom: none; }
+  .action-week ol li::before {
+    content: counter(action);
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .action-week ol li strong { font-weight: 600; color: var(--text); }
+
+  /* Trajectory */
+  .trajectory {
+    display: flex;
+    gap: 0;
+    margin-bottom: 16px;
+  }
+  .traj-step {
+    flex: 1;
+    padding: 16px;
+    text-align: center;
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+  .traj-step:first-child { border-radius: 10px 0 0 10px; }
+  .traj-step:last-child { border-radius: 0 10px 10px 0; }
+  .traj-step:not(:last-child) { border-right: none; }
+  .traj-step .traj-date { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .traj-step .traj-score { font-size: 24px; font-weight: 800; }
+  .traj-step .traj-grade { font-size: 12px; font-weight: 600; margin-top: 2px; }
+  .traj-step .traj-label { font-size: 11px; color: var(--text-muted); margin-top: 8px; line-height: 1.4; }
+  .traj-step.current { border-color: var(--accent); border-width: 2px; }
+  .traj-step.future { opacity: 0.55; }
+
+  /* Footer */
+  .report-footer {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .score-hero { flex-direction: column; text-align: center; }
+    .cat-grid { grid-template-columns: 1fr; }
+    .qw-item { grid-template-columns: 36px 1fr; }
+    .qw-meta { grid-column: 1 / -1; text-align: left; }
+    .trajectory { flex-direction: column; gap: 8px; }
+    .traj-step { border-radius: 10px !important; border: 1px solid var(--border) !important; }
+  }
+
+  /* Print */
+  @media print {
+    body { background: #fff; color: #111; }
+    .container { max-width: 100%; }
+    .tbl-wrap, .cat-card, .qw-item, .action-week, .score-hero { border-color: #ddd; background: #fafafa; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- Header -->
+<div class="header">
+  <h1>Wallace Collision Center</h1>
+  <div style="font-size: 15px; color: var(--text-muted); margin-bottom: 6px;">Google Ads Audit Report</div>
+  <div class="meta">
+    <span>May 27, 2026</span>
+    <span>Window: Apr 27 - May 27 (30 days)</span>
+    <span>CID: 604-861-1995</span>
+    <span>MCC: Phoenix Solutions Group</span>
+  </div>
+</div>
+
+<!-- Score Hero -->
+<div class="score-hero">
+  <div class="score-ring">
+    <svg width="140" height="140" viewBox="0 0 140 140">
+      <circle class="track" cx="70" cy="70" r="58"/>
+      <circle class="fill" cx="70" cy="70" r="58" stroke="var(--orange)"
+        stroke-dasharray="364.4" stroke-dashoffset="178.6"/>
+    </svg>
+    <div class="value">
+      51
+      <small>/ 100</small>
+    </div>
+  </div>
+  <div class="score-details">
+    <div class="grade-label">Grade D &mdash; Significant Problems</div>
+    <div class="grade-sub">Meaningful progress since baseline, but critical fixes remain.</div>
+    <div class="delta-badge">&#9650; +13 pts from May 18 (38/F)</div>
+    <div class="score-note">Score is a category-level estimate. Prior audit (5/18) used rigorous per-check rubric scoring. The F-to-D trajectory is real based on verified fixes.</div>
+  </div>
+</div>
+
+<!-- Category Cards -->
+<div class="cat-grid">
+  <div class="cat-card">
+    <div class="cat-top">
+      <span class="cat-name">Conversion Tracking</span>
+      <span class="cat-score"><b>55</b> / 100</span>
+    </div>
+    <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:55%;background:var(--orange)"></div></div>
+    <span class="cat-delta">+16</span><span class="cat-weight">25% weight</span>
+  </div>
+  <div class="cat-card">
+    <div class="cat-top">
+      <span class="cat-name">Wasted Spend / Negatives</span>
+      <span class="cat-score"><b>50</b> / 100</span>
+    </div>
+    <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:50%;background:var(--orange)"></div></div>
+    <span class="cat-delta">+17</span><span class="cat-weight">20% weight</span>
+  </div>
+  <div class="cat-card">
+    <div class="cat-top">
+      <span class="cat-name">Account Structure</span>
+      <span class="cat-score"><b>55</b> / 100</span>
+    </div>
+    <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:55%;background:var(--orange)"></div></div>
+    <span class="cat-delta">+17</span><span class="cat-weight">15% weight</span>
+  </div>
+  <div class="cat-card">
+    <div class="cat-top">
+      <span class="cat-name">Keywords &amp; Quality Score</span>
+      <span class="cat-score"><b>35</b> / 100</span>
+    </div>
+    <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:35%;background:var(--red)"></div></div>
+    <span class="cat-delta">+4</span><span class="cat-weight">15% weight</span>
+  </div>
+  <div class="cat-card">
+    <div class="cat-top">
+      <span class="cat-name">Ads &amp; Assets</span>
+      <span class="cat-score"><b>60</b> / 100</span>
+    </div>
+    <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:60%;background:var(--yellow)"></div></div>
+    <span class="cat-delta">+4</span><span class="cat-weight">15% weight</span>
+  </div>
+  <div class="cat-card">
+    <div class="cat-top">
+      <span class="cat-name">Settings &amp; Targeting</span>
+      <span class="cat-score"><b>45</b> / 100</span>
+    </div>
+    <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:45%;background:var(--orange)"></div></div>
+    <span class="cat-delta">+6</span><span class="cat-weight">10% weight</span>
+  </div>
+</div>
+
+<!-- Account Snapshot -->
+<section>
+  <h2>Account Snapshot</h2>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Metric</th><th>Value (Last 30 Days)</th><th>&Delta; vs 5/18</th></tr></thead>
+      <tbody>
+        <tr><td>Total spend</td><td><strong>$2,897.72</strong></td><td style="color:var(--text-muted)">-$487 (window shift)</td></tr>
+        <tr><td>Impressions</td><td>24,422</td><td style="color:var(--text-muted)">-5,887</td></tr>
+        <tr><td>Clicks</td><td>1,445</td><td style="color:var(--text-muted)">-427</td></tr>
+        <tr><td>Conversions (in-metric)</td><td>525.98</td><td style="color:var(--green)">-218 (signal cleanup)</td></tr>
+        <tr><td>All conversions</td><td>811.65</td><td></td></tr>
+        <tr><td>Account CTR</td><td>5.92%</td><td style="color:var(--text-muted)">-0.26pp</td></tr>
+        <tr><td>Account CPC</td><td>$2.01</td><td style="color:var(--text-muted)">+$0.20</td></tr>
+        <tr><td>Auto-tagging</td><td style="color:var(--green)">ON</td><td></td></tr>
+        <tr><td>Optimization score</td><td>60.1%</td><td style="color:var(--text-muted)">-2.6pp</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Active Campaigns (ENABLED)</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr><th>Campaign</th><th>Bidding</th><th>Budget/d</th><th>30d Spend</th><th>Impr</th><th>Clicks</th><th>Conv</th><th>SIS</th><th>Budget Lost</th><th>Rank Lost</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>LocalCollision Q2</td><td>Max Conv</td><td>$43</td><td>$307</td><td>737</td><td>52</td><td>5.0</td><td>53.3%</td><td>3.7%</td><td style="color:var(--red)"><strong>43.0%</strong></td>
+        </tr>
+        <tr>
+          <td>Wallace Ford Smart</td><td>Target Spend</td><td>$9</td><td>$271</td><td>10,160</td><td>769</td><td>85.0</td><td colspan="3" style="color:var(--text-muted);text-align:center">Smart campaign</td>
+        </tr>
+        <tr>
+          <td>TeslaApproved Q2</td><td>Manual CPC</td><td>$30</td><td>$156</td><td>55</td><td>9</td><td>0</td><td>87.5%</td><td>2.5%</td><td>10.0%</td>
+        </tr>
+        <tr>
+          <td>ToyotaCertified Q2</td><td>Target Spend</td><td>$13</td><td>$52</td><td>48</td><td>8</td><td>1.0</td><td>37.8%</td><td style="color:var(--yellow)">23.2%</td><td style="color:var(--red)">39.0%</td>
+        </tr>
+        <tr>
+          <td>Brand Q2</td><td>Target Spend</td><td>$15</td><td>$19</td><td>65</td><td>14</td><td>6.0</td><td style="color:var(--green)">74.1%</td><td>1.7%</td><td>24.1%</td>
+        </tr>
+        <tr>
+          <td>JLRCertified Q2</td><td>Manual CPC</td><td>$30</td><td>$0</td><td>7</td><td>0</td><td>0</td><td>80.0%</td><td>0%</td><td>20.0%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Paused Legacy (metrics from pre-pause period)</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Campaign</th><th>30d Spend</th><th>Impr</th><th>Clicks</th><th>Conv</th></tr></thead>
+      <tbody>
+        <tr><td>Tesla Approved</td><td>$840.57</td><td>3,039</td><td>119</td><td>24</td></tr>
+        <tr><td>PPC_Wallace_40Miles</td><td>$701.38</td><td>8,655</td><td>413</td><td>394</td></tr>
+        <tr><td>JLR Certified Collision Repairs</td><td>$550.54</td><td>1,656</td><td>61</td><td>11</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout callout-yellow">
+    <strong>Budget utilization: 19%.</strong> Total ENABLED daily budget is $140/d ($4,200/mo), but actual spend is $26.8/d. Root causes: Manual CPC bids too low on Tesla/JLR Q2, QS-driven rank loss on LocalCollision (43%), and Q2 campaigns still in learning (live since 5/20).
+  </div>
+</section>
+
+<!-- What Changed -->
+<section>
+  <h2>What Changed Since May 18</h2>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Fix</th><th>Status</th><th>Check(s)</th></tr></thead>
+      <tbody>
+        <tr><td>Q2 RSAs unpaused &mdash; 11 ads now serving</td><td><span class="badge badge-done">Done 5/20</span></td><td>G-AD1, A1</td></tr>
+        <tr><td>Brand Q2 campaign enabled, budget $7&rarr;$15/d</td><td><span class="badge badge-done">Done 5/20</span></td><td>G05</td></tr>
+        <tr><td>OEM negatives deployed (315 per-campaign negatives)</td><td><span class="badge badge-done">Done 5/20</span></td><td>G15, G16</td></tr>
+        <tr><td>GBP micro conversions removed from conv metric</td><td><span class="badge badge-done">Done 5/20</span></td><td>G47</td></tr>
+        <tr><td>Landing Page action demoted</td><td><span class="badge badge-done">Done 5/20</span></td><td>G47</td></tr>
+        <tr><td>Smart campaign map directions removed from conv metric</td><td><span class="badge badge-done">Done 5/20</span></td><td>G47</td></tr>
+        <tr><td>Final URLs remapped to correct landing pages</td><td><span class="badge badge-done">Done 5/20</span></td><td>G60</td></tr>
+        <tr><td>Tesla/JLR Q2 keywords expanded</td><td><span class="badge badge-done">Done 5/21</span></td><td>G-KW1</td></tr>
+        <tr><td>Toyota disapproval appeals submitted</td><td><span class="badge badge-done">Done 5/20</span></td><td>Policy</td></tr>
+        <tr><td>qualify_lead counting &rarr; ONE_PER_CLICK</td><td><span class="badge badge-pending">Blocked</span></td><td>G-CT1</td></tr>
+        <tr><td>Smart campaign ad clicks to call &rarr; exclude</td><td><span class="badge badge-pending">Immutable</span></td><td>G-CT1</td></tr>
+        <tr><td>Shared negative keyword lists</td><td><span class="badge badge-pending">Not built</span></td><td>G14</td></tr>
+        <tr><td>Legacy geo targeting fix</td><td><span class="badge badge-pending">Not done</span></td><td>G11</td></tr>
+        <tr><td>LocalCollision Q2 negatives</td><td><span class="badge badge-pending">0 deployed</span></td><td>G15</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Quick Wins -->
+<section>
+  <h2>Quick Wins</h2>
+  <div class="qw-list">
+
+    <div class="qw-item">
+      <div class="qw-num" style="background:var(--red-dim);color:var(--red)">1</div>
+      <div class="qw-body">
+        <h4>Fix qualify_lead counting in GA4 admin</h4>
+        <p><code>qualify_lead</code> still MANY_PER_CLICK (176 events/30d inflating Smart Bidding). GA4-imported action: immutable via Google Ads API. Fix in GA4: Admin &gt; Events &gt; qualify_lead &gt; set to "Once per session." Or audit GTM tag to fire once per pageview.</p>
+      </div>
+      <div class="qw-meta">
+        <div class="qw-time">15 min</div>
+        <span class="badge badge-critical">Critical</span>
+      </div>
+    </div>
+
+    <div class="qw-item">
+      <div class="qw-num" style="background:var(--red-dim);color:var(--red)">2</div>
+      <div class="qw-body">
+        <h4>Deploy negatives to LocalCollision Q2</h4>
+        <p>Highest-spend Q2 campaign ($307/30d) has <strong>zero negatives</strong>. Currently bleeding to windshield, glass, competitor, rust repair, and paint-cost queries. Copy 93 terms from PPC_Wallace_40Miles or build shared list.</p>
+      </div>
+      <div class="qw-meta">
+        <div class="qw-time">15 min</div>
+        <span class="badge badge-critical">Critical</span>
+      </div>
+    </div>
+
+    <div class="qw-item">
+      <div class="qw-num" style="background:var(--orange-dim);color:var(--orange)">3</div>
+      <div class="qw-body">
+        <h4>Build shared negative keyword lists</h4>
+        <p>500 negatives exist but all per-campaign, uncoordinated. Create 3 shared lists (Competitors, NonCollision, IntentFilter) and attach to all ENABLED Search campaigns. Prevents drift as campaigns scale.</p>
+      </div>
+      <div class="qw-meta">
+        <div class="qw-time">20 min</div>
+        <span class="badge badge-high">High</span>
+      </div>
+    </div>
+
+    <div class="qw-item">
+      <div class="qw-num" style="background:var(--orange-dim);color:var(--orange)">4</div>
+      <div class="qw-body">
+        <h4>Copy negatives to JLRCertified Q2</h4>
+        <p>Only 5 negatives vs. legacy JLR's 113. Will bleed when volume grows. Copy from legacy or attach shared list.</p>
+      </div>
+      <div class="qw-meta">
+        <div class="qw-time">10 min</div>
+        <span class="badge badge-high">High</span>
+      </div>
+    </div>
+
+    <div class="qw-item">
+      <div class="qw-num" style="background:var(--orange-dim);color:var(--orange)">5</div>
+      <div class="qw-body">
+        <h4>Brief site team on landing page quality</h4>
+        <p>86.4% of rated keywords have BELOW_AVERAGE post-click quality. LP experience is the single biggest QS drag and root cause of 43% rank loss on LocalCollision. Key pages: <code>/collision-repair/</code>, <code>/tesla-approved/</code>, <code>/certifications/</code>. Need above-fold form, LCP optimization, WebP hero images, schema markup.</p>
+      </div>
+      <div class="qw-meta">
+        <div class="qw-time">60 min brief</div>
+        <span class="badge badge-high">High</span>
+      </div>
+    </div>
+
+    <div class="qw-item">
+      <div class="qw-num" style="background:var(--yellow-dim);color:var(--yellow)">6</div>
+      <div class="qw-body">
+        <h4>Raise Toyota Q2 budget</h4>
+        <p>Losing 23.2% budget + 39% rank at $13/d. Raise to $20-25/d once <code>/certifications/toyota/</code> ships. Blocked by landing page.</p>
+      </div>
+      <div class="qw-meta">
+        <div class="qw-time">2 min</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+    </div>
+
+    <div class="qw-item">
+      <div class="qw-num" style="background:var(--orange-dim);color:var(--orange)">7</div>
+      <div class="qw-body">
+        <h4>Fix LocalCollision Q2 rank loss</h4>
+        <p>43% rank-lost at $43/d &mdash; budget is adequate but QS kills bids. Root cause is LP quality. Alternate approach: test tCPA to control bid aggressiveness while LP improves.</p>
+      </div>
+      <div class="qw-meta">
+        <div class="qw-time">Ongoing</div>
+        <span class="badge badge-high">High</span>
+      </div>
+    </div>
+
+    <div class="qw-item">
+      <div class="qw-num" style="background:var(--orange-dim);color:var(--orange)">8</div>
+      <div class="qw-body">
+        <h4>Launch PMax pilot</h4>
+        <p>Account eligible (525+ conv/30d). Launch with brand exclusions + shared negative lists. Target $40/d. Requires: shared lists deployed, qualify_lead counting fixed, 2 weeks of Q2 data.</p>
+      </div>
+      <div class="qw-meta">
+        <div class="qw-time">60 min build</div>
+        <span class="badge badge-high">High (30d)</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Findings -->
+<section>
+  <h2>Findings by Category</h2>
+
+  <h3>1. Conversion Tracking (25% weight) &mdash; 55 / 100</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:60px">Check</th><th style="width:80px">Result</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>G42</td><td><span class="badge badge-warn">Warn</span></td><td>5 actions in conversions metric (was 8). qualify_lead at 176 all_conv dominates; MANY_PER_CLICK inflates count.</td></tr>
+        <tr><td>G43</td><td><span class="badge badge-pass">Pass</span></td><td>Enhanced conversions for leads enabled.</td></tr>
+        <tr><td>G44</td><td><span class="badge badge-unknown">Unknown</span></td><td>Server-side tracking presence requires site audit.</td></tr>
+        <tr><td>G45</td><td><span class="badge badge-unknown">Unknown</span></td><td>Consent Mode v2 mode not surfaced in API. US-only, lower EEA exposure.</td></tr>
+        <tr><td>G47</td><td><span class="badge badge-pass">Pass</span></td><td>GBP micro conversions all excluded from conv metric. <strong>Fixed since 5/18.</strong></td></tr>
+        <tr><td>G48</td><td><span class="badge badge-pass">Pass</span></td><td>Primary actions on DDA where eligible.</td></tr>
+        <tr><td>G-CT1</td><td><span class="badge badge-fail">Fail</span></td><td><code>qualify_lead</code> still MANY_PER_CLICK. GA4-imported: immutable via API. Goal-level demotions already applied. Fix in GA4 admin.</td></tr>
+        <tr><td>G-CT2</td><td><span class="badge badge-unknown">Unknown</span></td><td>GA4 link status not exposed. 7 GA4 actions exist.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>2. Wasted Spend / Negatives (20% weight) &mdash; 50 / 100</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:60px">Check</th><th style="width:80px">Result</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>G14</td><td><span class="badge badge-fail">Fail</span></td><td>No NEGATIVE_KEYWORDS shared lists. 500 negatives exist per-campaign but ungoverned.</td></tr>
+        <tr><td>G15</td><td><span class="badge badge-fail">Fail</span></td><td>Uneven coverage. LocalCollision Q2 has <strong>0 negatives</strong>. JLRCertified Q2 has only 5.</td></tr>
+        <tr><td>G16</td><td><span class="badge badge-warn">Warn</span></td><td>Legacy waste visible (washing out ~6/1). Q2 waste ~$103/mo, down from ~$280 in May.</td></tr>
+        <tr><td>G17</td><td><span class="badge badge-pass">Pass</span></td><td>No BROAD + MANUAL_CPC combos.</td></tr>
+        <tr><td>G18</td><td><span class="badge badge-warn">Warn</span></td><td>Close-variant matches generating some non-collision traffic.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout-green">
+    <strong>Q2 waste estimate: ~$103/mo</strong> (down from ~$280 on full account in May). OEM negatives working. Main gap: LocalCollision Q2 has zero negative coverage.
+  </div>
+
+  <h3>3. Account Structure (15% weight) &mdash; 55 / 100</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:60px">Check</th><th style="width:80px">Result</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>G01</td><td><span class="badge badge-warn">Warn</span></td><td>Two naming conventions coexist. Legacy paused but not removed.</td></tr>
+        <tr><td>G05</td><td><span class="badge badge-pass">Pass</span></td><td>Brand Q2 ENABLED, serving, SIS 74.1%. <strong>Fixed since 5/18.</strong></td></tr>
+        <tr><td>G06</td><td><span class="badge badge-fail">Fail</span></td><td>No PMax campaigns despite 525+ conv/30d eligibility.</td></tr>
+        <tr><td>G09</td><td><span class="badge badge-warn">Warn</span></td><td>LocalCollision Q2: 43% rank-lost. QS is bottleneck, not budget.</td></tr>
+        <tr><td>G11</td><td><span class="badge badge-fail">Fail</span></td><td>4 legacy campaigns still PRESENCE_OR_INTEREST. All paused.</td></tr>
+        <tr><td>G12</td><td><span class="badge badge-fail">Fail</span></td><td>Search General still has Display Network ON. Paused.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>4. Keywords &amp; Quality Score (15% weight) &mdash; 35 / 100</h3>
+  <div class="callout callout-red">
+    <strong>Impression-weighted QS: 3.16.</strong> 86.4% of rated keywords have BELOW_AVERAGE landing page experience. This is the single biggest drag on account performance.
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:60px">Check</th><th style="width:80px">Result</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>G20</td><td><span class="badge badge-fail">Fail</span></td><td>370 keywords, 118 rated. QS distribution: 1=28, 2=29, 3=36, 4=10, 5=9, 6=2, 7=4. IW-QS: 3.16.</td></tr>
+        <tr><td>G21</td><td><span class="badge badge-fail">Fail</span></td><td>87% of rated keywords have QS &le;3.</td></tr>
+        <tr><td>G22</td><td><span class="badge badge-fail">Fail</span></td><td>87% BELOW_AVERAGE predicted CTR.</td></tr>
+        <tr><td>G23</td><td><span class="badge badge-warn">Warn</span></td><td>Creative quality mixed: 44 above, 41 average, 33 below.</td></tr>
+        <tr><td>G24</td><td><span class="badge badge-fail">Fail</span></td><td>102/118 (86.4%) BELOW_AVERAGE post-click quality.</td></tr>
+        <tr><td>G-KW1</td><td><span class="badge badge-warn">Warn</span></td><td>252/370 (68%) unrated. Q2 keywords still gaining impressions.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="color:var(--green)">Q2 Keyword Ratings (promising)</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Keyword</th><th>Campaign</th><th>QS</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td>wallace collision center</td><td>Brand Q2</td><td style="color:var(--green)"><strong>7</strong></td><td></td></tr>
+        <tr><td>wallace collision</td><td>Brand Q2</td><td style="color:var(--green)"><strong>7</strong></td><td></td></tr>
+        <tr><td>wallace body shop</td><td>Brand Q2</td><td style="color:var(--green)"><strong>7</strong></td><td></td></tr>
+        <tr><td>paintless dent repair near me</td><td>LocalCollision Q2</td><td style="color:var(--green)"><strong>7</strong></td><td></td></tr>
+        <tr><td>tesla collision repair</td><td>TeslaApproved Q2</td><td style="color:var(--green)"><strong>6</strong></td><td>Good</td></tr>
+        <tr><td>wallace collision bristol tn</td><td>Brand Q2</td><td style="color:var(--green)"><strong>6</strong></td><td>Good</td></tr>
+        <tr><td>collision repair kingsport</td><td>LocalCollision Q2</td><td><strong>5</strong></td><td>Acceptable</td></tr>
+        <tr><td>body shop near me</td><td>LocalCollision Q2</td><td style="color:var(--yellow)"><strong>4</strong></td><td>LP drag</td></tr>
+        <tr><td>collision repair near me</td><td>LocalCollision Q2</td><td style="color:var(--yellow)"><strong>4</strong></td><td>LP drag</td></tr>
+        <tr><td>auto body shop near me</td><td>LocalCollision Q2</td><td style="color:var(--red)"><strong>3</strong></td><td>LP drag</td></tr>
+        <tr><td>toyota body shop near me</td><td>ToyotaCertified Q2</td><td style="color:var(--red)"><strong>1</strong></td><td>LP + relevance</td></tr>
+        <tr><td>tesla body repair</td><td>TeslaApproved Q2</td><td style="color:var(--red)"><strong>1</strong></td><td>LP drag</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>5. Ads &amp; Assets (15% weight) &mdash; 60 / 100</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:60px">Check</th><th style="width:80px">Result</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>G26</td><td><span class="badge badge-pass">Pass</span></td><td>All Q2 campaigns have RSAs. 11 RSAs ENABLED and serving.</td></tr>
+        <tr><td>G-AD1</td><td><span class="badge badge-pass">Pass</span></td><td>Q2 ads fresh (created 5/13, unpaused 5/20). All APPROVED.</td></tr>
+        <tr><td>G-AD</td><td><span class="badge badge-pass">Pass</span></td><td>All 11 Q2 RSAs APPROVED. Toyota ads now APPROVED (was DISAPPROVED 5/20).</td></tr>
+        <tr><td>G-AI1</td><td><span class="badge badge-fail">Fail</span></td><td>AI Max not enabled. Eligible (525+ conv/mo). Blocked by shared negatives + qualify_lead fix.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout callout-yellow">
+    <strong>Toyota landing page risk:</strong> Ads point to <code>/certifications/</code> and are currently APPROVED, but the page scores 38/F for message match (generic H1, zero Toyota-specific copy). Policy reversal risk exists. Ship <code>/certifications/toyota/</code> as priority.
+  </div>
+
+  <h3>6. Settings &amp; Targeting (10% weight) &mdash; 45 / 100</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:60px">Check</th><th style="width:80px">Result</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>G50</td><td><span class="badge badge-warn">Warn</span></td><td>Account-level sitelinks inherited. No campaign-specific sitelinks on Q2.</td></tr>
+        <tr><td>G54</td><td><span class="badge badge-fail">Fail</span></td><td>4 phone numbers across CALL assets. No call-tracking consolidation.</td></tr>
+        <tr><td>G55</td><td><span class="badge badge-fail">Fail</span></td><td>No lead form extensions.</td></tr>
+        <tr><td>G57</td><td><span class="badge badge-fail">Fail</span></td><td>No customer match lists.</td></tr>
+        <tr><td>G60</td><td><span class="badge badge-pass">Pass</span></td><td>Final URLs correctly mapped. <strong>Fixed since 5/18.</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Conversion Actions -->
+<section>
+  <h2>Conversion Action Summary</h2>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Action</th><th>In Metric</th><th>Primary</th><th>Counting</th><th>30d Vol</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>qualify_lead (GA4)</td>
+          <td style="color:var(--red)"><strong>YES</strong></td><td>YES</td>
+          <td style="color:var(--red)"><strong>MANY</strong></td><td>176</td>
+          <td>Fix in GA4</td>
+        </tr>
+        <tr><td>Calls from Smart Campaign Ads</td><td style="color:var(--green)">YES</td><td>YES</td><td>ONE</td><td>75</td><td style="color:var(--green)">OK</td></tr>
+        <tr><td>Calls from ads</td><td style="color:var(--green)">YES</td><td>YES</td><td>MANY</td><td>41</td><td style="color:var(--green)">OK</td></tr>
+        <tr><td>Form (GA4)</td><td style="color:var(--green)">YES</td><td>YES</td><td>ONE</td><td>2</td><td style="color:var(--green)">OK</td></tr>
+        <tr>
+          <td>Smart ad clicks to call</td>
+          <td style="color:var(--yellow)"><strong>YES</strong></td><td>YES</td>
+          <td>MANY</td><td>0</td><td style="color:var(--text-muted)">Immutable (0 vol)</td>
+        </tr>
+        <tr style="opacity:0.5"><td>Landing Page</td><td>no</td><td>no</td><td>MANY</td><td>378</td><td style="color:var(--green)">Demoted</td></tr>
+        <tr style="opacity:0.5"><td>Local actions - Other engagements</td><td>no</td><td>yes</td><td>MANY</td><td>62</td><td style="color:var(--green)">Demoted</td></tr>
+        <tr style="opacity:0.5"><td>Local actions - Directions</td><td>no</td><td>yes</td><td>MANY</td><td>31</td><td style="color:var(--green)">Demoted</td></tr>
+        <tr style="opacity:0.5"><td>Clicks to call (GBP)</td><td>no</td><td>yes</td><td>MANY</td><td>25</td><td style="color:var(--green)">Demoted</td></tr>
+        <tr style="opacity:0.5"><td>Local actions - Website visits</td><td>no</td><td>yes</td><td>MANY</td><td>16</td><td style="color:var(--green)">Demoted</td></tr>
+        <tr style="opacity:0.5"><td>Store visits</td><td>no</td><td>yes</td><td>MANY</td><td>5.7</td><td style="color:var(--text-muted)">Google-managed</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Wasted Spend -->
+<section>
+  <h2>Wasted Spend Detail (Q2 Campaigns)</h2>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Search Term</th><th>Campaign</th><th>Spend</th><th>Clicks</th><th>Conv</th><th>Issue</th></tr></thead>
+      <tbody>
+        <tr><td>tesla certified body shop near me</td><td>TeslaApproved Q2</td><td>$22.63</td><td>1</td><td>0</td><td>Relevant, 0 conv &mdash; LP or geo issue</td></tr>
+        <tr><td>tesla body repair near me</td><td>TeslaApproved Q2</td><td>$22.55</td><td>1</td><td>0</td><td>Relevant, high CPC. Monitor.</td></tr>
+        <tr><td>best body shop near me</td><td>LocalCollision Q2</td><td>$15.28</td><td>4</td><td>0</td><td style="color:var(--red)">Generic. 0 negatives on campaign.</td></tr>
+        <tr><td>wallace collision center bluff city</td><td>LocalCollision Q2</td><td>$15.27</td><td>1</td><td>1</td><td>Brand query hitting non-brand campaign</td></tr>
+        <tr><td>tri cities collision johnson city tn</td><td>LocalCollision Q2</td><td>$14.33</td><td>1</td><td>0</td><td>Competitor name</td></tr>
+        <tr><td>caliber collision johnson city</td><td>LocalCollision Q2</td><td>$13.66</td><td>1</td><td>0</td><td>Competitor conquest</td></tr>
+        <tr><td>body shops that do rust repair near me</td><td>LocalCollision Q2</td><td>$10.43</td><td>1</td><td>0</td><td style="color:var(--red)">Rust &ne; collision. Neg candidate.</td></tr>
+        <tr><td>tesla repair shop near me</td><td>TeslaApproved Q2</td><td>$10.31</td><td>1</td><td>0</td><td>Mechanic intent, not collision</td></tr>
+        <tr><td>tesla repair near me</td><td>TeslaApproved Q2</td><td>$9.72</td><td>2</td><td>0</td><td>Mechanic/service intent</td></tr>
+        <tr><td>gerber collision bristol tn</td><td>LocalCollision Q2</td><td>$8.57</td><td>1</td><td>0</td><td>Competitor</td></tr>
+        <tr><td>services offered by johnson city toyota</td><td>ToyotaCertified Q2</td><td>$7.96</td><td>1</td><td>0</td><td>Dealer intent</td></tr>
+        <tr><td>maaco $300 paint job near me</td><td>LocalCollision Q2</td><td>$7.22</td><td>1</td><td>0</td><td>Price shopper</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div style="font-size:12px;color:var(--text-muted);margin-top:-12px;margin-bottom:20px;">
+    Legacy waste (jaguar f pace $34, tesla dealership $25, etc.) still in 30-day window from PAUSED campaigns. Will wash out by ~6/1.
+  </div>
+</section>
+
+<!-- Action Plan -->
+<section>
+  <h2>Action Plan (Next 30 Days)</h2>
+
+  <div class="action-week">
+    <h4>Week 1 &mdash; Critical Fixes</h4>
+    <ol>
+      <li><strong>(15 min) Fix qualify_lead counting in GA4 admin.</strong> GA4 &gt; Admin &gt; Events &gt; qualify_lead &gt; "Once per session." Or audit GTM tag firing. Verify propagation after 24h.</li>
+      <li><strong>(15 min) Deploy negatives to LocalCollision Q2.</strong> Copy 93 terms from PPC_Wallace_40Miles or build targeted list: Competitors (gerber, caliber, maaco, stateline), Non-collision (windshield, glass, rust, PDR), Intent (DIY, kit, for sale, how much).</li>
+      <li><strong>(20 min) Build 3 shared negative keyword lists</strong> and attach to all ENABLED Search campaigns: WAL_Neg_Competitors, WAL_Neg_NonCollision, WAL_Neg_IntentFilter.</li>
+      <li><strong>(5 min) Copy negatives from legacy JLR (113 terms) to JLRCertified Q2</strong> (currently has 5).</li>
+    </ol>
+  </div>
+
+  <div class="action-week">
+    <h4>Week 2 &mdash; Volume and Quality</h4>
+    <ol start="5">
+      <li><strong>(30 min) Address JLR Q2 and Tesla Q2 bid strategy.</strong> Both on MANUAL_CPC with near-zero spend. Raise manual bids to $8-12 for competitive terms. Switch to Maximize Conversions after 15+ conv.</li>
+      <li><strong>(15 min) Raise Toyota Q2 budget to $20-25/d</strong> once /certifications/toyota/ page ships.</li>
+      <li><strong>(60 min) Brief site team on landing page quality.</strong> /collision-repair/ and /tesla-approved/ need above-fold form, LCP optimization, WebP heroes, schema markup.</li>
+      <li><strong>(15 min) Add campaign-specific sitelinks to Q2 campaigns.</strong></li>
+    </ol>
+  </div>
+
+  <div class="action-week">
+    <h4>Week 3 &mdash; Growth Levers</h4>
+    <ol start="9">
+      <li><strong>(60 min) Launch PMax pilot</strong> with brand exclusions + shared negative lists. Target $40/d.</li>
+      <li><strong>(15 min) Add lead form extensions</strong> to LocalCollision and ToyotaCertified Q2.</li>
+      <li><strong>(30 min) Plan Customer Match upload</strong> for remarketing/exclusion.</li>
+    </ol>
+  </div>
+
+  <div class="action-week">
+    <h4>Week 4 &mdash; Monitoring</h4>
+    <ol start="12">
+      <li>Review Q2 search term reports weekly.</li>
+      <li>Monitor qualify_lead counting fix persistence.</li>
+      <li>Evaluate AI Max for Search eligibility.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- Trajectory -->
+<section>
+  <h2>Score Trajectory</h2>
+  <div class="trajectory">
+    <div class="traj-step">
+      <div class="traj-date">May 18</div>
+      <div class="traj-score" style="color:var(--red)">38</div>
+      <div class="traj-grade" style="color:var(--red)">Grade F</div>
+      <div class="traj-label">Baseline. Account dark, signal corrupted.</div>
+    </div>
+    <div class="traj-step current">
+      <div class="traj-date">May 27</div>
+      <div class="traj-score" style="color:var(--orange)">51</div>
+      <div class="traj-grade" style="color:var(--orange)">Grade D</div>
+      <div class="traj-label">Q2 live, brand defended, signal cleaned, negatives deployed.</div>
+    </div>
+    <div class="traj-step future">
+      <div class="traj-date">Target Jun 15</div>
+      <div class="traj-score" style="color:var(--yellow)">65-70</div>
+      <div class="traj-grade" style="color:var(--yellow)">Grade C/B</div>
+      <div class="traj-label">qualify_lead fix, shared negatives, LP improvements, bid fixes.</div>
+    </div>
+    <div class="traj-step future">
+      <div class="traj-date">Target Jul 15</div>
+      <div class="traj-score" style="color:var(--green)">75-80</div>
+      <div class="traj-grade" style="color:var(--green)">Grade B</div>
+      <div class="traj-label">PMax pilot, LP overhaul, AI Max eval, customer match.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<div class="report-footer">
+  <p>Audit produced via claude-ads/ads-google rubric. Source data: Google Ads API on 2026-05-27.</p>
+  <p style="margin-top:8px">Phoenix Solutions Group &middot; nick@phoenixsolutionsgroup.net</p>
+</div>
+
+</div>
+</body>
+</html>

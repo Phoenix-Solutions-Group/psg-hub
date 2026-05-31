@@ -1,0 +1,62 @@
+{
+  "agency_name": "AutoLeap (Marketing module + Website add-on)",
+  "domain": "autoleap.com",
+  "hq_location": "Toronto, ON (HQ) + Atlanta, GA (US ops); engineering in Pakistan",
+  "specialty": "AR (mechanical) primary; shop management SaaS with bundled marketing add-on",
+  "services": ["Shop Management Software (core)", "Website Design + Hosting", "SEO", "SMS Marketing", "Email Marketing", "Online Review Management (Google)", "Digital Vehicle Inspections", "Customer Reminders/Recall", "Live Chat", "QuickBooks integration"],
+  "base_monthly_low_usd": 179,
+  "base_monthly_high_usd": 500,
+  "typical_monthly_usd": "$179-$350/mo core SMS + $149/mo marketing module add-on = ~$300-$500/mo typical single-location bundle [uncertain]",
+  "setup_fee_usd": "One-time onboarding fee charged on top of annual contract; exact amount not published; refundable only if customer completes group training classes [uncertain]",
+  "min_ad_spend_usd": "N/A — no paid ad management included; SMS/email/review focused only",
+  "contract_length_months": "12 (annual) standard; monthly available but rare; auto-renewal",
+  "cancellation_policy": "60-day written notice required BEFORE annual renewal date; miss the window and customer is locked in another full year. Multiple Capterra/Diagnostic Network/Trustpilot reviews report sales reps minimize this term during demo.",
+  "asset_ownership": "Website built on AutoLeap platform — customer does NOT own the site or code post-cancellation. Domain typically registered by customer (kept). Customer data exportable but no native portability of templates/content. SMS subscriber list ownership unclear. [uncertain]",
+  "pricing_transparency": "Quote-only — starting price $179/mo published, all tiers and add-ons gated behind sales demo. Marketing module $149/mo referenced in promo copy.",
+  "pricing_confidence": "medium",
+  "pricing_sources": [
+    "https://autoleap.com/pricing/",
+    "https://autoleap.com/faq/",
+    "https://www.capterra.com/p/216500/Autoleap/pricing/",
+    "https://www.capterra.com/p/216500/Autoleap/reviews/",
+    "https://www.g2.com/products/autoleap/pricing",
+    "https://www.softwareadvice.com/auto-repair/autoleap-profile/",
+    "https://www.getapp.com/retail-consumer-services-software/a/autoleap/pricing/",
+    "https://www.saasworthy.com/product/autoleap/pricing",
+    "https://diag.net/msg/m29emod3idrt3nc2dair6zhqdt",
+    "https://ca.trustpilot.com/review/autoleap.com",
+    "https://techcrunch.com/2021/10/01/autoleap-drives-technology-for-car-repair-shops-with-new-18m-capital-infusion/",
+    "https://www.capterra.com/compare/190952-216500/Tekmetric-vs-Autoleap"
+  ],
+  "known_pain_points": [
+    "12-month auto-renew with 60-day cancellation window — most-cited complaint across Capterra, Diagnostic Network, Trustpilot",
+    "Setup fee charged on top of annual contract; only refundable via group training classes",
+    "Features demoed but not available at launch ('80% baked' — especially integrated parts ordering)",
+    "Over 50% of marketing SMS messages reportedly fail delivery; vendor blames customer spam blockers",
+    "Sales team uses high-pressure tactics to lock in annual deal",
+    "Pricing not transparent; many add-on costs surface post-signature",
+    "Marketing module is SMS/email/review only — no paid media management",
+    "Website is platform-locked (customer cannot take it on cancellation)"
+  ],
+  "notable_clients": ["Bain Capital Ventures-backed; 4.8/5 across 743+ Capterra reviews; thousands of independent AR shops"],
+  "pros": [
+    "Integrated stack — shop management + marketing + reviews + website in one tool",
+    "Strong UI/UX (consistent praise in Capterra reviews)",
+    "Built-in SMS reminders and Google review request automation",
+    "Well-funded ($48M raised, Bain Capital + Bessemer + Advance Venture Partners) — vendor stability",
+    "Auto repair vertical specialist (built FOR shops, not generic SaaS)",
+    "QuickBooks integration native"
+  ],
+  "cons": [
+    "Annual lock-in + 60-day notice = highest contract friction in segment (worse than Hibu's 15-day)",
+    "Setup fee + annual prepay creates high switching cost",
+    "No paid media management (no Google Ads, no Meta Ads) — would need separate vendor",
+    "Marketing module is SMS/email/review tools, NOT acquisition marketing",
+    "Website is platform-locked — same lock-in problem as Hibu and RSW",
+    "SMS delivery reliability issues reported",
+    "Pricing opacity",
+    "Collision (CR) workflows weaker than mechanical (AR) — built for general repair shops"
+  ],
+  "koffman_relevance": "Direct competitor to Tekmetric and Shopgenie at the SMS core, which means it would conflict with Koffman's existing Turnkey + Shopgenie stack rather than replacing Hibu. AutoLeap is shop management + retention marketing, NOT acquisition marketing — does not replace Hibu's Google Ads / website / display layer. If Koffman swapped Shopgenie for AutoLeap they would gain a cleaner SMS/email/review experience but lose Turnkey's call coaching and CR workflow, plus take on a 12-month auto-renew with 60-day notice (worse contract terms than Turnkey's likely 30-day). PSG would NOT recommend AutoLeap as a Hibu replacement — they solve different problems. Could be considered as a Tekmetric/Shopgenie alternative ONLY if Koffman wants tighter native marketing inside their SMS, but contract friction is a deal-breaker vs Tekmetric's month-to-month posture.",
+  "uncertain": ["base_monthly_high_usd exact ceiling for top tier", "typical_monthly_usd for single-location with marketing add-on", "setup_fee_usd exact amount", "asset_ownership of SMS subscriber list and website content", "whether Koffman currently has any AutoLeap exposure"]
+}

@@ -7,9 +7,9 @@
     "status": "in_progress"
   },
   "phase": {
-    "number": 1,
-    "name": "Workspace consolidation + multi-repo relocation",
-    "status": "in_progress"
+    "number": 2,
+    "name": "Design system submodule + brand token swap",
+    "status": "not_started"
   },
   "loop": {
     "plan": null,
@@ -17,7 +17,7 @@
   },
   "timestamps": {
     "created_at": "2026-05-29T00:00:00Z",
-    "updated_at": "2026-05-31T21:57:26Z"
+    "updated_at": "2026-05-31T22:40:00Z"
   },
   "satellite": {
     "groom": true

@@ -1,0 +1,70 @@
+{
+  "agency_name": "Tekmetric Marketing (formerly Shopgenie)",
+  "domain": "tekmetric.com",
+  "hq_location": "Houston, TX",
+  "specialty": "AR (mechanical)",
+  "services": [
+    "CRM",
+    "Email/SMS",
+    "Reviews",
+    "Website",
+    "Call Tracking",
+    "Online Booking",
+    "Campaign Automation",
+    "Customer Reactivation"
+  ],
+  "base_monthly_low_usd": 345,
+  "base_monthly_high_usd": 495,
+  "typical_monthly_usd": "$345/mo Marketing add-on on top of Tekmetric SMS base ($179-$439/mo). Total stack: ~$524-$840/mo for single-location shop. Legacy Shopgenie pricing was Lite $345 / Pro $495.",
+  "setup_fee_usd": "$0 — Tekmetric advertises no setup or hidden fees [uncertain: whether legacy Shopgenie onboarding fee carried over for migrated accounts]",
+  "min_ad_spend_usd": "None — Tekmetric Marketing is CRM/lifecycle, not paid media management. Shop runs its own Google Ads or hires separate agency.",
+  "contract_length_months": "Month-to-month. Tekmetric explicitly markets 'no contracts'. Annual prepay available for ~10% discount on base SMS.",
+  "cancellation_policy": "No long-term contract; cancel any time per Tekmetric public messaging. [uncertain: specific notice period in MSA]",
+  "asset_ownership": "Shop owns customer data, domain, and website content. Website built on Tekmetric/Shopgenie platform — likely platform-hosted, so moving off may require rebuild. [uncertain: full data export terms post-cancellation]",
+  "pricing_transparency": "Published — base SMS tiers and Marketing add-on price ($345/mo) listed on tekmetric.com/pricing and confirmed by Capterra/G2/GetApp. Legacy Shopgenie Lite/Pro tiers ($345/$495) on softwarefinder.com.",
+  "pricing_confidence": "high",
+  "pricing_sources": [
+    "https://www.tekmetric.com/pricing",
+    "https://www.tekmetric.com/shopgenie",
+    "https://www.tekmetric.com/feature/crm-marketing",
+    "https://www.g2.com/products/tekmetric/pricing",
+    "https://www.capterra.com/p/190952/Tekmetric/pricing/",
+    "https://www.getapp.com/retail-consumer-services-software/a/tekmetric/pricing/",
+    "https://softwarefinder.com/auto-repair-software/shopgenie",
+    "https://www.tekmetric.com/post/tekmetric-and-shopgenie-join-forces-to-revolutionize-auto-repair-shop-management",
+    "https://www.businesswire.com/news/home/20241016412480/en/Tekmetric-and-Shopgenie-Unite-to-Revolutionize-Auto-Repair-Shop-Management"
+  ],
+  "known_pain_points": [
+    "Can't always use existing main phone number for call tracking (per G2 reviews)",
+    "Acquisition integration still rolling out in phases — feature parity between legacy Shopgenie and new Tekmetric Marketing is in flux through 2025-2026",
+    "Tekmetric SMS is required to fully use Marketing — locks shop into the broader platform",
+    "Website is built on platform — limited portability if shop leaves"
+  ],
+  "notable_clients": [
+    "8,000+ Tekmetric SMS shops",
+    "2,000+ legacy Shopgenie customers at acquisition (Oct 2024)",
+    "[uncertain: specific named shop logos not published]"
+  ],
+  "pros": [
+    "Tight native integration with Tekmetric SMS — no Zapier or middleware",
+    "No long-term contract, transparent published pricing",
+    "Single-vendor stack reduces data silos (SMS + CRM + marketing in one)",
+    "Strong CRM automation: declined-services reactivation, reviews, two-way text",
+    "Free online booking tier as lead-gen entry point",
+    "Built by/for auto repair — not a generic CRM retrofitted"
+  ],
+  "cons": [
+    "No paid-media management — shop still needs an ads agency for Google/Meta",
+    "Only relevant if shop uses or migrates to Tekmetric SMS",
+    "Doesn't serve collision/body shops well (workflow built for mechanical RO lifecycle, not CCC/DRP)",
+    "Mid-acquisition integration risk — Shopgenie legacy customers being migrated to new product",
+    "Platform-hosted website creates lock-in"
+  ],
+  "koffman_relevance": "Direct overlap with Koffman's current Turnkey-Shopgenie stack on the AR side. Koffman currently pays Turnkey as the reseller/agency layer on top of Shopgenie. Going direct to Tekmetric Marketing would eliminate Turnkey's markup but lose the done-for-you content/social/gift-bag services Turnkey provides. NOT a fit for Koffman's collision department — Tekmetric Marketing is mechanical-only and has no DRP/CCC/insurance workflow. If Koffman keeps Tekmetric SMS on the AR side, switching to native Tekmetric Marketing is the obvious cost play vs. paying Turnkey to resell Shopgenie.",
+  "uncertain": [
+    "setup_fee_usd (legacy Shopgenie onboarding terms for migrated accounts)",
+    "cancellation_policy (specific notice period in MSA)",
+    "asset_ownership (full data export terms post-cancellation)",
+    "notable_clients (specific named shop logos)"
+  ]
+}

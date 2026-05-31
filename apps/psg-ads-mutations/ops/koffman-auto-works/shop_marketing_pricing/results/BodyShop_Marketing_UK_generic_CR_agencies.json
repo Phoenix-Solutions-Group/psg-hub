@@ -1,0 +1,82 @@
+{
+  "agency_name": "Collision-Specialist Marketing Agencies (category profile: BodyShop Marketing, Micki Woods Marketing, TenPoint Complete, Collision Center Marketing)",
+  "domain": "bodyshopmarketing.io, collisioncentermarketing.com, tenpointcomplete.com",
+  "hq_location": "Distributed — BodyShop Marketing (founder Daniel Burkholder, BC Canada/US ops); Micki Woods Marketing (US, collision-only); TenPoint Complete (US, SCRS member, CSI/call-center for OEM-certified shops)",
+  "specialty": "CR (collision)",
+  "services": [
+    "Website",
+    "SEO",
+    "Google Ads",
+    "Local Service Ads",
+    "Reputation/Reviews",
+    "Social",
+    "Geofencing",
+    "Landing Pages",
+    "Content",
+    "OEM Certification Promotion",
+    "CSI / Call Center (TenPoint)",
+    "DRP Positioning"
+  ],
+  "base_monthly_low_usd": 1550,
+  "base_monthly_high_usd": 4950,
+  "typical_monthly_usd": "$2,000-$3,500/mo for a single-location independent collision shop (BodyShop Marketing published range is $1,550-$4,950/mo excluding ad spend). Micki Woods Marketing and Collision Center Marketing operate in similar boutique-agency range. TenPoint Complete CSI services typically priced per-RO or per-call rather than flat retainer.",
+  "setup_fee_usd": "Typical boutique CR agency: $1,500-$5,000 one-time for website build + onboarding. [uncertain: BodyShop Marketing, Micki Woods, and TenPoint do not publish setup fees]",
+  "min_ad_spend_usd": "Most do not enforce a hard minimum but recommend $1,500-$3,000/mo Google Ads spend for a single-location shop. Industry benchmark per Body Shop Business: ~5% of revenue on marketing total. [uncertain: contractual minimums vary by agency]",
+  "contract_length_months": "Typically 6 or 12 months for retainer agencies; TenPoint per-engagement. BodyShop Marketing emphasizes a Transparency Guarantee but specific term not published. [uncertain: exact term length per agency]",
+  "cancellation_policy": "Boutique CR agency norm: 30-day written notice after initial term. [uncertain: no published cancellation terms for any of the three named agencies]",
+  "asset_ownership": "Industry norm for boutique CR shops: client owns domain, Google Ads account, GBP, and creative; agency may retain platform/CMS access until off-boarded. BodyShop Marketing's 'Transparency Guarantee' implies client-owned assets but is not contractually itemized publicly. [uncertain: per-agency contract specifics]",
+  "pricing_transparency": "Mixed. BodyShop Marketing publishes a range ($1,550-$4,950/mo) on its site — rare for the category. Micki Woods Marketing and TenPoint Complete are quote-only. Most CR-specialist agencies do not publish pricing.",
+  "pricing_confidence": "medium",
+  "pricing_sources": [
+    "https://www.bodyshopmarketing.io/",
+    "https://www.bodyshopmarketing.io/about",
+    "https://pr.dailyastorian.com/article/BodyShop-Marketing-Introduces-Solutions-to-Improve-Collision-Shop-Revenue",
+    "https://collisioncentermarketing.com/",
+    "https://collisioncentermarketing.com/about/",
+    "https://scrs.com/directory/business-listing/company-member/tenpoint-complete/",
+    "http://www.tenpointcomplete.com/automotive.html",
+    "https://news.assuredperformance.net/news/2016/09/01/certified-collision-care-and-tenpoint-complete-announce-advanced-and-customized-csi-services-for-oem-certified-collision-care-providers/",
+    "https://www.bodyshopbusiness.com/cost/",
+    "https://www.bodyshopbusiness.com/effective-marketing-for-collision-repairers/",
+    "https://www.autobodynews.com/news/collision-repair-marketing-what-shops-are-doing-in-creative-effective-local"
+  ],
+  "known_pain_points": [
+    "Boutique scale — small teams, key-person dependency (especially Micki Woods and BodyShop Marketing where the founder is the brand)",
+    "Reporting depth varies widely vs. mid-market agencies",
+    "Limited integration tooling — most don't natively plug into CCC ONE or shop management systems",
+    "Slow content/creative cadence at lower retainer tiers",
+    "[uncertain: BBB/Trustpilot/Reddit complaint volume — these agencies operate below public-review threshold]"
+  ],
+  "notable_clients": [
+    "BodyShop Marketing: Manuel Collision Center (testimonial published)",
+    "TenPoint Complete: Certified Collision Care / Assured Performance OEM-certified network (CSI partner)",
+    "Micki Woods Marketing: collision-only book, named clients not publicly listed",
+    "[uncertain: full client rosters not published]"
+  ],
+  "pros": [
+    "Deep collision-industry knowledge — speak DRP/CCC/OEM-certification language fluently",
+    "Understand insurance steering dynamics and how to position non-DRP and OEM-certified shops",
+    "Smaller client books = more personal attention than national resellers (Hibu, BizIQ)",
+    "Industry presence at SCRS, SEMA, CIC, NACE — credibility with shop owners",
+    "Content created by people who actually worked on a body shop floor (BodyShop Marketing founder background)",
+    "TenPoint specifically integrates CSI/voice-of-customer into the marketing loop, which is rare"
+  ],
+  "cons": [
+    "Higher per-month cost than generic SMB agencies ($1,550-$4,950 vs Hibu's ~$500-$1,500 typical)",
+    "Limited bench depth — vacation/illness/turnover risk on small teams",
+    "Most don't own a tech platform — they're services-only, so no proprietary CRM or attribution stack",
+    "Pricing transparency is poor across the category — hard to comparison-shop without sales calls",
+    "Few have national footprint — geographic coverage gaps possible",
+    "Limited Spanish-language / multi-market capability vs. enterprise vendors"
+  ],
+  "koffman_relevance": "Strongest fit for Koffman's under-served CR department. Today Koffman has no CR-specialist agency — Hibu handles general digital and Turnkey is mechanical-first. A CR-specialist would (a) build CCC/OEM-cert positioning Hibu can't, (b) target insurance-direct and OEM-cert vehicle traffic, (c) provide CSI workflow (TenPoint) that increases DRP retention. Replaces NOTHING Koffman currently pays for — this is incremental spend (~$2K-$3.5K/mo + ad spend) layered onto the CR department. Recommend evaluating BodyShop Marketing (price-transparent, published range) and Micki Woods Marketing (LSA/Google Ads specialist) for an initial RFP. TenPoint Complete is a complementary CSI/call-center add-on, not a replacement.",
+  "uncertain": [
+    "setup_fee_usd (none of the three named agencies publish onboarding fees)",
+    "min_ad_spend_usd (no published contractual minimums)",
+    "contract_length_months (no published term lengths)",
+    "cancellation_policy (no published cancellation terms)",
+    "asset_ownership (per-agency contract specifics not public)",
+    "known_pain_points (low public-review volume for boutique agencies)",
+    "notable_clients (full client rosters not published)"
+  ]
+}

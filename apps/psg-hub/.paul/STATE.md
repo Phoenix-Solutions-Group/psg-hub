@@ -5,27 +5,28 @@
 See: .paul/PROJECT.md (updated 2026-05-29)
 
 **Core value:** Consolidates fragmented PSG tooling into one branded `hub.psgweb.me` surface that customers, internal staff, and superadmins all use — replacing logins and tooling sprawl with role-gated unified access.
-**Current focus:** Wave 2 — 01-05 LOOP CLOSED 2026-05-31 (BSM anchor app, build green, IDOR secured). Next: 01-06 (BSM siblings → packages), then 01-07.
+**Current focus:** Phase 1 ✅ COMPLETE 2026-05-31 (7/7 plans loop-closed — monorepo consolidated). Transitioned to Phase 2 (Design system submodule + brand token swap). Next: /paul:plan Phase 2.
 
 ## Current Position
 
 Milestone: v0.1 Foundation (v0.1.0) — In progress
-Phase: 1 of 5 (Workspace consolidation + multi-repo relocation) — In progress
-Plan: 01-05 LOOP CLOSED ✓ (UNIFY 2026-05-31); 01-01..05 LOOP CLOSED; 01-06/07 pending
-Status: Ready for next plan — 01-06 (BSM siblings → packages/*)
-Last activity: 2026-05-31 — 01-05 UNIFY complete, loop closed. BSM anchor app merged (build green, 24/24 pages); Stripe apiVersion fixed; 2 HIGH IDOR content routes secured.
+Phase: 2 of 5 (Design system submodule + brand token swap) — Not started
+Plan: Not started — ready to plan Phase 2
+Status: Phase 1 complete + transitioned. Ready to plan Phase 2.
+Last activity: 2026-05-31 — Phase 1 ✅ complete (7/7 loop-closed); 01-07 UNIFY + transition done (PROJECT/ROADMAP evolved, phase commit pending operator review of staged set).
 
 Progress:
-- Milestone: [░░░░░░░░░░] 0%
-- Phase 1: [███████░░░] 71% (5 of 7 loop-closed; 01-06/07 pending APPLY)
+- Milestone v0.1: [██░░░░░░░░] 20% (1 of 5 phases complete)
+- Phase 1: [██████████] 100% ✅ (7 of 7 loop-closed)
+- Phase 2: [░░░░░░░░░░] 0% (not started)
 
 ## Loop Position
 
 ```
-PLAN ──▶ APPLY ──▶ UNIFY
-  ✓        ✓        ✓     [01-05 LOOP CLOSED 2026-05-31 — BSM anchor app live, build green]
+PLAN ──▶ APPLY ──▶ UNIFY ──▶ TRANSITION
+  ✓        ✓        ✓          ✓     [Phase 1 ✅ CLOSED 2026-05-31 — 7/7 plans; monorepo consolidated]
 ```
-Next: /paul:apply 01-06 (BSM siblings → packages), then 01-07.
+Next: /paul:plan Phase 2 (Design system submodule + brand token swap). Phase commit pending operator review of staged set (394M ads artifacts — see Git State).
 
 Carry-over to track in next plans:
 - Resolved 2026-05-31: workspace-root git strategy = single monorepo (collapse). `apps/psg/.git` is THE monorepo; psg-hub `.git` absorbed (history bundled); `/archive/` + `/psg-import/` + `/api-psghub/` + `/psg-data-lake/` gitignored (root-anchored). Wave 1 committed on branch `chore/phase-1-workspace-consolidation` (NOT pushed).
@@ -42,8 +43,8 @@ Carry-over to track in next plans:
 | 01-03 | ads-dashboard PAUL absorb + codebase archive + GitHub archive flag (D70) | 1 | none | 311 | LOOP CLOSED ✓ |
 | 01-04 | local_reach archive + active client outputs extracted (D69) + `local-reach-content/` addendum (carryover from 01-02) | 1 | none | 351 | LOOP CLOSED ✓ |
 | 01-05 | BSM dashboard relocated to `apps/psg/apps/psg-hub/`; pnpm-lock generated | 2 | 01-01 | 401 | LOOP CLOSED ✓ |
-| 01-06 | BSM siblings → `apps/psg/packages/*` scoped `@psg/*` | 2 | 01-01, 01-05 | 390 | PLAN ✓ |
-| 01-07 | `apps/ads/` → `apps/psg/apps/psg-ads-mutations/` Python worker | 2 | 01-01 | 350 | PLAN ✓ |
+| 01-06 | BSM siblings → `apps/psg/packages/*` scoped `@psg/*` | 2 | 01-01, 01-05 | 390 | LOOP CLOSED ✓ (only studio was a real pkg; 4 stubs deferred) |
+| 01-07 | `apps/ads/` → `apps/psg/apps/psg-ads-mutations/` Python worker | 2 | 01-01 | 350 | LOOP CLOSED ✓ (1935MB freed; .git bundled; .env preserved) |
 
 ## Accumulated Context
 
@@ -65,6 +66,8 @@ Carry-over to track in next plans:
 | D62 — Strictly sequential post-v1.0 | v1.1+ | Single team scheduling |
 | D70 — ads-dashboard reframed to plans/concepts | v0.3 + v0.1 Phase 4 | Absorb intent + PAUL plans only; not code |
 | 2026-05-31: local_reach `accidents.db` (2.9G) archived whole, not stripped | Phase 1 / 01-04 | Operator chose option A at checkpoint; archive recoverable, +2.9G workspace |
+| 2026-05-31: 01-06 scope override (Option A) — only `studio` is a real package; 4 stubs (integrations/onboarding/preview/shops, no package.json) deferred | Phase 1 / 01-06 | studio → @psg/studio (workspace=2 members); 4 stubs stay at ~/apps/projects/bsm/ for a later content/scaffold plan; AC-5 (6 members) → 2, AC-6 (BSM nearly empty) revised |
+| 2026-05-31: 01-07 — apps/ads → psg-ads-mutations Python worker; `.env` preserved (NOT deleted), nested `.git` bundled+dropped, node_modules/.claude stripped, non-Python content (psg-ads Obsidian vault + HTMLs) included-as-is | Phase 1 / 01-07 | worker landed 394M; secret-ignore gate verified (google-ads.yaml + .env ignored) pre-transition; bundle at `archive/_repo-bundles/ads-pre-drop-20260531.bundle`; 394M per-client artifacts will be staged at phase commit |
 | 2026-05-31: Workspace git = single monorepo (collapse) | Phase 1 / git strategy | `apps/psg/.git` is THE monorepo; psg-hub absorbed (history → `archive/_repo-bundles/` bundle); psg-import + api-psghub kept independent (own .git, gitignored); Wave 1 committed on branch `chore/phase-1-workspace-consolidation`, not pushed |
 
 ### Deferred Issues
@@ -99,8 +102,8 @@ From 01-01-PLAN.md:
 ## Session Continuity
 
 Last session: 2026-05-31
-Stopped at: 01-05 LOOP CLOSED (UNIFY complete) — BSM anchor app live (build green); 2 IDOR routes secured; Wave 2 pt1 committed (956c256). **PAUSED 2026-05-31 (context clear).** 5 of 7 Phase-1 plans closed.
-Next action: `/paul:apply .paul/phases/01-workspace-consolidation/01-06-PLAN.md` (BSM siblings → packages/*, gated 01-01+01-05 ✓). Then 01-07 (apps/ads → Python worker), then Phase 1 close + transition.
+Stopped at: **Phase 1 ✅ COMPLETE + transitioned to Phase 2.** All 7 plans loop-closed; PROJECT.md + ROADMAP.md evolved (Phase 1 ✅, Phase 2 🔵 next). 01-07 SUMMARY + UNIFY reconciled vs filesystem. **Phase git commit NOT yet finalized** — staged set under operator review (394M ads artifacts; see Git State).
+Next action: `/paul:plan` Phase 2 (Design system submodule + brand token swap) — gated on Phase 1 ✅. **Before/with that:** finalize the Phase 1 commit on branch `chore/phase-1-workspace-consolidation` (operator confirms staged set; then operator merges branch → main + pushes). Follow-ups open: (a) 4 deferred BSM stubs content/scaffold plan, (b) BSM-root residue retirement (docs/, supabase/, .paperclip/), (c) psg-hub `typecheck` script, (d) ads doc-path refresh (apps/ads → apps/psg-ads-mutations in CLAUDE.md/README body), (e) keep-vs-ignore decision on `ops/*/ad-assets/` binaries.
 Resume file: `.paul/HANDOFF-2026-05-31-wave2-next-01-06.md`
 Resume context:
 - Wave 1 complete: 01-01 (scaffold), 01-02 (kill list), 01-03 (ads-dashboard absorb), 01-04 (local_reach + sidecar archive) all LOOP CLOSED. Committed 2026-05-31 as monorepo on branch `chore/phase-1-workspace-consolidation` (not pushed).

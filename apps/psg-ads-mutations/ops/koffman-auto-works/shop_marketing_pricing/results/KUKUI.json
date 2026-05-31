@@ -1,0 +1,72 @@
+{
+  "agency_name": "KUKUI (Kukui Corporation)",
+  "domain": "kukui.com",
+  "hq_location": "San Jose, CA",
+  "specialty": "AR",
+  "services": ["Website", "SEO", "Google Ads (Search + LSA + Map + Bing)", "CRM", "Reviews", "Call Tracking", "Online Appointments", "Online Payments", "Email/SMS", "Direct Mail (postcards)", "Digital Vehicle Inspection integration", "Analytics"],
+  "base_monthly_low_usd": 499,
+  "base_monthly_high_usd": 1500,
+  "typical_monthly_usd": "$700-$1,200 for Pro Package (single-bay independent AR shop); ACA members report ~$250/mo savings off standard Pro",
+  "setup_fee_usd": "$399-$899 typical one-time; $399 setup for Auto Care Alliance / MWACA members; ~$500 off standard setup via ACA partnership",
+  "min_ad_spend_usd": "Not bundled into platform fee; PPC management is included but ad budget is paid separately by client (typical shop spends $500-$2,000/mo on Google Ads on top of Kukui fee) [uncertain]",
+  "contract_length_months": "12 (annual term); auto-renews per ToS unless client cancels in writing per Order terms",
+  "cancellation_policy": "Auto-renews as long as Kukui provides Services. No refunds for any reason. Client remains fully liable for sums due even if they stop using the service mid-term. 30-day data export window after termination, then Kukui has no obligation to maintain client data.",
+  "asset_ownership": "Kukui-built website is hosted on Kukui infrastructure; multiple Capterra reviewers report being told they could keep the website at signup but were later denied or charged. Domain typically owned by client if client registered it; site CMS, code, and integrations are Kukui's. Migration off platform is non-trivial.",
+  "pricing_transparency": "Quote-only; pricing page exists but lists no dollar amounts. Public floor of $499/mo comes from Capterra/GetApp/SoftwareFinder listings, not Kukui.com. ACA partnership page is the only public source confirming ~$250/mo + $399 setup discount math.",
+  "pricing_confidence": "medium",
+  "pricing_sources": [
+    "https://www.kukui.com/pricing",
+    "https://www.kukui.com/termsandconditions",
+    "https://www.kukui.com/plans",
+    "https://autocarealliance.org/aca-partners-with-kukui-2023/",
+    "https://www.kukui.com/aca",
+    "https://www.capterra.com/p/164990/Kukui-All-in-One-Success-Platform/",
+    "https://www.getapp.com/industries-software/a/kukui/pricing/",
+    "https://softwarefinder.com/auto-repair-software/kukui-software",
+    "https://www.softwareadvice.com/auto-repair/all-in-one-success-platform-profile/",
+    "https://www.glassdoor.com/Reviews/Kukui-Corporation-Reviews-E690319.htm"
+  ],
+  "known_pain_points": [
+    "Cookie-cutter website templates with shared stock photos across all Kukui clients",
+    "Customer service decline: shops cycle through multiple account managers in 12-24 months, each requiring ~2 month ramp",
+    "Sales reps allegedly over-promise free features that become paid add-ons at renewal/cancel",
+    "Duplicate Google Ads campaigns reported when Kukui signs competing shops in same geo",
+    "Same canned social media posts pushed to all clients despite paying for 'custom' content",
+    "No refunds policy; client liable for full annual term even if dissatisfied",
+    "Sales team turnover (per Glassdoor: 'every salesperson left in a given year')",
+    "Disputes over website ownership at cancellation",
+    "Dashboard tax-total calc reportedly skews shop financial reporting"
+  ],
+  "notable_clients": [
+    "Members of Auto Care Alliance (national network)",
+    "Members of Midwest Auto Care Alliance (MWACA)",
+    "Shop-Ware integration partners",
+    "NAPA TRACS integration shops",
+    "ATI (Automotive Training Institute) member shops",
+    "AutoZone-affiliated independent shops"
+  ],
+  "pros": [
+    "Vertical specialist: built for AR (mechanical) only — terminology, integrations, KPIs are auto-repair native",
+    "Google Partner Premier status (2023+) — Google Ads management is legitimately credentialed, unlike Hibu",
+    "Deep SMS integrations (Shop-Ware, NAPA TRACS, Tekmetric, Mitchell1) pull RO data into CRM automatically",
+    "All-in-one bundle removes vendor sprawl (website, CRM, PPC, reviews, DVI under one login)",
+    "Industry-association partnerships (ACA, MWACA, ATI, AutoZone) provide vetted discounts",
+    "Postcard direct mail integration is rare and valued by service-reminder workflows"
+  ],
+  "cons": [
+    "Locked into 12-month auto-renewing contract with no-refund clause",
+    "Website is templated; minimal design differentiation between Kukui clients",
+    "Account manager turnover undermines strategy continuity",
+    "Quote-only pricing — no published tier sheet means shops can't benchmark before sales call",
+    "Reported conflict of interest: same vendor running PPC for competing shops in same market",
+    "Mostly AR-focused; weak fit for collision repair (CR) workflows (no estimating, DRP, CCC/Mitchell collision integration)",
+    "Ad spend not included — true total cost = Kukui fee + Google Ads budget + any add-ons"
+  ],
+  "koffman_relevance": "Strong functional upgrade over Hibu for the AR side of Koffman: vertical AR specialization, Google Partner Premier (vs Hibu's iPromote display spam), real SMS/CRM integration with shop management systems, and call tracking that ties leads to ROs. Pricing ($499-$1,200/mo + ad spend + $399-$899 setup) lands roughly even with or below Hibu's blended invoice but with materially better Google Ads execution. However, Kukui does NOT serve the collision side — Koffman would still need a separate CR solution (Turnkey Marketing, BodyShop Booster, or PSG in-house), so Kukui is not a single-vendor Hibu replacement for a combined AR+CR shop. Kukui's 12-month auto-renewing no-refund contract is a similar lock-in risk to Hibu, and website-ownership disputes at cancellation are a documented pattern. Verdict: viable replacement for Hibu on the mechanical side; not a full replacement, and PSG should weigh against Turnkey (auto specialist serving both AR + CR) before recommending.",
+  "uncertain": [
+    "exact tier breakdown above the $499 floor (Starter / Pro / Premier or similar)",
+    "min_ad_spend_usd — whether Kukui imposes a minimum Google Ads budget for PPC management to be effective",
+    "whether contract is truly 12-month or 24-month for top tier",
+    "Koffman-specific quote (no public Kukui quote for Campbellsport WI market)"
+  ]
+}

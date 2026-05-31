@@ -1,0 +1,65 @@
+{
+  "agency_name": "Element DMA (Element Digital Marketing Agency)",
+  "domain": "elementdma.com",
+  "hq_location": "Sheridan, WY",
+  "specialty": "AR",
+  "services": [
+    "Website Design / Management",
+    "SEO (local + organic)",
+    "Google Ads / PPC",
+    "Google Business Profile / Location Management",
+    "Call Tracking",
+    "Advanced Analytics / Reporting",
+    "EGL AI Sales Assistant (client growth system)",
+    "Content / Blog",
+    "Lead Generation (also serves auto body, diesel, mobile mechanics)"
+  ],
+  "base_monthly_low_usd": 590,
+  "base_monthly_high_usd": 3500,
+  "typical_monthly_usd": "$1,500-$2,500/mo retainer (excluding ad spend) for a single-location independent shop; $950-$2,500/mo range reported on their site for management fee alone",
+  "setup_fee_usd": "Not published [uncertain] — no setup fee mentioned in any tier on G2 pricing page",
+  "min_ad_spend_usd": "~$1,000/mo per service bay recommended (e.g. 5-bay shop = ~$5,000/mo Google Ads budget); total $1,500-$3,500/mo packages typically include ad spend at the low end",
+  "contract_length_months": "month-to-month / no long-term contract (per agency claim: 'clients stay because of results, not because they're locked in')",
+  "cancellation_policy": "No long-term lock-in reported; exact notice period not published [uncertain]",
+  "asset_ownership": "Shop retains website, domain, Google Ads account, GBP, and creative [uncertain — not explicitly published, but consistent with their 'no lock-in' positioning and standard for transparent indie agencies]",
+  "pricing_transparency": "Tiered / partially published — starting price ($590) listed on G2; tier ranges discussed on their own site and podcast; specific tier feature breakdowns require a sales call",
+  "pricing_confidence": "medium",
+  "pricing_sources": [
+    "https://www.g2.com/products/element-dma-automotive-digital-marketing-agency/pricing",
+    "https://elementdma.com/",
+    "https://elementdma.com/services/digital-marketing-for-auto-repair-shop/",
+    "https://elementdma.com/marketing-roi-calculator/",
+    "https://clutch.co/profile/element-dma-automotive-digital-marketing",
+    "https://autorepairmarketing.captivate.fm/episode/002"
+  ],
+  "known_pain_points": [
+    "Limited third-party review volume — Clutch profile had no reviews at last capture, making independent verification of outcomes thin",
+    "Smaller agency footprint — capacity questions if Koffman wanted multi-location / enterprise-grade SLAs [uncertain]",
+    "Primarily mechanical-AR oriented; collision capability exists (lead-gen page for auto body shops) but is not their core competency"
+  ],
+  "notable_clients": [
+    "Client list not publicly enumerated [uncertain] — published case studies and podcast guests reference independent AR shop owners, but no named MSO or franchise client roster"
+  ],
+  "pros": [
+    "Founders Brian & Kim Walker previously owned a $2M auto repair shop — operator empathy is genuine and shows in messaging",
+    "Transparent-ish pricing vs Hibu/Turnkey — published starting price + ranges, ROI calculator, no contract lock-in",
+    "Niche focus on independent AR shops — content, ad copy, and tracking tuned to repair-shop KPIs (cost-per-repair-job, booked appointments)",
+    "Active thought leadership (Auto Repair Marketing Podcast, blog with 23+ industry guides)",
+    "Proprietary EGL AI Sales Assistant included in some tiers",
+    "Shop typically owns the website, ad account, and creative (consistent with their no-lock-in stance)"
+  ],
+  "cons": [
+    "AR-first — not a collision-repair specialist; would not replace BodyShop Booster for CR workflow",
+    "Thin third-party review profile (Clutch/G2 have minimal independent reviews); reputation rests on owner-published content",
+    "Small agency — bus-factor / capacity risk for a larger operator like Koffman",
+    "Lower price tier ($590) is likely website-only or very light Google Ads management; real comparable scope to Hibu/Turnkey lives at $1,500-$3,500/mo"
+  ],
+  "koffman_relevance": "MEDIUM — strong potential replacement for Turnkey Marketing on the mechanical-AR side (similar scope: website + Google Ads + GBP + analytics) at comparable or lower cost, with no contract lock-in and shop-owned assets. Would NOT cover Koffman's CR department — pair with BodyShop Booster or another collision specialist for that. Element DMA does have an auto-body lead-gen offering, but their published case studies and founder background are mechanical-AR. Best framed as: 'Element DMA replaces Turnkey for AR; BodyShop Booster bolts onto the CR dept; Hibu can be cut entirely.'",
+  "uncertain": [
+    "setup_fee_usd",
+    "cancellation_policy",
+    "asset_ownership",
+    "notable_clients",
+    "known_pain_points (agency capacity claim)"
+  ]
+}

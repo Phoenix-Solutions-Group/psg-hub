@@ -14,8 +14,8 @@ Consolidates fragmented PSG tooling (BSM customer dashboard, ads-dashboard plans
 |-----------|-------|
 | Type | Application |
 | Version | 0.0.0 |
-| Status | Initializing (post-SEED v7 graduation) |
-| Last Updated | 2026-05-29 |
+| Status | v0.1 Foundation — Phase 1 complete (workspace consolidated; monorepo live) |
+| Last Updated | 2026-05-31 |
 
 **Production URLs:**
 - `hub.psgweb.me` — production (target, not deployed yet)
@@ -32,7 +32,7 @@ Consolidates fragmented PSG tooling (BSM customer dashboard, ads-dashboard plans
 - Superadmin matrix: role + tier + module + security profile management with audit log
 
 ### Validated (Shipped)
-None yet (BSM Phases 1–5 relocate as foundation in v0.1).
+- ✓ Workspace consolidation — Phase 1 (2026-05-31): single pnpm+Turbo monorepo at `apps/psg/`; BSM dashboard → `apps/psg-hub/` anchor (build green, IDOR secured); BSM `studio` → `packages/studio` (`@psg/studio`); `apps/ads/` → `apps/psg-ads-mutations/` Python worker; ads-dashboard + local_reach archived; kill list retired; git collapsed to single repo (`Phoenix-Solutions-Group/data`).
 
 ### Active (In Progress)
 None yet — initializing.
@@ -125,6 +125,9 @@ Anchor = BSM `dashboard/` (Next.js 16, BSM Phases 1–5 shipped). Shared Supabas
 | D62 — Strictly sequential post-v1.0 | Q13 resolved | 2026-05-29 | Active |
 | D69 — local_reach archived immediately in v0.1 | Q22 resolved; BSM agents replace | 2026-05-29 | Active |
 | D70 — ads-dashboard absorption reframed to plans + concepts (not code) | Q20 resolved; ads-dashboard scaffold only, BSM Next 16 supersedes | 2026-05-29 | Active |
+| Phase 1 — Workspace git collapsed to single monorepo (`apps/psg/.git` = `data` repo); nested repos bundled to `archive/_repo-bundles/` then dropped | 01-01/05/07; avoids embedded gitlinks | 2026-05-31 | Shipped |
+| Phase 1 (01-06) — only BSM `studio` was a real package; 4 stubs deferred (no fabricated package.json) | reality vs plan at checkpoint | 2026-05-31 | Shipped |
+| Phase 1 (01-07) — `apps/ads` `.env` preserved (not deleted); non-Python content moved with the worker tree | irreversible-credential + operator Option A | 2026-05-31 | Shipped |
 
 ## Success Metrics
 
@@ -183,12 +186,12 @@ Anchor = BSM `dashboard/` (Next.js 16, BSM Phases 1–5 shipped). Shared Supabas
 | Brand source | github.com/Phoenix-Solutions-Group/design-system |
 | SEED ideation | `../../projects/psg-hub/PLANNING.md` (v7, 70 decisions) |
 | Workspace map | `../../.paul/codebase/` (STACK, ARCHITECTURE, STRUCTURE, CONVENTIONS, TESTING, INTEGRATIONS, CONCERNS) |
-| Anchor (BSM) | `~/apps/projects/bsm/` |
-| ads-dashboard PAUL (absorbed plans) | `~/apps/ads-dashboard/.paul/` |
-| `apps/ads/` (surfaced v1.2) | `~/apps/ads/` |
+| Anchor (BSM) — relocated Phase 1 | `apps/psg/apps/psg-hub/` (was `~/apps/projects/bsm/dashboard/`); Sanity studio → `apps/psg/packages/studio` (`@psg/studio`); 4 non-package stubs + docs residue remain at `~/apps/projects/bsm/` (deferred) |
+| ads-dashboard PAUL (absorbed plans) | `apps/psg/apps/psg-hub/.paul/references/ads-dashboard/` (absorbed); source archived |
+| Ads Python worker (surfaced v1.2) — relocated Phase 1 | `apps/psg/apps/psg-ads-mutations/` (was `~/apps/ads/`); history bundle at `archive/_repo-bundles/ads-pre-drop-20260531.bundle` |
 | Master Project Plan (v1.6 source) | `apps/psg/psg-advantage-portal/Master Project Plan_ PSG Agentic Market Intelligence Platform.md` |
 | FleetComplete 2019 spec (v1.1+ source) | `~/Library/CloudStorage/.../PSG Project Technical Design v1.0_Final.txt` |
 
 ---
 *PROJECT.md — Populated from SEED ideation v7 (projects/psg-hub/PLANNING.md, 70 decisions)*
-*Last updated: 2026-05-29*
+*Last updated: 2026-05-31 after Phase 1 (workspace consolidation)*

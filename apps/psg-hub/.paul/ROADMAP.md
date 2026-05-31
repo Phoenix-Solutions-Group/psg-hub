@@ -8,7 +8,7 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 **v0.1 Foundation** (v0.1.0)
 Status: In progress
-Phases: 0 of 5 complete (Phase 1 — Planning)
+Phases: 1 of 5 complete (Phase 1 ✅ workspace consolidated; Phase 2 next)
 
 ## Phases
 
@@ -20,8 +20,8 @@ Phases: 0 of 5 complete (Phase 1 — Planning)
 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
-| 1 | Workspace consolidation + multi-repo relocation | 7 (01-01 created; 01-02..01-07 pending) | Planning | - |
-| 2 | Design system submodule + brand token swap | TBD | Not started | - |
+| 1 | Workspace consolidation + multi-repo relocation | 7/7 | ✅ Complete | 2026-05-31 |
+| 2 | Design system submodule + brand token swap | TBD | 🔵 Next | - |
 | 3 | SendGrid + Twilio + Sanity + Vercel re-link | TBD | Not started | - |
 | 4 | PAUL inheritance + tracking | TBD | Not started | - |
 | 5 | local_reach client output archive | TBD | Not started | - |
@@ -65,15 +65,15 @@ Phases: 0 of 5 complete (Phase 1 — Planning)
 **Plans (7-plan split, 2 waves):**
 
 *Wave 1 (parallel-eligible, no deps):*
-- [ ] 01-01: Monorepo scaffold (workspace-root configs at `apps/psg/`) — **PLAN created 2026-05-29**
-- [ ] 01-02: Kill list retirement + non-code relocation outside repo (includes Q23–25 areas per D71)
-- [ ] 01-03: ads-dashboard PAUL plans + concepts absorbed (D70); repo + Vercel archived
-- [ ] 01-04: local_reach archive (D69) → `apps/psg/archive/local_reach/`
+- [x] 01-01: Monorepo scaffold (workspace-root configs at `apps/psg/`) — LOOP CLOSED
+- [x] 01-02: Kill list retirement + non-code relocation outside repo (D71) — LOOP CLOSED
+- [x] 01-03: ads-dashboard PAUL plans + concepts absorbed (D70); repo + Vercel archived — LOOP CLOSED
+- [x] 01-04: local_reach archive (D69) → `apps/psg/archive/local_reach/` — LOOP CLOSED
 
 *Wave 2 (sequential after 01-01):*
-- [ ] 01-05: BSM dashboard relocated to `apps/psg/apps/psg-hub/` (anchor lands; first workspace member)
-- [ ] 01-06: BSM siblings → `apps/psg/packages/*` (studio, integrations, onboarding, preview, shops)
-- [ ] 01-07: `apps/ads/` → `apps/psg/apps/psg-ads-mutations/` (Python worker)
+- [x] 01-05: BSM dashboard → `apps/psg/apps/psg-hub/` (anchor; build green, IDOR secured) — LOOP CLOSED
+- [x] 01-06: BSM siblings → `apps/psg/packages/*` — only `studio` was a real package (`@psg/studio`); 4 stubs deferred — LOOP CLOSED
+- [x] 01-07: `apps/ads/` → `apps/psg/apps/psg-ads-mutations/` (Python worker; `.env` preserved, `.git` bundled) — LOOP CLOSED
 
 ### Phase 2: Design system submodule + brand token swap
 
@@ -136,4 +136,4 @@ Phases: 0 of 5 complete (Phase 1 — Planning)
 
 ---
 *Roadmap created: 2026-05-29 (populated from SEED ideation v7)*
-*Last updated: 2026-05-29*
+*Last updated: 2026-05-31 — Phase 1 ✅ complete (7/7 plans)*
