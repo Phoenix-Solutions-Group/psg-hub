@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 
 export function SignupForm() {
   const [email, setEmail] = useState("");
@@ -50,10 +50,7 @@ export function SignupForm() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Create account</CardTitle>
-      </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
