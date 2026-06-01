@@ -19,3 +19,8 @@ process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID = "1234567890";
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role-key";
 process.env.SHOP_ADS_TIER_OVERRIDE = "";
+
+// SendGrid (Phase 3 — Plan 03-01). Deterministic dummy values for unit tests.
+process.env.SENDGRID_API_KEY = "SG.test-sendgrid-key";
+process.env.SENDGRID_FROM_EMAIL = "test-noreply@psgweb.me";
+process.env.SENDGRID_WEBHOOK_VERIFICATION_KEY = "test-sendgrid-verification-key";

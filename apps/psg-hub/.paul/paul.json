@@ -7,9 +7,9 @@
     "status": "in_progress"
   },
   "phase": {
-    "number": 2,
-    "name": "Design system — submodule + brand embodiment",
-    "status": "complete"
+    "number": 3,
+    "name": "SendGrid + Twilio + Sanity + Vercel re-link",
+    "status": "in_progress"
   },
   "loop": {
     "plan": null,
@@ -17,7 +17,7 @@
   },
   "timestamps": {
     "created_at": "2026-05-29T00:00:00Z",
-    "updated_at": "2026-06-01T14:32:32Z"
+    "updated_at": "2026-06-01T16:25:00Z"
   },
   "satellite": {
     "groom": true
