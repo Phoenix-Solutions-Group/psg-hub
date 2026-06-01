@@ -12,14 +12,14 @@ See: .paul/PROJECT.md (updated 2026-05-29)
 
 Milestone: v0.1 Foundation (v0.1.0) — In progress
 Phase: 2 of 5 (Design system — embody, expanded) — In progress
-Plan: 02-01 DONE (foundation); 02-02 created (branded login slice), in APPLY
-Status: 02-02 executing toward human-verify checkpoint
-Last activity: 2026-06-01 — 02-01 committed (`4792b1e`); re-scoped Phase 2 after human-verify revealed token-only ≠ "looks like PSG"; authored 02-02.
+Plan: 02-01 DONE (foundation); 02-02 DONE (branded login, approved); 02-03 created (app shell + routing fix), in APPLY
+Status: 02-03 executing toward human-verify
+Last activity: 2026-06-01 — 02-02 committed (`82d90c6`, operator-approved login screenshot); authored 02-03 (shell + fix /dashboard 404 + de-BSM + card/badge/table).
 
 Progress:
 - Milestone v0.1: [██░░░░░░░░] 20% (1 of 5 phases complete)
 - Phase 1: [██████████] 100% ✅
-- Phase 2: [███░░░░░░░] ~30% (02-01 done; 02-02 applying; 02-03/04 queued)
+- Phase 2: [█████░░░░░] ~55% (02-01 + 02-02 done; 02-03 applying; 02-04 docs queued)
 
 ## Loop Position
 
@@ -34,8 +34,8 @@ Next: apply 02-02 (logo + brand primitives + branded login/signup + de-BSM), sel
 | Plan | Scope | Deps | Status |
 |------|-------|------|--------|
 | 02-01 | Submodule + Gotham/Didact fonts + BSM teal → PSG tokens + delete orphan tokens.css | none | ✅ DONE (committed `4792b1e`) |
-| 02-02 | Branded `/login` slice: `<Logo>` (DS reconstruction) + restyle shared button/input/label to DS spec + rebuild login/signup PSG vocabulary + de-BSM (incl. tab title) | 02-01 | PLAN ✓ — applying |
-| 02-03 | App shell (`(dashboard)/layout.tsx` navy sidebar + reverse logo + header) + onboarding + card/badge/table to DS spec + rest of de-BSM (ads modals + callback in-copy) | 02-02 | TBD (after 02-02 loop) |
+| 02-02 | Branded `/login` slice: `<Logo>` + DS-spec button/label + login/signup PSG vocabulary + de-BSM + tab title | 02-01 | ✅ DONE (committed `82d90c6`, approved) |
+| 02-03 | App shell (navy sidebar + reverse logo + header) + FIX `/dashboard` 404 (redirect + nav hrefs → real routes) + onboarding + ads in-copy de-BSM + card/badge/table DS spec | 02-02 | PLAN ✓ — applying |
 | 02-04 | Doc retirement: portal `DESIGN-SYSTEM.md` superseded pointer; ads-dashboard reconcile; README brand-source line | 02-01 | TBD |
 
 Phase 2 decisions locked (2026-05-31 → 2026-06-01):
