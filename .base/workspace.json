@@ -315,11 +315,11 @@
       "state": "apps/psg-hub/.paul/STATE.md",
       "registered": "2026-05-29",
       "groom_check": true,
-      "last_activity": "2026-05-29T17:50:00Z",
-      "phase_name": "Workspace consolidation + multi-repo relocation",
-      "phase_number": 1,
-      "phase_status": "in_progress",
-      "loop_position": "APPLY_PAUSED",
+      "last_activity": "2026-05-31T22:40:00Z",
+      "phase_name": "Design system submodule + brand token swap",
+      "phase_number": 2,
+      "phase_status": "not_started",
+      "loop_position": "IDLE",
       "handoff": false
     },
     "ads-dashboard": {

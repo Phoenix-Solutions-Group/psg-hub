@@ -21,7 +21,7 @@ Phases: 1 of 5 complete (Phase 1 ✅ workspace consolidated; Phase 2 next)
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
 | 1 | Workspace consolidation + multi-repo relocation | 7/7 | ✅ Complete | 2026-05-31 |
-| 2 | Design system submodule + brand token swap | TBD | 🔵 Next | - |
+| 2 | Design system submodule + brand token swap | 1/2 planned | 🟡 Planning | - |
 | 3 | SendGrid + Twilio + Sanity + Vercel re-link | TBD | Not started | - |
 | 4 | PAUL inheritance + tracking | TBD | Not started | - |
 | 5 | local_reach client output archive | TBD | Not started | - |
@@ -82,12 +82,16 @@ Phases: 1 of 5 complete (Phase 1 ✅ workspace consolidated; Phase 2 next)
 **Research:** Unlikely (tokens already extracted by ads-dashboard `/brandkit` work; PSG design system stable)
 
 **Scope:**
-- `packages/ui/psg-brand/` git submodule from `github.com/Phoenix-Solutions-Group/design-system`
-- Tailwind 4 theme rebuilt from PSG tokens
-- shadcn primitives PSG-themed
-- Retire BSM oklch vars + psg-advantage-portal local DESIGN-SYSTEM.md
+- `packages/ui/psg-brand/` git submodule from `github.com/Phoenix-Solutions-Group/design-system` (SINGLE source of brand truth, operator-confirmed)
+- Tailwind 4 theme rebuilt from PSG tokens (`colors_and_type.css`): midnight navy `#1E3A52` + phoenix ember `#B8483E` + dark-ash + paper neutrals; Gotham + Didact Gothic fonts; restrained radius (6px)
+- shadcn primitives PSG-themed (every shadcn var re-valued)
+- Retire BSM oklch teal vars + psg-advantage-portal local DESIGN-SYSTEM.md
 
-**Plans:** TBD
+**Plans (2-plan split, 1 wave):**
+- [ ] 02-01: Vendor submodule + wire Gotham/Didact fonts + swap BSM teal → PSG brand tokens + delete orphan `src/styles/tokens.css` — PLAN ✓ (non-autonomous: human-verify brand conformance)
+- [ ] 02-02: Doc retirement — portal `DESIGN-SYSTEM.md` superseded pointer; ads-dashboard reference reconcile; README brand-source line — TBD (after 02-01 loop)
+
+**Plan-time decisions:** source of truth = design-system repo (portal drifted — teal success, slate `#4A4257`, radius 0); raw-asset consumption (not npm-wrapped); submodule = intentional gitlink (roadmapped, ≠ Phase 1's accidental ones); repo PRIVATE → Vercel deploy key at Phase 3 (carry-over).
 
 ### Phase 3: SendGrid + Twilio + Sanity + Vercel re-link
 
