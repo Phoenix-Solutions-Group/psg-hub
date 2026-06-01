@@ -8,7 +8,7 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 **v0.1 Foundation** (v0.1.0)
 Status: In progress
-Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodied; Phase 3 in progress — SendGrid + Twilio + Sanity + Vercel re-link; 03-01 SendGrid + 03-02 Twilio ✅ loop-closed; 03-03 Sanity PLAN created, awaiting approval; 03-04 remains)
+Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodied; Phase 3 in progress — SendGrid + Twilio + Sanity + Vercel deploy, re-split 4→5 plans; 03-01/02/03/04 ✅ loop-closed; **03-04 deployed psg-hub LIVE at https://hub.psgweb.me via NEW Vercel project**; 03-05 webhook live-verify + data/BSM decommission remains)
 
 ## Phases
 
@@ -22,7 +22,7 @@ Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodi
 |-------|------|-------|--------|-----------|
 | 1 | Workspace consolidation + multi-repo relocation | 7/7 | ✅ Complete | 2026-05-31 |
 | 2 | Design system — submodule + brand embodiment (logo, components, shell) | 4/4 | ✅ Complete | 2026-06-01 |
-| 3 | SendGrid + Twilio + Sanity + Vercel re-link | 2/4 done; 03-03 planned | In progress | - |
+| 3 | SendGrid + Twilio + Sanity + Vercel deploy | 4/5 done; 03-05 remains | In progress | - |
 | 4 | PAUL inheritance + tracking | TBD | Not started | - |
 | 5 | local_reach client output archive | TBD | Not started | - |
 
@@ -114,15 +114,16 @@ Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodi
 - BSM Vercel project decommissioned
 - ads-dashboard Vercel kept for read-only access until v0.3 absorption complete
 
-**Plans (4-way subsystem split, 2 waves — confirmed 2026-06-01):**
+**Plans (5-plan subsystem split, 2 waves — re-split 4→5 2026-06-01):**
 
 *Wave 1 (independent, no deps):*
-- [x] 03-01: SendGrid — shared `src/lib/resilience.ts` (retry + circuit breaker) + mail adapter + idempotent signature-verified event webhook + `email_events` table; operator domain auth (SPF/DKIM on psgweb.me) + live-send checkpoint — **✅ LOOP CLOSED 2026-06-01** (163 tests green; live send 202 + inbox; webhook event-row deferred → 03-04)
-- [x] 03-02: Twilio — SMS adapter (reuses resilience util) + idempotent dual-path webhook + `sms_events` table; operator number + secrets checkpoint — **✅ LOOP CLOSED 2026-06-01** (182 tests green; live send queued + phone receipt; 3 verified divergences from SendGrid mirror handled — error.status not .code, HMAC-over-parsed-params, composite UNIQUE(message_sid,status); webhook live sig-verify deferred → 03-04)
-- [~] 03-03: Sanity — provision new project + single prod dataset (D55) under PSG org; decouple `@psg/studio` from BSM `436nqu7v` (env-driven config) + publish env contract — **PLAN created 2026-06-01, awaiting approval** (tight scope: read client deferred v0.3; no migration — start fresh per D57; `autonomous:false`, 2 auto + 1 operator checkpoint)
+- [x] 03-01: SendGrid — shared `src/lib/resilience.ts` (retry + circuit breaker) + mail adapter + idempotent signature-verified event webhook + `email_events` table; operator domain auth (SPF/DKIM on psgweb.me) + live-send checkpoint — **✅ LOOP CLOSED 2026-06-01** (163 tests green; live send 202 + inbox; webhook event-row deferred → 03-05)
+- [x] 03-02: Twilio — SMS adapter (reuses resilience util) + idempotent dual-path webhook + `sms_events` table; operator number + secrets checkpoint — **✅ LOOP CLOSED 2026-06-01** (182 tests green; live send queued + phone receipt; 3 verified divergences from SendGrid mirror handled — error.status not .code, HMAC-over-parsed-params, composite UNIQUE(message_sid,status); webhook live sig-verify deferred → 03-05)
+- [x] 03-03: Sanity — provision new project + single prod dataset (D55) under PSG org; decouple `@psg/studio` from BSM `436nqu7v` (env-driven config) + publish env contract — **✅ LOOP CLOSED 2026-06-01** (project `vcw0bsnu`, private prod dataset, schema deployed 4 types, studio bound; 182 tests green; AC-1/2/3 met)
 
 *Wave 2 (after 03-01/02/03 — consumes their env):*
-- [ ] 03-04: Vercel — re-link `psg-advantage-portal`→`psg-hub` + rename (preserve env + analytics, D54) + private-submodule deploy key + wire all Phase 3 env; decommission BSM Vercel **(research-flagged: rename mechanics)**
+- [x] 03-04: Vercel deploy — **PIVOTED re-link→NEW project** (operator checkpoint:decision: `data` = broken non-customer portal, re-link would arm routeless-main clobber). Created `psg-hub` (`prj_CBrI1FRqqgPzCbAwin6LbSknY48U`), root `apps/psg-hub`, framework Next.js (vercel.json), 13 prod env keys via CLI, `hub.psgweb.me` + Cloudflare DNS → first prod deploy — **✅ LOOP CLOSED 2026-06-01** (all 3 ACs; psg-hub LIVE at https://hub.psgweb.me, branded + Let's Encrypt cert; webhook routes live; `data` untouched → retire in 03-05)
+- [ ] 03-05: Close deferred webhook loops + decommission — set SendGrid Event Webhook URL + Twilio StatusCallback/inbound URL against `hub.psgweb.me` → live-verify `email_events` row (03-01) + `sms_events` row/sig (03-02) + identify/decommission BSM Vercel (D54) — closes Phase 3 (depends on 03-04 public URL)
 
 ### Phase 4: PAUL inheritance + tracking
 
@@ -152,4 +153,4 @@ Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodi
 
 ---
 *Roadmap created: 2026-05-29 (populated from SEED ideation v7)*
-*Last updated: 2026-06-01 — Phase 2 ✅ complete (4/4 plans, unified); Phase 3 next*
+*Last updated: 2026-06-01 — Phase 3 re-split 4→5; 03-01/02/03 loop-closed; 03-04 (Vercel re-link + deploy) PLAN created, awaiting approval; 03-05 (webhook verify + BSM decommission) remains*

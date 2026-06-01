@@ -21,3 +21,9 @@ psg-advantage-portal/.vercel/
 psg-advantage-portal/node_modules/
 psg-advantage-portal/coverage/
 psg-advantage-portal/*.tsbuildinfo
+
+# --- psg-hub monorepo deploy: exclude heavy dirs psg-hub build never needs (added 2026-06-01, 03-04) ---
+archive/
+psg-data-lake/
+api-psghub/
+apps/psg-ads-mutations/
