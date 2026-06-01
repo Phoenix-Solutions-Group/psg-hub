@@ -5,43 +5,45 @@
 See: .paul/PROJECT.md (updated 2026-05-29)
 
 **Core value:** Consolidates fragmented PSG tooling into one branded `hub.psgweb.me` surface that customers, internal staff, and superadmins all use — replacing logins and tooling sprawl with role-gated unified access.
-**Current focus:** Phase 2 (Design system submodule + brand token swap) — Planning. Plan 02-01 created (submodule + fonts + brand token swap), awaiting approval. Source of brand truth = `github.com/Phoenix-Solutions-Group/design-system` (operator-confirmed 2026-05-31).
+**Core value:** Consolidates fragmented PSG tooling into one branded `hub.psgweb.me` surface.
+**Current focus:** Phase 2 (Design system) — **expanded intent 2026-06-01**: psg-hub must EMBODY the PSG design system (logo + brand components + layout), not just recolor. 02-01 (token/font foundation) DONE + committed. 02-02 (branded /login slice) created, applying. Source = `Phoenix-Solutions-Group/design-system` (= local `psg-design-system-repo`, same commit `1689896`).
 
 ## Current Position
 
 Milestone: v0.1 Foundation (v0.1.0) — In progress
-Phase: 2 of 5 (Design system submodule + brand token swap) — Planning
-Plan: 02-01 created, awaiting approval (autonomous: false — has human-verify checkpoint)
-Status: PLAN created, ready for APPLY
-Last activity: 2026-05-31 — Created 02-01-PLAN (vendor design-system submodule + wire Gotham/Didact fonts + swap BSM teal → PSG brand tokens).
+Phase: 2 of 5 (Design system — embody, expanded) — In progress
+Plan: 02-01 DONE (foundation); 02-02 created (branded login slice), in APPLY
+Status: 02-02 executing toward human-verify checkpoint
+Last activity: 2026-06-01 — 02-01 committed (`4792b1e`); re-scoped Phase 2 after human-verify revealed token-only ≠ "looks like PSG"; authored 02-02.
 
 Progress:
 - Milestone v0.1: [██░░░░░░░░] 20% (1 of 5 phases complete)
-- Phase 1: [██████████] 100% ✅ (7 of 7 loop-closed)
-- Phase 2: [░░░░░░░░░░] 0% (planning — 02-01 created)
+- Phase 1: [██████████] 100% ✅
+- Phase 2: [███░░░░░░░] ~30% (02-01 done; 02-02 applying; 02-03/04 queued)
 
 ## Loop Position
 
 ```
-PLAN ──▶ APPLY ──▶ UNIFY
-  ✓        ○        ○     [02-01 created, awaiting approval]
+02-01 PLAN ─▶ APPLY ─▶ (foundation done, committed 4792b1e)
+02-02 PLAN ✓ ─▶ APPLY ◀── here ──▶ human-verify ──▶ UNIFY
 ```
-Next: review + approve 02-01, then `/paul:apply apps/psg-hub/.paul/phases/02-design-system/02-01-PLAN.md`. Phase 1 commit still pending operator review of staged set (394M ads artifacts — see Git State).
+Next: apply 02-02 (logo + brand primitives + branded login/signup + de-BSM), self-screenshot, operator human-verify. Then author 02-03 (shell) + 02-04 (docs). Phase 1 = merged to main + pushed (`65bc17f`).
 
-## Phase 2 Plan Split (2 plans, 1 wave) — 02-01 created, 02-02 queued
+## Phase 2 Plan Split (expanded 4-plan, 2 waves) — re-scoped 2026-06-01
 
-| Plan | Scope | Track | Deps | Status |
-|------|-------|-------|------|--------|
-| 02-01 | Vendor design-system submodule (`packages/ui/psg-brand/`) + wire Gotham/Didact fonts via next/font/local + swap BSM teal → PSG brand tokens across all shadcn vars + delete orphan `src/styles/tokens.css` | standard (non-autonomous, human-verify) | none | PLAN ✓ |
-| 02-02 | Doc retirement: portal `DESIGN-SYSTEM.md` → superseded pointer to submodule; ads-dashboard reference reconcile note; psg-hub README brand-source line | quick-fix | 02-01 (docs point at the submodule it creates) | TBD (create after 02-01 loop) |
+| Plan | Scope | Deps | Status |
+|------|-------|------|--------|
+| 02-01 | Submodule + Gotham/Didact fonts + BSM teal → PSG tokens + delete orphan tokens.css | none | ✅ DONE (committed `4792b1e`) |
+| 02-02 | Branded `/login` slice: `<Logo>` (DS reconstruction) + restyle shared button/input/label to DS spec + rebuild login/signup PSG vocabulary + de-BSM (incl. tab title) | 02-01 | PLAN ✓ — applying |
+| 02-03 | App shell (`(dashboard)/layout.tsx` navy sidebar + reverse logo + header) + onboarding + card/badge/table to DS spec + rest of de-BSM (ads modals + callback in-copy) | 02-02 | TBD (after 02-02 loop) |
+| 02-04 | Doc retirement: portal `DESIGN-SYSTEM.md` superseded pointer; ads-dashboard reconcile; README brand-source line | 02-01 | TBD |
 
-Phase 2 decisions locked at plan time:
-- Source of brand truth = the design-system repo (`colors_and_type.css`), NOT psg-advantage-portal (portal drifted: teal success `#0EA5A5` vs brand sage `#526B51`; slate `#4A4257` vs `#4B5058`; radius `0` vs brand `6px`). Submodule wins on every divergence.
-- Consumption = raw-asset + hand-translate (shadcn var names ≠ brand var names; submodule upstream-owned → not wrapped as npm package). Fonts via `next/font/local`.
-- Submodule re-adds ONE intentional tracked gitlink — roadmapped, distinct from the accidental embedded gitlinks Phase 1 removed. Not a coherence violation.
-- design-system repo is PRIVATE → Vercel deploy key needed at Phase 3 deploy (carry-over, not a Phase 2 blocker).
-- No `psgTokens.ts` JS mirror (no chart/map/Tremor consumers in psg-hub yet); no Gotham Rounded (marketing-only).
-- Gotham = Adobe Typekit-licensed; self-hosting .otf in deployed app flagged for operator (likely accepted).
+Phase 2 decisions locked (2026-05-31 → 2026-06-01):
+- Source = design-system repo; `colors_and_type.css` CANONICAL over SKILL.md on contradictions (paper #FAFAFA, headings Bold 700) — operator 2026-06-01. (psg-advantage-portal DRIFTED — ignore its values.)
+- Logos = DS reconstruction placeholder (`assets/psg-logo-*.svg`), use now + swap official later (operator-approved). Product name = "Phoenix Solutions Group".
+- 02-01 reframe: human-verify showed token-swap ≠ design-system embodiment ("where's the logo"). Intent expanded; 02-01 kept as correct foundation, NOT a defect.
+- Consumption = raw-asset; fonts via next/font/local (paths MUST be literals — not a variable). No psgTokens.ts (no chart consumers); no Gotham Rounded.
+- Dev unblock: gitignored `.env.local` (Supabase URL + anon key via MCP) so /login renders; full env = Phase 3. Submodule PRIVATE → Vercel deploy key Phase 3. Gotham Typekit-licensed → flagged.
 
 Carry-over to track in next plans:
 - Resolved 2026-05-31: workspace-root git strategy = single monorepo (collapse). `apps/psg/.git` is THE monorepo; psg-hub `.git` absorbed (history bundled); `/archive/` + `/psg-import/` + `/api-psghub/` + `/psg-data-lake/` gitignored (root-anchored). Wave 1 committed on branch `chore/phase-1-workspace-consolidation` (NOT pushed).

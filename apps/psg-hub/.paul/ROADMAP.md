@@ -87,11 +87,15 @@ Phases: 1 of 5 complete (Phase 1 ✅ workspace consolidated; Phase 2 next)
 - shadcn primitives PSG-themed (every shadcn var re-valued)
 - Retire BSM oklch teal vars + psg-advantage-portal local DESIGN-SYSTEM.md
 
-**Plans (2-plan split, 1 wave):**
-- [ ] 02-01: Vendor submodule + wire Gotham/Didact fonts + swap BSM teal → PSG brand tokens + delete orphan `src/styles/tokens.css` — PLAN ✓ (non-autonomous: human-verify brand conformance)
-- [ ] 02-02: Doc retirement — portal `DESIGN-SYSTEM.md` superseded pointer; ads-dashboard reference reconcile; README brand-source line — TBD (after 02-01 loop)
+**Intent (expanded 2026-06-01):** Phase 2 is NOT just a token swap — psg-hub must visibly EMBODY the PSG design system: logo, brand-styled components (per `preview/components-*.html`), PSG layout vocabulary (eyebrow→headline, paper, single ember accent), and zero BSM/boilerplate identity. (Original "token swap" framing under-scoped vs operator intent; caught at 02-01 human-verify.)
 
-**Plan-time decisions:** source of truth = design-system repo (portal drifted — teal success, slate `#4A4257`, radius 0); raw-asset consumption (not npm-wrapped); submodule = intentional gitlink (roadmapped, ≠ Phase 1's accidental ones); repo PRIVATE → Vercel deploy key at Phase 3 (carry-over).
+**Plans (expanded split, 2 waves):**
+- [x] 02-01: Vendor submodule + Gotham/Didact fonts + BSM teal → PSG tokens + delete orphan tokens.css — **DONE 2026-06-01** (foundation; build+typecheck green; committed `4792b1e`)
+- [ ] 02-02: Branded `/login` slice — `<Logo>` (DS reconstruction) + restyle shared button/input/label to DS spec + rebuild login/signup in PSG vocabulary + de-BSM (incl. root tab title) — PLAN ✓ (non-autonomous: human-verify, visible-proof slice)
+- [ ] 02-03: App shell + remaining primitives — `(dashboard)/layout.tsx` navy sidebar w/ reverse logo + header; onboarding heading; card/badge/table to DS spec; rest of de-BSM (ads modals + callback in-copy "BSM") — TBD (after 02-02 loop confirms direction)
+- [ ] 02-04: Doc retirement — portal `DESIGN-SYSTEM.md` superseded pointer; ads-dashboard reference reconcile; README brand-source line — TBD
+
+**Plan-time decisions:** source of truth = design-system repo (= local `psg-design-system-repo`, same commit `1689896`); `colors_and_type.css` canonical over SKILL.md (paper #FAFAFA, headings Bold 700, per operator); logos = DS reconstruction placeholder (operator-approved, swap official later); product name = "Phoenix Solutions Group"; raw-asset consumption (not npm-wrapped); submodule gitlink intentional; repo PRIVATE → Vercel deploy key at Phase 3.
 
 ### Phase 3: SendGrid + Twilio + Sanity + Vercel re-link
 
