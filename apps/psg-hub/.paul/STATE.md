@@ -5,28 +5,30 @@
 See: .paul/PROJECT.md (updated 2026-05-29)
 
 **Core value:** Consolidates fragmented PSG tooling into one branded `hub.psgweb.me` surface that customers, internal staff, and superadmins all use — replacing logins and tooling sprawl with role-gated unified access.
-**Core value:** Consolidates fragmented PSG tooling into one branded `hub.psgweb.me` surface.
-**Current focus:** Phase 2 (Design system) **✅ COMPLETE 2026-06-01** — psg-hub embodies the PSG design system (submodule + Gotham/Didact fonts + brand tokens + PSG logo + branded login/signup + navy app shell + DS-spec primitives) and is fully de-BSM'd. All 4 plans loop-closed + approved. Next: Phase 3 (SendGrid + Twilio + Sanity + Vercel re-link).
+**Current focus:** Phase 3 (SendGrid + Twilio + Sanity new project + Vercel re-link) — Not started; ready to plan. Phase 2 (Design system) **✅ COMPLETE + UNIFIED 2026-06-01** — psg-hub embodies the PSG design system (submodule + Gotham/Didact fonts + brand tokens + PSG logo + branded login/signup + navy app shell + DS-spec primitives), fully de-BSM'd; all 4 plans loop-closed + operator-approved + reconciled (typecheck + 136 tests green at HEAD).
 
 ## Current Position
 
 Milestone: v0.1 Foundation (v0.1.0) — In progress
-Phase: 2 of 5 (Design system) — ✅ COMPLETE 2026-06-01
-Plan: 02-01..02-04 all DONE (committed). Phase 2 loop-closed.
-Status: Phase 2 complete. Ready for Phase 3 plan (or `/paul:unify` to formally close, then `/paul:plan 3`).
-Last activity: 2026-06-01 — 02-03 committed (`8f041c6`, app shell + /dashboard routing fix, approved); 02-04 doc retirement done. Phase 2 done.
+Phase: 3 of 5 (SendGrid + Twilio + Sanity + Vercel re-link) — Not started
+Plan: Not started
+Status: Ready to plan Phase 3. Phase 2 unified + loop-closed 2026-06-01.
+Last activity: 2026-06-01 — Phase 2 UNIFY complete: reconciled plan vs actual (typecheck + 136 tests green at HEAD; tokens/fonts/logo/shell/route-fix/de-BSM/docs all verified), PROJECT.md evolved, transitioned to Phase 3.
 
 Progress:
 - Milestone v0.1: [████░░░░░░] 40% (2 of 5 phases complete)
 - Phase 1: [██████████] 100% ✅
-- Phase 2: [██████████] 100% ✅ (4 of 4 plans)
+- Phase 2: [██████████] 100% ✅ (4 of 4 plans, unified)
 
 ## Loop Position
 
 ```
-Phase 2 ✅ CLOSED 2026-06-01 — 02-01 (tokens/fonts) · 02-02 (login) · 02-03 (shell+routing) · 02-04 (docs)
+PLAN ──▶ APPLY ──▶ UNIFY
+  ✓        ✓        ✓     [Phase 2 loop CLOSED 2026-06-01 — ready for Phase 3 PLAN]
 ```
-Next: Phase 3 — SendGrid + Twilio + Sanity (new project) + Vercel rename `psg-advantage-portal`→`psg-hub`. Carry-overs into Phase 3: design-system submodule is PRIVATE → Vercel deploy key; full `.env` (service role + feature keys) — only the gitignored dev `.env.local` (URL+anon) exists now. Phase 1 + Phase 2 all on `main` + pushed.
+Phase 2 ✅ CLOSED — 02-01 (tokens/fonts) · 02-02 (login) · 02-03 (shell+routing) · 02-04 (docs). Unified: claims re-verified at HEAD (typecheck + 136 tests green).
+Next: Phase 3 — SendGrid + Twilio + Sanity (new project) + Vercel rename `psg-advantage-portal`→`psg-hub`. Carry-overs into Phase 3: design-system submodule is PRIVATE → Vercel deploy key; full `.env` (service role + feature keys) — only the gitignored dev `.env.local` (URL+anon) exists now.
+**Git:** Phase 1 on `main` (pushed, `a96e271`). **Phase 2 on branch `chore/phase-2-design-system` — 8 ahead of `main`, NOT merged/pushed (operator-gated).**
 
 ## Phase 2 Plan Split (expanded 4-plan, 2 waves) — re-scoped 2026-06-01
 
@@ -36,7 +38,6 @@ Next: Phase 3 — SendGrid + Twilio + Sanity (new project) + Vercel rename `psg-
 | 02-02 | Branded `/login` slice: `<Logo>` + DS-spec button/label + login/signup PSG vocabulary + de-BSM + tab title | 02-01 | ✅ DONE (committed `82d90c6`, approved) |
 | 02-03 | App shell (navy sidebar + reverse logo + header) + FIX `/dashboard` 404 (renamed route group→segment) + onboarding + ads in-copy de-BSM + card/badge/table DS spec | 02-02 | ✅ DONE (`8f041c6`, approved) |
 | 02-04 | Doc retirement: portal `DESIGN-SYSTEM.md` superseded banner + ads-dashboard ABSORPTION-NOTES reconcile + README verified | 02-01 | ✅ DONE |
-| 02-04 | Doc retirement: portal `DESIGN-SYSTEM.md` superseded pointer; ads-dashboard reconcile; README brand-source line | 02-01 | TBD |
 
 Phase 2 decisions locked (2026-05-31 → 2026-06-01):
 - Source = design-system repo; `colors_and_type.css` CANONICAL over SKILL.md on contradictions (paper #FAFAFA, headings Bold 700) — operator 2026-06-01. (psg-advantage-portal DRIFTED — ignore its values.)
@@ -112,10 +113,10 @@ Verdict: **GO for Phase 2.** All 7 Phase-1 plans verified loop-closed in-repo; s
 - **Tracking findings:** (1) `apps/psg-ads-mutations/ops/*/ad-assets/` = 51M binary creative in `091cce6` → operator decided **KEEP permanently** (item closed). (2) `psg-data-lake/` = 63 source files tracked despite dead `/psg-data-lake/` gitignore rule (no own .git → leave tracked; rule is just misleading — left as-is).
 
 ### Git State
-- Last commit (pre-audit): `091cce6` — feat(phase-1): workspace consolidation complete (7/7 plans), 250 files
-- This session: planning + audit-cleanup committed on top (Phase 2 plan 02-01 + STATE/ROADMAP/paul.json + worktree prune + BASE state sync)
-- Branch: `chore/phase-1-workspace-consolidation` (NOT main, NOT pushed, no upstream; 4+ ahead of main, 0 behind)
-- **Operator action pending (blast radius beyond local):** set upstream → push → merge to `main` on `github.com/Phoenix-Solutions-Group/data`. Note: push uploads the 51M ad-assets — resolve the de-track decision first if desired.
+- Last commit: `6338e64` — docs(paul): unify Phase 2 — close loop + transition to Phase 3
+- Branch: `chore/phase-2-design-system` (9 ahead of `main`, 0 behind; NOT pushed, no upstream)
+- Phase 1: MERGED + PUSHED to `main` (`a96e271`) last session on `github.com/Phoenix-Solutions-Group/data` — no action pending.
+- **Phase 2 — operator action pending (blast radius beyond local):** merge/push `chore/phase-2-design-system` → `main` when ready (Claude can run on go). Push uploads the 51M ad-assets (operator chose KEEP permanently).
 - Excluded/ignored: `.next/` build cache + node_modules + real secrets (`.env`, `google-ads.yaml`) all gitignored
 - History bundles (gitignored `archive/_repo-bundles/`): psg-hub, bsm-dashboard, ads (`ads-pre-drop-20260531.bundle`)
 
@@ -134,14 +135,14 @@ From 01-01-PLAN.md:
 ## Session Continuity
 
 Last session: 2026-06-01
-Stopped at: **Phase 1 MERGED + PUSHED to main; Phase 2 ready to APPLY.** Phase 1 (7/7) + planning + readiness audit + record corrections fast-forwarded to `main` and pushed to `github.com/Phoenix-Solutions-Group/data` (main = `a96e271`). Two pre-Phase-2 config items closed on branch `chore/phase-2-prep` (then merged): psg-hub `typecheck` script added (tsc --noEmit, exit 0); `turbopack.root` set → monorepo root (build green, workspace-root warning gone). 02-01-PLAN created + awaiting approval.
-Next action: review + approve `02-01-PLAN.md`, then `/paul:apply apps/psg-hub/.paul/phases/02-design-system/02-01-PLAN.md`. **Phase 1 fully landed — no remote step pending.** Follow-ups still open (none block Phase 2): (a) 4 deferred BSM stubs content/scaffold plan, (b) BSM-root residue retirement (docs/, supabase/, .paperclip/), (c) ~~psg-hub typecheck script~~ ✅ DONE 2026-06-01 (studio still needs a tsconfig before its own typecheck), (d) ads doc-path refresh (apps/ads → apps/psg-ads-mutations in CLAUDE.md/README body), (e) ~~ad-assets keep/ignore~~ ✅ operator chose KEEP, (f) 01-02 out-of-repo archival gap (CFO/governance/obsidian-vault relocate-or-leave; records corrected).
-Resume file: `.paul/phases/02-design-system/02-01-PLAN.md`. Prior handoff `HANDOFF-2026-05-31-wave2-next-01-06.md` superseded — STATE is authoritative.
+Stopped at: **Phase 2 COMPLETE + UNIFIED + loop-closed.** All 4 plans done, operator-approved, committed on branch `chore/phase-2-design-system`. Unify reconciled plan vs actual at HEAD (typecheck + 136 tests green; tokens/fonts/logo/shell/route-fix/de-BSM/docs all verified). PROJECT.md evolved; ROADMAP + paul.json mark Phase 2 ✅; transitioned to Phase 3. Both root handoffs archived to `.paul/handoffs/archive/`.
+Next action: `/paul:plan 3` — Phase 3 (SendGrid + Twilio + Sanity new project + Vercel rename `psg-advantage-portal`→`psg-hub`). **Operator action (blast radius):** merge/push `chore/phase-2-design-system` → `main` when ready (8 ahead of `main`, not pushed; Claude can run on go).
+Resume file: `.paul/ROADMAP.md` (Phase 3 scope + research topics).
 Resume context:
-- Wave 1 complete: 01-01 (scaffold), 01-02 (kill list), 01-03 (ads-dashboard absorb), 01-04 (local_reach + sidecar archive) all LOOP CLOSED. Committed 2026-05-31 as monorepo on branch `chore/phase-1-workspace-consolidation` (not pushed).
-- Wave 2: 01-05 LOOP CLOSED (BSM anchor app, build green, IDOR fixed; committed 956c256). NEXT: 01-06 (BSM siblings → packages/*, gated ✓), then 01-07 (apps/ads → psg-ads-mutations, gated 01-01 ✓).
-- Git monorepo: `apps/psg/.git` is THE repo; psg-hub absorbed; `/archive/`, `/psg-import/`, `/api-psghub/`, `/psg-data-lake/` gitignored (root-anchored). psg-hub history bundled at `archive/_repo-bundles/`. Not pushed — operator merges to main when ready.
-Git strategy: RESOLVED 2026-05-31 — single monorepo (collapse). `apps/psg/.git` = THE monorepo. **Home repo = `github.com/Phoenix-Solutions-Group/data` CONFIRMED by operator 2026-05-31** (repo already held psg-advantage-portal + prior history; operator confirmed it as the monorepo home). Wave 1 committed on branch `chore/phase-1-workspace-consolidation`; NOT pushed — operator reviews/merges to main. psg-hub `.git` absorbed (bundle at `archive/_repo-bundles/psg-hub-pre-collapse-20260531.bundle`). Trap neutralized: `/archive/` root-anchored in `.gitignore`.
+- Phase 2 closed: submodule `packages/ui/psg-brand/` @`1689896`; PSG tokens (midnight/ember/paper, 6px) + Gotham/Didact fonts; `<Logo>` + DS-spec button/label/card/badge/table; branded `/login` + `/signup` + navy app shell; `/dashboard` 404 fixed (route group `(dashboard)`→ segment `dashboard`); de-BSM app-wide; legacy DS docs superseded.
+- Phase 3 carry-overs: submodule is PRIVATE → Vercel deploy key needed for recursive checkout; only gitignored dev `.env.local` (Supabase URL+anon via MCP) exists — full env (service role + SendGrid/Twilio/feature keys) lands Phase 3; Gotham = Adobe Typekit-licensed → self-hosting `.otf` flagged; old bare root URLs (`/content`, `/ads`) now 404 post route-rename (matters when Phase 3 wires email links).
+- Deferred (non-blocking): Phase 2.x compose route-page interiors to DS layout vocabulary; active-nav highlight (needs a small client nav component); 01-02 out-of-repo archival (CFO/governance/obsidian-vault relocate-or-leave; records corrected).
+- Git: Phase 1 on `main` (`a96e271`, pushed, home repo `github.com/Phoenix-Solutions-Group/data`). Phase 2 on `chore/phase-2-design-system`, 8 ahead of `main`, NOT pushed — operator merges when ready.
 
 ---
 *STATE.md — Updated after every significant action*

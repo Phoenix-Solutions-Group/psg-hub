@@ -14,8 +14,8 @@ Consolidates fragmented PSG tooling (BSM customer dashboard, ads-dashboard plans
 |-----------|-------|
 | Type | Application |
 | Version | 0.0.0 |
-| Status | v0.1 Foundation — Phase 1 complete (workspace consolidated; monorepo live) |
-| Last Updated | 2026-05-31 |
+| Status | v0.1 Foundation — Phase 2 complete (design system embodied; brand + shell live) |
+| Last Updated | 2026-06-01 |
 
 **Production URLs:**
 - `hub.psgweb.me` — production (target, not deployed yet)
@@ -33,6 +33,7 @@ Consolidates fragmented PSG tooling (BSM customer dashboard, ads-dashboard plans
 
 ### Validated (Shipped)
 - ✓ Workspace consolidation — Phase 1 (2026-05-31): single pnpm+Turbo monorepo at `apps/psg/`; BSM dashboard → `apps/psg-hub/` anchor (build green, IDOR secured); BSM `studio` → `packages/studio` (`@psg/studio`); `apps/ads/` → `apps/psg-ads-mutations/` Python worker; ads-dashboard + local_reach archived; kill list retired; git collapsed to single repo (`Phoenix-Solutions-Group/data`).
+- ✓ Design system embodiment — Phase 2 (2026-06-01): PSG design system vendored as `packages/ui/psg-brand/` submodule (pinned `1689896`); Gotham + Didact Gothic via `next/font/local`; BSM "Clarity Teal" oklch vars → PSG tokens (midnight `#1E3A52`, ember `#B8483E`, paper `#FAFAFA`, 6px) across every shadcn var; `<Logo>` + DS-spec button/label/card/badge/table; branded `/login` + `/signup` + navy app shell; **fixed `/dashboard` 404** (route group→segment); de-BSM app-wide; legacy DS docs superseded. typecheck + 136 tests green; login + dashboard screenshots operator-approved.
 
 ### Active (In Progress)
 None yet — initializing.
@@ -128,6 +129,9 @@ Anchor = BSM `dashboard/` (Next.js 16, BSM Phases 1–5 shipped). Shared Supabas
 | Phase 1 — Workspace git collapsed to single monorepo (`apps/psg/.git` = `data` repo); nested repos bundled to `archive/_repo-bundles/` then dropped | 01-01/05/07; avoids embedded gitlinks | 2026-05-31 | Shipped |
 | Phase 1 (01-06) — only BSM `studio` was a real package; 4 stubs deferred (no fabricated package.json) | reality vs plan at checkpoint | 2026-05-31 | Shipped |
 | Phase 1 (01-07) — `apps/ads` `.env` preserved (not deleted); non-Python content moved with the worker tree | irreversible-credential + operator Option A | 2026-05-31 | Shipped |
+| Phase 2 — `colors_and_type.css` canonical over SKILL.md (paper `#FAFAFA`, headings Bold 700) | DS self-contradicts; operator confirmed | 2026-06-01 | Shipped |
+| Phase 2 — Logos = DS reconstruction placeholder; raw-asset consumption (not npm-wrapped); product name "Phoenix Solutions Group" | official vector not on hand; `next/font/local` needs literal paths | 2026-06-01 | Shipped |
+| Phase 2 — route group `(dashboard)` → segment `dashboard` to fix `/`-collision 404 | dashboard was unreachable | 2026-06-01 | Shipped |
 
 ## Success Metrics
 
@@ -194,4 +198,4 @@ Anchor = BSM `dashboard/` (Next.js 16, BSM Phases 1–5 shipped). Shared Supabas
 
 ---
 *PROJECT.md — Populated from SEED ideation v7 (projects/psg-hub/PLANNING.md, 70 decisions)*
-*Last updated: 2026-05-31 after Phase 1 (workspace consolidation)*
+*Last updated: 2026-06-01 after Phase 2 (design system embodiment)*
