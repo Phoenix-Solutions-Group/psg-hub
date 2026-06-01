@@ -8,16 +8,16 @@
   },
   "phase": {
     "number": 2,
-    "name": "Design system submodule + brand token swap",
-    "status": "planning"
+    "name": "Design system — submodule + brand embodiment",
+    "status": "complete"
   },
   "loop": {
-    "plan": "02-01",
-    "position": "PLAN"
+    "plan": null,
+    "position": "IDLE"
   },
   "timestamps": {
     "created_at": "2026-05-29T00:00:00Z",
-    "updated_at": "2026-05-31T23:30:00Z"
+    "updated_at": "2026-06-01T09:30:00Z"
   },
   "satellite": {
     "groom": true

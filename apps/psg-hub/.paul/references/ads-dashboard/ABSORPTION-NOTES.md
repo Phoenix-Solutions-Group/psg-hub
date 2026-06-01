@@ -48,3 +48,7 @@ The absorbed PAUL plan files are the design-intent canon. v0.3 phase plans in ps
 ## Restoration
 
 If any absorbed artifact needs to be checked against the original after archive, the original codebase (including `.git` directory and `.paul/` tree) lives at `apps/psg/archive/ads-dashboard/`. GitHub repo is read-only but not deleted.
+
+## Brand reconcile (2026-06-01, Phase 2 / 02-04)
+
+ads-dashboard had a PSG-token-overridden shadcn setup. It is now reconciled to the single source of truth: the PSG design system submodule at `apps/psg/packages/ui/psg-brand/` (`colors_and_type.css` canonical). When v0.3 builds the customer-analytics surface from these absorbed plans, take **brand tokens/components from the submodule**, not from the archived ads-dashboard styling. The submodule wins on any divergence.

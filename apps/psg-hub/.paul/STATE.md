@@ -6,28 +6,27 @@ See: .paul/PROJECT.md (updated 2026-05-29)
 
 **Core value:** Consolidates fragmented PSG tooling into one branded `hub.psgweb.me` surface that customers, internal staff, and superadmins all use — replacing logins and tooling sprawl with role-gated unified access.
 **Core value:** Consolidates fragmented PSG tooling into one branded `hub.psgweb.me` surface.
-**Current focus:** Phase 2 (Design system) — **expanded intent 2026-06-01**: psg-hub must EMBODY the PSG design system (logo + brand components + layout), not just recolor. 02-01 (token/font foundation) DONE + committed. 02-02 (branded /login slice) created, applying. Source = `Phoenix-Solutions-Group/design-system` (= local `psg-design-system-repo`, same commit `1689896`).
+**Current focus:** Phase 2 (Design system) **✅ COMPLETE 2026-06-01** — psg-hub embodies the PSG design system (submodule + Gotham/Didact fonts + brand tokens + PSG logo + branded login/signup + navy app shell + DS-spec primitives) and is fully de-BSM'd. All 4 plans loop-closed + approved. Next: Phase 3 (SendGrid + Twilio + Sanity + Vercel re-link).
 
 ## Current Position
 
 Milestone: v0.1 Foundation (v0.1.0) — In progress
-Phase: 2 of 5 (Design system — embody, expanded) — In progress
-Plan: 02-01 DONE (foundation); 02-02 DONE (branded login, approved); 02-03 created (app shell + routing fix), in APPLY
-Status: 02-03 executing toward human-verify
-Last activity: 2026-06-01 — 02-02 committed (`82d90c6`, operator-approved login screenshot); authored 02-03 (shell + fix /dashboard 404 + de-BSM + card/badge/table).
+Phase: 2 of 5 (Design system) — ✅ COMPLETE 2026-06-01
+Plan: 02-01..02-04 all DONE (committed). Phase 2 loop-closed.
+Status: Phase 2 complete. Ready for Phase 3 plan (or `/paul:unify` to formally close, then `/paul:plan 3`).
+Last activity: 2026-06-01 — 02-03 committed (`8f041c6`, app shell + /dashboard routing fix, approved); 02-04 doc retirement done. Phase 2 done.
 
 Progress:
-- Milestone v0.1: [██░░░░░░░░] 20% (1 of 5 phases complete)
+- Milestone v0.1: [████░░░░░░] 40% (2 of 5 phases complete)
 - Phase 1: [██████████] 100% ✅
-- Phase 2: [█████░░░░░] ~55% (02-01 + 02-02 done; 02-03 applying; 02-04 docs queued)
+- Phase 2: [██████████] 100% ✅ (4 of 4 plans)
 
 ## Loop Position
 
 ```
-02-01 PLAN ─▶ APPLY ─▶ (foundation done, committed 4792b1e)
-02-02 PLAN ✓ ─▶ APPLY ◀── here ──▶ human-verify ──▶ UNIFY
+Phase 2 ✅ CLOSED 2026-06-01 — 02-01 (tokens/fonts) · 02-02 (login) · 02-03 (shell+routing) · 02-04 (docs)
 ```
-Next: apply 02-02 (logo + brand primitives + branded login/signup + de-BSM), self-screenshot, operator human-verify. Then author 02-03 (shell) + 02-04 (docs). Phase 1 = merged to main + pushed (`65bc17f`).
+Next: Phase 3 — SendGrid + Twilio + Sanity (new project) + Vercel rename `psg-advantage-portal`→`psg-hub`. Carry-overs into Phase 3: design-system submodule is PRIVATE → Vercel deploy key; full `.env` (service role + feature keys) — only the gitignored dev `.env.local` (URL+anon) exists now. Phase 1 + Phase 2 all on `main` + pushed.
 
 ## Phase 2 Plan Split (expanded 4-plan, 2 waves) — re-scoped 2026-06-01
 
@@ -35,7 +34,8 @@ Next: apply 02-02 (logo + brand primitives + branded login/signup + de-BSM), sel
 |------|-------|------|--------|
 | 02-01 | Submodule + Gotham/Didact fonts + BSM teal → PSG tokens + delete orphan tokens.css | none | ✅ DONE (committed `4792b1e`) |
 | 02-02 | Branded `/login` slice: `<Logo>` + DS-spec button/label + login/signup PSG vocabulary + de-BSM + tab title | 02-01 | ✅ DONE (committed `82d90c6`, approved) |
-| 02-03 | App shell (navy sidebar + reverse logo + header) + FIX `/dashboard` 404 (redirect + nav hrefs → real routes) + onboarding + ads in-copy de-BSM + card/badge/table DS spec | 02-02 | PLAN ✓ — applying |
+| 02-03 | App shell (navy sidebar + reverse logo + header) + FIX `/dashboard` 404 (renamed route group→segment) + onboarding + ads in-copy de-BSM + card/badge/table DS spec | 02-02 | ✅ DONE (`8f041c6`, approved) |
+| 02-04 | Doc retirement: portal `DESIGN-SYSTEM.md` superseded banner + ads-dashboard ABSORPTION-NOTES reconcile + README verified | 02-01 | ✅ DONE |
 | 02-04 | Doc retirement: portal `DESIGN-SYSTEM.md` superseded pointer; ads-dashboard reconcile; README brand-source line | 02-01 | TBD |
 
 Phase 2 decisions locked (2026-05-31 → 2026-06-01):

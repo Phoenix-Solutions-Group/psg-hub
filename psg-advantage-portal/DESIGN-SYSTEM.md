@@ -1,5 +1,7 @@
 # PSG Advantage Portal — Design System
 
+> **⚠️ SUPERSEDED (2026-06-01).** This local doc is no longer the brand source of truth. The PSG design system now lives as a git submodule at `apps/psg/packages/ui/psg-brand/` (`colors_and_type.css` is canonical). This doc has **drifted** from it — it shows teal success `#0EA5A5` (brand = sage `#526B51`), slate `#4A4257` (brand = `#4B5058`), and radius `0` (brand = `6px`). **Do NOT copy values from here.** Kept only as reference until psg-advantage-portal is ported into psg-hub in v0.3.
+
 Operating manual for the design tokens, components, and patterns used in this portal. Anchored to the [PSG Brand Guidelines](https://phoenixsolutionsgroup.net/psg-brand-guidelines/).
 
 > **Philosophy**: Understated luxury. Precision craft. Measured confidence. Refinement as discipline, not decoration.

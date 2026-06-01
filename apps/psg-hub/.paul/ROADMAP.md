@@ -8,7 +8,7 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 **v0.1 Foundation** (v0.1.0)
 Status: In progress
-Phases: 1 of 5 complete (Phase 1 ✅ workspace consolidated; Phase 2 next)
+Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodied; Phase 3 next — SendGrid + Twilio + Sanity + Vercel re-link)
 
 ## Phases
 
@@ -21,7 +21,7 @@ Phases: 1 of 5 complete (Phase 1 ✅ workspace consolidated; Phase 2 next)
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
 | 1 | Workspace consolidation + multi-repo relocation | 7/7 | ✅ Complete | 2026-05-31 |
-| 2 | Design system submodule + brand token swap | 1/2 planned | 🟡 Planning | - |
+| 2 | Design system — submodule + brand embodiment (logo, components, shell) | 4/4 | ✅ Complete | 2026-06-01 |
 | 3 | SendGrid + Twilio + Sanity + Vercel re-link | TBD | Not started | - |
 | 4 | PAUL inheritance + tracking | TBD | Not started | - |
 | 5 | local_reach client output archive | TBD | Not started | - |
@@ -92,8 +92,8 @@ Phases: 1 of 5 complete (Phase 1 ✅ workspace consolidated; Phase 2 next)
 **Plans (expanded split, 2 waves):**
 - [x] 02-01: Vendor submodule + Gotham/Didact fonts + BSM teal → PSG tokens + delete orphan tokens.css — **DONE 2026-06-01** (foundation; build+typecheck green; committed `4792b1e`)
 - [x] 02-02: Branded `/login` slice — `<Logo>` + DS-spec button/label + login/signup in PSG vocabulary + de-BSM + tab title — **DONE 2026-06-01** (operator-approved screenshot; committed `82d90c6`)
-- [ ] 02-03: App shell + routing fix + remaining primitives — `(dashboard)/layout.tsx` navy sidebar w/ reverse logo + header; FIX `/dashboard` 404 (login redirect + nav hrefs → real routes `/`,`/content`,`/agents`,`/settings`); onboarding + ads in-copy de-BSM; card/badge/table to DS spec — PLAN ✓ (applying)
-- [ ] 02-04: Doc retirement — portal `DESIGN-SYSTEM.md` superseded pointer; ads-dashboard reference reconcile; README brand-source line — TBD
+- [x] 02-03: App shell + routing fix + remaining primitives — navy sidebar + reverse logo + header; **fixed `/dashboard` 404 by renaming route group `(dashboard)`→ segment `dashboard`** (resolved `/`-collision); onboarding + ads in-copy de-BSM; card/badge/table DS spec — **DONE 2026-06-01** (approved; committed `8f041c6`)
+- [x] 02-04: Doc retirement — portal `DESIGN-SYSTEM.md` superseded banner; ads-dashboard ABSORPTION-NOTES reconcile; README verified — **DONE 2026-06-01**
 
 **Plan-time decisions:** source of truth = design-system repo (= local `psg-design-system-repo`, same commit `1689896`); `colors_and_type.css` canonical over SKILL.md (paper #FAFAFA, headings Bold 700, per operator); logos = DS reconstruction placeholder (operator-approved, swap official later); product name = "Phoenix Solutions Group"; raw-asset consumption (not npm-wrapped); submodule gitlink intentional; repo PRIVATE → Vercel deploy key at Phase 3.
 
