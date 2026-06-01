@@ -96,7 +96,7 @@ Carry-over to track in next plans:
 | Workspace-root git strategy — RESOLVED 2026-05-31 → collapse to single monorepo | 01-01 planning | S | Done (see Decisions); not pushed — operator merges to main |
 | `apps/psg/psg-agentic-os-dev-packet.docx` (32K loose) — classify | 01-02 APPLY post-state | XS | Decide before Phase 1 close |
 | psg-hub build Stripe `apiVersion` — RESOLVED 2026-05-31 | 01-05 build | XS | Set → `"2026-05-27.dahlia"` (match SDK stripe@^22); build green |
-| Stray `~/package-lock.json` mis-roots Next builds | 01-05 build | XS | Set `turbopack.root` in next.config.ts, or remove home lockfile |
+| Stray `~/package-lock.json` mis-roots Next builds — RESOLVED 2026-06-01 | 01-05 build | XS | Set `turbopack.root` → monorepo root in `apps/psg-hub/next.config.ts` (computed relative via import.meta). Build green, workspace-root warning gone. |
 | BSM `middleware.ts` deprecated in Next 16 (→ proxy) | 01-05 build | S | Rename convention in later phase |
 
 ### Blockers/Concerns
@@ -131,9 +131,9 @@ From 01-01-PLAN.md:
 
 ## Session Continuity
 
-Last session: 2026-05-31
-Stopped at: **Phase 2 PLAN — 02-01 created, awaiting approval.** Plan vendors the design-system submodule, wires Gotham/Didact fonts, and swaps BSM teal → PSG brand tokens. Context gathered: design-system repo inspected (brand-asset repo, not npm pkg; PRIVATE), psg-hub current theme = BSM Clarity Teal (wrong brand), `src/styles/tokens.css` orphaned, no chart/map consumers. **Phase 1 git commit still NOT finalized** — staged set under operator review (394M ads artifacts; see Git State).
-Next action: review + approve `02-01-PLAN.md`, then `/paul:apply apps/psg-hub/.paul/phases/02-design-system/02-01-PLAN.md`. **Still open from Phase 1:** finalize the Phase 1 commit on branch `chore/phase-1-workspace-consolidation` (operator confirms staged set → merges to main + pushes). Follow-ups open: (a) 4 deferred BSM stubs content/scaffold plan, (b) BSM-root residue retirement (docs/, supabase/, .paperclip/), (c) psg-hub `typecheck` script, (d) ads doc-path refresh (apps/ads → apps/psg-ads-mutations in CLAUDE.md/README body), (e) keep-vs-ignore decision on `ops/*/ad-assets/` binaries.
+Last session: 2026-06-01
+Stopped at: **Phase 1 MERGED + PUSHED to main; Phase 2 ready to APPLY.** Phase 1 (7/7) + planning + readiness audit + record corrections fast-forwarded to `main` and pushed to `github.com/Phoenix-Solutions-Group/data` (main = `a96e271`). Two pre-Phase-2 config items closed on branch `chore/phase-2-prep` (then merged): psg-hub `typecheck` script added (tsc --noEmit, exit 0); `turbopack.root` set → monorepo root (build green, workspace-root warning gone). 02-01-PLAN created + awaiting approval.
+Next action: review + approve `02-01-PLAN.md`, then `/paul:apply apps/psg-hub/.paul/phases/02-design-system/02-01-PLAN.md`. **Phase 1 fully landed — no remote step pending.** Follow-ups still open (none block Phase 2): (a) 4 deferred BSM stubs content/scaffold plan, (b) BSM-root residue retirement (docs/, supabase/, .paperclip/), (c) ~~psg-hub typecheck script~~ ✅ DONE 2026-06-01 (studio still needs a tsconfig before its own typecheck), (d) ads doc-path refresh (apps/ads → apps/psg-ads-mutations in CLAUDE.md/README body), (e) ~~ad-assets keep/ignore~~ ✅ operator chose KEEP, (f) 01-02 out-of-repo archival gap (CFO/governance/obsidian-vault relocate-or-leave; records corrected).
 Resume file: `.paul/phases/02-design-system/02-01-PLAN.md`. Prior handoff `HANDOFF-2026-05-31-wave2-next-01-06.md` superseded — STATE is authoritative.
 Resume context:
 - Wave 1 complete: 01-01 (scaffold), 01-02 (kill list), 01-03 (ads-dashboard absorb), 01-04 (local_reach + sidecar archive) all LOOP CLOSED. Committed 2026-05-31 as monorepo on branch `chore/phase-1-workspace-consolidation` (not pushed).
