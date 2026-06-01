@@ -13,7 +13,7 @@ Milestone: v0.1 Foundation (v0.1.0) — In progress
 Phase: 3 of 5 (SendGrid + Twilio + Sanity + Vercel re-link) — Not started
 Plan: Not started
 Status: Ready to plan Phase 3. Phase 2 unified + loop-closed 2026-06-01.
-Last activity: 2026-06-01 — Phase 2 UNIFY complete: reconciled plan vs actual (typecheck + 136 tests green at HEAD; tokens/fonts/logo/shell/route-fix/de-BSM/docs all verified), PROJECT.md evolved, transitioned to Phase 3.
+Last activity: 2026-06-01 — Phase 2 UNIFY complete: reconciled plan vs actual (typecheck + 136 tests green at HEAD; tokens/fonts/logo/shell/route-fix/de-BSM/docs all verified), PROJECT.md evolved, transitioned to Phase 3, then merged + pushed to `main` (`54e53f0`).
 
 Progress:
 - Milestone v0.1: [████░░░░░░] 40% (2 of 5 phases complete)
@@ -28,7 +28,7 @@ PLAN ──▶ APPLY ──▶ UNIFY
 ```
 Phase 2 ✅ CLOSED — 02-01 (tokens/fonts) · 02-02 (login) · 02-03 (shell+routing) · 02-04 (docs). Unified: claims re-verified at HEAD (typecheck + 136 tests green).
 Next: Phase 3 — SendGrid + Twilio + Sanity (new project) + Vercel rename `psg-advantage-portal`→`psg-hub`. Carry-overs into Phase 3: design-system submodule is PRIVATE → Vercel deploy key; full `.env` (service role + feature keys) — only the gitignored dev `.env.local` (URL+anon) exists now.
-**Git:** Phase 1 on `main` (pushed, `a96e271`). **Phase 2 on branch `chore/phase-2-design-system` — 8 ahead of `main`, NOT merged/pushed (operator-gated).**
+**Git:** Phase 1 + Phase 2 both on `main` (pushed). Phase 2 fast-forwarded `65bc17f..54e53f0` 2026-06-01; branch `chore/phase-2-design-system` fully merged (0 ahead / 0 behind `main`).
 
 ## Phase 2 Plan Split (expanded 4-plan, 2 waves) — re-scoped 2026-06-01
 
@@ -113,10 +113,10 @@ Verdict: **GO for Phase 2.** All 7 Phase-1 plans verified loop-closed in-repo; s
 - **Tracking findings:** (1) `apps/psg-ads-mutations/ops/*/ad-assets/` = 51M binary creative in `091cce6` → operator decided **KEEP permanently** (item closed). (2) `psg-data-lake/` = 63 source files tracked despite dead `/psg-data-lake/` gitignore rule (no own .git → leave tracked; rule is just misleading — left as-is).
 
 ### Git State
-- Last commit: `6338e64` — docs(paul): unify Phase 2 — close loop + transition to Phase 3
-- Branch: `chore/phase-2-design-system` (9 ahead of `main`, 0 behind; NOT pushed, no upstream)
-- Phase 1: MERGED + PUSHED to `main` (`a96e271`) last session on `github.com/Phoenix-Solutions-Group/data` — no action pending.
-- **Phase 2 — operator action pending (blast radius beyond local):** merge/push `chore/phase-2-design-system` → `main` when ready (Claude can run on go). Push uploads the 51M ad-assets (operator chose KEEP permanently).
+- Last commit: `54e53f0` — docs(paul): unify Phase 2 — close loop + transition to Phase 3 (now on `main`)
+- Branch: `chore/phase-2-design-system` == `main` (0 ahead / 0 behind; fully merged + pushed, tracks `origin/main`)
+- Phase 1: on `main` (`a96e271`). Phase 2: **MERGED + PUSHED to `main` 2026-06-01** (ff `65bc17f..54e53f0`) on `github.com/Phoenix-Solutions-Group/data`. No remote action pending.
+- 51M ad-assets remain in history (operator chose KEEP permanently; already on `main` since Phase 1).
 - Excluded/ignored: `.next/` build cache + node_modules + real secrets (`.env`, `google-ads.yaml`) all gitignored
 - History bundles (gitignored `archive/_repo-bundles/`): psg-hub, bsm-dashboard, ads (`ads-pre-drop-20260531.bundle`)
 
@@ -135,14 +135,14 @@ From 01-01-PLAN.md:
 ## Session Continuity
 
 Last session: 2026-06-01
-Stopped at: **Phase 2 COMPLETE + UNIFIED + loop-closed.** All 4 plans done, operator-approved, committed on branch `chore/phase-2-design-system`. Unify reconciled plan vs actual at HEAD (typecheck + 136 tests green; tokens/fonts/logo/shell/route-fix/de-BSM/docs all verified). PROJECT.md evolved; ROADMAP + paul.json mark Phase 2 ✅; transitioned to Phase 3. Both root handoffs archived to `.paul/handoffs/archive/`.
-Next action: `/paul:plan 3` — Phase 3 (SendGrid + Twilio + Sanity new project + Vercel rename `psg-advantage-portal`→`psg-hub`). **Operator action (blast radius):** merge/push `chore/phase-2-design-system` → `main` when ready (8 ahead of `main`, not pushed; Claude can run on go).
+Stopped at: **Phase 2 COMPLETE + UNIFIED + loop-closed.** All 4 plans done, operator-approved, committed on branch `chore/phase-2-design-system`. Unify reconciled plan vs actual at HEAD (typecheck + 136 tests green; tokens/fonts/logo/shell/route-fix/de-BSM/docs all verified). PROJECT.md evolved; ROADMAP + paul.json mark Phase 2 ✅; transitioned to Phase 3. Both root handoffs archived to `.paul/handoffs/archive/`. Then **merged + pushed to `main`** (ff `65bc17f..54e53f0`).
+Next action: `/paul:plan 3` — Phase 3 (SendGrid + Twilio + Sanity new project + Vercel rename `psg-advantage-portal`→`psg-hub`). Phase 2 already merged + pushed to `main` — no remote action pending.
 Resume file: `.paul/ROADMAP.md` (Phase 3 scope + research topics).
 Resume context:
 - Phase 2 closed: submodule `packages/ui/psg-brand/` @`1689896`; PSG tokens (midnight/ember/paper, 6px) + Gotham/Didact fonts; `<Logo>` + DS-spec button/label/card/badge/table; branded `/login` + `/signup` + navy app shell; `/dashboard` 404 fixed (route group `(dashboard)`→ segment `dashboard`); de-BSM app-wide; legacy DS docs superseded.
 - Phase 3 carry-overs: submodule is PRIVATE → Vercel deploy key needed for recursive checkout; only gitignored dev `.env.local` (Supabase URL+anon via MCP) exists — full env (service role + SendGrid/Twilio/feature keys) lands Phase 3; Gotham = Adobe Typekit-licensed → self-hosting `.otf` flagged; old bare root URLs (`/content`, `/ads`) now 404 post route-rename (matters when Phase 3 wires email links).
 - Deferred (non-blocking): Phase 2.x compose route-page interiors to DS layout vocabulary; active-nav highlight (needs a small client nav component); 01-02 out-of-repo archival (CFO/governance/obsidian-vault relocate-or-leave; records corrected).
-- Git: Phase 1 on `main` (`a96e271`, pushed, home repo `github.com/Phoenix-Solutions-Group/data`). Phase 2 on `chore/phase-2-design-system`, 8 ahead of `main`, NOT pushed — operator merges when ready.
+- Git: Phase 1 + Phase 2 both on `main` (pushed; home repo `github.com/Phoenix-Solutions-Group/data`, tip `54e53f0`). Branch `chore/phase-2-design-system` fully merged (0 ahead / 0 behind).
 
 ---
 *STATE.md — Updated after every significant action*
