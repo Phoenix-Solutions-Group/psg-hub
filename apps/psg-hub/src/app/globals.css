@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-didact), "Didact Gothic", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", monospace;
+  --font-heading: var(--font-gotham), "Gotham", ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -39,6 +39,11 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* PSG brand extras — non-shadcn semantics (status + single-focal ember accent) */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-ember: var(--ember);
+  --color-ember-soft: var(--ember-soft);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -49,73 +54,86 @@
 }
 
 :root {
-  /* PSG Brand: Authority Palette + Clarity Teal */
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.22 0.02 250);       /* navy-ish */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.02 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.02 250);
-  --primary: oklch(0.55 0.12 175);           /* teal #0D9488 */
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.97 0.005 250);
-  --secondary-foreground: oklch(0.22 0.02 250);
-  --muted: oklch(0.96 0.005 250);
-  --muted-foreground: oklch(0.45 0.01 250);
-  --accent: oklch(0.96 0.005 250);
-  --accent-foreground: oklch(0.22 0.02 250);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0.005 250);
-  --input: oklch(0.91 0.005 250);
-  --ring: oklch(0.55 0.12 175);              /* teal ring */
-  --chart-1: oklch(0.55 0.12 175);           /* teal */
-  --chart-2: oklch(0.22 0.02 250);           /* navy */
-  --chart-3: oklch(0.72 0.1 85);             /* gold */
-  --chart-4: oklch(0.62 0.18 145);           /* success green */
-  --chart-5: oklch(0.45 0.01 250);           /* slate */
-  --radius: 0.5rem;
-  --sidebar: oklch(0.22 0.02 250);           /* navy sidebar */
-  --sidebar-foreground: oklch(0.92 0.01 250);
-  --sidebar-primary: oklch(0.55 0.12 175);   /* teal */
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.28 0.02 250);
-  --sidebar-accent-foreground: oklch(0.92 0.01 250);
-  --sidebar-border: oklch(0.32 0.02 250);
-  --sidebar-ring: oklch(0.55 0.12 175);
+  /* PSG Brand — single source of truth: packages/ui/psg-brand/colors_and_type.css
+     Midnight navy primary · Phoenix ember accent/danger · paper neutrals · Gotham + Didact Gothic */
+  --background: #FAFAFA;          /* paper */
+  --foreground: #161616;          /* ink */
+  --card: #FFFFFF;
+  --card-foreground: #161616;
+  --popover: #FFFFFF;
+  --popover-foreground: #161616;
+  --primary: #1E3A52;            /* midnight */
+  --primary-foreground: #FAFAFA;
+  --secondary: #F0F0F0;          /* bone */
+  --secondary-foreground: #1E3A52;
+  --muted: #F0F0F0;
+  --muted-foreground: #949494;   /* mist */
+  --accent: #F1F4F7;             /* midnight-95 — subtle hover surface */
+  --accent-foreground: #1E3A52;
+  --destructive: #B8483E;        /* ember = brand danger */
+  --border: #E0E0E0;             /* stone */
+  --input: #E0E0E0;
+  --ring: #B8483E;               /* ember focus ring */
+  --chart-1: #1E3A52;            /* midnight */
+  --chart-2: #B8483E;            /* ember */
+  --chart-3: #4B5058;            /* dark-ash */
+  --chart-4: #526B51;            /* sage / success */
+  --chart-5: #C28E3A;            /* amber / warning */
+  --radius: 0.375rem;            /* brand md = 6px */
+  --sidebar: #1E3A52;            /* midnight */
+  --sidebar-foreground: #DCE3EA; /* midnight-90 */
+  --sidebar-primary: #B8483E;    /* ember = active nav focal */
+  --sidebar-primary-foreground: #FAFAFA;
+  --sidebar-accent: #2A4A63;     /* midnight-30 */
+  --sidebar-accent-foreground: #DCE3EA;
+  --sidebar-border: #2A4A63;
+  --sidebar-ring: #B8483E;
+  /* PSG brand extras */
+  --success: #526B51;            /* sage */
+  --warning: #C28E3A;            /* amber */
+  --ember: #B8483E;
+  --ember-soft: #FAEEEC;         /* ember-95 */
 }
 
 .dark {
-  --background: oklch(0.16 0.02 250);
-  --foreground: oklch(0.95 0.005 250);
-  --card: oklch(0.2 0.02 250);
-  --card-foreground: oklch(0.95 0.005 250);
-  --popover: oklch(0.2 0.02 250);
-  --popover-foreground: oklch(0.95 0.005 250);
-  --primary: oklch(0.6 0.12 175);
-  --primary-foreground: oklch(0.16 0.02 250);
-  --secondary: oklch(0.25 0.02 250);
-  --secondary-foreground: oklch(0.95 0.005 250);
-  --muted: oklch(0.25 0.02 250);
-  --muted-foreground: oklch(0.65 0.01 250);
-  --accent: oklch(0.25 0.02 250);
-  --accent-foreground: oklch(0.95 0.005 250);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.6 0.12 175);
-  --chart-1: oklch(0.6 0.12 175);
-  --chart-2: oklch(0.72 0.1 85);
-  --chart-3: oklch(0.62 0.18 145);
-  --chart-4: oklch(0.65 0.01 250);
-  --chart-5: oklch(0.45 0.01 250);
-  --sidebar: oklch(0.16 0.02 250);
-  --sidebar-foreground: oklch(0.95 0.005 250);
-  --sidebar-primary: oklch(0.6 0.12 175);
-  --sidebar-primary-foreground: oklch(0.95 0.005 250);
-  --sidebar-accent: oklch(0.25 0.02 250);
-  --sidebar-accent-foreground: oklch(0.95 0.005 250);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.6 0.12 175);
+  /* Minimal derived dark — brand + portal are light-only; this exists only for
+     shadcn dark-mode compat, derived from the midnight ramp. */
+  --background: #0A1822;         /* midnight-08 */
+  --foreground: #DCE3EA;
+  --card: #142838;               /* midnight-15 */
+  --card-foreground: #DCE3EA;
+  --popover: #142838;
+  --popover-foreground: #DCE3EA;
+  --primary: #8FA1B2;            /* midnight-70 — lifted for contrast */
+  --primary-foreground: #0A1822;
+  --secondary: #142838;
+  --secondary-foreground: #DCE3EA;
+  --muted: #142838;
+  --muted-foreground: #8FA1B2;
+  --accent: #2A4A63;
+  --accent-foreground: #DCE3EA;
+  --destructive: #D88378;        /* ember-65 — lifted */
+  --border: #2A4A63;
+  --input: #2A4A63;
+  --ring: #D88378;
+  --chart-1: #8FA1B2;
+  --chart-2: #D88378;
+  --chart-3: #8C8F95;            /* dark-ash-65 */
+  --chart-4: #7E9A7D;            /* lifted sage */
+  --chart-5: #D9B36B;            /* lifted amber */
+  --sidebar: #0A1822;
+  --sidebar-foreground: #DCE3EA;
+  --sidebar-primary: #D88378;
+  --sidebar-primary-foreground: #0A1822;
+  --sidebar-accent: #142838;
+  --sidebar-accent-foreground: #DCE3EA;
+  --sidebar-border: #2A4A63;
+  --sidebar-ring: #D88378;
+  /* brand extras (dark) */
+  --success: #7E9A7D;
+  --warning: #D9B36B;
+  --ember: #D88378;
+  --ember-soft: #2A1A18;
 }
 
 @layer base {
@@ -127,5 +145,8 @@
   }
   html {
     @apply font-sans;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
   }
 }
