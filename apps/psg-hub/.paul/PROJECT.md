@@ -14,12 +14,12 @@ Consolidates fragmented PSG tooling (BSM customer dashboard, ads-dashboard plans
 |-----------|-------|
 | Type | Application |
 | Version | 0.0.0 |
-| Status | v0.1 Foundation — Phase 2 complete (design system embodied; brand + shell live) |
+| Status | v0.1 Foundation — Phase 3 complete (integrations live; psg-hub deployed at hub.psgweb.me) |
 | Last Updated | 2026-06-01 |
 
 **Production URLs:**
-- `hub.psgweb.me` — production (target, not deployed yet)
-- Vercel: existing `psg-advantage-portal` project re-linked + renamed in v0.1
+- `hub.psgweb.me` — production **LIVE** (Vercel project `psg-hub`, Let's Encrypt cert, branded)
+- Vercel: NEW `psg-hub` project (`prj_CBrI1FRqqgPzCbAwin6LbSknY48U`, team psg-digital), git-connected to `Phoenix-Solutions-Group/data`@main — supersedes D54's "rename psg-advantage-portal" mechanism (old `data` portal project deleted)
 
 ## Requirements
 
@@ -34,9 +34,10 @@ Consolidates fragmented PSG tooling (BSM customer dashboard, ads-dashboard plans
 ### Validated (Shipped)
 - ✓ Workspace consolidation — Phase 1 (2026-05-31): single pnpm+Turbo monorepo at `apps/psg/`; BSM dashboard → `apps/psg-hub/` anchor (build green, IDOR secured); BSM `studio` → `packages/studio` (`@psg/studio`); `apps/ads/` → `apps/psg-ads-mutations/` Python worker; ads-dashboard + local_reach archived; kill list retired; git collapsed to single repo (`Phoenix-Solutions-Group/data`).
 - ✓ Design system embodiment — Phase 2 (2026-06-01): PSG design system vendored as `packages/ui/psg-brand/` submodule (pinned `1689896`); Gotham + Didact Gothic via `next/font/local`; BSM "Clarity Teal" oklch vars → PSG tokens (midnight `#1E3A52`, ember `#B8483E`, paper `#FAFAFA`, 6px) across every shadcn var; `<Logo>` + DS-spec button/label/card/badge/table; branded `/login` + `/signup` + navy app shell; **fixed `/dashboard` 404** (route group→segment); de-BSM app-wide; legacy DS docs superseded. typecheck + 136 tests green; login + dashboard screenshots operator-approved.
+- ✓ Integrations + deploy — Phase 3 (2026-06-01): SendGrid transactional email + Twilio SMS, each via a shared `src/lib/resilience.ts` (retry + circuit breaker) adapter and an idempotent, signature-verified webhook (`/api/webhooks/{sendgrid,twilio}` → `email_events` / `sms_events` on shared Supabase). Both **live-verified end-to-end** (real signed rows: SendGrid `event=open` matching the test send; Twilio inbound `status=received`). Sanity content backend provisioned (`vcw0bsnu`, private prod dataset, schema 4 types; `@psg/studio` env-decoupled from BSM). **psg-hub deployed LIVE at https://hub.psgweb.me** (NEW Vercel project, 14 prod env keys incl. `SUPABASE_SERVICE_ROLE_KEY`). D54 decommission confirmed (old `data` portal project deleted; no BSM/ads-dashboard project remains).
 
 ### Active (In Progress)
-None yet — initializing.
+None — Phase 3 closed. Phase 4 (PAUL inheritance + tracking) up next. One gated prod action before Phase-3→main merge: grant Vercel GitHub-app access to the private `design-system` submodule repo (git/main builds fail on submodule fonts until then; CLI deploys work).
 
 ### Planned (Next)
 - v0.1 Foundation (workspace consolidation, brand tokens, SendGrid + Twilio, Sanity new project, Vercel rename, BSM relocation, kill list retired)
@@ -132,6 +133,10 @@ Anchor = BSM `dashboard/` (Next.js 16, BSM Phases 1–5 shipped). Shared Supabas
 | Phase 2 — `colors_and_type.css` canonical over SKILL.md (paper `#FAFAFA`, headings Bold 700) | DS self-contradicts; operator confirmed | 2026-06-01 | Shipped |
 | Phase 2 — Logos = DS reconstruction placeholder; raw-asset consumption (not npm-wrapped); product name "Phoenix Solutions Group" | official vector not on hand; `next/font/local` needs literal paths | 2026-06-01 | Shipped |
 | Phase 2 — route group `(dashboard)` → segment `dashboard` to fix `/`-collision 404 | dashboard was unreachable | 2026-06-01 | Shipped |
+| Phase 3 — shared `src/lib/resilience.ts` (retry + circuit breaker) for all external calls; webhooks idempotent via DB UNIQUE + signature-verified (ECDSA SendGrid / HMAC Twilio) | resilience + idempotency constraints; proven across 2 providers | 2026-06-01 | Shipped |
+| Phase 3 (03-04) — NEW Vercel `psg-hub` project instead of re-linking `data` (supersedes D54 *mechanism*, intent intact) | `data` was a broken non-customer portal; re-link would arm a routeless-main clobber | 2026-06-01 | Shipped |
+| Phase 3 (03-05) — D54 decommission satisfied by verified state (old `data` project 404; no BSM/ads-dashboard project); KEEP psg-hub↔`Phoenix-Solutions-Group/data`@main git connection | targets already retired out-of-band; operator confirmed the active git-connected stack | 2026-06-01 | Shipped |
+| Phase 3 (03-05) — MERGE-BLOCKER: grant Vercel GitHub-app access to private `design-system` submodule before Phase-3→main merge | git/main builds fail on submodule fonts (proven dpl_2Mbq7…); CLI deploys work | 2026-06-01 | Open (gated) |
 
 ## Success Metrics
 
@@ -198,4 +203,4 @@ Anchor = BSM `dashboard/` (Next.js 16, BSM Phases 1–5 shipped). Shared Supabas
 
 ---
 *PROJECT.md — Populated from SEED ideation v7 (projects/psg-hub/PLANNING.md, 70 decisions)*
-*Last updated: 2026-06-01 after Phase 2 (design system embodiment)*
+*Last updated: 2026-06-01 after Phase 3 (integrations + deploy — SendGrid/Twilio live-verified, Sanity, psg-hub LIVE at hub.psgweb.me)*
