@@ -7,7 +7,7 @@ tags: [cleanup, kill-list, relocation, archive, workspace]
 requires: []
 provides:
   - clean workspace at apps/psg/ (kill list cleared, non-code material relocated)
-  - ~/apps/_psg-archive/ archive root with 9 relocated PSG-adjacent workspaces
+  - ~/apps/_psg-archive/ archive root with 6 relocated PSG-adjacent workspaces (3 intended relocations NOT executed — corrected 2026-05-31)
   - MANIFEST.md documenting D26 + D71 decisions
 affects: [01-04, 01-05]
 
@@ -32,16 +32,17 @@ key-files:
     - apps/psg/web-dev-skills/ (auto-fix; D26-mandated, plan frontmatter omitted)
     - ~/apps/CTO/
     - ~/apps/morgan/
-  relocated:
+  relocated:   # 6 actually executed (verified 2026-05-31)
     - apps/psg/psg/ → ~/apps/_psg-archive/psg-obsidian/
     - apps/psg/pipedrive/ → ~/apps/_psg-archive/pipedrive/
     - ~/apps/Automation/ → ~/apps/_psg-archive/Automation/
-    - ~/apps/CFO/ → ~/apps/_psg-archive/CFO/
     - ~/apps/daily-content-brief/ → ~/apps/_psg-archive/daily-content-brief/
-    - ~/apps/governance/ → ~/apps/_psg-archive/governance/
-    - ~/apps/obsidian-vault/ → ~/apps/_psg-archive/obsidian-vault/
     - ~/apps/python-scripts/ → ~/apps/_psg-archive/python-scripts/
     - ~/apps/DEGWEB-MODERNIZATION-REVIEW.md → ~/apps/_psg-archive/DEGWEB-MODERNIZATION-REVIEW.md
+  relocation-not-executed:   # CORRECTION 2026-05-31: originally listed as relocated, but the mv never ran; still live at source, absent from archive. Operator-decision.
+    - ~/apps/CFO/ (101M) — still at source
+    - ~/apps/governance/ (48K) — still at source
+    - ~/apps/obsidian-vault/ (77M) — still at source
 
 key-decisions:
   - "Auto-fix added web-dev-skills delete during APPLY — plan frontmatter omitted but D26 mandated"
@@ -58,7 +59,9 @@ completed: 2026-05-29T17:45:00Z
 
 # Phase 1 Plan 02: Kill List + Non-Code Relocation Summary
 
-**Workspace cleared of 9 dead/legacy directories (~580 MB freed) and 9 out-of-scope workspaces relocated to `~/apps/_psg-archive/` (~180 MB). `apps/psg/` top level now near-final shape before BSM lands.**
+> **CORRECTION 2026-05-31 (Phase 1 readiness audit):** This SUMMARY originally claimed all 9 out-of-scope workspaces were relocated and marked AC-3 PASS. The filesystem disproves it: only **6** relocations executed. `~/apps/CFO` (101M), `~/apps/governance` (48K), and `~/apps/obsidian-vault` (77M) were never moved — they remain live at their source paths and are absent from `~/apps/_psg-archive/`. AC-3 is downgraded to PARTIAL. The in-repo cleanup (kill list, in-workspace relocations) is unaffected and verified. Disposition of the 3 unmoved dirs is an operator decision (relocate or leave as active workspaces).
+
+**Workspace cleared of 9 dead/legacy directories (~580 MB freed) and 6 of 9 intended out-of-scope workspaces relocated to `~/apps/_psg-archive/` (the ~178 MB of CFO + obsidian-vault was NOT moved). `apps/psg/` top level now near-final shape before BSM lands.**
 
 ## Performance
 
@@ -68,9 +71,9 @@ completed: 2026-05-29T17:45:00Z
 | Started | 2026-05-29T17:34:30Z |
 | Completed | 2026-05-29T17:45:00Z |
 | Tasks | 5 of 5 completed + 1 auto-fix |
-| Files modified | 18 paths (9 deleted, 9 relocated, MANIFEST + pre-scan created) |
+| Files modified | 15 paths (9 deleted, 6 relocated, MANIFEST + pre-scan created) |
 | Bytes freed (kill) | ~580 MB |
-| Bytes relocated | ~180 MB |
+| Bytes relocated | small (~few MB); the originally-claimed ~180 MB counted CFO + obsidian-vault which were never moved |
 
 ## Acceptance Criteria Results
 
@@ -78,7 +81,7 @@ completed: 2026-05-29T17:45:00Z
 |-----------|--------|-------|
 | AC-1: Pre-scan captures full state | PASS | 17 paths classified (all EXISTS); audit log written to `.paul-bridge/01-02-pre-scan.md` |
 | AC-2: Kill list cleared | PASS+1 | 8 originally-scoped paths deleted; +1 auto-fix for `web-dev-skills/` (D26-mandated, plan omitted) |
-| AC-3: Relocations land at single archive root | PASS | All 9 paths in `~/apps/_psg-archive/`; mtime preserved via `mv` (same filesystem); sources return ENOENT |
+| AC-3: Relocations land at single archive root | PARTIAL (corrected 2026-05-31) | 6 of 9 relocated + mtime preserved; sources return ENOENT for those 6. CFO/governance/obsidian-vault were NOT moved (still live at source, absent from archive) — originally mis-recorded as PASS. Operator-decision pending. |
 | AC-4: Archive root self-documents | PASS | MANIFEST.md 45 lines; D26/D71 mentioned 20+ times; includes Untouched section + Restoration note |
 | AC-5: Adjacent third-party dirs left alone | PASS | `~/apps/gbrain/` + `~/apps/open-design/` untouched (confirmed via post-relocation `ls`) |
 
@@ -96,7 +99,7 @@ completed: 2026-05-29T17:45:00Z
 | `apps/psg/projects/psg-hub/.paul-bridge/01-02-pre-scan.md` | Created | Pre-state audit log: 17 paths × (exists/missing, size, mtime, file count) |
 | `~/apps/_psg-archive/` | Created | Single archive root for relocated material |
 | `~/apps/_psg-archive/MANIFEST.md` | Created | 45-line manifest documenting relocations + deletions with D26/D71 refs + Untouched + Restoration sections |
-| `~/apps/_psg-archive/{Automation, CFO, daily-content-brief, governance, obsidian-vault, pipedrive, psg-obsidian, python-scripts}/` | Created (relocated) | 9 archived material directories with original mtime |
+| `~/apps/_psg-archive/{Automation, daily-content-brief, pipedrive, psg-obsidian, python-scripts}/` | Created (relocated) | 5 archived dirs with original mtime (+ DEGWEB file below). CFO/governance/obsidian-vault NOT moved — see Correction. |
 | `~/apps/_psg-archive/DEGWEB-MODERNIZATION-REVIEW.md` | Created (relocated) | Separate file, original mtime preserved |
 | `apps/psg/{invoice,portal,sst-psgdigital,dashboard-psgdigital,shop-theacrb,invoice-psgdigital,web-dev-skills}/` | Deleted | D26 kill list (web-dev-skills auto-fixed) |
 | `~/apps/{CTO,morgan}/` | Deleted | D71 empty/stub kills |
