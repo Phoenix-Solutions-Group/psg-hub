@@ -5,30 +5,30 @@
 See: .paul/PROJECT.md (updated 2026-05-29)
 
 **Core value:** Consolidates fragmented PSG tooling into one branded `hub.psgweb.me` surface that customers, internal staff, and superadmins all use — replacing logins and tooling sprawl with role-gated unified access.
-**Current focus:** Phase 3 (SendGrid + Twilio + Sanity new project + Vercel re-link) — **03-02 (Twilio) ✅ LOOP CLOSED.** 4-way subsystem split confirmed (operator); `03-01` SendGrid + `03-02` Twilio both ✅ LOOP CLOSED (2 of 4); next: plan `03-03` (Sanity). Phase 3 NOT complete — 2 plans remain (no transition). Phase 2 (Design system) **✅ COMPLETE + UNIFIED 2026-06-01** — psg-hub embodies the PSG design system (submodule + Gotham/Didact fonts + brand tokens + PSG logo + branded login/signup + navy app shell + DS-spec primitives), fully de-BSM'd; all 4 plans loop-closed + operator-approved + reconciled (typecheck + 136 tests green at HEAD).
+**Current focus:** Phase 3 (SendGrid + Twilio + Sanity new project + Vercel re-link) — **03-03 (Sanity) PLAN created, awaiting approval.** 4-way subsystem split (operator); `03-01` SendGrid + `03-02` Twilio ✅ LOOP CLOSED (2 of 4); `03-03` (Sanity) PLAN ✓ — tight scope: provision new project + `production` dataset (D55) + decouple `@psg/studio` from BSM `436nqu7v` (env-driven) + env contract; read client deferred to v0.3 (operator). Phase 3 NOT complete — 2 plans remain (no transition). Phase 2 (Design system) **✅ COMPLETE + UNIFIED 2026-06-01** — psg-hub embodies the PSG design system (submodule + Gotham/Didact fonts + brand tokens + PSG logo + branded login/signup + navy app shell + DS-spec primitives), fully de-BSM'd; all 4 plans loop-closed + operator-approved + reconciled (typecheck + 136 tests green at HEAD).
 
 ## Current Position
 
 Milestone: v0.1 Foundation (v0.1.0) — In progress
-Phase: 3 of 5 (SendGrid + Twilio + Sanity + Vercel re-link) — In progress (2 of 4 loop-closed)
-Plan: 03-02 (Twilio) ✅ LOOP CLOSED — SUMMARY written
-Status: 03-02 loop closed (AC-1/2 PASS; AC-3 send-PASS — live SMS + phone receipt; webhook live sig-verify deferred→03-04). Ready to plan 03-03 (Sanity). Phase 3 NOT complete — 2 plans remain (no transition). 182 tests green.
-Last activity: 2026-06-01 — UNIFY 03-02: wrote `03-02-SUMMARY.md`, closed loop, synced paul.json. NOT committed yet (branch `chore/phase-3-integrations`).
+Phase: 3 of 5 (SendGrid + Twilio + Sanity + Vercel re-link) — Planning (2 of 4 loop-closed; 03-03 PLAN created)
+Plan: 03-03 (Sanity) created, awaiting approval
+Status: PLAN created, ready for APPLY. Tight + standard track, `autonomous: false` (1 operator checkpoint). Wave 1, deps []. 2 auto tasks (decouple `@psg/studio` from BSM → env-driven config + studio `.env.example`; psg-hub Sanity `.env.example` contract) + 1 checkpoint:human-action (provision new project under PSG org `oqyhOHQtc` + `production` dataset + read token + studio live-verify). De-risk: BSM `436nqu7v` = sample data only (7 docs, 4 real + 3 AI-assist) → start-fresh safe (D57); single org so no org-selection. Read client + content rendering deferred to v0.3; Vercel env wiring → 03-04. Phase 3 NOT complete — 2 plans remain.
+Last activity: 2026-06-01 — Created `03-03-PLAN.md` (Sanity, tight scope). Verified studio state + legacy-project contents via Sanity MCP.
 
 Progress:
 - Milestone v0.1: [████░░░░░░] 40% (2 of 5 phases complete)
 - Phase 1: [██████████] 100% ✅
 - Phase 2: [██████████] 100% ✅ (4 of 4 plans, unified)
-- Phase 3: [█████░░░░░] 50% (2 of 4 plans loop-closed)
+- Phase 3: [█████░░░░░] 50% (2 of 4 plans loop-closed; 03-03 planned)
 
 ## Loop Position
 
 ```
-PLAN ──▶ APPLY ──▶ UNIFY          (03-02)
-  ✓        ✓        ✓     [03-02 LOOP CLOSED — ready to plan 03-03]
+PLAN ──▶ APPLY ──▶ UNIFY          (03-03)
+  ✓        ○        ○     [03-03 PLAN created — awaiting approval]
 ```
-Phase 2 ✅ CLOSED. Phase 3 — 4-way split: **03-01 SendGrid (✅ LOOP CLOSED)** · **03-02 Twilio (✅ LOOP CLOSED)** · 03-03 Sanity (next) · 03-04 Vercel re-link.
-Next: `/paul:plan 03-03` (Sanity — provision new project + single prod dataset D55; import studio from `@psg/studio`; env wiring). Carry-overs into Phase 3: design-system submodule is PRIVATE → Vercel deploy key (03-04); 03-01 SENDGRID_* + 03-02 TWILIO_* now in `.env.local` (dev) — Vercel env + public host wired in 03-04 where BOTH webhooks get live-verified against a public URL.
+Phase 2 ✅ CLOSED. Phase 3 — 4-way split: **03-01 SendGrid (✅ LOOP CLOSED)** · **03-02 Twilio (✅ LOOP CLOSED)** · **03-03 Sanity (PLAN ✓ — awaiting approval)** · 03-04 Vercel re-link.
+Next: review + approve `03-03-PLAN.md`, then `/paul:apply .paul/phases/03-integrations/03-03-PLAN.md`. Carry-overs into Phase 3: design-system submodule is PRIVATE → Vercel deploy key (03-04); 03-01 SENDGRID_* + 03-02 TWILIO_* now in `.env.local` (dev) — Vercel env + public host wired in 03-04 where BOTH webhooks get live-verified against a public URL.
 
 ### APPLY 03-01 execution log (for UNIFY)
 - **Task 1 (auto) — DONE/PASS:** `src/lib/resilience.ts` (withRetry + CircuitBreaker, injectable clock/sleep/jitter) + `src/lib/mail/{types,sendgrid}.ts` (`createMailSender` factory + `sendEmail`; retry on 429/5xx, breaker trips on transient only). 20 new unit tests. AC-1 met.
@@ -47,7 +47,7 @@ Next: `/paul:plan 03-03` (Sanity — provision new project + single prod dataset
 - **Adversarial review (workflow, real twilio@6):** 2 confirmed-real MEDIUM findings, both fail-CLOSED URL-reconstruction (no security hole): (1) trailing-slash in `TWILIO_WEBHOOK_BASE_URL` → double-slash → 100% sig rejection → FIXED (`base.replace(/\/+$/,"")`); (2) query-string preservation untested → FIXED (+2 hardening tests). Re-qualified green.
 - **Deviations/notes:** (1) dropped unused `RestException` import — `statusOf` is structural (`"status" in error`), mirroring the mail adapter; no shipped-behavior change. (2) Scope addition: `scripts/send-test-sms.mjs` (dev verifier, no secrets). (3) 2 review fixes folded into qualify (above).
 - **Files:** package.json · pnpm-lock.yaml · .env.example · vitest.setup.ts · src/lib/sms/types.ts · src/lib/sms/twilio.ts · src/lib/sms/__tests__/twilio.test.ts · src/app/api/webhooks/twilio/route.ts · src/app/api/webhooks/twilio/__tests__/route.test.ts · scripts/send-test-sms.mjs · (DB) sms_events migration.
-- **Not committed yet** — branch `chore/phase-3-integrations` (operator commits at/after UNIFY).
+- **Committed + pushed:** `01daead` on `chore/phase-3-integrations` → origin (github.com/Phoenix-Solutions-Group/data); 16 files, +1313/−18; NOT merged to main (phase merge after 03-04). `.gitignore` fix: `!.env.example` un-ignores the example file (was swallowed by `.env*`) — also retroactively lands the 03-01 SendGrid env block. `.base/*` excluded.
 
 ## Phase 3 Plan Split (4-way subsystem, 2 waves) — confirmed 2026-06-01
 
@@ -55,7 +55,7 @@ Next: `/paul:plan 03-03` (Sanity — provision new project + single prod dataset
 |------|-------|------|------|--------|
 | 03-01 | SendGrid: shared resilience util + mail adapter + idempotent event webhook + `email_events` table; operator domain-auth (SPF/DKIM/DMARC) + live-send checkpoint | 1 | none | ✅ LOOP CLOSED (163 tests green; live send 202 verified; webhook-row deferred → 03-04; SUMMARY written) |
 | 03-02 | Twilio: SMS adapter (reuses `src/lib/resilience.ts`) + idempotent dual-path webhook + `sms_events` table; operator number + secrets checkpoint | 1 | none | ✅ LOOP CLOSED (182 tests green; live send queued + phone receipt; webhook live sig-verify deferred → 03-04; SUMMARY written) |
-| 03-03 | Sanity: provision new project + single prod dataset (D55); import studio from `@psg/studio`; env wiring | 1 | none | TBD |
+| 03-03 | Sanity: provision new project + single prod dataset (D55) under PSG org; decouple `@psg/studio` from BSM `436nqu7v` (env-driven config); publish env contract (studio + hub). Tight scope — read client deferred v0.3; no migration (start fresh, D57) | 1 | none | PLAN ✓ (awaiting approval — `autonomous:false`, 2 auto + 1 operator checkpoint) |
 | 03-04 | Vercel: re-link `psg-advantage-portal`→`psg-hub` + rename (preserve env + analytics, D54) + private-submodule deploy key + wire all Phase 3 env; decommission BSM Vercel | 2 | 03-01,03-02,03-03 | TBD (research-flagged: rename mechanics) |
 **Git:** Phase 1 + Phase 2 both on `main` (pushed). Phase 2 fast-forwarded `65bc17f..54e53f0` 2026-06-01; branch `chore/phase-2-design-system` fully merged (0 ahead / 0 behind `main`).
 
@@ -144,7 +144,8 @@ Verdict: **GO for Phase 2.** All 7 Phase-1 plans verified loop-closed in-repo; s
 - **Tracking findings:** (1) `apps/psg-ads-mutations/ops/*/ad-assets/` = 51M binary creative in `091cce6` → operator decided **KEEP permanently** (item closed). (2) `psg-data-lake/` = 63 source files tracked despite dead `/psg-data-lake/` gitignore rule (no own .git → leave tracked; rule is just misleading — left as-is).
 
 ### Git State
-- Last commit: `54e53f0` — docs(paul): unify Phase 2 — close loop + transition to Phase 3 (now on `main`)
+- Last commit: `01daead` — feat(psg-hub): Twilio SMS 03-02 (on `chore/phase-3-integrations`, pushed to origin; NOT merged to main)
+- Phase 3 branch `chore/phase-3-integrations`: PUSHED to origin 2026-06-01 (tracks `origin/chore/phase-3-integrations`). Contains `98c3125` (03-01 SendGrid) + `01daead` (03-02 Twilio). Merges to `main` at Phase 3 transition (after 03-04). `.base/*` intentionally excluded from these commits.
 - Branch: `chore/phase-2-design-system` == `main` (0 ahead / 0 behind; fully merged + pushed, tracks `origin/main`)
 - Phase 1: on `main` (`a96e271`). Phase 2: **MERGED + PUSHED to `main` 2026-06-01** (ff `65bc17f..54e53f0`) on `github.com/Phoenix-Solutions-Group/data`. No remote action pending.
 - 51M ad-assets remain in history (operator chose KEEP permanently; already on `main` since Phase 1).
@@ -166,9 +167,9 @@ From 01-01-PLAN.md:
 ## Session Continuity
 
 Last session: 2026-06-01
-Stopped at: **03-02 (Twilio) ✅ LOOP CLOSED.** PLAN→APPLY→UNIFY complete; `03-02-SUMMARY.md` written; paul.json synced. SMS adapter (reuses resilience.ts; `statusOf` reads `error.status`) + dual-path signature-verified idempotent webhook + `sms_events` (UNIQUE(message_sid,status), both NOT NULL, RLS on, 0 policies on `gylkkzmcmbdftxieyabw`). Adversarial review vs real twilio@6 found + fixed 2 medium URL-reconstruction issues. Gates: typecheck · 182 tests · lint 0 errors. AC-3 send-PASS (live SMS `SMe1f86eae…` queued + phone receipt); webhook live sig-verify deferred → 03-04. Phase 3 = 2/4 loop-closed — NOT complete, no transition. NOT committed (branch `chore/phase-3-integrations`).
-Next action: `/paul:plan 03-03` (Sanity).
-Resume file: `.paul/phases/03-integrations/03-02-SUMMARY.md`.
+Stopped at: **03-03 (Sanity) PLAN created — awaiting approval.** `03-03-PLAN.md` written (tight + standard, `autonomous:false`, wave 1, deps []). Scope: provision NEW Sanity project under PSG org (`oqyhOHQtc`) + single `production` dataset (D55); decouple `@psg/studio` from BSM `436nqu7v` (config → env-driven `SANITY_STUDIO_*`, BSM id removed); publish env contract in `packages/studio/.env.example` + `apps/psg-hub/.env.example` (`NEXT_PUBLIC_SANITY_*` + `SANITY_API_READ_TOKEN`, names only). 2 auto tasks + 1 checkpoint:human-action (provision + token + studio live-verify). De-risk via Sanity MCP: legacy `436nqu7v` = sample data only (7 docs) → start-fresh safe (D57); single org → no org-selection. Operator decisions confirmed pre-plan: TIGHT scope (read client + content rendering deferred to v0.3), STANDARD track. Vercel env wiring + `sanity deploy` → 03-04 (mirrors SendGrid/Twilio deferral). 03-01/03-02 still ✅ LOOP CLOSED; Phase 3 = 2/4, NOT complete.
+Next action: review + approve `03-03-PLAN.md`, then `/paul:apply .paul/phases/03-integrations/03-03-PLAN.md`.
+Resume file: `.paul/phases/03-integrations/03-03-PLAN.md`.
 Resume context:
 - Phase 2 closed: submodule `packages/ui/psg-brand/` @`1689896`; PSG tokens (midnight/ember/paper, 6px) + Gotham/Didact fonts; `<Logo>` + DS-spec button/label/card/badge/table; branded `/login` + `/signup` + navy app shell; `/dashboard` 404 fixed (route group `(dashboard)`→ segment `dashboard`); de-BSM app-wide; legacy DS docs superseded.
 - Phase 3 carry-overs: submodule is PRIVATE → Vercel deploy key needed for recursive checkout; only gitignored dev `.env.local` (Supabase URL+anon via MCP) exists — full env (service role + SendGrid/Twilio/feature keys) lands Phase 3; Gotham = Adobe Typekit-licensed → self-hosting `.otf` flagged; old bare root URLs (`/content`, `/ads`) now 404 post route-rename (matters when Phase 3 wires email links).

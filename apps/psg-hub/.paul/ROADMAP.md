@@ -8,7 +8,7 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 **v0.1 Foundation** (v0.1.0)
 Status: In progress
-Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodied; Phase 3 in progress — SendGrid + Twilio + Sanity + Vercel re-link; 03-01 SendGrid + 03-02 Twilio ✅ loop-closed, 2 plans remain)
+Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodied; Phase 3 in progress — SendGrid + Twilio + Sanity + Vercel re-link; 03-01 SendGrid + 03-02 Twilio ✅ loop-closed; 03-03 Sanity PLAN created, awaiting approval; 03-04 remains)
 
 ## Phases
 
@@ -22,7 +22,7 @@ Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodi
 |-------|------|-------|--------|-----------|
 | 1 | Workspace consolidation + multi-repo relocation | 7/7 | ✅ Complete | 2026-05-31 |
 | 2 | Design system — submodule + brand embodiment (logo, components, shell) | 4/4 | ✅ Complete | 2026-06-01 |
-| 3 | SendGrid + Twilio + Sanity + Vercel re-link | 1/4 done | In progress | - |
+| 3 | SendGrid + Twilio + Sanity + Vercel re-link | 2/4 done; 03-03 planned | In progress | - |
 | 4 | PAUL inheritance + tracking | TBD | Not started | - |
 | 5 | local_reach client output archive | TBD | Not started | - |
 
@@ -119,7 +119,7 @@ Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodi
 *Wave 1 (independent, no deps):*
 - [x] 03-01: SendGrid — shared `src/lib/resilience.ts` (retry + circuit breaker) + mail adapter + idempotent signature-verified event webhook + `email_events` table; operator domain auth (SPF/DKIM on psgweb.me) + live-send checkpoint — **✅ LOOP CLOSED 2026-06-01** (163 tests green; live send 202 + inbox; webhook event-row deferred → 03-04)
 - [x] 03-02: Twilio — SMS adapter (reuses resilience util) + idempotent dual-path webhook + `sms_events` table; operator number + secrets checkpoint — **✅ LOOP CLOSED 2026-06-01** (182 tests green; live send queued + phone receipt; 3 verified divergences from SendGrid mirror handled — error.status not .code, HMAC-over-parsed-params, composite UNIQUE(message_sid,status); webhook live sig-verify deferred → 03-04)
-- [ ] 03-03: Sanity — provision new project + single prod dataset (D55); import studio from `@psg/studio`; env wiring
+- [~] 03-03: Sanity — provision new project + single prod dataset (D55) under PSG org; decouple `@psg/studio` from BSM `436nqu7v` (env-driven config) + publish env contract — **PLAN created 2026-06-01, awaiting approval** (tight scope: read client deferred v0.3; no migration — start fresh per D57; `autonomous:false`, 2 auto + 1 operator checkpoint)
 
 *Wave 2 (after 03-01/02/03 — consumes their env):*
 - [ ] 03-04: Vercel — re-link `psg-advantage-portal`→`psg-hub` + rename (preserve env + analytics, D54) + private-submodule deploy key + wire all Phase 3 env; decommission BSM Vercel **(research-flagged: rename mechanics)**

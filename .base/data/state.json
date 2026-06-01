@@ -8,9 +8,9 @@
   "drift_signals": [],
   "health": "fresh",
   "drift": {
-    "score": 1,
+    "score": 0,
     "indicators": {
-      "active_age_days": 1,
+      "active_age_days": 0,
       "backlog_age_days": 0,
       "backlog_past_review": 0,
       "orphaned_sessions": 0,
@@ -18,5 +18,5 @@
       "stale_satellites": 0
     }
   },
-  "last_modified": "2026-06-01T06:16:40.254106"
+  "last_modified": "2026-06-01T13:31:37.916546"
 }
