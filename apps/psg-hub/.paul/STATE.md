@@ -5,30 +5,30 @@
 See: .paul/PROJECT.md (updated 2026-05-29)
 
 **Core value:** Consolidates fragmented PSG tooling into one branded `hub.psgweb.me` surface that customers, internal staff, and superadmins all use — replacing logins and tooling sprawl with role-gated unified access.
-**Current focus:** Phase 3 (SendGrid + Twilio + Sanity new project + Vercel re-link) — **PLANNING.** 4-way subsystem split confirmed (operator); plan `03-01` (SendGrid) created, awaiting approval. Phase 2 (Design system) **✅ COMPLETE + UNIFIED 2026-06-01** — psg-hub embodies the PSG design system (submodule + Gotham/Didact fonts + brand tokens + PSG logo + branded login/signup + navy app shell + DS-spec primitives), fully de-BSM'd; all 4 plans loop-closed + operator-approved + reconciled (typecheck + 136 tests green at HEAD).
+**Current focus:** Phase 3 (SendGrid + Twilio + Sanity new project + Vercel re-link) — **03-02 (Twilio) ✅ LOOP CLOSED.** 4-way subsystem split confirmed (operator); `03-01` SendGrid + `03-02` Twilio both ✅ LOOP CLOSED (2 of 4); next: plan `03-03` (Sanity). Phase 3 NOT complete — 2 plans remain (no transition). Phase 2 (Design system) **✅ COMPLETE + UNIFIED 2026-06-01** — psg-hub embodies the PSG design system (submodule + Gotham/Didact fonts + brand tokens + PSG logo + branded login/signup + navy app shell + DS-spec primitives), fully de-BSM'd; all 4 plans loop-closed + operator-approved + reconciled (typecheck + 136 tests green at HEAD).
 
 ## Current Position
 
 Milestone: v0.1 Foundation (v0.1.0) — In progress
-Phase: 3 of 5 (SendGrid + Twilio + Sanity + Vercel re-link) — In progress (1 of 4 plans complete)
-Plan: 03-01 (SendGrid) ✅ LOOP CLOSED — SUMMARY written
-Status: 03-01 loop closed (AC-1/2 PASS; AC-3 send-PASS, webhook-row deferred→03-04). Ready to plan 03-02 (Twilio). Phase 3 NOT complete — 3 plans remain (no transition).
-Last activity: 2026-06-01 — UNIFY 03-01: reconciled plan vs actual, wrote `03-01-SUMMARY.md`, closed loop. Not committed (branch `chore/phase-3-integrations`).
+Phase: 3 of 5 (SendGrid + Twilio + Sanity + Vercel re-link) — In progress (2 of 4 loop-closed)
+Plan: 03-02 (Twilio) ✅ LOOP CLOSED — SUMMARY written
+Status: 03-02 loop closed (AC-1/2 PASS; AC-3 send-PASS — live SMS + phone receipt; webhook live sig-verify deferred→03-04). Ready to plan 03-03 (Sanity). Phase 3 NOT complete — 2 plans remain (no transition). 182 tests green.
+Last activity: 2026-06-01 — UNIFY 03-02: wrote `03-02-SUMMARY.md`, closed loop, synced paul.json. NOT committed yet (branch `chore/phase-3-integrations`).
 
 Progress:
 - Milestone v0.1: [████░░░░░░] 40% (2 of 5 phases complete)
 - Phase 1: [██████████] 100% ✅
 - Phase 2: [██████████] 100% ✅ (4 of 4 plans, unified)
-- Phase 3: [██░░░░░░░░] 25% (1 of 4 plans loop-closed)
+- Phase 3: [█████░░░░░] 50% (2 of 4 plans loop-closed)
 
 ## Loop Position
 
 ```
-PLAN ──▶ APPLY ──▶ UNIFY          (03-01)
-  ✓        ✓        ✓     [03-01 LOOP CLOSED — ready to plan 03-02]
+PLAN ──▶ APPLY ──▶ UNIFY          (03-02)
+  ✓        ✓        ✓     [03-02 LOOP CLOSED — ready to plan 03-03]
 ```
-Phase 2 ✅ CLOSED. Phase 3 — 4-way split: **03-01 SendGrid (✅ LOOP CLOSED)** · 03-02 Twilio (next) · 03-03 Sanity · 03-04 Vercel re-link.
-Next: `/paul:plan 03-02` (Twilio — reuses `src/lib/resilience.ts` + webhook idempotency pattern from 03-01). Carry-overs into Phase 3: design-system submodule is PRIVATE → Vercel deploy key (03-04); 03-01 added SENDGRID_* to `.env.local` (dev) — Vercel env wired in 03-04 where the webhook event-row gets live-verified against a public URL.
+Phase 2 ✅ CLOSED. Phase 3 — 4-way split: **03-01 SendGrid (✅ LOOP CLOSED)** · **03-02 Twilio (✅ LOOP CLOSED)** · 03-03 Sanity (next) · 03-04 Vercel re-link.
+Next: `/paul:plan 03-03` (Sanity — provision new project + single prod dataset D55; import studio from `@psg/studio`; env wiring). Carry-overs into Phase 3: design-system submodule is PRIVATE → Vercel deploy key (03-04); 03-01 SENDGRID_* + 03-02 TWILIO_* now in `.env.local` (dev) — Vercel env + public host wired in 03-04 where BOTH webhooks get live-verified against a public URL.
 
 ### APPLY 03-01 execution log (for UNIFY)
 - **Task 1 (auto) — DONE/PASS:** `src/lib/resilience.ts` (withRetry + CircuitBreaker, injectable clock/sleep/jitter) + `src/lib/mail/{types,sendgrid}.ts` (`createMailSender` factory + `sendEmail`; retry on 429/5xx, breaker trips on transient only). 20 new unit tests. AC-1 met.
@@ -39,12 +39,22 @@ Next: `/paul:plan 03-02` (Twilio — reuses `src/lib/resilience.ts` + webhook id
 - **Files:** package.json · pnpm-lock.yaml · .env.example · vitest.setup.ts · src/lib/resilience.ts · src/lib/__tests__/resilience.test.ts · src/lib/mail/types.ts · src/lib/mail/sendgrid.ts · src/lib/mail/__tests__/sendgrid.test.ts · src/app/api/webhooks/sendgrid/route.ts · src/app/api/webhooks/sendgrid/__tests__/route.test.ts · scripts/send-test-email.mjs · (DB) email_events migration.
 - **Not committed yet** — branch `chore/phase-3-integrations` (operator commits at/after UNIFY).
 
+### APPLY 03-02 execution log (for UNIFY)
+- **Task 1 (auto) — DONE/PASS:** `src/lib/sms/{types,twilio}.ts` — `createSmsSender` factory over lazy `getTwilioClient`, wraps `messages.create` in `CircuitBreaker.execute(withRetry(...))` reusing `src/lib/resilience.ts` verbatim. KEY divergence implemented: `statusOf` reads `error.status` (HTTP), NOT `.code` (Twilio vendor code) — inverse of SendGrid. `isRetryableTwilioError`: undefined→true, 429||≥500→true. `twilio@^6.0.2` added. 7 unit tests. AC-1 met.
+- **Task 2 (auto) — DONE/PASS:** `src/app/api/webhooks/twilio/route.ts` — single dual-path route: `twilio.validateRequest(authToken, signature, env-reconstructed URL, PARSED form params)` → 403 invalid / 400 missing sig / 500 missing token|base-url; idempotent `upsert(onConflict "message_sid,status", ignoreDuplicates)`; branch on `MessageStatus` → status-callback 204 / inbound empty-TwiML `text/xml`; 500 on persist-fail. Migration `create_sms_events` applied to shared project `gylkkzmcmbdftxieyabw` (RLS on, 0 policies, UNIQUE(message_sid,status), both NOT NULL). 12 route tests. AC-2 met.
+- **Task 3 (checkpoint:human-action) — RESOLVED:** operator set TWILIO_ACCOUNT_SID/AUTH_TOKEN/PHONE_NUMBER in `.env.local` (no Messaging Service → bare-from path). Live send `scripts/send-test-sms.mjs <operator-mobile>` → `OK sid=SMe1f86eae4a7ff0b20c83f2e48e695552 status=queued sender=+19735325352`; operator confirmed phone receipt. AC-3 send-half met; **webhook live sig-verify DEFERRED → 03-04** (needs public URL — clean parallel to 03-01).
+- **Gates:** `pnpm typecheck` clean · `pnpm test` 182/182 (19 files; +19 new) · `pnpm lint` 0 errors (1 PRE-EXISTING warning in `src/lib/supabase/middleware.ts`, not introduced here).
+- **Adversarial review (workflow, real twilio@6):** 2 confirmed-real MEDIUM findings, both fail-CLOSED URL-reconstruction (no security hole): (1) trailing-slash in `TWILIO_WEBHOOK_BASE_URL` → double-slash → 100% sig rejection → FIXED (`base.replace(/\/+$/,"")`); (2) query-string preservation untested → FIXED (+2 hardening tests). Re-qualified green.
+- **Deviations/notes:** (1) dropped unused `RestException` import — `statusOf` is structural (`"status" in error`), mirroring the mail adapter; no shipped-behavior change. (2) Scope addition: `scripts/send-test-sms.mjs` (dev verifier, no secrets). (3) 2 review fixes folded into qualify (above).
+- **Files:** package.json · pnpm-lock.yaml · .env.example · vitest.setup.ts · src/lib/sms/types.ts · src/lib/sms/twilio.ts · src/lib/sms/__tests__/twilio.test.ts · src/app/api/webhooks/twilio/route.ts · src/app/api/webhooks/twilio/__tests__/route.test.ts · scripts/send-test-sms.mjs · (DB) sms_events migration.
+- **Not committed yet** — branch `chore/phase-3-integrations` (operator commits at/after UNIFY).
+
 ## Phase 3 Plan Split (4-way subsystem, 2 waves) — confirmed 2026-06-01
 
 | Plan | Scope | Wave | Deps | Status |
 |------|-------|------|------|--------|
 | 03-01 | SendGrid: shared resilience util + mail adapter + idempotent event webhook + `email_events` table; operator domain-auth (SPF/DKIM/DMARC) + live-send checkpoint | 1 | none | ✅ LOOP CLOSED (163 tests green; live send 202 verified; webhook-row deferred → 03-04; SUMMARY written) |
-| 03-02 | Twilio: SMS adapter (reuses `src/lib/resilience.ts`) + messaging service + idempotent inbound/delivery webhook; operator number + secrets checkpoint | 1 | none | TBD |
+| 03-02 | Twilio: SMS adapter (reuses `src/lib/resilience.ts`) + idempotent dual-path webhook + `sms_events` table; operator number + secrets checkpoint | 1 | none | ✅ LOOP CLOSED (182 tests green; live send queued + phone receipt; webhook live sig-verify deferred → 03-04; SUMMARY written) |
 | 03-03 | Sanity: provision new project + single prod dataset (D55); import studio from `@psg/studio`; env wiring | 1 | none | TBD |
 | 03-04 | Vercel: re-link `psg-advantage-portal`→`psg-hub` + rename (preserve env + analytics, D54) + private-submodule deploy key + wire all Phase 3 env; decommission BSM Vercel | 2 | 03-01,03-02,03-03 | TBD (research-flagged: rename mechanics) |
 **Git:** Phase 1 + Phase 2 both on `main` (pushed). Phase 2 fast-forwarded `65bc17f..54e53f0` 2026-06-01; branch `chore/phase-2-design-system` fully merged (0 ahead / 0 behind `main`).
@@ -107,6 +117,7 @@ Carry-over to track in next plans:
 | 2026-05-31: 01-07 — apps/ads → psg-ads-mutations Python worker; `.env` preserved (NOT deleted), nested `.git` bundled+dropped, node_modules/.claude stripped, non-Python content (psg-ads Obsidian vault + HTMLs) included-as-is | Phase 1 / 01-07 | worker landed 394M; secret-ignore gate verified (google-ads.yaml + .env ignored) pre-transition; bundle at `archive/_repo-bundles/ads-pre-drop-20260531.bundle`; 394M per-client artifacts will be staged at phase commit |
 | 2026-05-31: Workspace git = single monorepo (collapse) | Phase 1 / git strategy | `apps/psg/.git` is THE monorepo; psg-hub absorbed (history → `archive/_repo-bundles/` bundle); psg-import + api-psghub kept independent (own .git, gitignored); Wave 1 committed on branch `chore/phase-1-workspace-consolidation`, not pushed |
 | 2026-06-01: SendGrid integration (03-01) — shared `src/lib/resilience.ts` (retry + circuit breaker) introduced; `email_events` table on shared `gylkkzmcmbdftxieyabw` (RLS on, no public policies, `sg_event_id` UNIQUE); webhook mirrors Stripe route | Phase 3 / 03-01 | Resilience util is the reusable foundation for all external calls (03-02 Twilio reuses); domain auth on psgweb.me verified (202 + inbox); webhook event-row verify deferred → 03-04 (public-URL) |
+| 2026-06-01: Twilio integration (03-02) — SMS adapter reuses `src/lib/resilience.ts`; `sms_events` on shared `gylkkzmcmbdftxieyabw` (RLS on, no public policies, composite UNIQUE(message_sid,status) both NOT NULL); webhook = HMAC-SHA1 via `twilio.validateRequest` over env-reconstructed URL + parsed params (auth token = secret, no separate key var); `statusOf` reads `error.status` (inverse of SendGrid `.code`) | Phase 3 / 03-02 | resilience util proven across 2 providers; live send verified (queued + phone receipt) via bare-from (no Messaging Service yet); webhook live sig-verify deferred → 03-04 (public URL) |
 
 ### Deferred Issues
 
@@ -155,9 +166,9 @@ From 01-01-PLAN.md:
 ## Session Continuity
 
 Last session: 2026-06-01
-Stopped at: **03-01 (SendGrid) LOOP CLOSED.** PLAN→APPLY→UNIFY complete; `03-01-SUMMARY.md` written. AC-1/2 PASS, AC-3 send-PASS (202 + inbox) with webhook event-row deferred→03-04. typecheck + 163 tests + lint green; `email_events` migration live on shared project. Phase 3 is 1/4 plans done — NOT complete, so no phase transition/commit ran. Work uncommitted on branch `chore/phase-3-integrations`.
-Next action: `/paul:plan 03-02` (Twilio — reuses `src/lib/resilience.ts` + the 03-01 webhook idempotency pattern). Optionally commit 03-01 first (operator's call).
-Resume file: `.paul/phases/03-integrations/03-01-SUMMARY.md`.
+Stopped at: **03-02 (Twilio) ✅ LOOP CLOSED.** PLAN→APPLY→UNIFY complete; `03-02-SUMMARY.md` written; paul.json synced. SMS adapter (reuses resilience.ts; `statusOf` reads `error.status`) + dual-path signature-verified idempotent webhook + `sms_events` (UNIQUE(message_sid,status), both NOT NULL, RLS on, 0 policies on `gylkkzmcmbdftxieyabw`). Adversarial review vs real twilio@6 found + fixed 2 medium URL-reconstruction issues. Gates: typecheck · 182 tests · lint 0 errors. AC-3 send-PASS (live SMS `SMe1f86eae…` queued + phone receipt); webhook live sig-verify deferred → 03-04. Phase 3 = 2/4 loop-closed — NOT complete, no transition. NOT committed (branch `chore/phase-3-integrations`).
+Next action: `/paul:plan 03-03` (Sanity).
+Resume file: `.paul/phases/03-integrations/03-02-SUMMARY.md`.
 Resume context:
 - Phase 2 closed: submodule `packages/ui/psg-brand/` @`1689896`; PSG tokens (midnight/ember/paper, 6px) + Gotham/Didact fonts; `<Logo>` + DS-spec button/label/card/badge/table; branded `/login` + `/signup` + navy app shell; `/dashboard` 404 fixed (route group `(dashboard)`→ segment `dashboard`); de-BSM app-wide; legacy DS docs superseded.
 - Phase 3 carry-overs: submodule is PRIVATE → Vercel deploy key needed for recursive checkout; only gitignored dev `.env.local` (Supabase URL+anon via MCP) exists — full env (service role + SendGrid/Twilio/feature keys) lands Phase 3; Gotham = Adobe Typekit-licensed → self-hosting `.otf` flagged; old bare root URLs (`/content`, `/ads`) now 404 post route-rename (matters when Phase 3 wires email links).

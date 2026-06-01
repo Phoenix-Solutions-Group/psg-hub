@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...but the example file is safe to track (placeholders only; documents required vars)
+!.env.example
 
 # vercel
 .vercel

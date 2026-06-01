@@ -8,7 +8,7 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 **v0.1 Foundation** (v0.1.0)
 Status: In progress
-Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodied; Phase 3 in progress — SendGrid + Twilio + Sanity + Vercel re-link; 03-01 SendGrid ✅ loop-closed, 3 plans remain)
+Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodied; Phase 3 in progress — SendGrid + Twilio + Sanity + Vercel re-link; 03-01 SendGrid + 03-02 Twilio ✅ loop-closed, 2 plans remain)
 
 ## Phases
 
@@ -118,7 +118,7 @@ Phases: 2 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodi
 
 *Wave 1 (independent, no deps):*
 - [x] 03-01: SendGrid — shared `src/lib/resilience.ts` (retry + circuit breaker) + mail adapter + idempotent signature-verified event webhook + `email_events` table; operator domain auth (SPF/DKIM on psgweb.me) + live-send checkpoint — **✅ LOOP CLOSED 2026-06-01** (163 tests green; live send 202 + inbox; webhook event-row deferred → 03-04)
-- [ ] 03-02: Twilio — SMS adapter (reuses resilience util) + messaging service + idempotent inbound/delivery webhook; operator number + secrets checkpoint
+- [x] 03-02: Twilio — SMS adapter (reuses resilience util) + idempotent dual-path webhook + `sms_events` table; operator number + secrets checkpoint — **✅ LOOP CLOSED 2026-06-01** (182 tests green; live send queued + phone receipt; 3 verified divergences from SendGrid mirror handled — error.status not .code, HMAC-over-parsed-params, composite UNIQUE(message_sid,status); webhook live sig-verify deferred → 03-04)
 - [ ] 03-03: Sanity — provision new project + single prod dataset (D55); import studio from `@psg/studio`; env wiring
 
 *Wave 2 (after 03-01/02/03 — consumes their env):*

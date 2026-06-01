@@ -24,3 +24,9 @@ process.env.SHOP_ADS_TIER_OVERRIDE = "";
 process.env.SENDGRID_API_KEY = "SG.test-sendgrid-key";
 process.env.SENDGRID_FROM_EMAIL = "test-noreply@psgweb.me";
 process.env.SENDGRID_WEBHOOK_VERIFICATION_KEY = "test-sendgrid-verification-key";
+
+// Twilio (Phase 3 — Plan 03-02). Deterministic dummy values for unit tests.
+process.env.TWILIO_ACCOUNT_SID = "ACtestaccountsid000000000000000000";
+process.env.TWILIO_AUTH_TOKEN = "test-twilio-auth-token";
+process.env.TWILIO_MESSAGING_SERVICE_SID = "MGtestmessagingservice0000000000000";
+process.env.TWILIO_WEBHOOK_BASE_URL = "https://test.psgweb.me";
