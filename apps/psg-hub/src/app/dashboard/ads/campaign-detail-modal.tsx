@@ -162,7 +162,7 @@ export function CampaignDetailModal({
 
   async function deleteCampaign() {
     const ok = window.confirm(
-      `Delete campaign "${campaign.name}"? The campaign will be marked REMOVED in Google Ads and no longer appear in BSM. This cannot be undone.`
+      `Delete campaign "${campaign.name}"? The campaign will be marked REMOVED in Google Ads and no longer appear in PSG. This cannot be undone.`
     );
     if (!ok) return;
     setMessage(null);

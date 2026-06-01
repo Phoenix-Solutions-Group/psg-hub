@@ -169,7 +169,7 @@ export function CreateCampaignModal({
               Create campaign
             </h2>
             <p className="text-sm text-muted-foreground">
-              Start from a BSM collision-repair template.
+              Start from a PSG collision-repair template.
             </p>
           </div>
           <button

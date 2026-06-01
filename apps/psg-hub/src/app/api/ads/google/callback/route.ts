@@ -119,7 +119,7 @@ export async function GET(request: Request) {
   }
   if (customers.length > 1) {
     return errorHtml(
-      "This Google account has access to multiple Google Ads customers. BSM supports a single-customer link only in this release."
+      "This Google account has access to multiple Google Ads customers. PSG supports a single-customer link only in this release."
     );
   }
   const customerId = customers[0];

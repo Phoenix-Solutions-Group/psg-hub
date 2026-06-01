@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { shouldShowUpgradeBanner } from "@/app/(dashboard)/billing/upgrade-banner";
+import { shouldShowUpgradeBanner } from "@/app/dashboard/billing/upgrade-banner";
 
 describe("shouldShowUpgradeBanner", () => {
   it("returns 'hidden' when not returned from Stripe", () => {
