@@ -8,7 +8,7 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 **v0.1 Foundation** (v0.1.0)
 Status: In progress
-Phases: 3 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodied; **Phase 3 ✅ COMPLETE 2026-06-01** — SendGrid + Twilio + Sanity + Vercel, 5/5 plans loop-closed; webhooks live-verified end-to-end; psg-hub LIVE at https://hub.psgweb.me; D54 decommission confirmed. Phase 4 (PAUL inheritance + tracking) next. **Gated before Phase-3→main merge: grant Vercel GitHub-app access to private `design-system` submodule.**)
+Phases: 4 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodied; Phase 3 ✅ integrations + deploy; **Phase 4 ✅ COMPLETE 2026-06-01** — PAUL inheritance made navigable via `references/INDEX.md` + tracking reconciled + ACTIVE.md superseded by STATE.md. Phase 5 (local_reach client output archive) next — last v0.1 phase. **Gated before v0.1→main merge: grant Vercel GitHub-app access to private `design-system` submodule, or keep CLI `vercel --prod` deploys (operator option C).**)
 
 ## Phases
 
@@ -23,7 +23,7 @@ Phases: 3 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodi
 | 1 | Workspace consolidation + multi-repo relocation | 7/7 | ✅ Complete | 2026-05-31 |
 | 2 | Design system — submodule + brand embodiment (logo, components, shell) | 4/4 | ✅ Complete | 2026-06-01 |
 | 3 | SendGrid + Twilio + Sanity + Vercel deploy | 5/5 | ✅ Complete | 2026-06-01 |
-| 4 | PAUL inheritance + tracking | TBD | Not started (next) | - |
+| 4 | PAUL inheritance + tracking | 1/1 | ✅ Complete | 2026-06-01 |
 | 5 | local_reach client output archive | TBD | Not started | - |
 
 ### Future milestones (defined in PLANNING.md, plans TBD at milestone kickoff)
@@ -137,7 +137,10 @@ Phases: 3 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodi
 - ACTIVE.md updated
 - Tracking system records psg-hub as in-progress
 
-**Plans:** TBD
+**Reframe (2026-06-01, at plan time):** The "preserve + copy PAUL" deliverables were front-loaded into Phase 1 — `references/bsm/` (Phases 1-5, real PLAN/SUMMARY/AUDIT) and `references/ads-dashboard/` (absorbed 01-03, brand-reconciled 02-04) already exist; BASE tracking already records psg-hub in_progress at this phase; and `ACTIVE.md` is a phantom (the current PAUL framework uses STATE.md, never ACTIVE.md). Operator chose to add a usability layer rather than close lean: Phase 4 turns the two archived snapshots into navigable design-intent canon and reconciles the loose ends.
+
+**Plans (1, autonomous):**
+- [x] 04-01: Inheritance INDEX + tracking reconcile — added `.paul/references/INDEX.md` mapping inherited BSM/ads-dashboard history → consuming milestones (v0.2..v2.0) with resolving paths + brand-reconcile caveat (psg-brand submodule wins); verified both trees populated (verify-by-building, 7 deep-readers); recorded ACTIVE.md superseded-by-STATE.md (no file created); verified BASE satellite at Phase 4 / in_progress. Did NOT re-copy PAUL. 3-lens adversarial verify (1 MEDIUM + 3 LOW fixed). — **✅ LOOP CLOSED 2026-06-01**
 
 ### Phase 5: local_reach client output archive
 
@@ -153,4 +156,4 @@ Phases: 3 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodi
 
 ---
 *Roadmap created: 2026-05-29 (populated from SEED ideation v7)*
-*Last updated: 2026-06-01 — Phase 3 ✅ COMPLETE (5/5 plans loop-closed): SendGrid + Twilio webhooks live-verified, Sanity `vcw0bsnu`, psg-hub LIVE at hub.psgweb.me, D54 decommission confirmed. Transitioned to Phase 4. Gated: grant Vercel GitHub-app access to private `design-system` submodule before Phase-3→main merge.*
+*Last updated: 2026-06-01 — Phase 4 ✅ COMPLETE (1/1 loop-closed): PAUL inheritance made navigable via `references/INDEX.md`, tracking reconciled, ACTIVE.md superseded by STATE.md. Transitioned to Phase 5 (local_reach client output archive) — last v0.1 phase.*
