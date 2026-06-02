@@ -13,6 +13,29 @@ Completed: 2026-06-02 (all 5 phases loop-closed; gitleaks gate clean; AEGIS scop
 
 Run `/paul:discuss-milestone` or `/paul:milestone` to define **v0.2 Customer MVP** (RBAC + tier gating + shop switcher + superadmin bootstrap + launch hardening).
 
+<!-- audit-added 2026-06-02: from AUDIT-2026-06-02-trajectory.md (whole-project trajectory audit) -->
+### v0.2 Readiness Gates (from trajectory audit 2026-06-02)
+
+Carry these into `/paul:discuss-milestone` for v0.2 as entry criteria. Full rationale: `.paul/AUDIT-2026-06-02-trajectory.md`.
+
+**Decide now (before v0.2 planning):**
+- **M1 — Revenue checkpoint vs North Star — RESOLVED 2026-06-02:** operator chose **build-first**. EOY-2026 MRR is a **directional horizon, not a hard gate**; the roadmap is NOT re-sequenced around a deadline. (Reverses the audit's "add a revenue checkpoint" recommendation by deliberate operator choice — quality-first D60 stands.)
+- **M4 — Land v0.1 — PARTIALLY RESOLVED 2026-06-02:** push DONE (origin has `chore/phase-3-integrations`@`3a641d9` + tag `v0.1.0`; recoverability no longer single-machine). Land-on-`main` **DEFERRED** — stay on CLI `vercel --prod` (option C, works today); revisit the submodule gate (option A/B) only if push-to-deploy is wanted.
+
+**Gate into v0.2 scope:**
+- **M2 — Pull compliance forward.** PII + RLS + secret-handling security gate at v0.2; a PII RLS review before any shop sees live data; first AEGIS pass at v0.2 (not v2.0).
+- **S1 — Environment isolation.** Staging/prod separation (or a documented, enforced migration-safety + RLS-review protocol) before v0.2 customer tables land on the shared Supabase project.
+- **S2 — Pilot onboarding owns first MRR.** Give Wallace + Tedesco + Tracy's an owning slice with an activation checklist.
+- **S3 — Inherited defects into backlog.** Stripe INSERT→UPSERT, refresh-token-compromise mitigation, review-sync cron (currently only `references/INDEX.md` caveats).
+- **S4 — Idempotency mechanism + checklist** (not convention) as Stripe/import/mutations land.
+- **S5 — Activate quality gates.** Vitest ≥70% + Playwright happy-path at v0.2; WCAG AA + brand-conformance at first customer UI; LCP budget at v0.3.
+
+**Before v0.4 (first customer dollar):**
+- **M3 — Reproducible deploy.** Replace laptop-only CLI `vercel --prod` with GH Actions prebuilt (option A) or vendored brand assets (option B).
+- **S6 — Resolve Gotham (Typekit) licensing** before broad customer launch.
+<!-- end audit-added -->
+
+
 ## Completed Milestones
 
 <details>
