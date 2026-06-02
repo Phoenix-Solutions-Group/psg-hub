@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Logo } from "@/components/brand/logo";
+import { NoShopNotice } from "@/components/dashboard/no-shop-notice";
+import { getDashboardAccess, decideDashboardAccess } from "@/lib/auth/shop-access";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -23,6 +25,12 @@ export default async function DashboardLayout({
 
   if (!user) {
     redirect("/login");
+  }
+
+  // Customer-id gate (Phase 6 / 06-03): staff bypass; non-staff need a shop membership.
+  const access = await getDashboardAccess(user.id);
+  if (decideDashboardAccess(access) === "no-shop") {
+    return <NoShopNotice email={user.email} />;
   }
 
   return (
