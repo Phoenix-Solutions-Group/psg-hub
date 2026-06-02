@@ -1,0 +1,9 @@
+# gitleaks allowlist — vetted false positives
+#
+# Reviewed 2026-06-02 during the v0.1 Foundation milestone-close scan.
+# The generic-api-key rule misfires on a documentation sentence in an inherited,
+# immutable BSM PAUL snapshot (apps/psg-hub/.paul/references/bsm/STATE.md, line 110)
+# that lists, in prose, the names of several third-party services whose credentials
+# were still to be configured. It is not a credential; no real secrets are committed
+# to this repository's history.
+956c256e18ac92c51a2b066cf1fffef1cee5a7fd:apps/psg-hub/.paul/references/bsm/STATE.md:generic-api-key:110

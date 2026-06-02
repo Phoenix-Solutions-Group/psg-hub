@@ -13,8 +13,8 @@ Consolidates fragmented PSG tooling (BSM customer dashboard, ads-dashboard plans
 | Attribute | Value |
 |-----------|-------|
 | Type | Application |
-| Version | 0.0.0 |
-| Status | v0.1 Foundation — ✅ COMPLETE (all 5 phases loop-closed; psg-hub LIVE at hub.psgweb.me; v0.1→main merge operator-gated) |
+| Version | 0.1.0 |
+| Status | v0.1 Foundation — ✅ COMPLETE 2026-06-02 (5/5 phases; gitleaks gate clean; AEGIS scoped to v2.0; psg-hub LIVE at hub.psgweb.me; v0.1→main merge operator-gated) |
 | Last Updated | 2026-06-02 |
 
 **Production URLs:**
@@ -39,7 +39,7 @@ Consolidates fragmented PSG tooling (BSM customer dashboard, ads-dashboard plans
 - ✓ local_reach client output archive — Phase 5 (2026-06-02): verified the local_reach active client outputs (`tracys-research-v3`, `new-tracys-report-v2`, sidecar `tracys/`) preserved on-disk at gitignored `archive/local_reach-outputs/` faithful to its MANIFEST, and the codebase retired (source gone, archived). Lean close (on-disk-only preservation = reference material for v0.3 BSM-agent migration; not version-controlled). Scope was front-loaded into Phase 1 / 01-04; Phase 5 audited + closed. **Closes milestone v0.1 (all 5 phases loop-closed).**
 
 ### Active (In Progress)
-None — **v0.1 Foundation COMPLETE (all 5 phases loop-closed, 2026-06-02).** Next milestone: v0.2 Customer MVP (RBAC + tier gating + shop switcher + superadmin bootstrap + launch hardening). One gated prod action remains before the v0.1→main merge: grant Vercel GitHub-app access to the private `design-system` submodule, or keep deploying via CLI `vercel --prod` (operator option C; CLI deploys work today).
+**v0.1 Foundation ✅ COMPLETE (2026-06-02)** — all 5 phases loop-closed; gitleaks milestone scan clean (1 vetted false positive allowlisted in `.gitleaksignore`); AEGIS scoped to v2.0 per ROADMAP (recommend a per-milestone pass starting v0.2); milestone archived (`MILESTONES.md` + `milestones/v0.1.0-ROADMAP.md`) and tagged `v0.1.0` (local, not pushed). Next: v0.2 Customer MVP (RBAC + tier gating + shop switcher + superadmin bootstrap + launch hardening). One gated prod action remains before the v0.1→main merge: grant Vercel GitHub-app access to the private `design-system` submodule, or keep deploying via CLI `vercel --prod` (operator option C; CLI deploys work today).
 
 ### Planned (Next)
 - v0.1 Foundation (workspace consolidation, brand tokens, SendGrid + Twilio, Sanity new project, Vercel rename, BSM relocation, kill list retired)
@@ -148,7 +148,8 @@ Anchor = BSM `dashboard/` (Next.js 16, BSM Phases 1–5 shipped). Shared Supabas
 |--------|--------|---------|--------|
 | Vitest coverage (new code) | ≥70% lines | - | Not started |
 | Playwright E2E happy paths | auth + 1 customer + 1 ops | 0 | Not started |
-| AEGIS audit per milestone | Pass | - | Not started |
+| AEGIS audit per milestone | Pass | v0.1: deferred (no live customers, D57) | Scoped to v2.0 (final); recommend v0.2 start |
+| gitleaks scan per milestone | No real secrets | v0.1: ✅ clean (1 vetted FP allowlisted) | Pass |
 | WCAG AA on customer routes | Pass | - | Not started |
 | LCP on /dashboard | <2s | - | Not started |
 | Brand conformance audit per UI milestone | Pass | - | Not started |
@@ -207,4 +208,4 @@ Anchor = BSM `dashboard/` (Next.js 16, BSM Phases 1–5 shipped). Shared Supabas
 
 ---
 *PROJECT.md — Populated from SEED ideation v7 (projects/psg-hub/PLANNING.md, 70 decisions)*
-*Last updated: 2026-06-02 after Phase 5 (local_reach client output archive — verified preserved on-disk; milestone v0.1 Foundation COMPLETE, all 5 phases loop-closed)*
+*Last updated: 2026-06-02 — milestone v0.1 Foundation COMPLETE (all 5 phases loop-closed; gitleaks gate clean; tagged v0.1.0 local). Version 0.1.0. Next: v0.2 Customer MVP.*
