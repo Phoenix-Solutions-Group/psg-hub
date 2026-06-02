@@ -7,8 +7,8 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 ## Current Milestone
 
 **v0.1 Foundation** (v0.1.0)
-Status: In progress
-Phases: 4 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodied; Phase 3 ✅ integrations + deploy; **Phase 4 ✅ COMPLETE 2026-06-01** — PAUL inheritance made navigable via `references/INDEX.md` + tracking reconciled + ACTIVE.md superseded by STATE.md. Phase 5 (local_reach client output archive) next — last v0.1 phase. **Gated before v0.1→main merge: grant Vercel GitHub-app access to private `design-system` submodule, or keep CLI `vercel --prod` deploys (operator option C).**)
+Status: ✅ COMPLETE (2026-06-02)
+Phases: 5 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodied; Phase 3 ✅ integrations + deploy; Phase 4 ✅ PAUL inheritance INDEX + tracking; **Phase 5 ✅ COMPLETE 2026-06-02** — local_reach client outputs verified preserved on-disk (gitignored `archive/local_reach-outputs/`), codebase retired. **Milestone v0.1 Foundation COMPLETE — all 5 phases loop-closed.** Next milestone: v0.2 Customer MVP. **Gated before v0.1→main merge: grant Vercel GitHub-app access to private `design-system` submodule, or keep CLI `vercel --prod` deploys (operator option C).**)
 
 ## Phases
 
@@ -24,7 +24,7 @@ Phases: 4 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodi
 | 2 | Design system — submodule + brand embodiment (logo, components, shell) | 4/4 | ✅ Complete | 2026-06-01 |
 | 3 | SendGrid + Twilio + Sanity + Vercel deploy | 5/5 | ✅ Complete | 2026-06-01 |
 | 4 | PAUL inheritance + tracking | 1/1 | ✅ Complete | 2026-06-01 |
-| 5 | local_reach client output archive | TBD | Not started | - |
+| 5 | local_reach client output archive | 1/1 | ✅ Complete | 2026-06-02 |
 
 ### Future milestones (defined in PLANNING.md, plans TBD at milestone kickoff)
 
@@ -152,8 +152,11 @@ Phases: 4 of 5 complete (Phase 1 ✅ workspace; Phase 2 ✅ design system embodi
 - Copy `tracys-research-v3/`, `new-tracys-report-v2/`, other active client outputs from `~/apps/projects/local_reach/` to `apps/psg/archive/local_reach-outputs/`
 - Hard retire local_reach codebase
 
-**Plans:** TBD
+**Reframe (2026-06-02, at plan time):** Like Phase 4, this scope was front-loaded into Phase 1 / 01-04 — `archive/local_reach-outputs/` already holds `tracys-research-v3` + `new-tracys-report-v2` + sidecar `tracys/` with a MANIFEST, and the codebase is archived + retired (source gone). `archive/` is gitignored, so the outputs are preserved on-disk only. Operator chose lean close (on-disk preservation matches the v0.3 BSM-migration reference intent; `archive/` also holds a 3.1GB db, so the tree stays gitignored).
+
+**Plans (1, quick-fix):**
+- [x] 05-01: Verify local_reach output preservation + retirement, then close — confirmed outputs faithful to MANIFEST (5/5/1 files), source `~/apps/projects/local_reach/` gone, codebase archived + gitignored. No new artifact, no force-add. — **✅ LOOP CLOSED 2026-06-02 (closes milestone v0.1)**
 
 ---
 *Roadmap created: 2026-05-29 (populated from SEED ideation v7)*
-*Last updated: 2026-06-01 — Phase 4 ✅ COMPLETE (1/1 loop-closed): PAUL inheritance made navigable via `references/INDEX.md`, tracking reconciled, ACTIVE.md superseded by STATE.md. Transitioned to Phase 5 (local_reach client output archive) — last v0.1 phase.*
+*Last updated: 2026-06-02 — Phase 5 ✅ COMPLETE (1/1 loop-closed): local_reach client outputs verified preserved on-disk (gitignored), codebase retired. **Milestone v0.1 Foundation COMPLETE — all 5 phases loop-closed.** Next: v0.2 Customer MVP (v0.1→main merge stays operator-gated on the private submodule).*

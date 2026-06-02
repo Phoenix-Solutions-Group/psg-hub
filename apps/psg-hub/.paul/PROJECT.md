@@ -14,8 +14,8 @@ Consolidates fragmented PSG tooling (BSM customer dashboard, ads-dashboard plans
 |-----------|-------|
 | Type | Application |
 | Version | 0.0.0 |
-| Status | v0.1 Foundation — Phase 4 complete (PAUL inheritance INDEX + tracking; integrations live; psg-hub at hub.psgweb.me) |
-| Last Updated | 2026-06-01 |
+| Status | v0.1 Foundation — ✅ COMPLETE (all 5 phases loop-closed; psg-hub LIVE at hub.psgweb.me; v0.1→main merge operator-gated) |
+| Last Updated | 2026-06-02 |
 
 **Production URLs:**
 - `hub.psgweb.me` — production **LIVE** (Vercel project `psg-hub`, Let's Encrypt cert, branded)
@@ -36,9 +36,10 @@ Consolidates fragmented PSG tooling (BSM customer dashboard, ads-dashboard plans
 - ✓ Design system embodiment — Phase 2 (2026-06-01): PSG design system vendored as `packages/ui/psg-brand/` submodule (pinned `1689896`); Gotham + Didact Gothic via `next/font/local`; BSM "Clarity Teal" oklch vars → PSG tokens (midnight `#1E3A52`, ember `#B8483E`, paper `#FAFAFA`, 6px) across every shadcn var; `<Logo>` + DS-spec button/label/card/badge/table; branded `/login` + `/signup` + navy app shell; **fixed `/dashboard` 404** (route group→segment); de-BSM app-wide; legacy DS docs superseded. typecheck + 136 tests green; login + dashboard screenshots operator-approved.
 - ✓ Integrations + deploy — Phase 3 (2026-06-01): SendGrid transactional email + Twilio SMS, each via a shared `src/lib/resilience.ts` (retry + circuit breaker) adapter and an idempotent, signature-verified webhook (`/api/webhooks/{sendgrid,twilio}` → `email_events` / `sms_events` on shared Supabase). Both **live-verified end-to-end** (real signed rows: SendGrid `event=open` matching the test send; Twilio inbound `status=received`). Sanity content backend provisioned (`vcw0bsnu`, private prod dataset, schema 4 types; `@psg/studio` env-decoupled from BSM). **psg-hub deployed LIVE at https://hub.psgweb.me** (NEW Vercel project, 14 prod env keys incl. `SUPABASE_SERVICE_ROLE_KEY`). D54 decommission confirmed (old `data` portal project deleted; no BSM/ads-dashboard project remains).
 - ✓ PAUL inheritance + tracking — Phase 4 (2026-06-01): BSM PAUL (Phases 1-5) and ads-dashboard PAUL were already preserved under `apps/psg-hub/.paul/references/` (front-loaded in Phase 1 / 01-03 + the BSM relocation). Phase 4 made them navigable via a new `references/INDEX.md` mapping every inherited body of work to its consuming milestone (v0.2..v2.0), with the brand-reconcile caveat (psg-brand submodule wins). Tracking reconciled (BASE satellite verified at Phase 4 / in_progress). `ACTIVE.md` documented as superseded by `STATE.md` (no file created). 3-lens adversarial verification (1 MEDIUM + 3 LOW findings applied).
+- ✓ local_reach client output archive — Phase 5 (2026-06-02): verified the local_reach active client outputs (`tracys-research-v3`, `new-tracys-report-v2`, sidecar `tracys/`) preserved on-disk at gitignored `archive/local_reach-outputs/` faithful to its MANIFEST, and the codebase retired (source gone, archived). Lean close (on-disk-only preservation = reference material for v0.3 BSM-agent migration; not version-controlled). Scope was front-loaded into Phase 1 / 01-04; Phase 5 audited + closed. **Closes milestone v0.1 (all 5 phases loop-closed).**
 
 ### Active (In Progress)
-None — Phase 4 closed. Phase 5 (local_reach client output archive) is the last v0.1 Foundation phase. One gated prod action remains before the v0.1→main merge: grant Vercel GitHub-app access to the private `design-system` submodule, or keep deploying via CLI `vercel --prod` (operator option C; CLI deploys work today).
+None — **v0.1 Foundation COMPLETE (all 5 phases loop-closed, 2026-06-02).** Next milestone: v0.2 Customer MVP (RBAC + tier gating + shop switcher + superadmin bootstrap + launch hardening). One gated prod action remains before the v0.1→main merge: grant Vercel GitHub-app access to the private `design-system` submodule, or keep deploying via CLI `vercel --prod` (operator option C; CLI deploys work today).
 
 ### Planned (Next)
 - v0.1 Foundation (workspace consolidation, brand tokens, SendGrid + Twilio, Sanity new project, Vercel rename, BSM relocation, kill list retired)
@@ -139,6 +140,7 @@ Anchor = BSM `dashboard/` (Next.js 16, BSM Phases 1–5 shipped). Shared Supabas
 | Phase 3 (03-05) — D54 decommission satisfied by verified state (old `data` project 404; no BSM/ads-dashboard project); KEEP psg-hub↔`Phoenix-Solutions-Group/data`@main git connection | targets already retired out-of-band; operator confirmed the active git-connected stack | 2026-06-01 | Shipped |
 | Phase 3 (03-05) — MERGE-BLOCKER: grant Vercel GitHub-app access to private `design-system` submodule before Phase-3→main merge | git/main builds fail on submodule fonts (proven dpl_2Mbq7…); CLI deploys work | 2026-06-01 | Open (gated) |
 | Phase 4 (04-01) — PAUL inheritance closed via a navigable `references/INDEX.md`; the inheritance itself was front-loaded into Phase 1, so Phase 4 added a usability layer rather than re-copying; `ACTIVE.md` superseded by `STATE.md` (no file created) | inheritance deliverables already shipped; operator chose "add usability layer"; current PAUL framework has no ACTIVE.md | 2026-06-01 | Shipped |
+| Phase 5 (05-01) — local_reach client outputs preserved on-disk only (gitignored `archive/local_reach-outputs/`), codebase retired; verify-and-close, no version-controlling | scope front-loaded into Phase 1 / 01-04; operator chose lean close; outputs are v0.3 BSM-migration reference material, and `archive/` holds a 3.1GB db so the tree stays gitignored | 2026-06-02 | Shipped (closes v0.1) |
 
 ## Success Metrics
 
@@ -205,4 +207,4 @@ Anchor = BSM `dashboard/` (Next.js 16, BSM Phases 1–5 shipped). Shared Supabas
 
 ---
 *PROJECT.md — Populated from SEED ideation v7 (projects/psg-hub/PLANNING.md, 70 decisions)*
-*Last updated: 2026-06-01 after Phase 4 (PAUL inheritance + tracking — navigable references/INDEX.md; ACTIVE.md superseded by STATE.md)*
+*Last updated: 2026-06-02 after Phase 5 (local_reach client output archive — verified preserved on-disk; milestone v0.1 Foundation COMPLETE, all 5 phases loop-closed)*
