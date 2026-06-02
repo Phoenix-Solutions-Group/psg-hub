@@ -14,7 +14,7 @@
       "start_date": null,
       "due_date": null,
       "created_at": "2026-05-28T12:36:26.361988",
-      "updated_at": "2026-06-01T13:16:40.693908",
+      "updated_at": "2026-06-02T09:39:13.817848",
       "location": "psg-import/",
       "blocked_by": null,
       "next": null,
@@ -50,7 +50,7 @@
       "start_date": null,
       "due_date": null,
       "created_at": "2026-05-29T12:51:02.913722",
-      "updated_at": "2026-06-01T13:16:40.693926",
+      "updated_at": "2026-06-02T09:39:13.817871",
       "location": "apps/psg-hub/",
       "blocked_by": null,
       "next": null,
@@ -60,14 +60,14 @@
         "is_paul_project": true,
         "satellite_name": "psg-hub",
         "location": "apps/psg-hub/",
-        "milestone": "v0.1 Foundation",
-        "phase": "SendGrid + Twilio + Sanity + Vercel re-link",
-        "phase_name": "SendGrid + Twilio + Sanity + Vercel re-link",
+        "milestone": "v0.2 Customer MVP",
+        "phase": "RBAC + RLS spine",
+        "phase_name": "RBAC + RLS spine",
         "loop_position": "IDLE",
-        "last_update": "2026-06-01T17:05:00Z",
+        "last_update": "2026-06-02T08:00:00Z",
         "handoff": false,
         "handoff_path": null,
-        "completed_phases": 2,
+        "completed_phases": 5,
         "total_phases": null,
         "last_plan_completed_at": null
       },
@@ -86,7 +86,7 @@
       "start_date": null,
       "due_date": null,
       "created_at": "2026-05-29T12:51:02.913731",
-      "updated_at": "2026-06-01T13:16:40.693931",
+      "updated_at": "2026-06-02T09:39:13.817877",
       "location": "archive/ads-dashboard/",
       "blocked_by": null,
       "next": null,
@@ -111,5 +111,5 @@
       "description": null
     }
   ],
-  "last_modified": "2026-06-01T13:16:40.694347"
+  "last_modified": "2026-06-02T09:39:13.818408"
 }
