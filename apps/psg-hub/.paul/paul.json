@@ -1,15 +1,15 @@
 {
   "name": "psg-hub",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "milestone": {
-    "name": "v0.1 Foundation",
-    "version": "0.1.0",
-    "status": "complete"
+    "name": "v0.2 Customer MVP",
+    "version": "0.2.0",
+    "status": "in_progress"
   },
   "phase": {
-    "number": 5,
-    "name": "local_reach client output archive",
-    "status": "complete"
+    "number": 6,
+    "name": "RBAC + RLS spine",
+    "status": "not_started"
   },
   "loop": {
     "plan": null,
@@ -17,7 +17,7 @@
   },
   "timestamps": {
     "created_at": "2026-05-29T00:00:00Z",
-    "updated_at": "2026-06-02T01:00:00Z"
+    "updated_at": "2026-06-02T08:00:00Z"
   },
   "satellite": {
     "groom": true

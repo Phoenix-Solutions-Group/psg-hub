@@ -6,34 +6,34 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 ## Current Milestone
 
-**v0.1 Foundation** (v0.1.0) — ✅ COMPLETE
-Completed: 2026-06-02 (all 5 phases loop-closed; gitleaks gate clean; AEGIS scoped to v2.0; tagged `v0.1.0` local; v0.1→main merge operator-gated on the private `design-system` submodule, or keep CLI `vercel --prod`, option C)
-
-## Next Milestone
-
-Run `/paul:discuss-milestone` or `/paul:milestone` to define **v0.2 Customer MVP** (RBAC + tier gating + shop switcher + superadmin bootstrap + launch hardening).
+**v0.2 Customer MVP** (v0.2.0) — 🚧 In Progress
+Started: 2026-06-02 · Phases: 0 of 3 complete
+Focus: turn the live psg-hub shell into a secure, role-gated, multi-tenant customer surface a real shop can safely log into.
+Build-first (operator 2026-06-02): EOY-2026 MRR = directional horizon, not a hard gate (quality-first D60). v0.1 Foundation ✅ COMPLETE 2026-06-02 (see Completed Milestones).
 
 <!-- audit-added 2026-06-02: from AUDIT-2026-06-02-trajectory.md (whole-project trajectory audit) -->
 ### v0.2 Readiness Gates (from trajectory audit 2026-06-02)
 
-Carry these into `/paul:discuss-milestone` for v0.2 as entry criteria. Full rationale: `.paul/AUDIT-2026-06-02-trajectory.md`.
+Entry criteria for v0.2, folded into the phase split. Full rationale: `.paul/AUDIT-2026-06-02-trajectory.md`.
 
-**Decide now (before v0.2 planning):**
-- **M1 — Revenue checkpoint vs North Star — RESOLVED 2026-06-02:** operator chose **build-first**. EOY-2026 MRR is a **directional horizon, not a hard gate**; the roadmap is NOT re-sequenced around a deadline. (Reverses the audit's "add a revenue checkpoint" recommendation by deliberate operator choice — quality-first D60 stands.)
-- **M4 — Land v0.1 — PARTIALLY RESOLVED 2026-06-02:** push DONE (origin has `chore/phase-3-integrations`@`3a641d9` + tag `v0.1.0`; recoverability no longer single-machine). Land-on-`main` **DEFERRED** — stay on CLI `vercel --prod` (option C, works today); revisit the submodule gate (option A/B) only if push-to-deploy is wanted.
+**Decided (operator 2026-06-02):**
+- **M1 — Revenue checkpoint — build-first.** EOY-2026 MRR = directional horizon, not a hard gate; roadmap NOT re-sequenced around a deadline (quality-first D60 stands; audit's revenue-checkpoint rec declined by choice).
+- **M4 — Land v0.1 — push DONE** (origin has `chore/phase-3-integrations`@`3a641d9` + tag `v0.1.0`). Land-on-`main` DEFERRED (stay CLI `vercel --prod`, option C).
 
-**Gate into v0.2 scope:**
-- **M2 — Pull compliance forward.** PII + RLS + secret-handling security gate at v0.2; a PII RLS review before any shop sees live data; first AEGIS pass at v0.2 (not v2.0).
-- **S1 — Environment isolation.** Staging/prod separation (or a documented, enforced migration-safety + RLS-review protocol) before v0.2 customer tables land on the shared Supabase project.
-- **S2 — Pilot onboarding owns first MRR.** Give Wallace + Tedesco + Tracy's an owning slice with an activation checklist.
-- **S3 — Inherited defects into backlog.** Stripe INSERT→UPSERT, refresh-token-compromise mitigation, review-sync cron (currently only `references/INDEX.md` caveats).
-- **S4 — Idempotency mechanism + checklist** (not convention) as Stripe/import/mutations land.
-- **S5 — Activate quality gates.** Vitest ≥70% + Playwright happy-path at v0.2; WCAG AA + brand-conformance at first customer UI; LCP budget at v0.3.
+**In v0.2 scope (mapped to phases):**
+- **M2 / S1 — Compliance forward** → Phase 8 (PII + RLS + secret-handling gate, PII RLS review before any live-data shop, first AEGIS pass) + Phase 6 (RLS spine on a migration-safety/isolation protocol).
+- **S3 — Inherited defect** Stripe INSERT→UPSERT → track for the v0.4 billing path (refresh-token + review-sync cron mostly v0.3).
+- **S4 — Idempotency mechanism + checklist** as new tables/imports land → Phases 6-8.
+- **S5 — Quality gates** Vitest ≥70% + Playwright happy-path → Phase 8.
 
-**Before v0.4 (first customer dollar):**
-- **M3 — Reproducible deploy.** Replace laptop-only CLI `vercel --prod` with GH Actions prebuilt (option A) or vendored brand assets (option B).
-- **S6 — Resolve Gotham (Typekit) licensing** before broad customer launch.
+**Deferred past v0.2:**
+- **M3 — Reproducible deploy** (GH Actions prebuilt / vendor brand assets) → before v0.4 first-dollar; CLI `vercel --prod` until then.
+- **S6 — Gotham (Typekit) license** → before broad customer launch (v0.4). **S2 — Pilot onboarding** → v0.4.
 <!-- end audit-added -->
+
+## Next Milestone
+
+**v0.3 Customer Analytics** — unified Google Ads + GA4 + GSC marketing surface, story-led narrative, monthly PDF (built from the absorbed ads-dashboard canon + BSM Phase 5 Google Ads data).
 
 
 ## Completed Milestones
@@ -69,11 +69,18 @@ Gates: gitleaks ✅ clean (1 vetted FP) · AEGIS → v2.0 · v0.1→main merge o
 | 4 | PAUL inheritance + tracking | 1/1 | ✅ Complete | 2026-06-01 |
 | 5 | local_reach client output archive | 1/1 | ✅ Complete | 2026-06-02 |
 
+### v0.2 — Customer MVP (🚧 current)
+
+| Phase | Name | Plans | Status | Completed |
+|-------|------|-------|--------|-----------|
+| 6 | RBAC + RLS spine | TBD | Not started | - |
+| 7 | Tier gating + shop switcher | TBD | Not started | - |
+| 8 | Launch hardening | TBD | Not started | - |
+
 ### Future milestones (defined in PLANNING.md, plans TBD at milestone kickoff)
 
 | Milestone | Goal | Track |
 |-----------|------|-------|
-| v0.2 — Customer MVP | RBAC + tier gating + shop switcher + superadmin bootstrap + customer launch hardening | Customer |
 | v0.3 — Customer Analytics | ads-dashboard plans/concepts absorbed; unified Ads + GA4 + GSC marketing surface; story-led narrative; monthly PDF; presence; sentiment | Customer |
 | v0.4 — Invoicing + Payments | Invoiced.com mirror + Stripe coexistence + payment links — **v1.0 customer launch** | Customer |
 | v1.1 — Ops Foundation | Companies, Employees, Repair Customers, ROs, Estimates, Surveys, SysConfig, RO/Estimate Import (psg-import absorb), Security Profiles | Ops |
@@ -201,5 +208,50 @@ Gates: gitleaks ✅ clean (1 vetted FP) · AEGIS → v2.0 · v0.1→main merge o
 - [x] 05-01: Verify local_reach output preservation + retirement, then close — confirmed outputs faithful to MANIFEST (5/5/1 files), source `~/apps/projects/local_reach/` gone, codebase archived + gitignored. No new artifact, no force-add. — **✅ LOOP CLOSED 2026-06-02 (closes milestone v0.1)**
 
 ---
+
+## v0.2 — Customer MVP (🚧 current)
+
+### Phase 6: RBAC + RLS spine
+
+**Goal:** The 3-role psg model (`customer` / `psg_internal` / `psg_superadmin`) with default-deny RLS, enforced in middleware, plus a seeded first superadmin. Foundation — every other v0.2 feature gates on it.
+**Depends on:** v0.1 (live psg-hub shell + shared Supabase + BSM Phase 4 auth/RLS base to extend)
+**Research:** Likely (reconcile BSM `owner/manager/viewer` membership enum → the psg 3-role model; Supabase RLS + custom-access-token role/`shop_id` claims; migration-safety on the shared project)
+
+**Scope:**
+- 3-role model `customer` / `psg_internal` / `psg_superadmin` (reconcile/extend BSM Phase 4 role enum; honor `profile_id` convention on new tables)
+- RLS clamps: customer tables by `shop_id IN authorized shops`; ops tables gated by `roles + security_profiles.functions_jsonb`; default-deny
+- Middleware customer-id-required check (matches `apps/ads/` CLI rule)
+- Superadmin bootstrap — seed Nick / Tina / Brian
+- **S1 gate:** land on a documented migration-safety + RLS-review protocol (or staging/prod isolation) before customer tables hit the shared Supabase
+
+**Plans:** TBD (defined during /paul:plan)
+
+### Phase 7: Tier gating + shop switcher
+
+**Goal:** Hard feature-gating across `essentials` / `growth` / `performance` (BSM enum, no migration) and an MSO multi-shop switcher over the multi-tenant RLS.
+**Depends on:** Phase 6 (role model + RLS spine)
+**Research:** Maybe (BSM `assertAdsTier` pattern → generalize to a tier-gate helper across customer features)
+
+**Scope:**
+- Tier feature-gates `essentials` / `growth` / `performance` (BSM stored tier; gating was thin — only Performance ads tier hard-gated)
+- Shop switcher — MSO multi-shop context switch
+- `profile_id` + idempotency conventions on any new tables (S4)
+
+**Plans:** TBD (defined during /paul:plan)
+
+### Phase 8: Launch hardening
+
+**Goal:** Make the surface safe for a real shop to log in with live PII, and stand up the quality gates that have been unstarted.
+**Depends on:** Phases 6-7 (the surface to harden)
+**Research:** Likely (PII RLS review methodology; AEGIS scope for a first customer-facing pass; Playwright setup on Next 16)
+
+**Scope:**
+- **M2:** PII + RLS + secret-handling security gate; PII RLS review before any shop sees live data; first AEGIS pass (pulled forward from v2.0)
+- **S5:** quality gates — Vitest ≥70% on new code + Playwright happy-path (auth + one customer flow); WCAG AA + brand-conformance on customer UI
+- Idempotency mechanism + pre-merge checklist consolidated (S4)
+
+**Plans:** TBD (defined during /paul:plan)
+
+---
 *Roadmap created: 2026-05-29 (populated from SEED ideation v7)*
-*Last updated: 2026-06-02 — Phase 5 ✅ COMPLETE (1/1 loop-closed): local_reach client outputs verified preserved on-disk (gitignored), codebase retired. **Milestone v0.1 Foundation COMPLETE — all 5 phases loop-closed.** Next: v0.2 Customer MVP (v0.1→main merge stays operator-gated on the private submodule).*
+*Last updated: 2026-06-02 — **Milestone v0.2 Customer MVP CREATED** (3 phases: 6 RBAC+RLS spine · 7 tier+switcher · 8 hardening). v0.1 Foundation ✅ COMPLETE (under Completed Milestones). Build-first; audit gates folded into phases. Next: /paul:plan Phase 6.*
