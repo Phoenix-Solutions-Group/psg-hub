@@ -1,0 +1,64 @@
+// Phase 9 / 09-01 — Analytics foundation types.
+// Source-agnostic snapshot model: one row per (shop, source, metric_date, period),
+// with source-specific metrics in the `metrics` jsonb. Per-source shapes documented here.
+
+export type AnalyticsSource = "semrush" | "google_ads" | "ga4" | "gsc";
+export type AnalyticsPeriod = "daily" | "monthly";
+
+/**
+ * A stored analytics snapshot row (public.analytics_snapshots).
+ * Column names match the inherited table (extended in 09-01): the date column is
+ * `date`; `location_id` is nullable (shop-level snapshots leave it null).
+ */
+export type AnalyticsSnapshot = {
+  id: string;
+  shop_id: string;
+  location_id: string | null;
+  source: AnalyticsSource;
+  date: string; // ISO date (YYYY-MM-DD)
+  period: AnalyticsPeriod;
+  metrics: Record<string, unknown>;
+  synced_at: string;
+  created_at: string;
+};
+
+/** Insert/upsert shape — id/synced_at/created_at default server-side. */
+export type AnalyticsSnapshotInsert = {
+  shop_id: string;
+  location_id?: string | null;
+  source: AnalyticsSource;
+  date: string;
+  period: AnalyticsPeriod;
+  metrics: Record<string, unknown>;
+};
+
+/**
+ * First documented `metrics` shape — SEMrush organic-SEO (Phase 9 / 09-03).
+ * Stored in `metrics` jsonb so adding sources never changes the schema.
+ * Later sources (google_ads, ga4, gsc) document their own shapes alongside this.
+ */
+export type SemrushMetrics = {
+  organic_keywords: number;
+  organic_traffic: number;
+  organic_traffic_cost: number; // USD
+  backlinks: number;
+  authority_score: number; // 0-100
+  position_distribution?: {
+    top3?: number;
+    top10?: number;
+    top20?: number;
+    top100?: number;
+  };
+};
+
+/** Ingest audit ledger row (public.analytics_sync_runs). */
+export type AnalyticsSyncRun = {
+  id: string;
+  shop_id: string | null;
+  source: AnalyticsSource;
+  status: "running" | "success" | "error";
+  rows_written: number;
+  error: string | null;
+  started_at: string;
+  finished_at: string | null;
+};
