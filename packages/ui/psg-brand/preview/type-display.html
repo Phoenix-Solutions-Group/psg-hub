@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin:0; padding: 24px 28px; background: var(--psg-paper); }
+  .header { display:flex; gap:16px; padding-bottom:10px; border-bottom:1px solid var(--color-border); margin-bottom:8px; }
+  .header span { font-family: var(--font-mono); font-size: 10px; color: var(--psg-mist); letter-spacing: 0.06em; text-transform: uppercase; }
+  .h-size{width:60px}.h-weight{width:96px}.h-use{width:120px}
+  .row { display:flex; align-items:baseline; gap: 16px; padding: 6px 0; border-bottom: 1px solid var(--color-border); }
+  .row:last-child { border-bottom: none; }
+  .size { width: 60px; font-family: var(--font-mono); font-size: 11px; color: var(--psg-graphite); flex-shrink:0; }
+  .weight { width: 96px; font-family: var(--font-mono); font-size: 10px; color: var(--psg-mist); flex-shrink:0; letter-spacing:0.04em; }
+  .use { width: 120px; font-family: var(--font-mono); font-size: 10px; color: var(--psg-mist); flex-shrink:0; letter-spacing:0.04em; }
+  .specimen { font-family: "Gotham", "Helvetica Neue", system-ui, sans-serif; color: var(--psg-midnight); line-height: 1.0; letter-spacing: -0.02em; flex:1; }
+  .specimen-rnd { font-family: "Gotham Rounded", "Gotham", system-ui, sans-serif; color: var(--psg-midnight); line-height: 1.0; letter-spacing: -0.015em; flex:1; }
+  .group-label { font-family: var(--font-mono); font-size: 10px; color: var(--psg-ember); letter-spacing: 0.12em; text-transform: uppercase; padding: 18px 0 6px; border-bottom: 1px solid var(--color-border); margin-bottom: 4px; }
+  .group-label:first-of-type { padding-top: 4px; }
+</style></head>
+<body>
+  <div class="header"><span class="h-size">SIZE</span><span class="h-weight">WEIGHT</span><span class="h-use">APPLICATION</span><span>SPECIMEN</span></div>
+
+  <div class="group-label">Gotham · primary display</div>
+  <div class="row"><span class="size">96px</span><span class="weight">700 · Bold</span><span class="use">Hero display</span><span class="specimen" style="font-size:54px;font-weight:700">Transformation</span></div>
+  <div class="row"><span class="size">64px</span><span class="weight">700 · Bold</span><span class="use">H1 · page title</span><span class="specimen" style="font-size:40px;font-weight:700">Heritage refined</span></div>
+  <div class="row"><span class="size">48px</span><span class="weight">700 · Bold</span><span class="use">H2 · section</span><span class="specimen" style="font-size:32px;font-weight:700">Precision craft</span></div>
+  <div class="row"><span class="size">36px</span><span class="weight">700 · Bold</span><span class="use">H3 · subsection</span><span class="specimen" style="font-size:26px;font-weight:700;letter-spacing:-0.01em">Operational execution</span></div>
+  <div class="row"><span class="size">24px</span><span class="weight">500 · Medium</span><span class="use">H4 · card</span><span class="specimen" style="font-size:20px;font-weight:500;letter-spacing:-0.005em">Strategic insight, delivered</span></div>
+  <div class="row"><span class="size">18px</span><span class="weight">500 · Med Italic</span><span class="use">Pull-quote</span><span class="specimen" style="font-size:17px;font-weight:500;font-style:italic;letter-spacing:0">“Built around your bay schedule.”</span></div>
+
+  <div class="group-label">Gotham Rounded · softer marketing variant</div>
+  <div class="row"><span class="size">48px</span><span class="weight">700 · Bold</span><span class="use">Deck title slide</span><span class="specimen-rnd" style="font-size:32px;font-weight:700">Welcome aboard.</span></div>
+  <div class="row"><span class="size">24px</span><span class="weight">500 · Medium</span><span class="use">Testimonial header</span><span class="specimen-rnd" style="font-size:20px;font-weight:500;letter-spacing:-0.005em">What clients say, in their words.</span></div>
+</body></html>

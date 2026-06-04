@@ -1,0 +1,3 @@
+-- Baselined history stub (applied remotely before repo linkage).
+-- The actual schema lives in 20260602105554_remote_schema.sql (db dump snapshot).
+-- Intentionally empty: this version is already in remote schema_migrations and is never re-run.

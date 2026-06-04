@@ -1,0 +1,25 @@
+{
+  "name": "ads-dashboard",
+  "version": "0.0.0",
+  "milestone": {
+    "name": "v0.1 Initial Release",
+    "version": "0.1.0",
+    "status": "not_started"
+  },
+  "phase": {
+    "number": 0,
+    "name": "None",
+    "status": "not_started"
+  },
+  "loop": {
+    "plan": null,
+    "position": "IDLE"
+  },
+  "timestamps": {
+    "created_at": "2026-05-20T00:00:00Z",
+    "updated_at": "2026-05-20T00:00:00Z"
+  },
+  "satellite": {
+    "groom": true
+  }
+}

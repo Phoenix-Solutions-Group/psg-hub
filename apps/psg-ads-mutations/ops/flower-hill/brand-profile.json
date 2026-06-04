@@ -1,0 +1,156 @@
+{
+  "schema_version": "1.0",
+  "brand_name": "Flower Hill Auto Body",
+  "website_url": "https://www.flowerhillautobody.com",
+  "extracted_at": "2026-05-06",
+  "extraction_notes": "Extracted from homepage, about, and services pages. Color values estimated from brand aesthetic — CSS not directly extractable from JS-rendered site.",
+
+  "voice": {
+    "formal_casual": 3,
+    "rational_emotional": 4,
+    "playful_serious": 8,
+    "bold_subtle": 6,
+    "traditional_innovative": 3,
+    "expert_accessible": 3,
+    "descriptors": ["heritage-driven", "precision-focused", "quietly confident"],
+    "confidence": {
+      "formal_casual": "high",
+      "rational_emotional": "medium",
+      "playful_serious": "high",
+      "bold_subtle": "medium",
+      "traditional_innovative": "high",
+      "expert_accessible": "high"
+    },
+    "evidence": [
+      "Hero copy: 'Over 70 Years and Four Generations' — strong traditional anchor",
+      "Service copy: 'we don't believe that close to original is good enough' — precision/expert signal",
+      "CTA: 'Schedule An In-Person Damage Assessment Today' — formal, professional language",
+      "About: 'relies on superior craftsmanship rather than advertising' — understated confidence",
+      "Certifications lead the homepage — rational proof over emotional appeal"
+    ]
+  },
+
+  "colors": {
+    "primary": "#1a1a1a",
+    "secondary": ["#cc1122", "#ffffff"],
+    "accent_red": "#cc1122",
+    "forbidden": ["neon colors", "bright orange", "pastels"],
+    "background": "#ffffff",
+    "text": "#1a1a1a",
+    "_notes": "Confirmed from Huntington exterior signage photo: dark charcoal wordmark on warm wood panel with red horizontal accent bar between 'Flower Hill' and 'Auto Body'. Red is a confirmed brand color. Navy was incorrect — updated. Exact red hex should be verified against logo SVG file."
+  },
+
+  "typography": {
+    "heading_font": null,
+    "body_font": "system-ui",
+    "pairing_descriptor": "Google Fonts not detected in static fetch; likely web-safe or hosted font. Verify via browser DevTools.",
+    "_notes": "JS-rendered site — fonts not extractable from static fetch"
+  },
+
+  "imagery": {
+    "style": "professional photography",
+    "subjects": ["luxury and exotic vehicles", "repair process", "before/after transformations", "shop facility", "technicians at work"],
+    "composition": "Clean, detail-focused. Vehicle-centric. Real shop photography over stock.",
+    "forbidden": ["stock photos of generic car crashes", "budget/economy vehicle focus", "amateur photography", "clip art or illustration"]
+  },
+
+  "aesthetic": {
+    "mood_keywords": ["precision", "heritage", "trust", "craftsmanship", "prestige"],
+    "texture": "minimal",
+    "negative_space": "generous"
+  },
+
+  "brand_values": [
+    "Craftsmanship over shortcuts",
+    "Heritage and family legacy (70+ years, 4 generations)",
+    "OEM precision — 'close to original is not good enough'",
+    "Customer trust built over decades",
+    "Community-rooted North Shore identity"
+  ],
+
+  "differentiators": [
+    "Long Island's ONLY certified Aston Martin Repair Center",
+    "Lucid 2026 Shop of the Year — awarded by Lucid Motors",
+    "25+ OEM certifications including McLaren, Aston Martin, BMW, Porsche, Audi",
+    "EV specialists: Tesla, Rivian (Fleet Certified), Lucid (2026 Shop of the Year), Polestar",
+    "ADAS calibration certified",
+    "I-CAR Gold Class + SCRS + Assured Performance + BBB A+ + ASE + VeriFacts",
+    "75+ years in business — founded post-WWII",
+    "15,000 sq ft state-of-the-art facility",
+    "Staff tenure: most employees 20+ years",
+    "Enterprise rental cars on-site",
+    "Carbon fiber and composite structural repair specialty"
+  ],
+
+  "certifications": {
+    "headline_certs": ["Aston Martin (Long Island's ONLY)", "McLaren", "Porsche", "BMW", "Audi", "Tesla", "Rivian Fleet"],
+    "full_list": ["Aston Martin", "McLaren", "BMW", "Audi", "Porsche", "Mercedes-Benz", "Jaguar", "Land Rover", "Lexus", "Volvo", "Genesis", "Infiniti", "Honda", "Acura", "Nissan", "Mazda", "Subaru", "Toyota", "Ford", "Chrysler", "Kia", "Hyundai", "Volkswagen", "Tesla", "Rivian", "Lucid", "Polestar"],
+    "accreditations": ["I-CAR Gold Class", "SCRS Certified", "Assured Performance Certified", "BBB A+", "ASE Certified Technicians", "VeriFacts"]
+  },
+
+  "locations": [
+    {
+      "name": "Roslyn",
+      "address": "12 Middle Neck Road, Roslyn, NY 11576",
+      "phone": "516.627.3913",
+      "zip": "11576"
+    },
+    {
+      "name": "Glen Cove",
+      "address": "36 Morris Ave, Glen Cove, NY 11542",
+      "phone": "516.759.1737",
+      "zip": "11542"
+    },
+    {
+      "name": "Huntington",
+      "address": "15 W Stepar Pl, Huntington Station, NY 11746",
+      "phone": "631.270.0033",
+      "zip": "11746",
+      "priority": true,
+      "note": "Newest location — highest budget allocation in Months 1-3"
+    }
+  ],
+
+  "target_audience": {
+    "primary": {
+      "segment": "Luxury/Exotic Vehicle Owners",
+      "age_range": "38-65",
+      "hhi": "$200,000+",
+      "profession": "Business owners, executives, professionals, finance/legal, real estate",
+      "vehicle_makes": ["Aston Martin", "McLaren", "Lamborghini", "Ferrari", "Porsche", "Bentley", "Rolls-Royce", "Maserati", "Maybach", "BMW M-series", "Mercedes AMG"],
+      "pain_points": [
+        "Finding a shop trusted enough to touch their exotic",
+        "Worrying about non-OEM parts degrading vehicle value",
+        "Dealing with insurance companies on high-value claims"
+      ],
+      "aspirations": [
+        "Vehicle restored to factory-perfect condition",
+        "Working with specialists who understand the car",
+        "White-glove, zero-hassle process"
+      ]
+    },
+    "secondary": {
+      "segment": "General Vehicle Owners — North Shore LI",
+      "age_range": "28-60",
+      "hhi": "$75,000-$200,000",
+      "profession": "Homeowners, dual-income households, commuters",
+      "vehicle_makes": ["BMW", "Mercedes-Benz", "Audi", "Lexus", "Tesla", "Rivian", "Acura", "Volvo", "Land Rover"],
+      "pain_points": [
+        "Navigating insurance claims after an accident",
+        "Finding a shop they can trust with their daily driver",
+        "Minimizing time without their vehicle"
+      ],
+      "aspirations": [
+        "Stress-free repair process",
+        "Back in their car quickly",
+        "Confident the repair is right"
+      ]
+    }
+  },
+
+  "social_media": {
+    "instagram": "@flowerhillautobody",
+    "facebook": "present",
+    "youtube": "UCVWDM6KuLDI5zPWEAXvT5hA"
+  }
+}

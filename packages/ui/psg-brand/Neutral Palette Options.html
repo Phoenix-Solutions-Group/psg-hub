@@ -1,0 +1,140 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<title>PSG — Neutral Palette Options</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="colors_and_type.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<style>
+  body { margin:0; background:#1a1a1a; }
+</style>
+</head><body>
+<div id="root"></div>
+<script type="text/babel">
+
+// Six clearly-different surface directions — not shades of the same near-white.
+const palettes = [
+  {
+    id: 'true-neutral',
+    label: 'A — True Neutral (current)',
+    desc: 'The Swiss baseline. No warm or cool lean. Everything else competes with this.',
+    bg: '#FAFAFA', bgAlt: '#F0F0F0', surface: '#FFFFFF', border: '#E0E0E0',
+    mist: '#949494', graphite: '#2A2A2A', ink: '#161616', accent: '#B8483E',
+    fg: '#161616', mutedFg: '#5A5A5A',
+    chips: ['#FAFAFA','#F0F0F0','#E0E0E0','#C4C4C4','#949494','#2A2A2A']
+  },
+  {
+    id: 'bone-warm',
+    label: 'B — Bone (warm linen)',
+    desc: 'Editorial warmth. A noticeable paper tone — feels like a Monocle spread.',
+    bg: '#F4F0E8', bgAlt: '#EAE3D5', surface: '#FBF8F2', border: '#DDD4C3',
+    mist: '#9A9388', graphite: '#2A2826', ink: '#1A1815', accent: '#B8483E',
+    fg: '#1A1815', mutedFg: '#5C5750',
+    chips: ['#F4F0E8','#EAE3D5','#DDD4C3','#BFB6A2','#9A9388','#2A2826']
+  },
+  {
+    id: 'midnight-tint',
+    label: 'C — Midnight Tint',
+    desc: 'Backgrounds carry a visible blue from the Midnight brand hue. Cohesive, slightly editorial-tech.',
+    bg: '#EEF2F6', bgAlt: '#DCE3EC', surface: '#F6F9FC', border: '#C5D1DD',
+    mist: '#7C8A99', graphite: '#1F2A36', ink: '#10171F', accent: '#B8483E',
+    fg: '#10171F', mutedFg: '#4A5764',
+    chips: ['#EEF2F6','#DCE3EC','#C5D1DD','#9DAEBF','#7C8A99','#1F2A36']
+  },
+  {
+    id: 'greige',
+    label: 'D — Greige',
+    desc: 'Warm-leaning gray. Architectural and grounded — between bone and true neutral.',
+    bg: '#EFEBE4', bgAlt: '#DFD9CE', surface: '#F7F4EE', border: '#CFC8BB',
+    mist: '#928B7C', graphite: '#28251F', ink: '#15130F', accent: '#B8483E',
+    fg: '#15130F', mutedFg: '#5A5447',
+    chips: ['#EFEBE4','#DFD9CE','#CFC8BB','#A8A192','#928B7C','#28251F']
+  },
+  {
+    id: 'slate-cool',
+    label: 'E — Cool Slate',
+    desc: 'Visible cool gray. The most technical/SaaS-leaning direction.',
+    bg: '#E9ECEF', bgAlt: '#D8DCE2', surface: '#F5F6F8', border: '#C1C7CE',
+    mist: '#7F858C', graphite: '#22262B', ink: '#13161A', accent: '#B8483E',
+    fg: '#13161A', mutedFg: '#4D525A',
+    chips: ['#E9ECEF','#D8DCE2','#C1C7CE','#9CA3AB','#7F858C','#22262B']
+  },
+  {
+    id: 'dark',
+    label: 'F — Dark theme (Midnight)',
+    desc: 'Inverse. Backgrounds become Midnight; surfaces lighten. The most dramatic shift.',
+    bg: '#0E1A24', bgAlt: '#162739', surface: '#1E3A52', border: '#2A4A63',
+    mist: '#8FA1B2', graphite: '#DCE3EA', ink: '#F1F4F7', accent: '#D88378',
+    fg: '#F1F4F7', mutedFg: '#9CB0C2',
+    chips: ['#0E1A24','#162739','#1E3A52','#2A4A63','#4F6A82','#DCE3EA']
+  },
+];
+
+function PaletteCard({ p }) {
+  const isDark = p.id === 'dark';
+  return (
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Big content preview */}
+      <div style={{ background: p.bg, borderRadius: '8px 8px 0 0', padding: '36px 32px 32px', border: `1px solid ${p.border}`, borderBottom: 'none', flex: 1 }}>
+        <div style={{ fontFamily:'Gotham, Montserrat, sans-serif', fontSize:11, fontWeight:500, textTransform:'uppercase', letterSpacing:'0.18em', color: p.accent, marginBottom:16, display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{width:18,height:1,background:'currentColor',display:'inline-block'}}></span>Engagement
+        </div>
+        <div style={{ fontFamily:'Gotham, Montserrat, sans-serif', fontSize:26, fontWeight:700, color: p.fg, letterSpacing:'-0.015em', lineHeight:1.15, marginBottom:12 }}>
+          The Quarterly Playbook
+        </div>
+        <p style={{ fontFamily:'Didact Gothic, sans-serif', fontSize:14, lineHeight:1.6, color: p.mutedFg, margin:0 }}>
+          Strategy, execution, and review — built around your bay schedule.
+        </p>
+        <div style={{ marginTop: 22, display:'flex', gap: 10 }}>
+          <div style={{ fontFamily:'Gotham, Montserrat, sans-serif', fontSize:11, fontWeight:700, letterSpacing:'0.06em', padding:'10px 18px', borderRadius:6, background: isDark ? p.accent : '#1E3A52', color: isDark ? '#0E1A24' : p.bg }}>SCHEDULE</div>
+          <div style={{ fontFamily:'Gotham, Montserrat, sans-serif', fontSize:11, fontWeight:500, letterSpacing:'0.06em', padding:'10px 18px', borderRadius:6, background:'transparent', color: p.fg, border:`1px solid ${isDark ? p.border : '#1E3A52'}` }}>LEARN MORE</div>
+        </div>
+
+        {/* Three nested surfaces */}
+        <div style={{ marginTop: 22, display:'flex', flexDirection:'column', gap: 8 }}>
+          <div style={{ background: p.surface, borderRadius: 6, padding: '12px 16px', border: `1px solid ${p.border}`, fontFamily:'Didact Gothic, sans-serif', fontSize:13, color: p.fg, display:'flex', justifyContent:'space-between' }}>
+            <span>Surface · <code style={{fontFamily:'var(--font-mono)', fontSize:11}}>{p.surface}</code></span>
+            <span style={{color:p.mist, fontFamily:'var(--font-mono)', fontSize:11}}>top</span>
+          </div>
+          <div style={{ background: p.bgAlt, borderRadius: 6, padding: '12px 16px', border: `1px solid ${p.border}`, fontFamily:'Didact Gothic, sans-serif', fontSize:13, color: p.fg, display:'flex', justifyContent:'space-between' }}>
+            <span>Alt panel · <code style={{fontFamily:'var(--font-mono)', fontSize:11}}>{p.bgAlt}</code></span>
+            <span style={{color:p.mist, fontFamily:'var(--font-mono)', fontSize:11}}>recessed</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Swatch strip */}
+      <div style={{ background:'#fff', borderRadius:'0 0 8px 8px', padding:'18px 24px 22px', border:`1px solid ${p.border}` }}>
+        <div style={{ fontFamily:'Gotham, Montserrat, sans-serif', fontSize:11, fontWeight:500, textTransform:'uppercase', letterSpacing:'0.12em', color:'#5A5A5A', marginBottom:12 }}>{p.desc}</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(6, 1fr)', gap: 6 }}>
+          {p.chips.map((c, i) => (
+            <div key={i} style={{ display:'flex', flexDirection:'column', gap:4 }}>
+              <div style={{ width: '100%', height: 40, background: c, borderRadius: 3, border: i < 2 ? '1px solid rgba(0,0,0,0.06)' : 'none' }}></div>
+              <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'#888', textAlign:'center' }}>{c}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas title="PSG — Neutral Palette Directions" subtitle="Six clearly different surface directions. Pick by feel, not by hex.">
+      <DCSection id="palettes" title="Pick a direction">
+        {palettes.map(p => (
+          <DCArtboard key={p.id} id={p.id} label={p.label} width={520} height={620}>
+            <PaletteCard p={p} />
+          </DCArtboard>
+        ))}
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body></html>

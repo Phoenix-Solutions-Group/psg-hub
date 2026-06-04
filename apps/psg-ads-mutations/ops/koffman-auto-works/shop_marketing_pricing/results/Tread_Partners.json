@@ -1,0 +1,66 @@
+{
+  "agency_name": "Tread Partners",
+  "domain": "treadpartners.com",
+  "hq_location": "Raleigh, NC (task brief said Houston — Clutch/LinkedIn/ZoomInfo all confirm Raleigh) [uncertain]",
+  "specialty": "AR (mechanical) and tire dealer — independent and multi-location aftermarket; not collision",
+  "services": ["Website Design/Development", "SEO", "PPC / Google Ads", "Branding / Rebranding", "Graphic Design", "Direct Mail", "Marketing Strategy / Consulting", "ReTread customer re-engagement program (digital ads + landing pages + email + direct mail)", "Conversion Rate Optimization", "Geofencing / Local Listings", "OTT/CTV / Radio media planning"],
+  "base_monthly_low_usd": 1500,
+  "base_monthly_high_usd": 7500,
+  "typical_monthly_usd": "$2,500-$5,000/mo management retainer typical for single-to-small-multi-location shop; project minimum $5,000+ per Clutch [uncertain on retainer split vs project]",
+  "setup_fee_usd": "Not published; project-based engagements start at $5,000 minimum per Clutch — may include onboarding/website build [uncertain]",
+  "min_ad_spend_usd": "$1,500-$5,000+/mo recommended ad spend for PPC clients, per Tread Partners PPC service page",
+  "contract_length_months": "Not published; ReTread program runs 90-day cycles. Standard retainer length undisclosed [uncertain]",
+  "cancellation_policy": "Not published [uncertain]",
+  "asset_ownership": "Not published; agency norm for vertical-specialist shops is client-owned website/domain/ad accounts, but unconfirmed for Tread Partners [uncertain]",
+  "pricing_transparency": "Partially published — Clutch lists $5K project minimum and $150-$199/hr; full retainer pricing quote-only",
+  "pricing_confidence": "medium",
+  "pricing_sources": [
+    "https://clutch.co/profile/tread-partners",
+    "https://www.designrush.com/agency/profile/tread-partners",
+    "https://treadpartners.com/services/ppc/",
+    "https://treadpartners.com/services/retread-customer-re-engagement-program/",
+    "https://treadpartners.com/drive/",
+    "https://treadpartners.com/about/",
+    "https://www.cbinsights.com/company/tread-partners",
+    "https://www.zoominfo.com/c/tread-partners/469791340",
+    "https://gaintractionpodcast.com/from-new-leads-to-loyal-customers-marketing-insights-with-neal-maier/"
+  ],
+  "known_pain_points": [
+    "Small agency (founded 2021) — limited public review surface area (1 Clutch review)",
+    "No BBB profile or sustained Reddit/Trustpilot footprint to validate at scale",
+    "Project minimum $5K may price out very small single-bay shops",
+    "Not collision-repair-specialized — DRP, OEM certification, and CCC/CarWise nuances not core to their playbook"
+  ],
+  "notable_clients": [
+    "Action Gator Tire (multi-location FL tire dealer) — 276.45% lead lift case study",
+    "Ulmer's Auto Care — ReTread case study ($34,017 in 30 days, 4,306% campaign ROI)",
+    "RepairPal partnership (Treads / RepairPal integration)",
+    "Multi-location NC auto repair + tire dealer client cited on Clutch"
+  ],
+  "pros": [
+    "Founders (David Christopher, Neal Maier) are former shop owners — credible vertical expertise",
+    "Tire + AR vertical focus = better keyword/creative/seasonality playbooks than generalist SMB agencies (Hibu, Scorpion)",
+    "Proprietary DRIVE framework and ReTread re-engagement product with ROI guarantees",
+    "Strong published case-study results (276% leads, 4,306% campaign ROI)",
+    "Industry-active (Gain Traction Podcast, NTDA presence, tire-trade-press visibility)",
+    "Pricing partially transparent on Clutch ($5K project min, $150-$199/hr)"
+  ],
+  "cons": [
+    "Young agency (2021) with thin third-party review surface (1 Clutch review at last check)",
+    "Tire/AR vertical focus means little-to-no collision-repair playbook depth",
+    "$5K project floor likely above where Koffman currently spends on Hibu's AR-side allocation",
+    "Headquarters in Raleigh NC (not Houston as briefed) — verify before client conversations",
+    "Retainer length, cancellation, and asset ownership terms not public"
+  ],
+  "koffman_relevance": "Not relevant today for Koffman's collision-repair-focused business — Tread Partners' entire playbook is tire dealers and independent AR shops, not collision. Would NOT replace Hibu (current bundled SMB vendor) or Turnkey (collision-side) for the CR side of Koffman's operation. ONLY becomes relevant if Koffman expands the mechanical/tire/general-AR side of the business and wants a vertical specialist for that line — at which point Tread Partners (alongside AutoLeap Marketing, Autoshop Solutions, Shop Marketing Pros) is one of the top 3-4 AR-specialist agencies to evaluate. Their AR/tire expertise, ReTread program, and DRIVE framework would substantially outperform Hibu's generic SMB playbook for that segment.",
+  "uncertain": [
+    "hq_location (task brief said Houston, all public sources say Raleigh NC)",
+    "base_monthly_low_usd",
+    "base_monthly_high_usd",
+    "typical_monthly_usd",
+    "setup_fee_usd",
+    "contract_length_months",
+    "cancellation_policy",
+    "asset_ownership"
+  ]
+}

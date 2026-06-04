@@ -1,0 +1,68 @@
+{
+  "agency_name": "BodyShop Booster",
+  "domain": "bodyshopbooster.com",
+  "hq_location": "Canmore, Alberta, Canada [uncertain]",
+  "specialty": "CR",
+  "services": [
+    "AI Virtual Assistant (lead capture / phone / text)",
+    "Photo & Video Estimates (patented image-guided capture)",
+    "Estimate Follow-up Automation (text, email, ringless voicemail)",
+    "2-Way Texting",
+    "Digital Repair Authorizations / Scheduling",
+    "Reviews / Reputation Management",
+    "Drip Marketing (post-repair, thank-you, anniversary)",
+    "CRM / Lead Management (OEM, dealer, insurance sources)"
+  ],
+  "base_monthly_low_usd": null,
+  "base_monthly_high_usd": null,
+  "typical_monthly_usd": "$300-$700/mo [uncertain] — pricing is quote-only; comparable collision SaaS tools (AutoVitals, Mitchell RepairCenter add-ons) fall in this range",
+  "setup_fee_usd": "$0 reported by TrustRadius; some users report setup process is time-consuming [uncertain]",
+  "min_ad_spend_usd": "N/A — software/SaaS platform, not a paid-ads agency",
+  "contract_length_months": "month-to-month [uncertain]",
+  "cancellation_policy": "30-day notice, no long-term contract reported [uncertain]",
+  "asset_ownership": "Shop retains customer/lead data; platform IP (AI workflows, estimate templates) stays with vendor [uncertain]",
+  "pricing_transparency": "Quote-only — no pricing published on bodyshopbooster.com or listing sites (Capterra, G2, GetApp, SoftwareAdvice all say 'contact vendor')",
+  "pricing_confidence": "low",
+  "pricing_sources": [
+    "https://www.capterra.com/p/138072/Bodyshop-Booster/",
+    "https://www.g2.com/products/bodyshop-booster/reviews",
+    "https://www.trustradius.com/products/bodyshop-booster/pricing",
+    "https://www.getapp.com/industries-software/a/bodyshop-booster/pricing/",
+    "https://www.softwareadvice.com/retail/bodyshop-booster-profile/",
+    "https://bodyshopbooster.com/"
+  ],
+  "known_pain_points": [
+    "Setup/onboarding takes longer than expected (multiple G2/Capterra reviews)",
+    "Limited reporting flexibility — users want ability to combine report types within the app",
+    "Pricing opacity — no published rates means apples-to-apples comparison vs alternatives is hard",
+    "Feature discoverability — users report not knowing about capabilities they were paying for (e.g. in-app repair authorizations)"
+  ],
+  "notable_clients": [
+    "Used widely across independent and MSO collision shops in US + Canada [uncertain — no public named-client roster]"
+  ],
+  "pros": [
+    "Pure-play collision repair focus — built for the CR workflow (photo estimates, DRP-style follow-up, insurance/dealer lead routing), unlike Hibu/Turnkey which are generalist",
+    "Patented image-guided estimate capture is genuinely differentiated; helps shops triage drivable vs non-drivable before customer arrives",
+    "AI virtual assistant + omni-channel inbox addresses real CR pain (missed calls during high-volume DRP weeks)",
+    "Month-to-month, no long-term contract reported",
+    "Reputation/reviews automation included — no separate Birdeye/Podium needed"
+  ],
+  "cons": [
+    "Not a marketing agency — does not run Google/Meta ads, SEO, or build websites; needs to be paired with a demand-gen vendor",
+    "Quote-only pricing makes budgeting hard for shops evaluating against transparent peers",
+    "Onboarding friction reported repeatedly",
+    "Limited public client list and limited Reddit/forum chatter — harder to vet community sentiment than Hibu or Birdeye"
+  ],
+  "koffman_relevance": "HIGH — directly addresses Koffman's CR department, which is currently under-served by Turnkey Marketing (Turnkey is mechanical-AR focused). BodyShop Booster is a complement, not a replacement: it fills the estimate-capture + DRP follow-up gap that no generalist (Hibu, Turnkey, Element DMA) covers. Best paired with a separate demand-gen vendor for Google Ads/SEO. Recommended path: add BodyShop Booster as a CR-side bolt-on while keeping or replacing Turnkey for AR-side ads/website. The patented photo-estimate funnel is the strongest single reason to evaluate.",
+  "uncertain": [
+    "hq_location",
+    "base_monthly_low_usd",
+    "base_monthly_high_usd",
+    "typical_monthly_usd",
+    "setup_fee_usd",
+    "contract_length_months",
+    "cancellation_policy",
+    "asset_ownership",
+    "notable_clients"
+  ]
+}

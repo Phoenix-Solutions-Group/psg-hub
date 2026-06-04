@@ -1,0 +1,353 @@
+/* =========================================================================
+   Phoenix Solutions Group — Colors & Type
+   -------------------------------------------------------------------------
+   Brand: 35 years of transformation. Heritage meets contemporary refinement.
+   Philosophy: Understated luxury. Precision craft. Functional elegance.
+   ========================================================================= */
+
+/* ----- FONTS -----------------------------------------------------------
+   Heading face is Gotham (proprietary, licensed via H&Co/Monotype).
+   We substitute with Montserrat as the closest Google Fonts match —
+   geometric sans, similar proportions, generous x-height.
+   Body face is Didact Gothic (Google Fonts, OFL).
+   FLAG: replace @font-face fallback with licensed Gotham webfonts in
+   production. See README → Typography.
+   ---------------------------------------------------------------------- */
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-Thin.otf") format("opentype");
+  font-weight: 100; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-Light.otf") format("opentype");
+  font-weight: 300; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-Book.otf") format("opentype");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-Medium.otf") format("opentype");
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-Bold.otf") format("opentype");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-Black.otf") format("opentype");
+  font-weight: 800; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-Ultra.otf") format("opentype");
+  font-weight: 900; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-ThinItalic.otf") format("opentype");
+  font-weight: 100; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-LightItalic.otf") format("opentype");
+  font-weight: 300; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-BookItalic.otf") format("opentype");
+  font-weight: 400; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-MediumItalic.otf") format("opentype");
+  font-weight: 500; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-BoldItalic.otf") format("opentype");
+  font-weight: 700; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-BlackItalic.otf") format("opentype");
+  font-weight: 800; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("fonts/Gotham-UltraItalic.otf") format("opentype");
+  font-weight: 900; font-style: italic; font-display: swap;
+}
+
+@font-face {
+  font-family: "Didact Gothic";
+  src: url("fonts/DidactGothic-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ===== BRAND COLORS ===========================================
+     Three signature hues anchor the system.
+     ============================================================ */
+  --psg-midnight: #1E3A52;   /* deep navy — trust, heritage, primary */
+  --psg-ember:    #B8483E;   /* phoenix red-clay — accent, transformation */
+  --psg-slate:    #4A4257;   /* aubergine-slate — refinement, secondary */
+
+  /* Tonal extensions (10/30/60/90 ramps) — derived in oklch space
+     for harmonious lift/shadow without losing brand chroma. */
+  --psg-midnight-95: #F1F4F7;
+  --psg-midnight-90: #DCE3EA;
+  --psg-midnight-70: #8FA1B2;
+  --psg-midnight-50: #4F6A82;
+  --psg-midnight-30: #2A4A63;
+  --psg-midnight-15: #142838;
+  --psg-midnight-08: #0A1822;
+
+  --psg-ember-95: #FAEEEC;
+  --psg-ember-85: #ECC8C2;
+  --psg-ember-65: #D88378;
+  --psg-ember-45: #C0594D;
+  --psg-ember-25: #8C362D;
+
+  --psg-slate-95: #F2F0F4;
+  --psg-slate-85: #CFC9D3;
+  --psg-slate-65: #8E8694;
+  --psg-slate-45: #635A6E;
+  --psg-slate-25: #36303E;
+
+  /* ===== NEUTRALS — warm, paper-toned ============================ */
+  --psg-paper:    #FAF8F5;   /* default page surface */
+  --psg-bone:     #F2EEE8;   /* alt surface, panels */
+  --psg-stone:    #E4DED5;   /* hairlines, dividers (light) */
+  --psg-graphite: #2A2826;   /* near-black body ink */
+  --psg-ink:      #161514;   /* deepest text */
+  --psg-mist:     #9A958E;   /* secondary copy */
+  --psg-fog:      #C7C2BA;   /* tertiary copy / disabled */
+
+  /* ===== SEMANTIC COLOR TOKENS =================================== */
+  --color-bg:           var(--psg-paper);
+  --color-bg-alt:       var(--psg-bone);
+  --color-bg-inverse:   var(--psg-midnight);
+  --color-bg-deep:      var(--psg-midnight-08);
+
+  --color-surface:      #FFFFFF;
+  --color-surface-alt:  var(--psg-bone);
+  --color-surface-deep: var(--psg-midnight);
+
+  --color-fg:           var(--psg-ink);
+  --color-fg-1:         var(--psg-graphite);
+  --color-fg-2:         var(--psg-mist);
+  --color-fg-3:         var(--psg-fog);
+  --color-fg-inverse:   var(--psg-paper);
+
+  --color-accent:       var(--psg-ember);
+  --color-accent-hover: var(--psg-ember-25);
+  --color-accent-soft:  var(--psg-ember-95);
+
+  --color-primary:      var(--psg-midnight);
+  --color-primary-hover:var(--psg-midnight-15);
+  --color-primary-soft: var(--psg-midnight-95);
+
+  --color-secondary:    var(--psg-slate);
+  --color-secondary-hover: var(--psg-slate-25);
+
+  --color-border:       var(--psg-stone);
+  --color-border-strong:var(--psg-midnight-70);
+  --color-border-focus: var(--psg-ember);
+
+  --color-success:      #4A6B4D;
+  --color-warning:      #C28E3A;
+  --color-danger:       var(--psg-ember-25);
+
+  /* ===== TYPE FAMILIES =========================================== */
+  --font-display: "Gotham", "Helvetica Neue", system-ui, sans-serif;
+  --font-body:    "Didact Gothic", "Gotham", system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* ===== TYPE SCALE — 1.250 (major third) ======================== */
+  --fs-12:  0.75rem;   /* 12 — micro, eyebrow */
+  --fs-13:  0.8125rem; /* 13 — caption */
+  --fs-14:  0.875rem;  /* 14 — small body */
+  --fs-16:  1rem;      /* 16 — body */
+  --fs-18:  1.125rem;  /* 18 — lead body */
+  --fs-20:  1.25rem;   /* 20 — h6 */
+  --fs-24:  1.5rem;    /* 24 — h5 */
+  --fs-30:  1.875rem;  /* 30 — h4 */
+  --fs-36:  2.25rem;   /* 36 — h3 */
+  --fs-48:  3rem;      /* 48 — h2 */
+  --fs-64:  4rem;      /* 64 — h1 */
+  --fs-80:  5rem;      /* 80 — display */
+  --fs-112: 7rem;      /* 112 — hero display */
+
+  /* Line heights */
+  --lh-tight:   1.05;
+  --lh-snug:    1.2;
+  --lh-normal:  1.5;
+  --lh-relaxed: 1.65;
+
+  /* Tracking (letter-spacing) */
+  --tr-eyebrow: 0.18em;   /* SECTION LABELS */
+  --tr-caps:    0.08em;   /* button caps, small caps */
+  --tr-display: -0.02em;  /* large display */
+  --tr-heading: -0.01em;  /* h1–h3 */
+
+  /* Weights */
+  --fw-light:    300;
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+  --fw-black:    800;
+
+  /* ===== SPACING — 4pt grid ====================================== */
+  --space-1:  0.25rem;   /* 4 */
+  --space-2:  0.5rem;    /* 8 */
+  --space-3:  0.75rem;   /* 12 */
+  --space-4:  1rem;      /* 16 */
+  --space-5:  1.5rem;    /* 24 */
+  --space-6:  2rem;      /* 32 */
+  --space-7:  2.5rem;    /* 40 */
+  --space-8:  3rem;      /* 48 */
+  --space-9:  4rem;      /* 64 */
+  --space-10: 5rem;      /* 80 */
+  --space-11: 6rem;      /* 96 */
+  --space-12: 8rem;      /* 128 */
+
+  /* ===== RADII — restrained, mostly square ======================= */
+  --radius-none: 0;
+  --radius-xs:   2px;
+  --radius-sm:   4px;
+  --radius-md:   6px;   /* default for inputs / cards */
+  --radius-lg:   10px;  /* hero cards */
+  --radius-pill: 999px;
+
+  /* ===== SHADOWS — subtle, layered, paper-like =================== */
+  --shadow-hairline: 0 0 0 1px rgba(30, 58, 82, 0.08);
+  --shadow-sm:  0 1px 2px rgba(22, 21, 20, 0.04), 0 1px 1px rgba(22, 21, 20, 0.03);
+  --shadow-md:  0 4px 12px rgba(22, 21, 20, 0.06), 0 1px 2px rgba(22, 21, 20, 0.04);
+  --shadow-lg:  0 16px 32px -8px rgba(30, 58, 82, 0.12), 0 4px 8px rgba(22, 21, 20, 0.04);
+  --shadow-xl:  0 32px 64px -16px rgba(30, 58, 82, 0.18), 0 8px 16px rgba(22, 21, 20, 0.05);
+  --shadow-inset: inset 0 1px 2px rgba(22, 21, 20, 0.06);
+
+  /* ===== MOTION ================================================== */
+  --ease-out:    cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-emph:   cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-fast:    140ms;
+  --dur-base:    220ms;
+  --dur-slow:    420ms;
+
+  /* ===== LAYOUT ================================================== */
+  --container-narrow: 768px;
+  --container-base:   1120px;
+  --container-wide:   1320px;
+  --container-full:   1480px;
+}
+
+/* =========================================================================
+   SEMANTIC ELEMENT DEFAULTS
+   Apply this stylesheet anywhere brand type/colors are wanted.
+   ========================================================================= */
+
+html {
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--color-fg);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body { margin: 0; line-height: var(--lh-normal); }
+
+/* Display / Headings — always Gotham/Montserrat, tight tracking, semi/bold */
+/* Headings: Gotham, never heavier than Medium (500). Brand rule. */
+.display, h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  color: var(--color-fg);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tr-heading);
+  margin: 0;
+  text-wrap: balance;
+}
+
+.display-hero {
+  font-size: var(--fs-112);
+  font-weight: 100;       /* Gotham Thin */
+  line-height: 0.95;
+  letter-spacing: var(--tr-display);
+}
+.display { font-size: var(--fs-80); font-weight: var(--fw-light); line-height: 1.0; letter-spacing: var(--tr-display); }
+h1 { font-size: var(--fs-64); font-weight: var(--fw-light); line-height: 1.05; letter-spacing: var(--tr-display); }
+h2 { font-size: var(--fs-48); font-weight: var(--fw-light); }
+h3 { font-size: var(--fs-36); font-weight: var(--fw-regular); }
+h4 { font-size: var(--fs-24); font-weight: var(--fw-medium); }
+h5 { font-size: var(--fs-20); font-weight: var(--fw-medium); }
+h6 {
+  font-size: var(--fs-13);
+  font-weight: var(--fw-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-eyebrow);
+  color: var(--color-fg-2);
+}
+
+/* Eyebrow — 35 YEARS OF TRANSFORMATION style, used above headings */
+.eyebrow {
+  font-family: var(--font-display);
+  font-size: var(--fs-12);
+  font-weight: var(--fw-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-eyebrow);
+  color: var(--color-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.eyebrow::before {
+  content: "";
+  width: 24px;
+  height: 1px;
+  background: currentColor;
+}
+
+/* Body */
+p, li {
+  font-family: var(--font-body);
+  font-size: var(--fs-16);
+  line-height: var(--lh-relaxed);
+  color: var(--color-fg-1);
+  margin: 0;
+  text-wrap: pretty;
+}
+.lead { font-size: var(--fs-20); line-height: var(--lh-relaxed); color: var(--color-fg-1); }
+.small { font-size: var(--fs-14); }
+.caption { font-size: var(--fs-13); color: var(--color-fg-2); }
+
+/* Links — understated, accent on hover */
+a {
+  color: var(--color-fg);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-border-strong);
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+a:hover { color: var(--color-accent); border-color: var(--color-accent); }
+
+/* Code */
+code, pre, .mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+/* Selection */
+::selection { background: var(--psg-ember-95); color: var(--psg-ember-25); }
+
+/* Horizontal rule — hairline, brand-toned */
+hr { border: none; border-top: 1px solid var(--color-border); margin: var(--space-7) 0; }

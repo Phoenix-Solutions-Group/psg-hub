@@ -1,0 +1,48 @@
+{
+  "agency_name": "Turnkey Marketing (TKMKT / Turnkey Auto Marketing)",
+  "domain": "tkmkt.com / turnkeyautomarketing.com",
+  "hq_location": "Overland Park, KS",
+  "specialty": "AR (mechanical) primary, CR secondary",
+  "services": ["Social Media (organic)", "Paid Social (FB/IG boosts)", "CRM via Shopgenie/Tekmetric Marketing", "Email/SMS Lifecycle", "Call Recording + Scoring (10 calls/mo)", "Website Specials Posting", "Print/Collateral Design (gift bags, QR review cards)", "Project Management (Monday.com board)"],
+  "base_monthly_low_usd": 2500,
+  "base_monthly_high_usd": 4000,
+  "typical_monthly_usd": "$2,500-$4,000 base retainer + ad spend + Shopgenie SaaS",
+  "setup_fee_usd": "$1,000-$2,500 one-time (industry standard, includes creative + brand asset work)",
+  "min_ad_spend_usd": "$500/mo Meta minimum typical; growth shops run $1,000-$2,000/mo",
+  "contract_length_months": "Likely 12, unconfirmed",
+  "cancellation_policy": "Unconfirmed; comparable agencies require 30-day written notice",
+  "asset_ownership": "Unconfirmed; client likely owns site + ad accounts (industry standard for specialist agencies)",
+  "pricing_transparency": "Quote-only; not published",
+  "pricing_confidence": "medium",
+  "pricing_sources": [
+    "https://tkmkt.com/",
+    "https://www.turnkeyautomarketing.com/",
+    "https://www.tekmetric.com/pricing",
+    "https://www.businesswire.com/news/home/20241016412480/en/",
+    "https://shopmarketingpros.com/best-marketing-companies-for-an-auto-repair-shop/",
+    "https://elementdma.com/top-23-automotive-marketing-agencies-in-the-us/",
+    "https://reviews.birdeye.com/turnkey-marketing-170930451185857",
+    "https://www.ratchetandwrench.com/site-placement/latest-news/article/11546411/autoshop-solutions-and-turnkey-marketing-partner-together"
+  ],
+  "known_pain_points": [
+    "AR-specialty bias; collision (CR) is secondary",
+    "Boosted posts not equal to structured Meta Ads campaigns",
+    "10 call scoring/mo is sampling, not full QA"
+  ],
+  "notable_clients": ["Koffman AutoWorks (Campbellsport WI)", "Partnership with Autoshop Solutions"],
+  "pros": [
+    "Auto repair vertical specialist",
+    "Integrated with Tekmetric/Shopgenie (industry-standard shop management)",
+    "Dedicated marketing manager model",
+    "Call coaching loop with AutoFix",
+    "Project management discipline via Monday.com"
+  ],
+  "cons": [
+    "Collision dept under-served (Heather doing CR posts herself)",
+    "CR follow-up creates duplication with Carwise/CCC outbound",
+    "No published OEM or DRP positioning expertise",
+    "Pricing opaque"
+  ],
+  "koffman_relevance": "Current vendor for AR social + CRM + call scoring. Strong on AR retention; weak on CR acquisition. PSG could replace fully OR layer over (CR-focused) while leaving Turnkey on AR. Most likely PSG replaces for consolidation + measurement.",
+  "uncertain": ["exact contract terms", "exact Koffman invoice amount", "asset ownership specifics"]
+}

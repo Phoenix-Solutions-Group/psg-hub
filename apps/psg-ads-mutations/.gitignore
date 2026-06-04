@@ -1,0 +1,42 @@
+# macOS
+.DS_Store
+
+# Secrets — NEVER commit
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+ops/flower-hill/google-ads/config/google-ads.yaml
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+
+# Operational artifacts
+logs/
+*.log
+
+# Editor / tooling state
+.vscode/
+.idea/
+.claude/
+.claude-flow/
+
+# Node — bundled inside ad-assets, large
+node_modules/
+
+# Markers from prior reorg — manually delete after verification
+_OLD_*/
+
+# Generated reports — keep source HTML+assets, regenerate PDF
+reports/*/recap.pdf

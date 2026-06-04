@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wallace Collision Center — May 2026 Progress Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://use.typekit.net">
+<link rel="stylesheet" href="https://use.typekit.net/pof1ttz.css">
+<link href="https://fonts.googleapis.com/css2?family=Didact+Gothic&family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  /* PSG Brand Guidelines — phoenixsolutionsgroup.net/psg-brand-guidelines/ */
+  :root {
+    /* Primary brand */
+    --midnight: #1E3A52;
+    --ember: #B8483E;
+    --dark-ash: #4B5058;
+    /* Neutrals */
+    --paper: #FAFAFA;
+    --bone: #F0F0F0;
+    --stone: #E0E0E0;
+    --fog: #C4C4C4;
+    --mist: #949494;
+    --graphite: #2A2A2A;
+    --ink-true: #161616;
+    /* Status */
+    --success: #526B51;
+    --warning: #C28E3A;
+    --error: #B8483E;
+
+    /* Semantic tokens */
+    --ink: var(--midnight);
+    --ink-soft: var(--dark-ash);
+    --muted: var(--mist);
+    --line: var(--stone);
+    --bg: #ffffff;
+    --bg-soft: var(--paper);
+    --accent: var(--ember);
+    --accent-soft: #fbecea;
+    --good: var(--success);
+    --good-soft: #eef2ee;
+    --info: var(--midnight);
+    --info-soft: #eaf0f4;
+    --warn: var(--warning);
+    --warn-soft: #faf2e3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Didact Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    color: var(--ink);
+    margin: 0;
+    background: var(--bg-soft);
+    line-height: 1.6;
+    font-size: 15.5px;
+  }
+  h1, h2, h3, h4, .hero .eyebrow, th, .kpi .label, .kpi .value, .badge, .timeline .date, .footer strong {
+    font-family: gotham, "Gotham", "Montserrat", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+  .page {
+    max-width: 960px;
+    margin: 0 auto;
+    background: var(--bg);
+    padding: 56px 64px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  header.hero {
+    border-bottom: 3px solid var(--midnight);
+    padding-bottom: 24px;
+    margin-bottom: 36px;
+    position: relative;
+  }
+  .hero-mark {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .hero-mark .mark-glyph {
+    width: 34px;
+    height: 34px;
+    background: var(--midnight);
+    color: var(--paper);
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: gotham, "Gotham", "Montserrat", sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    position: relative;
+  }
+  .hero-mark .mark-glyph::after {
+    content: "";
+    position: absolute;
+    bottom: -3px;
+    right: -3px;
+    width: 10px;
+    height: 10px;
+    background: var(--ember);
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+  }
+  .hero-mark .mark-word {
+    font-family: gotham, "Gotham", "Montserrat", sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--midnight);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .hero-mark .mark-word .word-light {
+    color: var(--mist);
+    font-weight: 500;
+    margin-left: 6px;
+    letter-spacing: 0.15em;
+  }
+  .hero .eyebrow {
+    color: var(--ember);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .hero h1 {
+    font-size: 34px;
+    margin: 0 0 10px 0;
+    color: var(--midnight);
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+  .hero .sub {
+    color: var(--dark-ash);
+    font-size: 14.5px;
+    max-width: 640px;
+  }
+  .hero .meta {
+    display: flex;
+    gap: 32px;
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .hero .meta div span:first-child {
+    color: var(--muted);
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 2px;
+  }
+  h2 {
+    font-size: 21px;
+    margin: 52px 0 18px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--stone);
+    color: var(--midnight);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  h2::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 2px;
+    background: var(--ember);
+    vertical-align: middle;
+    margin-right: 10px;
+    margin-bottom: 3px;
+  }
+  h3 {
+    font-size: 15.5px;
+    margin: 26px 0 10px 0;
+    color: var(--midnight);
+  }
+  p { margin: 0 0 14px 0; color: var(--ink-soft); }
+  .summary-card {
+    background: var(--bone);
+    border-left: 3px solid var(--ember);
+    padding: 22px 26px;
+    border-radius: 2px;
+    margin: 24px 0 36px 0;
+  }
+  .summary-card p { color: var(--midnight); margin: 0; font-size: 15.5px; line-height: 1.7; }
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin: 24px 0;
+  }
+  .kpi {
+    background: var(--bg);
+    border: 1px solid var(--stone);
+    border-radius: 2px;
+    padding: 20px;
+    border-top: 2px solid var(--midnight);
+  }
+  .kpi .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--mist);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .kpi .value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--midnight);
+    letter-spacing: -0.01em;
+    font-family: gotham, "Gotham", "Montserrat", sans-serif;
+  }
+  .kpi .delta {
+    font-size: 12px;
+    margin-top: 4px;
+    font-weight: 600;
+  }
+  .kpi .delta.up { color: var(--good); }
+  .kpi .delta.down { color: var(--accent); }
+  .kpi .delta.neutral { color: var(--muted); }
+  .kpi .context {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 11px 13px;
+    border-bottom: 1px solid var(--line);
+  }
+  th {
+    background: var(--paper);
+    color: var(--dark-ash);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    border-bottom: 2px solid var(--midnight);
+  }
+  td.right, th.right { text-align: right; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .check { color: var(--good); font-weight: 700; }
+  .chart-container {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin: 16px 0;
+  }
+  .chart-container h3 {
+    margin-top: 0;
+    font-size: 15px;
+    color: var(--ink);
+  }
+  .chart-container .chart-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .chart-wrap {
+    position: relative;
+    height: 280px;
+  }
+  .chart-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .timeline {
+    border-left: 2px solid var(--line);
+    margin: 24px 0;
+    padding-left: 0;
+    list-style: none;
+  }
+  .timeline li {
+    position: relative;
+    padding: 14px 0 14px 28px;
+    margin-left: 0;
+  }
+  .timeline li::before {
+    content: "";
+    position: absolute;
+    left: -7px;
+    top: 22px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--ember);
+    border: 3px solid var(--bg);
+  }
+  .timeline .date {
+    font-size: 11px;
+    color: var(--midnight);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 4px;
+  }
+  .timeline .what {
+    font-size: 14px;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .timeline .why {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .opportunity {
+    background: var(--paper);
+    border: 1px solid var(--stone);
+    border-left: 3px solid var(--midnight);
+    padding: 18px 22px;
+    border-radius: 2px;
+    margin: 14px 0;
+  }
+  .opportunity h4 {
+    margin: 0 0 8px 0;
+    font-size: 14.5px;
+    color: var(--midnight);
+    font-family: gotham, "Gotham", "Montserrat", sans-serif;
+    text-transform: none;
+    letter-spacing: 0.01em;
+  }
+  .opportunity p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+  .callout {
+    background: var(--info-soft);
+    border: 1px solid var(--stone);
+    border-left: 3px solid var(--midnight);
+    border-radius: 2px;
+    padding: 16px 20px;
+    margin: 18px 0;
+    font-size: 13.5px;
+    color: var(--dark-ash);
+    line-height: 1.65;
+  }
+  .callout strong { color: var(--midnight); font-family: gotham, "Gotham", "Montserrat", sans-serif; }
+  .footer {
+    margin-top: 64px;
+    padding-top: 28px;
+    border-top: 1px solid var(--stone);
+    color: var(--mist);
+    font-size: 12px;
+    text-align: center;
+    line-height: 1.7;
+  }
+  .footer .footer-mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .footer .footer-glyph {
+    width: 24px;
+    height: 24px;
+    background: var(--midnight);
+    color: var(--paper);
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: gotham, "Gotham", "Montserrat", sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    position: relative;
+  }
+  .footer .footer-glyph::after {
+    content: "";
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 7px;
+    height: 7px;
+    background: var(--ember);
+    border-radius: 50%;
+    border: 1.5px solid var(--bg);
+  }
+  .footer strong { color: var(--midnight); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .footer .tagline {
+    font-style: italic;
+    color: var(--mist);
+    font-size: 11.5px;
+    margin-top: 4px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 2px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .badge.good { background: var(--good-soft); color: var(--good); }
+  .badge.info { background: var(--info-soft); color: var(--info); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  ul.clean { padding-left: 18px; color: var(--ink-soft); }
+  ul.clean li { margin-bottom: 6px; }
+  @media print {
+    body { background: white; }
+    .page { box-shadow: none; padding: 24px; max-width: 100%; }
+    .chart-wrap { height: 220px; }
+  }
+  @media (max-width: 760px) {
+    .page { padding: 28px 20px; }
+    .hero h1 { font-size: 24px; }
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    .chart-grid-2 { grid-template-columns: 1fr; }
+    .hero .meta { flex-direction: column; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="hero">
+    <div class="hero-mark">
+      <span class="mark-glyph">PSG</span>
+      <span class="mark-word">Phoenix<span class="word-light">Solutions Group</span></span>
+    </div>
+    <div class="eyebrow">Monthly Progress Report</div>
+    <h1>Wallace Collision Center<br>May 2026</h1>
+    <div class="sub">Account performance, what we did, and what is next.</div>
+    <div class="meta">
+      <div><span>Account</span><span>Wallace Collision Center</span></div>
+      <div><span>Reporting Period</span><span>May 1 to May 21, 2026</span></div>
+      <div><span>Compared To</span><span>April 2026 (full month)</span></div>
+      <div><span>Prepared By</span><span>Phoenix Solutions Group</span></div>
+    </div>
+  </header>
+
+  <div class="summary-card">
+    <p>May was a transition month for the account. We moved it off the old campaign structure onto the new 2026 Q2 build, fixed the conversion tracking that was counting Get Directions clicks as leads, and got every ad through Google's policy review. Google's account health score went from 63% to 89%. The Tesla and JLR campaigns got broader keywords on May 21 so they show up the way real people actually search. June is about scaling that work.</p>
+  </div>
+
+  <h2>Headline Numbers</h2>
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="label">Google Health Score</div>
+      <div class="value">88.8%</div>
+      <div class="delta up">&#9650; +26.1 pts</div>
+      <div class="context">Google's own scorecard for account quality.</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Policy Approval</div>
+      <div class="value">100%</div>
+      <div class="delta up">&#9650; 7 of 7 resolved</div>
+      <div class="context">Every ad now in good standing with Google.</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Negative Keywords</div>
+      <div class="value">569</div>
+      <div class="delta up">&#9650; +124% MoM</div>
+      <div class="context">Protects against dealer and parts queries.</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Conversion Signal Quality</div>
+      <div class="value">4 / 4</div>
+      <div class="delta up">&#9650; Cleaned</div>
+      <div class="context">Bidding now optimizes against real leads only.</div>
+    </div>
+  </div>
+
+  <h2>Month-Over-Month Performance</h2>
+  <p>April was the last full month on the old campaign structure. We paused the legacy campaigns on May 13 and brought the new 2026 Q2 stack live. Read the numbers below with that switch in mind.</p>
+
+  <div class="callout">
+    <strong>Like-for-like note.</strong> April's conversion count was inflated. Google was counting Get Directions clicks, Menu views, and Website clicks from your Google Business Profile as full conversions. We turned that off on May 20. Google now only counts form fills, phone calls from ads, and qualified leads. So May's number is smaller, but it is the real number.
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th class="right">April 2026 (full month)</th>
+        <th class="right">May 1 to 21, 2026</th>
+        <th class="right">Direction</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Impressions</td><td class="right num">25,568</td><td class="right num">19,326</td><td class="right"><span class="badge good">+8% / day</span></td></tr>
+      <tr><td>Click-Through Rate</td><td class="right num">8.42%</td><td class="right num">5.29%</td><td class="right"><span class="badge info">Recalibrating</span></td></tr>
+      <tr><td>Google Health Score</td><td class="right num">62.7%</td><td class="right num">88.8%</td><td class="right"><span class="badge good">+26.1 pts</span></td></tr>
+      <tr><td>Policy-Approved Ads</td><td class="right num">55 of 62</td><td class="right num">62 of 62</td><td class="right"><span class="badge good">+11%</span></td></tr>
+      <tr><td>Negative Keyword Library</td><td class="right num">254</td><td class="right num">569</td><td class="right"><span class="badge good">+124%</span></td></tr>
+      <tr><td>Active Campaign Structure</td><td class="right num">Legacy</td><td class="right num">6 Q2 standardized</td><td class="right"><span class="badge good">Rebuilt</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="chart-container">
+    <h3>Daily Impressions, April vs May</h3>
+    <div class="chart-sub">Impressions tracked April closely through May 17, then dropped while Google held ads in review and put the new campaigns through its learning window.</div>
+    <div class="chart-wrap"><canvas id="impChart"></canvas></div>
+  </div>
+
+  <div class="callout">
+    <strong>Why the drop after May 17?</strong> The drop is on Google's side, not ours. Three things hit at once:
+    <ul style="margin:10px 0 0 0; padding-left:20px;">
+      <li><strong>Google's ad review queue.</strong> Google's automated policy system flagged several of your certified-repair ads in mid-May. While ads sit in that queue, Google throttles or pauses them until a human at Google clears them. We submitted appeals on May 20, and Google has now cleared every ad, but the queue itself was what blocked impressions during those days.</li>
+      <li><strong>Google's new-campaign learning period.</strong> Every new campaign goes through a 7 to 14 day learning phase. Google deliberately throttles serving while its algorithm gathers signal. Your 2026 Q2 campaigns started that window mid-May. There is no way to skip it.</li>
+      <li><strong>Smart Campaign reach swings.</strong> The May 17 spike and the drop right after came from your Brand Smart campaign, which Google fully manages. Day-to-day reach bounces around while Google's automation tests where to place those ads.</li>
+    </ul>
+    <p style="margin: 12px 0 0 0;">These are normal Google behaviors when an account goes through structural changes and policy reviews at the same time. Appeals are cleared. The learning window is closing. Impressions should normalize through the first half of June.</p>
+  </div>
+
+  <div class="chart-container">
+    <h3>Account Quality, Month-Over-Month</h3>
+    <div class="chart-sub">Quality and policy compliance both improved a lot in May.</div>
+    <div class="chart-wrap"><canvas id="qualityChart"></canvas></div>
+  </div>
+
+  <h2>What We Accomplished This Month</h2>
+  <p>The work, in plain language. Every change went through a dry-run preview before going live, and the before-and-after is logged on our end.</p>
+
+  <h3>1. Rebuilt the 2026 Q2 Campaign Stack</h3>
+  <p>We finished moving off the old campaigns. Six new ones are live, each one tied to a specific service line: Brand Defense, Local Collision, Tesla Approved, JLR Certified, Toyota Certified, and BMW or Rivian Certified. The legacy campaigns are paused, not deleted, so the history is still there if we need to reference it.</p>
+
+  <h3>2. Cleaned Up Conversion Tracking</h3>
+  <p>The account was treating Get Directions clicks, Menu views, and Website clicks from your Google Business Profile as conversions. That inflated the reported numbers and gave Google's bidding algorithm the wrong signal about what a real lead looks like. We turned off seven of those micro-events and kept the four that actually mean something: form fills, phone calls from ads, qualified leads, and Smart Campaign tracked calls. Bidding now optimizes for real leads.</p>
+
+  <h3>3. Restored Brand Defense</h3>
+  <p>The Wallace Collision Center brand campaign was paused when we picked the account up, so nothing was defending the brand on Google search. We turned it back on, switched it to a Maximize Clicks bidding strategy, and added five exact-match brand keyword variations covering Bristol, Kingsport, and the core brand phrases.</p>
+
+  <h3>4. Resolved All Outstanding Ad Disapprovals</h3>
+  <p>Google had flagged seven ads, three on Toyota creative and four across other certified-repair lines. We worked each one, figured out what the policy concern was, and appealed. Every ad in the account is approved today.</p>
+
+  <h3>5. Expanded Negative Keyword Coverage</h3>
+  <p>We added 315 negative keywords this month, more than doubling the list. They block dealership and "for sale" queries, parts and DIY repair kits, service and maintenance searches, out-of-area locations, and shopper queries like Tesla news or Land Rover lease deals. More of every click now goes to people actually looking for collision repair.</p>
+
+  <h3>6. Refreshed Landing Page Mapping</h3>
+  <p>Every 2026 Q2 campaign now points to the right landing page: Tesla to the Tesla page, BMW to the BMW page, JLR to the JLR page, Toyota to the Toyota page. We also fixed the UTM tracking so attribution lines up cleanly.</p>
+
+  <h3>7. Tightened Up GTM Conversion Tags</h3>
+  <p>There was a redundant pageview tag in your Google Tag Manager that was firing at the same time as the lead conversion tag. We paused it. The remaining tag fires only when a lead actually completes.</p>
+
+  <h3>8. Expanded Tesla and JLR Keyword Reach</h3>
+  <p>On May 21 we widened the Tesla Approved and JLR Certified campaigns. The original keywords were tight: "tesla certified collision repair", "jaguar certified collision repair", phrases real people don't usually type. We added 13 phrase-match terms in the language people actually use, like "land rover body shop", "tesla collision repair", "range rover body shop". We also raised Tesla's bid guardrail so it can compete on the broader terms.</p>
+
+  <h2>Active Management Timeline</h2>
+  <p>The day-by-day record of what we changed in May. Each one has a before-and-after audit file on our end if you ever want to see it.</p>
+
+  <ul class="timeline">
+    <li>
+      <div class="date">May 13</div>
+      <div class="what">Launched 2026 Q2 campaign architecture</div>
+      <div class="why">Activated the new standardized campaign set; paused legacy campaigns to keep the active stack clean.</div>
+    </li>
+    <li>
+      <div class="date">May 19</div>
+      <div class="what">Conversion tracking integrity review</div>
+      <div class="why">Identified inflated conversion counts caused by Google Business Profile micro-events; staged the cleanup.</div>
+    </li>
+    <li>
+      <div class="date">May 20,morning</div>
+      <div class="what">Deployed expanded negative keyword set</div>
+      <div class="why">315 new negatives added across all 2026 Q2 campaigns to block dealer and parts queries.</div>
+    </li>
+    <li>
+      <div class="date">May 20,midday</div>
+      <div class="what">Re-enabled brand defense campaign</div>
+      <div class="why">Switched bidding strategy, added five brand keyword variants, activated the campaign.</div>
+    </li>
+    <li>
+      <div class="date">May 20,afternoon</div>
+      <div class="what">Cleaned conversion tracking primary actions</div>
+      <div class="why">Demoted seven micro-events out of the primary conversion column; bidding now optimizes against real leads.</div>
+    </li>
+    <li>
+      <div class="date">May 20,afternoon</div>
+      <div class="what">Activated 11 new 2026 Q2 ads</div>
+      <div class="why">Brought the new ad copy live across all five Wallace Collision Q2 search campaigns.</div>
+    </li>
+    <li>
+      <div class="date">May 20,afternoon</div>
+      <div class="what">Final URL remapping across 2026 Q2 campaigns</div>
+      <div class="why">Aligned every campaign with its dedicated landing page and corrected UTM tagging.</div>
+    </li>
+    <li>
+      <div class="date">May 20,afternoon</div>
+      <div class="what">Paused redundant GTM pageview tag</div>
+      <div class="why">Removed double-fire risk on lead conversion tracking.</div>
+    </li>
+    <li>
+      <div class="date">May 20,evening</div>
+      <div class="what">Submitted appeals on 3 Toyota ad disapprovals</div>
+      <div class="why">Restored Toyota-certified creative to serving status.</div>
+    </li>
+    <li>
+      <div class="date">May 20,late evening</div>
+      <div class="what">Submitted appeals on 4 additional ad disapprovals</div>
+      <div class="why">Final cleanup pass on remaining policy flags; account now at 100% approval.</div>
+    </li>
+    <li>
+      <div class="date">May 21</div>
+      <div class="what">Expanded Tesla and JLR keyword reach</div>
+      <div class="why">Added 13 broader phrase-match terms; tuned Tesla bid guardrails to compete on the new vocabulary.</div>
+    </li>
+  </ul>
+
+  <h2>The Rest of May, Day by Day</h2>
+  <p>Here is what we are doing between now and the end of the month. This is not a hands-off period. We are inside the account every working day to monitor the keyword expansion, watch how Google's learning window plays out, and tune as the new traffic patterns settle.</p>
+
+  <ul class="timeline">
+    <li>
+      <div class="date">May 22, Thursday</div>
+      <div class="what">24-hour health check on the keyword expansion</div>
+      <div class="why">Confirm the 13 new Tesla and JLR phrase terms are serving impressions. Review any new search terms that come through. Pause anything that triggers on irrelevant traffic.</div>
+    </li>
+    <li>
+      <div class="date">May 23, Friday</div>
+      <div class="what">Mid-week impression share review</div>
+      <div class="why">Pull the Tesla, JLR, Toyota, and Local Collision impression share numbers. If rank-lost share is still high, step ad-group bids up in small increments to compete.</div>
+    </li>
+    <li>
+      <div class="date">May 24 to 25, weekend</div>
+      <div class="what">Passive monitoring</div>
+      <div class="why">Google's learning window is still running. Daily checks for serving anomalies, fresh disapprovals, or runaway queries. No structural changes over the weekend so the algorithm can stabilize.</div>
+    </li>
+    <li>
+      <div class="date">May 26, Monday</div>
+      <div class="what">Negative keyword review on the post-expansion search terms</div>
+      <div class="why">Five business days of new search-term data from the May 21 expansion. We will add any new irrelevant queries to the negative list and tighten the Tesla, JLR, and Toyota campaign filters.</div>
+    </li>
+    <li>
+      <div class="date">May 27, Tuesday</div>
+      <div class="what">Rewrite the Average and Poor strength ads</div>
+      <div class="why">Refresh the headlines and descriptions on the four responsive search ads currently rated below "Good" by Google. Target a rating of "Good" or "Excellent" on every active ad.</div>
+    </li>
+    <li>
+      <div class="date">May 28, Wednesday</div>
+      <div class="what">Performance Max pilot setup</div>
+      <div class="why">Build the brand-exclusion list, prep image and video assets, configure the conversion goal, and set the campaign in paused state for review.</div>
+    </li>
+    <li>
+      <div class="date">May 29, Thursday</div>
+      <div class="what">Performance Max pilot goes live</div>
+      <div class="why">Activate the campaign. Monitor first-day pacing and search-term reports closely for any leakage past the brand exclusions.</div>
+    </li>
+    <li>
+      <div class="date">May 30, Friday</div>
+      <div class="what">End-of-month performance review</div>
+      <div class="why">Full account pull: impression share, conversion volume, search-term quality, ad approval status, optimization score. Adjust ad-group bids on the Q2 stack based on what the data says.</div>
+    </li>
+    <li>
+      <div class="date">May 31, Saturday</div>
+      <div class="what">June plan finalization</div>
+      <div class="why">Lock in the June priorities and campaign posture. Prepare the next progress report for early June delivery.</div>
+    </li>
+  </ul>
+
+  <p>If anything unusual shows up between now and then (a fresh disapproval, an unexpected serving drop, a runaway query), we jump in immediately. The account is checked daily.</p>
+
+  <h2>Health Snapshot</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Area</th>
+        <th>Start of Month</th>
+        <th>Today</th>
+        <th class="right">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Google Health Score</td><td>62.7%</td><td><strong>88.8%</strong></td><td class="right"><span class="badge good">Improved</span></td></tr>
+      <tr><td>Ads with policy approval</td><td>55 of 62</td><td><strong>62 of 62</strong></td><td class="right"><span class="badge good">Clean</span></td></tr>
+      <tr><td>Conversion tracking signal</td><td>Inflated by 7 micro-events</td><td><strong>4 true lead actions</strong></td><td class="right"><span class="badge good">Clean</span></td></tr>
+      <tr><td>Brand campaign status</td><td>Paused</td><td><strong>Active</strong></td><td class="right"><span class="badge good">Restored</span></td></tr>
+      <tr><td>Negative keyword library</td><td>254 terms</td><td><strong>569 terms</strong></td><td class="right"><span class="badge good">Expanded</span></td></tr>
+      <tr><td>Active campaign structure</td><td>Legacy, fragmented</td><td><strong>6 standardized Q2 campaigns</strong></td><td class="right"><span class="badge good">Rebuilt</span></td></tr>
+      <tr><td>Tesla and JLR keyword breadth</td><td>15 narrow terms</td><td><strong>28 terms covering natural language</strong></td><td class="right"><span class="badge good">Widened</span></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Opportunities and Suggestions</h2>
+  <p>What is next. All of these work with what is already in the account.</p>
+
+  <div class="opportunity">
+    <h4>Performance Max pilot</h4>
+    <p>Performance Max needs a baseline of qualified-lead history to work, and the account has that now. It opens up Maps, YouTube, Discover, and Shopping placements. We would run a controlled pilot in early June with brand exclusions set up first, so it does not cannibalize the brand search campaign.</p>
+  </div>
+
+  <div class="opportunity">
+    <h4>Landing page experience uplift</h4>
+    <p>Google's Quality Score signal says the certified-make landing pages are slow on mobile and a little thin on content. We will put together a punch list for the website team: image compression, structured data markup for LocalBusiness and AutoRepair, mobile load fixes. Better landing pages improve Quality Score, and Quality Score affects ad ranking on every campaign.</p>
+  </div>
+
+  <div class="opportunity">
+    <h4>Call tracking consolidation</h4>
+    <p>There are four different phone numbers across the call assets right now. We will consolidate to one tracked number so we can actually tell which campaign drove which call.</p>
+  </div>
+
+  <div class="opportunity">
+    <h4>Lead form extension</h4>
+    <p>Lead Form extensions let someone request a quote without leaving the search results page. For collision repair we typically see 10 to 20 percent more leads. Scoping it for June.</p>
+  </div>
+
+  <div class="opportunity">
+    <h4>Past-customer remarketing list</h4>
+    <p>A hashed list of past customer emails gives Google a strong audience signal, both to find similar prospects and to let us include or exclude existing customers depending on the campaign. We will ask for a clean export and upload it.</p>
+  </div>
+
+  <div class="opportunity">
+    <h4>Ad creative refresh on under-rated ads</h4>
+    <p>A few responsive search ads are sitting at "Average" or "Poor" strength in Google's rating. We will rewrite the headlines and descriptions to get every ad to "Good" or "Excellent". Usually worth 10 to 15 percent more clicks.</p>
+  </div>
+
+  <h2>What to Expect Next Month</h2>
+  <p>June's plan, in order of priority:</p>
+  <ul class="clean">
+    <li>Monitor the keyword expansion deployed May 21. Tune bids weekly as Tesla and JLR start showing impressions.</li>
+    <li>Launch the Performance Max pilot with brand-exclusion safeguards.</li>
+    <li>Hand the landing page punch list to the website team.</li>
+    <li>Consolidate call tracking onto a single attributed number.</li>
+    <li>Rewrite under-rated responsive search ads.</li>
+    <li>Build the past-customer audience for remarketing.</li>
+    <li>Scale the Q2 campaigns through June as impression volume confirms efficient lead delivery.</li>
+  </ul>
+  <p>Every change is logged and reversible. Next report goes out at the end of June.</p>
+
+  <div class="footer">
+    <div class="footer-mark">
+      <span class="footer-glyph">PSG</span>
+      <strong>Phoenix Solutions Group</strong>
+    </div>
+    <div class="tagline">Exceptional work speaks louder than exaggerated promises.</div>
+    <div style="margin-top: 8px;">nick@phoenixsolutionsgroup.net &middot; phoenixsolutionsgroup.net &middot; Prepared May 21, 2026</div>
+  </div>
+
+</div>
+
+<script>
+// PSG brand colors
+const MIDNIGHT = "#1E3A52";
+const EMBER = "#B8483E";
+const DARK_ASH = "#4B5058";
+const MIST = "#949494";
+const FOG = "#C4C4C4";
+const SUCCESS = "#526B51";
+const ACCENT = EMBER;
+const INFO = MIDNIGHT;
+const GOOD = SUCCESS;
+const MUTED = FOG;
+
+Chart.defaults.font.family = '"Didact Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
+Chart.defaults.font.size = 11;
+Chart.defaults.color = DARK_ASH;
+
+const aprilImp = [854, 913, 914, 671, 619, 1071, 748, 922, 790, 1085, 705, 687, 969, 1020, 661, 841, 793, 803, 896, 907, 937, 785, 955, 757, 719, 805, 1327, 877, 710, 827];
+const mayImp = [1033, 1229, 734, 961, 1039, 627, 889, 847, 775, 1474, 903, 865, 414, 1779, 947, 1118, 3366, 63, 90, 147, 24];
+
+const dayLabels30 = Array.from({length: 30}, (_, i) => "Day " + (i+1));
+
+new Chart(document.getElementById("impChart"), {
+  type: "line",
+  data: {
+    labels: dayLabels30,
+    datasets: [
+      {
+        label: "April",
+        data: aprilImp,
+        borderColor: FOG,
+        backgroundColor: "rgba(196,196,196,0.18)",
+        borderWidth: 2,
+        tension: 0.3,
+        pointRadius: 0,
+        fill: true,
+      },
+      {
+        label: "May (to date)",
+        data: mayImp,
+        borderColor: EMBER,
+        backgroundColor: "rgba(184,72,62,0.10)",
+        borderWidth: 2.5,
+        tension: 0.3,
+        pointRadius: 0,
+        fill: true,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: "bottom", labels: { boxWidth: 12, padding: 14 } },
+      tooltip: { callbacks: { label: (c) => c.dataset.label + ": " + c.parsed.y.toLocaleString() + " imp" } }
+    },
+    scales: {
+      y: { beginAtZero: true, grid: { color: "#E0E0E0" } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+new Chart(document.getElementById("qualityChart"), {
+  type: "bar",
+  data: {
+    labels: ["Google Health Score (%)", "Ads Policy-Approved (%)", "Negative Keywords (count)", "Active Campaigns Standardized"],
+    datasets: [
+      {
+        label: "April",
+        data: [62.7, 88.7, 254, 0],
+        backgroundColor: FOG,
+        borderRadius: 2,
+      },
+      {
+        label: "May (today)",
+        data: [88.8, 100, 569, 6],
+        backgroundColor: MIDNIGHT,
+        borderRadius: 2,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: "bottom", labels: { boxWidth: 12, padding: 14 } }
+    },
+    scales: {
+      y: { beginAtZero: true, grid: { color: "#E0E0E0" } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,108 @@
+{
+  "generated_at": "2026-05-06",
+  "provider": "higgsfield-soul",
+  "model": "text2image_soul",
+  "native_output_size": "2048x1152 (16:9)",
+  "note": "Seedream and Reve models unavailable on this account. All assets generated via Soul model at 2048x1152. Crop to target dimensions before upload.",
+  "priority_batch": "Concepts 1 + 3 (highest SEMrush keyword arbitrage)",
+  "assets": [
+    {
+      "brief": 1,
+      "concept": "concept-1",
+      "concept_name": "The Only Certified Choice",
+      "platform": "meta-feed",
+      "target_dimensions": "1080x1080",
+      "aspect_ratio": "1:1",
+      "file": "ad-assets/meta/concept-1/feed-1080x1080.png",
+      "job_set_id": "e53e88f5-b9ce-4afa-8b2a-a471ce2046b8",
+      "subject": "Rivian R1S 3/4 front, charcoal background, rim light",
+      "status": "completed",
+      "crop_guidance": "Center crop from 2048x1152 to 1080x1080"
+    },
+    {
+      "brief": 2,
+      "concept": "concept-1",
+      "concept_name": "The Only Certified Choice",
+      "platform": "meta-stories",
+      "target_dimensions": "1080x1920",
+      "aspect_ratio": "9:16",
+      "file": "ad-assets/stories/concept-1/stories-1080x1920.png",
+      "job_set_id": "b0cba290-06e8-4c95-864f-510ecc754803",
+      "subject": "Rivian R1T side profile, dramatic rim light, shop atmosphere",
+      "status": "completed",
+      "crop_guidance": "Vertical crop from 2048x1152 center column to 9:16"
+    },
+    {
+      "brief": 3,
+      "concept": "concept-1",
+      "concept_name": "The Only Certified Choice",
+      "platform": "google-display",
+      "target_dimensions": "1200x628",
+      "aspect_ratio": "1.91:1",
+      "file": "ad-assets/google/concept-1/google-display-1200x628.png",
+      "job_set_id": "15f2903d-51f8-4023-91d5-101bf8d96e30",
+      "subject": "Long Island map silhouette, red location pins, severed drive path lines",
+      "status": "completed",
+      "crop_guidance": "Trim top/bottom from 2048x1152 to 1200x628 (native 16:9 close to target)"
+    },
+    {
+      "brief": 7,
+      "concept": "concept-3",
+      "concept_name": "Long Island's Only",
+      "platform": "meta-feed",
+      "target_dimensions": "1080x1080",
+      "aspect_ratio": "1:1",
+      "file": "ad-assets/meta/concept-3/feed-1080x1080.png",
+      "job_set_id": "432214ee-ba74-484f-982b-a95c620f524d",
+      "subject": "Aston Martin rear 3/4, pure black bg, single hard rim light, gallery aesthetic",
+      "status": "completed",
+      "crop_guidance": "Center crop from 2048x1152 to 1080x1080"
+    },
+    {
+      "brief": 8,
+      "concept": "concept-3",
+      "concept_name": "Long Island's Only",
+      "platform": "meta-stories",
+      "target_dimensions": "1080x1920",
+      "aspect_ratio": "9:16",
+      "file": "ad-assets/stories/concept-3/stories-1080x1920.png",
+      "job_set_id": "9dc3159f-670b-45d9-8be9-1bcde860562a",
+      "subject": "McLaren side profile, pure black bg, razor rim light, prestige register",
+      "status": "completed",
+      "crop_guidance": "Vertical crop from 2048x1152 center column to 9:16"
+    },
+    {
+      "brief": 9,
+      "concept": "concept-3",
+      "concept_name": "Long Island's Only",
+      "platform": "google-display",
+      "target_dimensions": "1200x628",
+      "aspect_ratio": "1.91:1",
+      "file": "ad-assets/google/concept-3/google-display-1200x628.png",
+      "job_set_id": "16f5c59f-e45e-416a-9064-223caa1b9e62",
+      "subject": "Dark charcoal canvas, OEM badge row (Aston Martin McLaren Ferrari Lamborghini Porsche), red underline, editorial authority",
+      "status": "completed",
+      "crop_guidance": "Trim top/bottom from 2048x1152 to 1200x628"
+    }
+  ],
+  "pending": [
+    {
+      "briefs": [4, 5, 6],
+      "concept": "concept-2",
+      "concept_name": "75 Years. They're Still Family.",
+      "note": "Huntington launch / trust concept — run next batch"
+    },
+    {
+      "briefs": [10, 11, 12],
+      "concept": "concept-4",
+      "concept_name": "Certified, Not Just Equipped",
+      "note": "German OEM authority concept — run after concept-2"
+    }
+  ],
+  "next_steps": [
+    "Crop each asset to target dimensions before upload (see crop_guidance per asset)",
+    "Quality gate: review each image against brand-profile.json forbidden list (no stock crash imagery, no budget vehicles, no neon/pastels)",
+    "Run Concepts 2 + 4 (Briefs 4-6, 10-12) as next batch",
+    "Confirm call tracking numbers per location and GA4 estimate-form events live before launch — see TRACKING-SETUP.md"
+  ]
+}

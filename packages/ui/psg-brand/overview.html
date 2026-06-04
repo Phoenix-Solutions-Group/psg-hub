@@ -1,0 +1,328 @@
+<!DOCTYPE html><html lang="en"><head>
+
+
+<meta charset="utf-8">
+<title>PSG Design System — Visual Overview</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="colors_and_type.css">
+<style>
+  body { background: var(--psg-paper); margin: 0; padding: 56px 48px; }
+  .wrap { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
+  .head { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 32px; border-bottom: 1px solid var(--color-border); }
+  .head h1 { font-family: 'Gotham'; font-size: 56px; font-weight: 700; color: var(--psg-midnight); letter-spacing: -0.02em; line-height: 1; margin: 12px 0 0; }
+  .head .meta { font-family: var(--font-mono); font-size: 11px; color: var(--psg-mist); text-align: right; }
+  .head .meta strong { color: var(--psg-graphite); display: block; font-family: 'Gotham'; font-weight: 500; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
+
+  .section-label { font-family: 'Gotham'; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.18em; color: var(--psg-ember); display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .section-label::before { content: ""; width: 28px; height: 1px; background: currentColor; }
+  .section-label .num { font-family: var(--font-mono); color: var(--psg-mist); letter-spacing: 0.04em; }
+
+  /* Logo system showcase — 6 lockups + 3 marks */
+  .logo-system { display: flex; flex-direction: column; gap: 32px; }
+  .logo-family { display: grid; grid-template-columns: 220px 1fr 1fr; gap: 16px; align-items: stretch; }
+  .logo-family-meta { padding: 4px 0; }
+  .logo-family-name { font-family: 'Gotham'; font-size: 14px; font-weight: 700; color: var(--psg-midnight); letter-spacing: -0.005em; }
+  .logo-family-desc { font-size: 12px; line-height: 1.5; color: var(--psg-mist); margin-top: 6px; }
+  .logo-family-files { font-family: var(--font-mono); font-size: 10px; color: var(--psg-fog); margin-top: 10px; letter-spacing: 0.02em; }
+  .marks-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .mark-tile { border: 1px solid var(--color-border); border-radius: 6px; display: flex; align-items: center; justify-content: center; min-height: 140px; padding: 24px; background: #fff; }
+  .mark-tile.dark { background: var(--psg-midnight); border: none; }
+  .mark-tile.square { padding: 0; overflow: hidden; }
+  .mark-tile img { max-width: 70%; max-height: 90px; }
+  .mark-tile.square img { max-width: 100%; max-height: 100%; width: 100%; height: 100%; }
+  .mark-cap { font-family: var(--font-mono); font-size: 10px; color: var(--psg-mist); margin-top: 8px; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* Color */
+  .color-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .swatch { border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden; background: #fff; }
+  .swatch .chip { height: 130px; }
+  .swatch .meta { padding: 14px 16px; }
+  .swatch .name { font-family: 'Gotham'; font-size: 14px; font-weight: 500; color: var(--psg-midnight); }
+  .swatch .role { font-size: 12px; color: var(--psg-mist); margin-top: 2px; line-height: 1.4; }
+  .swatch .hex { font-family: var(--font-mono); font-size: 11px; color: var(--psg-graphite); margin-top: 8px; letter-spacing: 0.04em; }
+
+  .neutrals { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .neutral { border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden; }
+  .neutral .chip { height: 56px; }
+  .neutral .meta { padding: 8px 10px; background: #fff; }
+  .neutral .name { font-family: 'Gotham'; font-size: 11px; font-weight: 500; color: var(--psg-midnight); }
+  .neutral .hex { font-family: var(--font-mono); font-size: 10px; color: var(--psg-mist); margin-top: 1px; }
+
+  /* Type */
+  .type-stack { display: flex; flex-direction: column; gap: 4px; }
+  .type-row { display: grid; grid-template-columns: 90px 1fr; gap: 24px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--color-border); }
+  .type-row:last-child { border-bottom: none; }
+  .type-spec { font-family: var(--font-mono); font-size: 11px; color: var(--psg-mist); letter-spacing: 0.04em; }
+  .type-sample { font-family: 'Gotham'; color: var(--psg-midnight); line-height: 1.0; letter-spacing: -0.02em; }
+  .body-sample { font-family: 'Didact Gothic'; color: var(--psg-graphite); }
+  .eyebrow-sample { font-family: 'Gotham'; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.18em; color: var(--psg-ember); }
+
+  /* Components */
+  .components-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; }
+  .panel { background: #fff; border: 1px solid var(--color-border); border-radius: 6px; padding: 28px 28px 32px; }
+  .panel-dark { background: var(--psg-midnight); border: none; }
+  .panel-dark .panel-title { color: var(--psg-paper); }
+  .panel-title { font-family: 'Gotham'; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; color: var(--psg-mist); margin-bottom: 20px; display: block; }
+
+  .btn-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .btn { font-family: 'Gotham'; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; padding: 11px 20px; border-radius: 6px; border: 1px solid transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+  .btn-primary { background: var(--psg-midnight); color: var(--psg-paper); }
+  .btn-secondary { background: transparent; color: var(--psg-midnight); border-color: var(--psg-midnight); }
+  .btn-ghost { background: transparent; color: var(--psg-midnight); padding-left: 4px; padding-right: 4px; }
+  .btn-accent { background: var(--psg-ember); color: #fff; }
+
+  .badge { font-family: 'Gotham'; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; padding: 5px 11px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
+  .b-primary { background: var(--psg-midnight); color: var(--psg-paper); }
+  .b-soft { background: #DCE3EA; color: #142838; }
+  .b-accent { background: #FAEEEC; color: #8C362D; }
+  .b-success { background: #E4ECDF; color: #3A553D; }
+  .b-outline { background: transparent; color: var(--psg-midnight); border: 1px solid #8FA1B2; }
+
+  .input { width: 100%; font-family: 'Didact Gothic'; font-size: 14px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 6px; background: #fff; color: var(--psg-graphite); box-sizing: border-box; }
+  .input-label { display: block; font-family: 'Gotham'; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--psg-graphite); margin-bottom: 6px; margin-top: 12px; }
+  .input-label:first-child { margin-top: 0; }
+
+  /* Spacing & shadows */
+  .spacing-row { display: flex; align-items: center; gap: 14px; padding: 6px 0; }
+  .spacing-token { width: 80px; font-family: var(--font-mono); font-size: 11px; color: var(--psg-graphite); }
+  .spacing-px { width: 40px; font-family: var(--font-mono); font-size: 11px; color: var(--psg-mist); }
+  .spacing-bar { height: 12px; background: var(--psg-midnight); border-radius: 2px; }
+
+  .radii-row { display: flex; gap: 18px; align-items: flex-start; }
+  .radii-item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .radii-box { width: 76px; height: 56px; background: #fff; border: 1px solid var(--color-border); }
+  .radii-lbl { font-family: var(--font-mono); font-size: 11px; color: var(--psg-graphite); }
+  .radii-px { font-size: 10px; color: var(--psg-mist); }
+
+  .shadow-row { display: flex; gap: 24px; padding: 24px 0 8px; }
+  .shadow-item { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .shadow-box { width: 84px; height: 56px; background: #fff; border-radius: 6px; }
+
+  /* Voice */
+  .voice { display: grid; grid-template-columns: 5fr 7fr; gap: 56px; align-items: end; padding: 48px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
+  .voice h2 { font-family: 'Gotham'; font-size: 44px; font-weight: 300; color: var(--psg-midnight); letter-spacing: -0.018em; line-height: 1.05; margin: 14px 0 0; }
+  .voice p { font-size: 15px; line-height: 1.65; color: var(--psg-graphite); margin: 0; }
+
+  /* Footer */
+  .footer-note { font-family: var(--font-mono); font-size: 11px; color: var(--psg-mist); padding-top: 24px; border-top: 1px solid var(--color-border); display: flex; justify-content: space-between; }
+</style>
+</head>
+<body data-cc-id="cc-1" style="cursor: crosshair;">
+<div class="wrap">
+
+  <header class="head">
+    <div>
+      <span class="section-label" style="margin: 0;">Phoenix Solutions Group <span class="num">· v3.0</span></span>
+      <h1>The design system, at a glance.</h1>
+    </div>
+    <div class="meta">
+      <strong>Visual overview</strong>
+      Brand · Color · Type · Components<br>v3.0 · May 2026
+    </div>
+  </header>
+
+  <!-- BRAND -->
+  <section>
+    <div class="section-label"><span class="num">01</span> Brand · The PSG logo system</div>
+    <div class="logo-system">
+
+      <!-- Primary horizontal -->
+      <div class="logo-family">
+        <div class="logo-family-meta">
+          <div class="logo-family-name">Primary · Horizontal</div>
+          <div class="logo-family-desc">Full lockup with tagline. Use everywhere you have horizontal room and the brand needs introduction.</div>
+          <div class="logo-family-files">psg-logo-primary.svg<br>psg-logo-reverse.svg</div>
+        </div>
+        <div class="mark-tile"><img src="assets/psg-logo-primary.svg" alt="PSG primary horizontal"></div>
+        <div class="mark-tile dark"><img src="assets/psg-logo-reverse.svg" alt="PSG primary horizontal reverse"></div>
+      </div>
+
+      <!-- Simple horizontal -->
+      <div class="logo-family">
+        <div class="logo-family-meta">
+          <div class="logo-family-name">Simple · Horizontal</div>
+          <div class="logo-family-desc">Flame + PSG only, no tagline. Use in nav bars, headers, and any context where the brand is already established.</div>
+          <div class="logo-family-files">psg-logo-simple.svg<br>psg-logo-simple-reverse.svg</div>
+        </div>
+        <div class="mark-tile"><img src="assets/psg-logo-simple.svg" alt="PSG simple horizontal" style="max-height:70px"></div>
+        <div class="mark-tile dark"><img src="assets/psg-logo-simple-reverse.svg" alt="PSG simple horizontal reverse" style="max-height:70px"></div>
+      </div>
+
+      <!-- Vertical with tagline -->
+      <div class="logo-family">
+        <div class="logo-family-meta">
+          <div class="logo-family-name">Vertical · Full</div>
+          <div class="logo-family-desc">Stacked lockup with tagline. Use for posters, signage, deck title slides, and other tall-format moments.</div>
+          <div class="logo-family-files">psg-logo-vertical.svg<br>psg-logo-vertical-reverse.svg</div>
+        </div>
+        <div class="mark-tile"><img src="assets/psg-logo-vertical.svg" alt="PSG vertical full" style="max-height:140px"></div>
+        <div class="mark-tile dark"><img src="assets/psg-logo-vertical-reverse.svg" alt="PSG vertical full reverse" style="max-height:140px"></div>
+      </div>
+
+      <!-- Vertical stacked simple -->
+      <div class="logo-family">
+        <div class="logo-family-meta">
+          <div class="logo-family-name">Vertical · Stacked</div>
+          <div class="logo-family-desc">Stacked flame + PSG, no tagline. Use when the vertical lockup is needed but space is tight or brand is already established.</div>
+          <div class="logo-family-files">psg-logo-stacked.svg<br>psg-logo-stacked-reverse.svg</div>
+        </div>
+        <div class="mark-tile"><img src="assets/psg-logo-stacked.svg" alt="PSG stacked" style="max-height:130px"></div>
+        <div class="mark-tile dark"><img src="assets/psg-logo-stacked-reverse.svg" alt="PSG stacked reverse" style="max-height:130px"></div>
+      </div>
+
+      <!-- Marks -->
+      <div class="logo-family">
+        <div class="logo-family-meta">
+          <div class="logo-family-name">Phoenix mark</div>
+          <div class="logo-family-desc">The flame on its own. Use as a favicon, app icon, watermark, or any moment that calls for a single visual mark without the wordmark.</div>
+          <div class="logo-family-files">psg-mark.svg · psg-mark-white.svg · psg-mark-square.svg</div>
+        </div>
+        <div class="mark-tile" style="grid-column: span 2; display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0; padding: 0; overflow: hidden;">
+          <div style="display:flex; align-items:center; justify-content:center; background:#fff; border-right:1px solid var(--color-border); padding:24px;"><img src="assets/psg-mark.svg" alt="PSG mark" style="max-height:80px"></div>
+          <div style="display:flex; align-items:center; justify-content:center; background:var(--psg-midnight); border-right:1px solid var(--color-border); padding:24px;"><img src="assets/psg-mark-white.svg" alt="PSG mark white" style="max-height:80px"></div>
+          <div style="display:flex; align-items:center; justify-content:center; padding:0; overflow:hidden;"><img src="assets/psg-mark-square.svg" alt="PSG mark square" style="width:100%; height:100%; object-fit:cover;"></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- COLOR -->
+  <section>
+    <div class="section-label"><span class="num">02</span> Color · Brand &amp; neutrals</div>
+    <div class="color-row">
+      <div class="swatch"><div class="chip" style="background:#1E3A52"></div><div class="meta"><div class="name">Midnight</div><div class="role">Primary · trust, heritage</div><div class="hex">#1E3A52</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#B8483E"></div><div class="meta"><div class="name">Ember</div><div class="role">Accent · transformation, single focal moment</div><div class="hex">#B8483E</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#4B5058"></div><div class="meta"><div class="name">Dark Ash</div><div class="role">Secondary · supporting copy, taglines</div><div class="hex">#4B5058</div></div></div>
+    </div>
+    <div class="neutrals">
+      <div class="neutral"><div class="chip" style="background:#FAFAFA"></div><div class="meta"><div class="name">Paper</div><div class="hex">#FAFAFA</div></div></div>
+      <div class="neutral"><div class="chip" style="background:#F0F0F0"></div><div class="meta"><div class="name">Bone</div><div class="hex">#F0F0F0</div></div></div>
+      <div class="neutral"><div class="chip" style="background:#E0E0E0"></div><div class="meta"><div class="name">Stone</div><div class="hex">#E0E0E0</div></div></div>
+      <div class="neutral"><div class="chip" style="background:#C4C4C4"></div><div class="meta"><div class="name">Fog</div><div class="hex">#C4C4C4</div></div></div>
+      <div class="neutral"><div class="chip" style="background:#949494"></div><div class="meta"><div class="name">Mist</div><div class="hex">#949494</div></div></div>
+      <div class="neutral"><div class="chip" style="background:#2A2A2A"></div><div class="meta"><div class="name" style="color:#fff;background:#2A2A2A;margin:-8px -10px 1px;padding:8px 10px">Graphite</div><div class="hex">#2A2A2A</div></div></div>
+      <div class="neutral"><div class="chip" style="background:#161616"></div><div class="meta"><div class="name" style="color:#fff;background:#161616;margin:-8px -10px 1px;padding:8px 10px">Ink</div><div class="hex">#161616</div></div></div>
+    </div>
+  </section>
+
+  <!-- TYPE -->
+  <section>
+    <div class="section-label"><span class="num">03</span> Type · Gotham + Didact Gothic</div>
+    <div class="type-stack">
+      <div class="type-row"><span class="type-spec">H1 · 64 / Bold</span><span class="type-sample" style="font-size:60px;font-weight:700">Transformation, on schedule.</span></div>
+      <div class="type-row"><span class="type-spec">H2 · 48 / Bold</span><span class="type-sample" style="font-size:42px;font-weight:700">Heritage. Refined.</span></div>
+      <div class="type-row"><span class="type-spec">H3 · 36 / Bold</span><span class="type-sample" style="font-size:32px;font-weight:700">Precision craft</span></div>
+      <div class="type-row"><span class="type-spec">H4 · 24 / Bold</span><span class="type-sample" style="font-size:22px;font-weight:700;letter-spacing:-0.005em">Operational execution</span></div>
+      <div class="type-row"><span class="type-spec">Eyebrow</span><span class="eyebrow-sample">35 Years of Transformation</span></div>
+      <div class="type-row"><span class="type-spec">Body 16</span><span class="body-sample" style="font-size:16px;line-height:1.6">Strategic insight, operationally executed. Since 1989.</span></div>
+      <div class="type-row"><span class="type-spec">Small 14</span><span class="body-sample" style="font-size:14px;color:var(--psg-mist)">We respond to inquiries within one business day.</span></div>
+    </div>
+  </section>
+
+  <!-- NOTIFICATION COLORS -->
+  <section>
+    <div class="section-label"><span class="num">04</span> Notifications · Semantic state</div>
+    <div class="color-row" style="grid-template-columns: repeat(4, 1fr); gap: 14px;">
+      <div class="swatch"><div class="chip" style="background:#526B51;height:96px"></div><div class="meta"><div class="name">Success</div><div class="role">Sage green</div><div class="hex">#526B51</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#C28E3A;height:96px"></div><div class="meta"><div class="name">Warning</div><div class="role">Amber</div><div class="hex">#C28E3A</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#B8483E;height:96px"></div><div class="meta"><div class="name">Danger</div><div class="role">Ember · reuse, don’t invent</div><div class="hex">#B8483E</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#C4C4C4;height:96px"></div><div class="meta"><div class="name">Inactive</div><div class="role">Fog · disabled state</div><div class="hex">#C4C4C4</div></div></div>
+    </div>
+  </section>
+
+  <!-- VOICE -->
+  <section class="voice">
+    <div>
+      <div class="section-label" style="margin-bottom:0"><span class="num">05</span> Voice</div>
+      <h2 style="font-weight:700">Marketing built around your bay schedule.</h2>
+    </div>
+    <p>PSG writes like a senior consultant in a tailored sport coat — warm, precise, and quietly confident. Editorial, never salesy. Sentences breathe. Adjectives earn their place. No emoji. Em-dashes welcome.</p>
+  </section>
+
+  <!-- COMPONENTS -->
+  <section>
+    <div class="section-label"><span class="num">06</span> Components</div>
+    <div class="components-grid">
+      <div class="panel">
+        <span class="panel-title">Buttons</span>
+        <div class="btn-row" style="margin-bottom:12px">
+          <button class="btn btn-primary">Schedule consultation <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H8M17 7V16"></path></svg></button>
+          <button class="btn btn-secondary">Learn more</button>
+          <button class="btn btn-ghost">View case study →</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-accent">Begin transformation</button>
+        </div>
+      </div>
+      <div class="panel">
+        <span class="panel-title">Badges</span>
+        <div class="btn-row" style="margin-bottom:10px">
+          <span class="badge b-primary">Primary</span>
+          <span class="badge b-accent">New</span>
+          <span class="badge b-soft">Quarterly</span>
+        </div>
+        <div class="btn-row">
+          <span class="badge b-success"><span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>Active client</span>
+          <span class="badge b-outline">Outline</span>
+        </div>
+      </div>
+      <div class="panel">
+        <span class="panel-title">Form</span>
+        <label class="input-label">Shop name</label>
+        <input class="input" value="Apex Collision Center">
+        <label class="input-label">Email</label>
+        <input class="input" placeholder="you@shop.com" style="border-color:var(--psg-ember);box-shadow:0 0 0 2px var(--psg-paper),0 0 0 4px var(--psg-ember)">
+      </div>
+      <div class="panel panel-dark">
+        <span class="panel-title" style="color:#949494">Card · on midnight</span>
+        <div style="font-family:'Gotham';font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.18em;color:#D88378;margin-bottom:12px;display:flex;align-items:center;gap:10px"><span style="width:18px;height:1px;background:currentColor"></span>Engagement</div>
+        <h4 style="font-family:'Gotham';font-size:20px;font-weight:700;color:var(--psg-paper);margin:0 0 8px;letter-spacing:-0.005em">The Quarterly Playbook</h4>
+        <p style="font-size:13px;line-height:1.6;color:#C4C4C4;margin:0">Strategy, execution, and review. Built around your bay schedule.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SPACING / RADII / SHADOWS -->
+  <section>
+    <div class="section-label"><span class="num">07</span> Spacing · Radii · Shadows</div>
+    <div class="components-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+      <div class="panel">
+        <span class="panel-title">4-pt scale</span>
+        <div class="spacing-row"><span class="spacing-token">--space-2</span><span class="spacing-px">8</span><div class="spacing-bar" style="width:8px"></div></div>
+        <div class="spacing-row"><span class="spacing-token">--space-4</span><span class="spacing-px">16</span><div class="spacing-bar" style="width:16px"></div></div>
+        <div class="spacing-row"><span class="spacing-token">--space-6</span><span class="spacing-px">32</span><div class="spacing-bar" style="width:32px"></div></div>
+        <div class="spacing-row"><span class="spacing-token">--space-8</span><span class="spacing-px">48</span><div class="spacing-bar" style="width:48px"></div></div>
+        <div class="spacing-row"><span class="spacing-token">--space-10</span><span class="spacing-px">80</span><div class="spacing-bar" style="width:80px"></div></div>
+        <div class="spacing-row"><span class="spacing-token">--space-11</span><span class="spacing-px">96</span><div class="spacing-bar" style="width:96px"></div></div>
+      </div>
+      <div class="panel">
+        <span class="panel-title">Radii</span>
+        <div class="radii-row">
+          <div class="radii-item"><div class="radii-box" style="border-radius:0"></div><span class="radii-lbl">none</span><span class="radii-px">0</span></div>
+          <div class="radii-item"><div class="radii-box" style="border-radius:4px"></div><span class="radii-lbl">sm</span><span class="radii-px">4</span></div>
+          <div class="radii-item"><div class="radii-box" style="border-radius:6px"></div><span class="radii-lbl">md</span><span class="radii-px">6 · default</span></div>
+          <div class="radii-item"><div class="radii-box" style="border-radius:999px"></div><span class="radii-lbl">pill</span><span class="radii-px">badges</span></div>
+        </div>
+      </div>
+      <div class="panel">
+        <span class="panel-title">Shadows</span>
+        <div class="shadow-row">
+          <div class="shadow-item"><div class="shadow-box" style="box-shadow:var(--shadow-hairline)"></div><span class="radii-lbl">hair</span></div>
+          <div class="shadow-item"><div class="shadow-box" style="box-shadow:var(--shadow-sm)"></div><span class="radii-lbl">sm</span></div>
+          <div class="shadow-item"><div class="shadow-box" style="box-shadow:var(--shadow-md)"></div><span class="radii-lbl">md</span></div>
+          <div class="shadow-item"><div class="shadow-box" style="box-shadow:var(--shadow-lg)"></div><span class="radii-lbl">lg</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer-note">
+    <span>PHOENIX SOLUTIONS GROUP · DESIGN SYSTEM v3.0 · EST. 1989</span>
+    <span>17 cards registered · See Design System tab for individual reviews</span>
+  </div>
+
+</div>
+
+
+</body></html>

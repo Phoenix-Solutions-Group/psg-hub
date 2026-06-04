@@ -1,0 +1,363 @@
+// Portal user profile from Supabase portal_users table
+export interface PortalUser {
+  id: string
+  email: string
+  shop_id: string
+  role: 'shop_owner' | 'psg_admin' | 'read_only'
+  full_name: string | null
+  created_at: string
+  last_login: string | null
+}
+
+// Session log entry for portal_sessions_log
+export interface SessionLogEntry {
+  user_id: string
+  shop_id: string
+  action: string
+}
+
+// API error response shape
+export interface ApiError {
+  error: {
+    code: 'UNAUTHORIZED' | 'FORBIDDEN' | 'NOT_FOUND' | 'INTERNAL_ERROR'
+    message: string
+  }
+}
+
+export interface HealthCheckResult {
+  supabase: string
+  redis: string
+}
+
+// Network dashboard types
+export interface NetworkSummary {
+  total_surveys: number
+  avg_emi_pct: number
+  active_shops: number
+  alert_count: number
+  total_surveys_delta?: number  // vs prior period
+  avg_emi_delta?: number
+}
+
+export interface TrendPoint {
+  month: string          // YYYY-MM format
+  surveys: number
+  avg_emi_pct: number    // already multiplied by 100
+}
+
+export interface ShopListItem {
+  shop_name: string
+  canonical_shop_name?: string | null
+  total_surveys: number
+  avg_emi_pct: number
+  trend?: 'improving' | 'stable' | 'declining'
+  emi_delta?: number      // change vs prior period
+  latest_survey_date: string
+  place_id?: string
+  address?: string | null
+  phone?: string | null
+  website?: string | null
+  rating?: number | null
+  category?: string | null
+  latitude?: number | null
+  longitude?: number | null
+}
+
+export interface AlertShop {
+  shop_name: string
+  avg_emi_pct: number
+  total_surveys: number
+  months_below: number   // consecutive months below threshold
+}
+
+// Shop detail types
+export interface ShopDetail {
+  shop_name: string
+  invoiced_id?: number | null
+  psg_id?: string | null
+  invoiced_city?: string | null
+  invoiced_state?: string | null
+  avg_emi_pct: number
+  trend: 'improving' | 'stable' | 'declining'
+  emi_delta: number
+  total_surveys: number
+  avg_quality: number | null
+  avg_cleanliness: number | null
+  avg_communication: number | null
+  avg_courtesy: number | null
+  network_avg_communication: number | null
+}
+
+export interface ShopTrendPoint {
+  month: string
+  avg_emi_pct: number
+  surveys: number
+}
+
+export interface ShopCompetitorPoint {
+  is_anchor: boolean
+  shop_name: string
+  place_id: string | null
+  address: string | null
+  phone: string | null
+  website: string | null
+  rating: number | null
+  category: string | null
+  latitude: number
+  longitude: number
+  distance_miles: number
+}
+
+export interface MarketMapPoint {
+  layer: 'psg_customer' | 'directory_shop'
+  id: string
+  shop_name: string
+  psg_id: string | null
+  invoiced_id: number | null
+  place_id: string | null
+  address: string | null
+  phone: string | null
+  website: string | null
+  rating: number | null
+  latitude: number
+  longitude: number
+  state: string | null
+  city: string | null
+  survey_count: number | null
+  avg_emi_pct: number | null
+  match_status: string
+}
+
+export interface MarketMapData {
+  points: MarketMapPoint[]
+  summary: {
+    psg_customers: number
+    directory_shops: number
+    surveyed_psg_customers: number
+    states: string[]
+  }
+}
+
+export type MarketMapSearchResult = MarketMapPoint
+
+export interface MarketViewportTopZip {
+  zip: string
+  state: string
+  city: string | null
+  year: number | null
+  total_crashes: number
+  injury_crashes: number
+  weather_related_crashes: number
+  storm_events: number
+  hail_events: number
+  wind_events: number
+  storm_demand_score: number
+  targeting_score: number
+}
+
+export interface MarketViewportTopCustomer {
+  shop_name: string
+  psg_id: string | null
+  city: string | null
+  state: string | null
+  survey_count: number | null
+  avg_emi_pct: number | null
+}
+
+export interface MarketViewportIntelligence {
+  viewport_label: string
+  zoom: number
+  psg_customer_count: number
+  directory_shop_count: number
+  surveyed_psg_customer_count: number
+  crash_count: number
+  injury_crash_count: number
+  weather_related_crash_count: number
+  storm_event_count: number
+  hail_event_count: number
+  wind_event_count: number
+  storm_demand_score: number
+  top_zips: MarketViewportTopZip[]
+  top_customers: MarketViewportTopCustomer[]
+}
+
+export type CustomerGeoPreset = 'all' | 'nyc5' | 'nyc_nassau_suffolk'
+
+export interface CustomerGeoShopOption {
+  shop_id: string
+  shop_name: string
+  repair_count: number
+}
+
+export interface CustomerGeoZipPoint {
+  zip: string | null
+  city: string | null
+  state: string | null
+  county_name: string | null
+  latitude: number
+  longitude: number
+  repair_count: number
+  unique_household_count: number
+  shop_count: number
+}
+
+export type CustomerGeoPin = CustomerGeoZipPoint
+
+export interface CustomerGeoPinsResponse {
+  filters: {
+    startDate: string
+    endDate: string
+    preset: CustomerGeoPreset
+    shopIds: string[]
+  }
+  summary: {
+    pin_count: number
+    unique_households: number
+    unique_zips: number
+    total_repairs: number
+  }
+  pins: CustomerGeoZipPoint[]
+}
+
+export interface CustomerGeoZipIncomeRow {
+  zip: string
+  state: string | null
+  county_name: string | null
+  city_name: string | null
+  repair_count: number
+  unique_household_count: number
+  registered_vehicles: number | null
+  vehicle_repair_penetration_pct: number | null
+  market_share_pct: number | null
+  mean_household_income: number | null
+  median_household_income: number | null
+  avg_repair_total: number | null
+  total_repair_value: number | null
+  competitor_shop_count: number | null
+  crash_demand_score: number | null
+  storm_demand_score: number | null
+  opportunity_score: number | null
+  ev_vehicle_count: number | null
+  data_quality_flag?: string | null
+}
+
+export interface CustomerGeoZipIncomeResponse {
+  filters: {
+    startDate: string
+    endDate: string
+    preset: CustomerGeoPreset
+    shopIds: string[]
+  }
+  summary: {
+    zip_count: number
+    total_repairs: number
+    total_registered_vehicles: number | null
+    vehicle_repair_penetration_pct: number | null
+    market_share_pct: number | null
+    weighted_mean_household_income: number | null
+    avg_opportunity_score: number | null
+  }
+  rows: CustomerGeoZipIncomeRow[]
+}
+
+export interface ShopComment {
+  survey_date: string
+  comment_text: string
+  scale_emi_pct: number
+}
+
+export interface PaginatedComments {
+  comments: ShopComment[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+// Auth profile for API routes
+export interface AuthProfile {
+  userId: string
+  email: string
+  shopId: string
+  role: 'shop_owner' | 'psg_admin' | 'read_only'
+}
+
+// Flower Hill market report types
+export interface FlowerHillCustomerRow {
+  customer_first_name: string | null
+  customer_last_name: string | null
+  vehicle_year: number | null
+  vehicle_make: string | null
+  vehicle_model: string | null
+  repair_total: number | null
+  pay_type: string | null
+  insurance_company: string | null
+  date_in: string | null
+  date_out: string | null
+  shop_name: string
+  customer_zip: string | null
+  customer_city: string | null
+  customer_state: string | null
+  latitude: number | null
+  longitude: number | null
+  formatted_address: string | null
+  is_target_vehicle: boolean
+}
+
+export interface FlowerHillZipRow {
+  zip: string
+  city: string | null
+  psg_customer_count: number
+  target_vehicle_matches: number
+  consumer_db_count: number
+  penetration_pct: number | null
+}
+
+export interface FlowerHillMakeRow {
+  make: string
+  psg_customer_count: number
+  consumer_db_count: number
+  penetration_pct: number | null
+}
+
+export interface FlowerHillMetrics {
+  total_repairs: number
+  unique_customers: number
+  total_revenue: number
+  avg_repair_value: number
+  target_vehicle_matches: number
+  target_vehicle_match_rate: number
+  consumer_db_total: number
+  overall_penetration_pct: number
+  shop_names: string[]
+  first_date: string | null
+  last_date: string | null
+  household_penetration_pct: number | null
+  market_penetration_radius_pct: number | null
+  registered_vehicles_in_radius: number
+  top_insurance: Array<{ name: string; count: number }>
+  pay_type_distribution: Array<{ name: string; count: number }>
+}
+
+export interface FlowerHillReportData {
+  metrics: FlowerHillMetrics
+  customers: FlowerHillCustomerRow[]
+  zip_breakdown: FlowerHillZipRow[]
+  make_breakdown: FlowerHillMakeRow[]
+  market_zips: FlowerHillMarketZipRow[]
+}
+
+export interface FlowerHillMarketZipRow {
+  zip: string
+  city: string | null
+  repair_orders: number
+  unique_households: number
+  registered_vehicles: number | null
+  vehicle_pen_pct: number | null
+  market_share_pct: number | null
+  competitor_shops: number | null
+  ev_vehicles: number | null
+  opportunity_score: number | null
+  mean_income: number | null
+  median_income: number | null
+}

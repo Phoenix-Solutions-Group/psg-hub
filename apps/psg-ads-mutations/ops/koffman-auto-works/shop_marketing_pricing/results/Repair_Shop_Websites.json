@@ -1,0 +1,52 @@
+{
+  "agency_name": "Repair Shop Websites",
+  "domain": "repairshopwebsites.com",
+  "hq_location": "Cary, NC (reported) [uncertain]",
+  "specialty": "AR (mechanical) primary, some CR; auto repair shop niche website builder",
+  "services": ["Website", "Hosting", "Basic SEO", "Online Review Management", "Google Business Profile assistance", "Content updates"],
+  "base_monthly_low_usd": 99,
+  "base_monthly_high_usd": 249,
+  "typical_monthly_usd": "~$129-$179/mo for mid-tier website + SEO bundle [uncertain]",
+  "setup_fee_usd": "$0-$199 one-time (often waived in promos) [uncertain]",
+  "min_ad_spend_usd": "None — Google Ads not a core service; PPC available as separate add-on",
+  "contract_length_months": "Month-to-month reported, with annual prepay discounts [uncertain]",
+  "cancellation_policy": "Standard ~30-day notice; site goes dark on cancellation (vendor retains template + hosting) [uncertain]",
+  "asset_ownership": "Vendor retains website template, hosting, and codebase. Customer typically owns their domain name (registered separately) but loses the site itself on cancellation. Content/copy ownership unclear. [uncertain]",
+  "pricing_transparency": "Quote-only — 3 published plans referenced on site but exact dollar amounts gated behind a 10-minute call",
+  "pricing_confidence": "low",
+  "pricing_sources": [
+    "https://www.repairshopwebsites.com/pricing/",
+    "https://www.repairshopwebsites.com/",
+    "https://www.repairshopwebsites.com/reviews/",
+    "https://www.repairshopwebsites.com/online-review-management/",
+    "https://www.flashcrafter.ai/compare/best-website-builders-for-auto-repair",
+    "https://www.networksolutions.com/blog/best-auto-repair-website-builders/",
+    "https://xsoneconsultants.com/blog/cost-to-build-a-website-for-an-auto-repair-shop/"
+  ],
+  "known_pain_points": [
+    "Generic template-driven sites with limited customization",
+    "Light SEO — local pages and meta tags only, no real content strategy or link-building",
+    "No native Google Ads management — must layer a separate vendor",
+    "No conversion tracking setup beyond basic form/phone analytics [uncertain]",
+    "Site disappears on cancellation; client retains nothing beyond domain",
+    "Pricing not transparent — must call to get quote"
+  ],
+  "notable_clients": ["Thousands of small independent AR shops nationwide; no marquee names published"],
+  "pros": [
+    "Auto repair vertical specialist — 20+ years in the niche",
+    "Low entry monthly fee vs Hibu or full-service agencies",
+    "Bundled hosting + content updates + review widget",
+    "No long-term contract reported (month-to-month flexibility)",
+    "US-based support targeting AR shop owners specifically"
+  ],
+  "cons": [
+    "Template-based — sites look similar across customers, weak differentiation",
+    "Limited SEO depth — no link-building, no content marketing program",
+    "No paid media management (Google Ads, Meta Ads not core offering)",
+    "Customer does not own the site post-cancellation",
+    "Quote-only pricing creates friction and obscures comparison",
+    "Lacks CRM, call tracking, and shop management integrations (vs AutoLeap/Tekmetric)"
+  ],
+  "koffman_relevance": "Direct downgrade from Hibu on services breadth (no ads, no display, no listings management) but upgrade on transparency and contract friction. Would replace ONLY the website + basic SEO portion of Hibu, not the Google Ads or display layer. PSG would still need to layer paid media, conversion tracking, and CRM. Likely not a Hibu replacement; more of a cheaper bare-bones alternative if Koffman wanted to strip Hibu down to just hosting + template. Vendor lock-in (no site ownership) is similar to Hibu's pain point.",
+  "uncertain": ["hq_location", "base_monthly_low_usd exact floor", "base_monthly_high_usd exact ceiling", "typical_monthly_usd", "setup_fee_usd", "contract_length_months", "cancellation_policy", "asset_ownership", "conversion tracking setup details", "ownership of content vs template"]
+}

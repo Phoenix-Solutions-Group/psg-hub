@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "workspace_initialized": "2026-05-28",
+  "last_groom": null,
+  "next_groom": "2026-05-29",
+  "groom_cadence": "weekly",
+  "groom_day": "Friday",
+  "drift_signals": [],
+  "health": "fresh",
+  "drift": {
+    "score": 0,
+    "indicators": {
+      "active_age_days": 0,
+      "backlog_age_days": 0,
+      "backlog_past_review": 0,
+      "orphaned_sessions": 0,
+      "untracked_root_files": 0,
+      "stale_satellites": 0
+    }
+  },
+  "last_modified": "2026-06-02T10:39:18.025307"
+}

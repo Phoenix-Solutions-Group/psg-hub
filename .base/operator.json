@@ -1,0 +1,52 @@
+{
+  "hook_active": true,
+  "operator": {
+    "name": "Nick Schoolcraft",
+    "email": "nick@phoenixsolutionsgroup.net",
+    "organization": "Phoenix Solutions Group"
+  },
+  "deep_why": {
+    "statement": "PSG exists so hard-working SMBs — including the ones in my own family and community — finally see their effort compound into real growth, by closing the enterprise cost gap with AI-powered services.",
+    "layers": [
+      "AI-powered services for SMBs",
+      "SMBs can't afford enterprise tools/talent",
+      "Family/community runs SMBs — personal stake",
+      "Watched them work hard but lose ground",
+      "Their effort finally compounds into real growth"
+    ],
+    "completed_at": "2026-05-28"
+  },
+  "north_star": {
+    "metric": "MRR (monthly recurring revenue)",
+    "timeframe": "EOY 2026",
+    "current": "$0–$2k/mo",
+    "target": "$10k/mo",
+    "completed_at": "2026-05-28"
+  },
+  "key_values": {
+    "values": [
+      { "rank": 1, "value": "Craft / quality", "meaning": "Ship things that hold up. No slop, no half-done. Quality wins ties." },
+      { "rank": 2, "value": "Client outcomes over deliverables", "meaning": "Measure by their results, not our outputs. Deliverables are means, outcomes are the end." },
+      { "rank": 3, "value": "Independence / sovereignty", "meaning": "Stay lean. No VC, no gatekeepers. Keep PSG free; keep clients free." },
+      { "rank": 4, "value": "Compounding / long-term thinking", "meaning": "Build assets that gain value over time. Prefer durable systems to one-shot wins." }
+    ],
+    "completed_at": "2026-05-28"
+  },
+  "elevator_pitch": {
+    "pitch": "AI services for local businesses — Phoenix Solutions Group delivers AI-powered marketing, automation, and ops to SMBs that can't afford enterprise teams or tools.",
+    "floors": {
+      "1": "AI services for local businesses.",
+      "2": "Phoenix Solutions Group delivers AI-powered marketing, automation, and ops to local businesses that can't afford enterprise teams or tools.",
+      "3": "SMBs can't hire five specialists or buy twelve SaaS tools. PSG bundles marketing, automation, content, and ops into one AI-powered service. Effort finally compounds into growth.",
+      "4": "Problem: hard-working SMBs lose ground because enterprise-grade marketing, automation, and ops are priced out of reach — meanwhile chains and big tech keep widening the gap. Insight: AI flips the cost equation; bundled into a productized service, it gives a five-person shop the leverage of a thirty-person team. Ask: PSG works with SMBs who want outcomes over deliverables, and partners who share the thesis that main street should keep its independence while growing."
+    },
+    "completed_at": "2026-05-28"
+  },
+  "surface_vision": {
+    "summary": "PSG works when clients can't help but tell us — unprompted texts like \"booked solid again this month, thanks\" — because the outcomes speak before the invoice does.",
+    "scenes": [
+      "Client SMS: 'booked solid again this month, thanks' — unprompted, recurring, no nudge needed"
+    ],
+    "completed_at": "2026-05-28"
+  }
+}

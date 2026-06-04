@@ -1,0 +1,85 @@
+{
+  "agency_name": "Autoshop Solutions, Inc.",
+  "domain": "autoshopsolutions.com",
+  "hq_location": "Apex, NC (Raleigh-Cary metro)",
+  "specialty": "AR (mechanical) — primary; explicit Auto Body / Collision Repair vertical (industries/auto-body-shop/ and industries/collision-repair page) but mechanical AR is the dominant book of business. Treat as Both, AR-leaning.",
+  "services": [
+    "Website",
+    "SEO",
+    "Google Ads",
+    "Meta Ads",
+    "Social",
+    "Content",
+    "Listings",
+    "Reviews",
+    "Account Management",
+    "Hosting"
+  ],
+  "base_monthly_low_usd": 179,
+  "base_monthly_high_usd": "[uncertain] — not published. Third-party comparison estimates $2,000–$5,000+/mo for full RPM program; top end likely higher for multi-location.",
+  "typical_monthly_usd": "[uncertain] ~$1,500–$3,500/mo for a single-location independent shop on the full RPM program (website + SEO + PPC + social + account mgmt). Per Service Stories' public comparison, 'typically $2,000–$5,000+/month based on industry standards.'",
+  "setup_fee_usd": "Partner/promo pricing: $1 setup via AutoZone, ATI, and Turnkey Marketing partner channels. Standard setup [uncertain] but typically rolled into first month.",
+  "min_ad_spend_usd": "[uncertain] — not published. PPC is included in RPM, ad spend billed separately on top of management fee.",
+  "contract_length_months": "Month-to-month (no annual contract). Per Terms: 'Because there's no annual contract, your rate is subject to change, but we'll always notify you beforehand.'",
+  "cancellation_policy": "5-day full refund window from order date. After 5 days payments are non-refundable; service continues until end of current billing period. Cancel anytime via Manage Account page or by contacting Autoshop Solutions. Social Media and Paid Search (PPC) payments are non-refundable. Late fee 1.5%/mo on past-due balances. Termination on default: 14 business days to cure.",
+  "asset_ownership": "[uncertain on full transfer rights] Hosting is on Autoshop Solutions' dedicated servers and bundled in monthly fee — implies website is on their stack and migration off is non-trivial. Terms state 'all grants of any license to use or transfer ownership of any intellectual property rights under this Agreement are conditioned on full payment' — i.e., client receives IP rights only after settling all balances, and even then transfer mechanics are not spelled out publicly. Client retains rights to content/photos/trademarks they supply.",
+  "pricing_transparency": "Quote-only for full RPM. One published entry price: $179/mo via AutoZone-partner channel. Tiered structure ('Regardless of the level you choose') but tier prices not on website — uses a 'Right-Fit' calculator that asks weekly car count, ARO, and revenue, then quotes a recommended budget.",
+  "pricing_confidence": "medium",
+  "pricing_sources": [
+    "https://autoshopsolutions.com/rpm/",
+    "https://autoshopsolutions.com/partners/autozone/?tag=autozone",
+    "https://autoshopsolutions.com/partners/turnkey-marketing/?tag=turnkey",
+    "https://autoshopsolutions.com/partners/ati/",
+    "https://autoweb.autoshopsolutions.com/terms-conditions/",
+    "https://www.servicestories.com/comparisons/price-comparison/service-stories-vs-autoshop-solutions-for-seo-ai-software-vs-full-service-agency",
+    "https://www.bbb.org/us/nc/apex/profile/marketing-consultant/autoshop-solutions-inc-0593-90190901",
+    "https://www.glassdoor.com/Reviews/Autoshop-Solutions-Reviews-E724978.htm"
+  ],
+  "known_pain_points": [
+    "Website + hosting locked to their proprietary platform (autoshopdashboard.com analytics, mystagingwebsite.com staging domain) — migration off is friction-heavy",
+    "PPC and Social payments non-refundable even on cancellation within month",
+    "Not BBB-accredited",
+    "Glassdoor employee reviews mention management/culture concerns (3.6/5 across 37 reviews)",
+    "Pricing opacity for full RPM program; only the partner-tier $179 entry SKU is published"
+  ],
+  "notable_clients": [
+    "Reggie's Motorworks",
+    "Dynamic Automotive (Dwayne Myers, 5 locations)",
+    "Carmedix (Jay Huh)",
+    "AutoStream Car Care (Doug Grills)",
+    "K20 Auto Repair & Performance (Adam Charles)",
+    "Atlantic Motorcar",
+    "Buddy's Automotive",
+    "Harlan Automotive",
+    "Key Auto Werks",
+    "Towne & Country Auto Body",
+    "Xtreme Auto Collision Repair & Spa (Raleigh, NC)",
+    "Blackwater Diesel (Clearwater, FL)"
+  ],
+  "pros": [
+    "20+ years exclusively automotive (founded 2005)",
+    "Largest and most-decorated independent agency in the AR niche — Inc 5000 (2013/14/15), multiple HERMES Platinum and AVA Digital awards",
+    "Deep partner ecosystem: AutoZone, ATI, AASP, ASTA, CCA, Shop-Ware, Protractor, AutoServe1, Turnkey Marketing, RLO Training, 360 Payments, NCS-SSI",
+    "Month-to-month — no annual lock-in (genuine differentiator vs Hibu)",
+    "5-day full refund window",
+    "Explicit collision/auto-body vertical with case studies (Towne & Country, Xtreme Auto Collision)",
+    "Published entry-tier pricing via AutoZone partnership at $179/mo"
+  ],
+  "cons": [
+    "Website hosted on their dedicated platform — asset portability is a real concern on exit",
+    "Full RPM pricing not transparent — requires sales call and 'Right-Fit' qualification",
+    "PPC/Social non-refundable",
+    "Not BBB-accredited",
+    "Employee Glassdoor 3.6/5 — some culture complaints could affect account-team continuity",
+    "Estimated revenue ~$611K (ZoomInfo) appears low for a 75-employee company — data may be stale or wrong, treat with caution"
+  ],
+  "koffman_relevance": "Strongest single replacement candidate for Hibu. Month-to-month + 5-day refund directly attacks Hibu's biggest pain point (6-month contracts and cancellation friction documented across BBB, Trustpilot, JustAnswer). Has explicit collision/auto-body vertical that SMP lacks publicly, and is the named preferred marketing provider for AASP and CCA — relevant credentialing for a WI shop. Already a partner of Turnkey Marketing, so it can either replace Turnkey or coexist (Turnkey handles direct-mail/retention; ASS handles digital + website). For a single-location WI AR + collision shop like Koffman, plausible spend is ~$1,500–$3,500/mo all-in on RPM, plus media spend. Real watch-outs: (1) website is locked to their hosting stack — negotiate explicit asset/domain/content transfer terms upfront and (2) verify Wisconsin / Midwest case studies (most named clients are TN/NC/East Coast). Net: replaces Hibu cleanly, can replace Turnkey for direct-response digital but not for direct-mail retention loops.",
+  "uncertain": [
+    "base_monthly_high_usd",
+    "typical_monthly_usd",
+    "setup_fee_usd (standard, non-partner)",
+    "min_ad_spend_usd",
+    "asset_ownership (full transfer mechanics)",
+    "specialty (AR vs Both split)"
+  ]
+}

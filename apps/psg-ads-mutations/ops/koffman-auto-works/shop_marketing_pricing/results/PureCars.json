@@ -1,0 +1,66 @@
+{
+  "agency_name": "PureCars",
+  "domain": "purecars.com",
+  "hq_location": "Atlanta, GA (also Charleston, SC)",
+  "specialty": "Enterprise dealer (new/used auto retail); not specialized in AR or CR",
+  "services": ["Digital Advertising (Search, Display, Social, Video, OTT/CTV)", "Customer Data Platform (CDP)", "Business Intelligence / Market Insights", "Amazon Ads", "Disney+ / TikTok premium media", "Geofencing / Waze", "AI-driven Merchandising", "VIN-level Value Reports", "Service Marketing"],
+  "base_monthly_low_usd": 1500,
+  "base_monthly_high_usd": 15000,
+  "typical_monthly_usd": "$3,000-$8,000/mo management fee per rooftop typical for franchise dealer; large dealer groups (Asbury-scale) negotiate enterprise SaaS contracts [uncertain]",
+  "setup_fee_usd": "Not published; enterprise onboarding likely waived or bundled into annual contract [uncertain]",
+  "min_ad_spend_usd": "No public minimum; OEM co-op programs (Subaru Certified Digital, etc.) set floor via tier-program rules. Typical dealer media spend $5,000-$50,000/mo [uncertain]",
+  "contract_length_months": "12+ typical for enterprise SaaS; multi-year for top-100 dealer groups [uncertain]",
+  "cancellation_policy": "Not published; enterprise contracts typically require 30-90 day written notice and may have minimum-term commitments [uncertain]",
+  "asset_ownership": "Dealer typically retains Google Ads / Meta accounts under OEM compliance rules; CDP data and PureCars proprietary dashboards/Value Reports remain PureCars IP [uncertain]",
+  "pricing_transparency": "Quote-only; no pricing published on website or G2",
+  "pricing_confidence": "low",
+  "pricing_sources": [
+    "https://www.g2.com/products/purecars/reviews",
+    "https://www.purecars.com/solutions",
+    "https://www.purecars.com/digital-advertising",
+    "https://www.purecars.com/resources/purecars-and-asbury-automotive-extend-relationship-for-digital-advertising",
+    "https://digitaldealer.com/news/purecars-asbury-automotive-group-extend-relationship-digital-advertising-solutions/138874/",
+    "https://www.autodealertodaymagazine.com/news/purecars-announces-all-new-pro-dealer-platform",
+    "https://www.subarucertifieddigital.com/docs/purecars_digad.pdf",
+    "https://www.crunchbase.com/organization/purecars"
+  ],
+  "known_pain_points": [
+    "Glassdoor employee reviews cite 'rush to bring new products to market that are white-labelled or buggy' — possible product quality concerns for dealers",
+    "Disorganization and inter-department communication issues reported internally (Glassdoor) — may translate to account-management churn",
+    "No public BBB complaint resolution record; not BBB accredited",
+    "Pricing opacity — no published rate card forces enterprise sales cycle",
+    "Tooling (Value Reports, CDP) optimized for new/used vehicle retail funnel; little public evidence of collision-repair fit"
+  ],
+  "notable_clients": [
+    "Asbury Automotive Group (top-5 US dealer group)",
+    "65 of top 100 North American dealer groups (per company claim)",
+    "Subaru Certified Digital program",
+    "2,500+ retail rooftops, 60+ automotive agencies (white-label)"
+  ],
+  "pros": [
+    "Deep OEM co-op program integration (Subaru, others) — eligible for manufacturer reimbursement",
+    "Premium media inventory access (Amazon, Disney+, TikTok, OTT/CTV) most SMB agencies cannot offer",
+    "Mature CDP with VIN-level shopper intent data",
+    "Scale — proven at 65 of top-100 dealer groups",
+    "AI-driven inventory merchandising and dynamic creative"
+  ],
+  "cons": [
+    "Built for franchise new-car dealer economics, not single-location collision or independent AR",
+    "Enterprise pricing model (likely $3K-$15K/mo per rooftop) far exceeds Koffman's Hibu-tier budget",
+    "Quote-only pricing creates evaluation friction for small shops",
+    "No collision-repair-specific case studies or DRP-aware service offering",
+    "Glassdoor signals product-quality and account-management stability concerns",
+    "Asset/data lock-in (proprietary CDP, Value Reports) similar to Hibu trap if relationship ends"
+  ],
+  "koffman_relevance": "Wrong fit for Koffman. PureCars is enterprise dealer software priced for franchise new-car rooftops and top-100 dealer groups, not single-location WI collision shops. Would not replace Hibu or Turnkey — PureCars wouldn't quote or onboard a shop Koffman's size, and even if they did the monthly cost would exceed Koffman's entire current marketing spend by 3-5x. Only relevant as a benchmark for what enterprise auto marketing capabilities look like (CDP, OTT/CTV, premium media) when contrasting with the SMB collision vendor landscape.",
+  "uncertain": [
+    "base_monthly_low_usd",
+    "base_monthly_high_usd",
+    "typical_monthly_usd",
+    "setup_fee_usd",
+    "min_ad_spend_usd",
+    "contract_length_months",
+    "cancellation_policy",
+    "asset_ownership"
+  ]
+}

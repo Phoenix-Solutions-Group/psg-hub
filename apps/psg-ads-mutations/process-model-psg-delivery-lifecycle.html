@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PSG Delivery Lifecycle - Process Model</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --navy: #0B1F3A;
+    --red: #C8102E;
+    --iron: #2C2C2C;
+    --canvas: #F4F1EA;
+    --muted: #6B7280;
+    --line: #E5E7EB;
+    --accent: #1E3A8A;
+    --green: #047857;
+    --amber: #B45309;
+    --pink: #9D174D;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; color: var(--iron); background: #fff; margin: 0; line-height: 1.55; }
+  header { background: var(--navy); color: var(--canvas); padding: 36px 48px 28px; border-bottom: 4px solid var(--accent); }
+  header h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -0.01em; }
+  header .sub { color: #A8B3C5; font-size: 14px; max-width: 980px; }
+  header .companion { margin-top: 12px; background: rgba(255,255,255,0.08); border-left: 3px solid var(--accent); padding: 8px 14px; font-size: 13px; color: #E5E7EB; }
+  header .companion a { color: #DBEAFE; text-decoration: none; }
+  nav.toc { background: #F9FAFB; border-bottom: 1px solid var(--line); padding: 14px 48px; font-size: 13px; }
+  nav.toc a { color: var(--accent); text-decoration: none; margin-right: 16px; white-space: nowrap; }
+  nav.toc a:hover { text-decoration: underline; }
+  nav.toc .toc-section { display: inline-block; color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; margin-right: 10px; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 48px 80px; }
+  h2 { color: var(--navy); border-bottom: 2px solid var(--accent); padding-bottom: 8px; margin-top: 56px; font-size: 22px; }
+  h3 { color: var(--navy); font-size: 17px; margin-top: 30px; }
+  h4 { color: var(--accent); font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 22px; margin-bottom: 8px; }
+  code { background: #F3F4F6; border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; font-size: 13px; font-family: 'JetBrains Mono', Menlo, monospace; }
+  pre.code { background: var(--navy); color: #E5E7EB; padding: 14px 18px; border-radius: 6px; font-size: 13px; overflow-x: auto; font-family: 'JetBrains Mono', Menlo, monospace; }
+  pre.code .c { color: #9CA3AF; }
+  .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 24px; padding: 18px; background: var(--canvas); border-left: 4px solid var(--accent); border-radius: 4px; }
+  .meta div { font-size: 13px; }
+  .meta strong { display: block; color: var(--navy); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .diagram { margin: 20px 0 28px; padding: 20px; background: #FBFAF7; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0 28px; font-size: 13px; }
+  th, td { border: 1px solid var(--line); padding: 9px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: var(--canvas); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.role-r { background: #FEE2E2; font-weight: 600; color: var(--red); text-align: center; }
+  td.role-a { background: #FED7AA; font-weight: 600; text-align: center; }
+  td.role-c { background: #DBEAFE; font-weight: 600; text-align: center; }
+  td.role-i { background: #E5E7EB; text-align: center; }
+  .callout { background: #FFF7ED; border-left: 4px solid #EA580C; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
+  .callout.green { background: #ECFDF5; border-color: var(--green); }
+  .callout.blue { background: #EFF6FF; border-color: var(--accent); }
+  .callout.pink { background: #FDF2F8; border-color: var(--pink); }
+  .phase-card { border: 1px solid var(--line); border-radius: 8px; padding: 18px 22px; margin: 18px 0; border-left: 6px solid var(--accent); background: #FCFCFD; }
+  .phase-card h3 { margin-top: 0; }
+  .phase-meta { display: flex; flex-wrap: wrap; gap: 18px; font-size: 12px; color: var(--muted); margin: 4px 0 12px; }
+  .phase-meta span strong { color: var(--iron); }
+  .sub-phase { border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; margin: 10px 0; background: #fff; border-left: 4px solid #94A3B8; }
+  .sub-phase h4 { margin-top: 0; color: var(--iron); }
+  ul.tight { margin: 4px 0; padding-left: 22px; }
+  ul.tight li { margin-bottom: 4px; font-size: 14px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+  .b-read { background: #DBEAFE; color: #1E3A8A; }
+  .b-write { background: #FEE2E2; color: #C8102E; }
+  .b-plan { background: #FEF3C7; color: #92400E; }
+  .b-verify { background: #D1FAE5; color: #047857; }
+  .b-customer { background: #FCE7F3; color: #9D174D; }
+  .persona-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 14px 0; }
+  .persona { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; background: #fff; font-size: 13px; }
+  .persona h5 { margin: 0 0 6px; color: var(--navy); font-size: 13px; }
+  .persona .meta-row { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .skill-card { border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; margin: 8px 0; background: #fff; }
+  .skill-card h5 { margin: 0 0 4px; color: var(--navy); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .skill-card .tag { background: var(--canvas); padding: 1px 6px; font-size: 10px; border-radius: 3px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+  .skill-card p { margin: 4px 0 4px; font-size: 13px; }
+  .skill-card .install { margin-top: 6px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; color: var(--accent); }
+  .skill-card .source { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .skill-card .source a { color: var(--accent); text-decoration: none; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PSG Delivery Lifecycle - Process Model</h1>
+  <div class="sub">Handoff Gate through renewal or offboard. Covers eight delivery phases (D1-D8) with five parallel build streams in D4 (analytics, LP build in Sanity, content creation, ads build, CRO instrumentation), four concurrent refinement loops in D6, persona work, voice-of-customer research, SEMrush market intel, GA4 plus call tracking build, Google Ads build via googleads_psg, and continuous CRO testing.</div>
+  <div class="companion">Companion document covers the Sales side (S0-S8) and Commercial Operations: <a href="process-model-psg-sales-lifecycle.html">process-model-psg-sales-lifecycle.html</a></div>
+</header>
+
+<nav class="toc">
+  <span class="toc-section">Foundations</span>
+  <a href="#sec-1">1. Scope</a>
+  <a href="#sec-2">2. Required Skills</a>
+  <a href="#sec-3">3. Tool Stack</a>
+  <a href="#sec-4">4. Customer Foundation</a>
+  <a href="#sec-5">5. Personas</a>
+  <span class="toc-section">Delivery</span>
+  <a href="#sec-6">6. Lifecycle Map</a>
+  <a href="#sec-7">7. Delivery Phases</a>
+  <a href="#sec-8">8. Refinement Loops</a>
+  <span class="toc-section">Reference</span>
+  <a href="#sec-9">9. SEMrush Map</a>
+  <a href="#sec-10">10. claude-ads Map</a>
+  <a href="#sec-11">11. Analytics Build</a>
+  <a href="#sec-12">12. LP Build (Sanity)</a>
+  <span class="toc-section">PM + Knowledge</span>
+  <a href="#sec-13">13. Asana Project Setup</a>
+  <a href="#sec-14">14. Obsidian Vault</a>
+  <span class="toc-section">Governance</span>
+  <a href="#sec-15">15. RACI</a>
+  <a href="#sec-16">16. Gateways</a>
+  <a href="#sec-17">17. Cadence</a>
+  <a href="#sec-18">18. Anti-patterns</a>
+</nav>
+
+<main>
+
+<div class="meta">
+  <div><strong>Owner</strong>Account Strategist</div>
+  <div><strong>Process Type</strong>To-Be (target state)</div>
+  <div><strong>Notation</strong>BPMN swimlane + flowchart (Mermaid)</div>
+  <div><strong>Version</strong>3.0 / 2026-05-27</div>
+  <div><strong>Vertical</strong>Collision repair (NAICS 81112)</div>
+  <div><strong>Scope</strong>Delivery (D1-D8)</div>
+  <div><strong>LP Stack</strong>Sanity + Next.js or Astro</div>
+  <div><strong>Analytics</strong>GA4 + GTM (+ sGTM) + Call tracking + Looker Studio</div>
+  <div><strong>PM Tool</strong>Asana (one project per client, created at S7)</div>
+  <div><strong>Knowledge</strong>Obsidian (one vault per client, created at S7)</div>
+  <div><strong>Contracts</strong>PandaDoc (Sales side, signed before D1)</div>
+</div>
+
+<h2 id="sec-1">1. Scope and Boundaries</h2>
+
+<p><strong>Starts when:</strong> the Handoff Gate completes and D1 kickoff is scheduled. <strong>Ends when:</strong> the engagement renews, expands, or offboards with a clean handover. Phases D6a through D6d run continuously from launch (D5) until offboard.</p>
+
+<p>This document is the companion to the Sales lifecycle doc. Sales owns S0-S8 plus the Handoff Gate plus Commercial Operations. Delivery owns everything that happens after kickoff.</p>
+
+<table>
+  <tr><th>Pool</th><th>Lanes (roles)</th><th>Tools they own</th></tr>
+  <tr><td>PSG Delivery</td><td>Account Strategist, Ads Engineer, Web Engineer, Content Lead, CRO Analyst, Analytics Engineer, Client Success</td><td>claude-ads, googleads_psg, SEMrush MCP, Sanity, Next.js or Astro repo, GA4, GTM, sGTM, Looker Studio, Microsoft Clarity, Asana (one project per client), Obsidian (one vault per client)</td></tr>
+  <tr><td>Client</td><td>Decision Maker, Marketing Owner, Web or Tech Owner, Shop Manager, Service Advisor (for VoC)</td><td>CMS, CRM, call tracking platform, review platforms</td></tr>
+  <tr><td>Google Ads Platform</td><td>Search, Performance Max, Demand Gen, YouTube, LSA, Conversion API</td><td>Google Ads API via googleads_psg</td></tr>
+  <tr><td>Data and Insight Sources</td><td>SEMrush, GA4, Search Console, call tracking, reviews, social listening</td><td>SEMrush MCP, GA4 BigQuery export, CallRail or WhatConverts API, Brightdata for review scraping</td></tr>
+</table>
+
+<h2 id="sec-2">2. Required Skills and Plugins</h2>
+
+<p>Install everything below before running this workflow. Items marked <span class="badge b-verify">Verified</span> have a confirmed install path. Items marked <span class="badge b-plan">PSG Internal</span> require access to PSG plugin registry. Items marked <span class="badge b-read">Built-in</span> ship with Claude Code.</p>
+
+<h3>2.1 Built-in Claude Code Skills (no install needed)</h3>
+
+<div class="skill-card">
+  <h5>docx, xlsx, pptx, pdf <span class="tag">Built-in</span></h5>
+  <p>Document generation. Used across QBR decks, monthly reports, audit deliverables, LTV models.</p>
+  <div class="source">Paths: <code>anthropic-skills:docx</code>, <code>anthropic-skills:xlsx</code>, <code>anthropic-skills:pptx</code>, <code>anthropic-skills:pdf</code></div>
+</div>
+
+<div class="skill-card">
+  <h5>process-modeling <span class="tag">Built-in</span></h5>
+  <p>BPMN notation and flowchart patterns. Used for documenting client-specific processes and creating QBR diagrams.</p>
+  <div class="source">Path: <code>anthropic-skills:process-modeling</code></div>
+</div>
+
+<div class="skill-card">
+  <h5>internal-comms <span class="tag">Built-in</span></h5>
+  <p>Status reports, leadership updates, project updates. Used for monthly client reports and internal weekly updates.</p>
+  <div class="source">Path: <code>anthropic-skills:internal-comms</code></div>
+</div>
+
+<div class="skill-card">
+  <h5>graphic-design-expert <span class="tag">Built-in</span></h5>
+  <p>PSG brand system enforcement for client-facing deliverables.</p>
+  <div class="source">Path: <code>anthropic-skills:graphic-design-expert</code></div>
+</div>
+
+<div class="skill-card">
+  <h5>humanizer <span class="tag">Built-in</span></h5>
+  <p>Removes AI-writing patterns from generated content. Run on every client-facing copy draft.</p>
+  <div class="source">Path: <code>anthropic-skills:humanizer</code></div>
+</div>
+
+<h3>2.2 Marketplace Plugins to Install</h3>
+
+<div class="skill-card">
+  <h5>claude-ads (AgriciDaniel/claude-ads) <span class="tag">Verified</span></h5>
+  <p>250+ audit checks, 17 commands, 19 sub-skills, 10 agents. Used across D2a (full audit), D6a (weekly ads loop), D6b (monthly strategic), and D7 (QBR reporting).</p>
+  <div class="install">/plugin marketplace add AgriciDaniel/claude-ads</div>
+  <div class="install">/plugin install claude-ads@agricidaniel-claude-ads</div>
+  <div class="source">GitHub: <a href="https://github.com/AgriciDaniel/claude-ads" target="_blank">github.com/AgriciDaniel/claude-ads</a> · License: MIT</div>
+</div>
+
+<div class="skill-card">
+  <h5>searchfit-seo <span class="tag">PSG Internal</span></h5>
+  <p>SEO audit, content brief generation, schema markup, keyword clustering, on-page optimization. Used across D2d (LP audit), D4c (content creation), D6d (content refresh).</p>
+  <div class="install">/plugin install searchfit-seo</div>
+  <div class="source">Source: confirm in PSG plugin registry.</div>
+</div>
+
+<div class="skill-card">
+  <h5>sanity <span class="tag">PSG Internal</span></h5>
+  <p>Sanity CMS best practices: content modeling, GROQ queries, TypeGen, portable text conversion, SEO/AEO, Studio structure. Critical for D4b (LP build).</p>
+  <div class="install">/plugin install sanity</div>
+  <div class="source">Source: confirm in PSG plugin registry. Sanity docs: <a href="https://www.sanity.io/docs" target="_blank">sanity.io/docs</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>brightdata-plugin <span class="tag">Installed</span></h5>
+  <p>Web scraping plus 81112 collision-mode research with 7-persona library. Used in D2e (VoC research) for review scrape, social listening, competitor sites.</p>
+  <div class="install">/plugin install brightdata-plugin</div>
+  <div class="source">Status: confirmed installed at PSG. Bright Data docs: <a href="https://docs.brightdata.com" target="_blank">docs.brightdata.com</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>brand-voice <span class="tag">PSG Internal</span></h5>
+  <p>Brand voice enforcement, guideline generation, brand discovery. Used during D4c content creation to keep client copy on-brand.</p>
+  <div class="install">/plugin install brand-voice</div>
+  <div class="source">Source: confirm in PSG plugin registry.</div>
+</div>
+
+<div class="skill-card">
+  <h5>design <span class="tag">PSG Internal</span></h5>
+  <p>Design skill bundle: accessibility-review, design-critique, design-handoff, ux-copy, user-research, research-synthesis. Used during D4b (LP build) and D6c (CRO loop).</p>
+  <div class="install">/plugin install design</div>
+  <div class="source">Source: confirm in PSG plugin registry.</div>
+</div>
+
+<div class="skill-card">
+  <h5>data <span class="tag">PSG Internal</span></h5>
+  <p>Data skill bundle: analyze, build-dashboard, create-viz, explore-data, sql-queries, statistical-analysis, validate-data, write-query. Used for D4a (analytics build), D6c (CRO statistical review), D7 (Looker Studio dashboards).</p>
+  <div class="install">/plugin install data</div>
+  <div class="source">Source: confirm in PSG plugin registry.</div>
+</div>
+
+<div class="skill-card">
+  <h5>marketing <span class="tag">PSG Internal</span></h5>
+  <p>Marketing skill bundle: campaign-plan, content-creation, competitive-brief, email-sequence, performance-report, seo-audit. Some overlap with searchfit-seo; use whichever is configured first.</p>
+  <div class="install">/plugin install marketing</div>
+  <div class="source">Source: confirm in PSG plugin registry.</div>
+</div>
+
+<div class="skill-card">
+  <h5>engineering <span class="tag">PSG Internal</span></h5>
+  <p>Engineering skill bundle: code-review, debug, deploy-checklist, documentation, system-design, testing-strategy. Used during D4b (LP build) for code reviews and during ongoing repo maintenance.</p>
+  <div class="install">/plugin install engineering</div>
+  <div class="source">Source: confirm in PSG plugin registry.</div>
+</div>
+
+<div class="skill-card">
+  <h5>adobe-for-creativity <span class="tag">PSG Internal</span></h5>
+  <p>Adobe Express, Firefly Boards, image editing, video editing, retouching, batch operations. Used for client assets (LP imagery, ad creative, social variants).</p>
+  <div class="install">/plugin install adobe-for-creativity</div>
+  <div class="source">Source: confirm in PSG plugin registry.</div>
+</div>
+
+<div class="skill-card">
+  <h5>asana-project-setup <span class="tag">Installed</span></h5>
+  <p>PSG's hard-won Asana setup automation. Used by Sales at S7 to create the client project, then by Delivery throughout the engagement to add tasks, milestones, and section moves. Encodes the Asana MCP quirks (section creation requires REST API, subtask visibility trap).</p>
+  <div class="install">tool: anthropic-skills:asana-project-setup</div>
+  <div class="source">Status: confirmed installed at PSG.</div>
+</div>
+
+<div class="skill-card">
+  <h5>project-manager <span class="tag">Built-in</span></h5>
+  <p>Agile sprint planning, estimation, RACI, dependency mapping, risk register, retrospectives. Used by Account Strategist for D4 build sprint planning and D6 loop coordination.</p>
+  <div class="source">Path: <code>anthropic-skills:project-manager</code></div>
+</div>
+
+<div class="skill-card">
+  <h5>claude-obsidian (AgriciDaniel/claude-obsidian) <span class="tag">Verified</span></h5>
+  <p>11 skills, 4 commands (/wiki, /save, /autoresearch, /canvas). Persistent compounding wiki vault per client. Vault is created by Sales at S7 and inherited by Delivery at D1. Account Strategist is the vault steward. Used throughout Delivery to capture VoC (D2e), personas (D3a), strategy decisions (D3), build learnings (D4), experiment outcomes (D6b/D6c), and QBR notes (D7). Hot cache survives between sessions.</p>
+  <div class="install">claude plugin marketplace add AgriciDaniel/claude-obsidian</div>
+  <div class="install">claude plugin install claude-obsidian@claude-obsidian-marketplace</div>
+  <div class="source">GitHub: <a href="https://github.com/AgriciDaniel/claude-obsidian" target="_blank">github.com/AgriciDaniel/claude-obsidian</a> · License: MIT · 4.1k stars</div>
+</div>
+
+<h3>2.3 PSG Custom Skills (private repos)</h3>
+
+<div class="skill-card">
+  <h5>collision-repair-content-system <span class="tag">PSG Internal</span></h5>
+  <p>The core of D4c. Six-phase content workflow: Discovery, Strategy, Creation, QA, Client Review, Publication. Includes 8-persona library, 5-anxiety framework, SEMrush integration patterns, social listening playbook, GEO answer-first content patterns, entity mapping for collision repair.</p>
+  <div class="source">Source: PSG internal skills repo. Currently installed at <code>anthropic-skills:collision-repair-content-system</code>.</div>
+</div>
+
+<div class="skill-card">
+  <h5>web-scraping <span class="tag">PSG Internal</span></h5>
+  <p>Web scraping with anti-bot bypass plus dedicated 81112 collision-mode research with 7 consumer personas and source taxonomy. Used in D2e (VoC research).</p>
+  <div class="source">Source: PSG internal skills repo. Currently installed at <code>anthropic-skills:web-scraping</code>.</div>
+</div>
+
+<div class="skill-card">
+  <h5>graphic-design-expert <span class="tag">PSG Internal</span></h5>
+  <p>PSG brand system: Authority Palette (Foundation Navy, Phoenix Red, Iron, Canvas), Energy Palettes, Outfit/Inter typography, Swiss airline aesthetic. Applied to all client-facing visual deliverables.</p>
+  <div class="source">Source: PSG internal skills repo.</div>
+</div>
+
+<div class="skill-card">
+  <h5>server-maintenance <span class="tag">PSG Internal</span></h5>
+  <p>PSG infrastructure maintenance: n8n, cPanel, apps, paperclip servers. Disk cleanup, Docker cleanup, container updates, SSL cert checks. Run monthly.</p>
+  <div class="source">Source: PSG internal skills repo.</div>
+</div>
+
+<div class="skill-card">
+  <h5>email-design-system <span class="tag">PSG Internal</span></h5>
+  <p>HTML email design system: typography, color, layout patterns, section composition. Used for client email campaigns (when in scope).</p>
+  <div class="source">Source: PSG internal skills repo. Currently installed at <code>anthropic-skills:email-design-system</code>.</div>
+</div>
+
+<h3>2.4 MCPs to Configure</h3>
+
+<div class="skill-card">
+  <h5>google-ads-mcp <span class="tag">PSG Configured</span></h5>
+  <p>Read-only Google Ads telemetry. Required for D2a audit, D5 launch verification, D6a weekly mining, every mutation verification.</p>
+  <div class="install">tool: mcp__google-ads-mcp__search</div>
+  <div class="source">Source: PSG MCP configuration. See <code>apps/ads/CLAUDE.md</code>.</div>
+</div>
+
+<div class="skill-card">
+  <h5>googleads_psg (write toolkit) <span class="tag">PSG Internal</span></h5>
+  <p>Write-side Python toolkit for Google Ads mutations. Defaults to <code>--dry-run</code>; <code>--execute</code> required for actual API hits. Every execute writes JSON audit log to <code>logs/</code>.</p>
+  <div class="install">cd apps/ads &amp;&amp; python -m ops.&lt;client&gt;.&lt;script&gt; --customer-id &lt;ID&gt; [--execute]</div>
+  <div class="source">Source: PSG internal Python package in <code>apps/ads/</code>. See <code>apps/ads/CLAUDE.md</code>.</div>
+</div>
+
+<div class="skill-card">
+  <h5>SEMrush MCP <span class="tag">PSG Configured</span></h5>
+  <p>Full SEMrush toolkit: keyword, organic, overview, URL, subdomain, subfolder, backlink, site audit, position tracking, trends, custom reports.</p>
+  <div class="install">tools: mcp__[semrush]__*_research</div>
+  <div class="source">Source: SEMrush API. See <a href="https://www.semrush.com/api-documentation/" target="_blank">semrush.com/api-documentation</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>Sanity MCP <span class="tag">PSG Configured</span></h5>
+  <p>Sanity CMS operations: document CRUD, schema validation, dataset operations. Used during D4b LP build and D6d content refresh.</p>
+  <div class="install">tools: mcp__plugin_sanity_Sanity__*</div>
+  <div class="source">Source: <a href="https://www.sanity.io/docs/mcp" target="_blank">sanity.io/docs/mcp</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>Brightdata MCP <span class="tag">Configured</span></h5>
+  <p>Web scraping, search, structured data extraction from 40+ platforms (review sites, social, forums).</p>
+  <div class="source">Status: confirmed configured at PSG. Source: <a href="https://github.com/brightdata-com/brightdata-mcp" target="_blank">github.com/brightdata-com/brightdata-mcp</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>Notion MCP <span class="tag">Configured</span></h5>
+  <p>Client-facing documentation, meeting notes, runbooks (offboard deliverable). Not the primary PM tool; Asana is.</p>
+  <div class="source">Status: configured. Source: <a href="https://developers.notion.com" target="_blank">developers.notion.com</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>Asana MCP <span class="tag">Configured</span></h5>
+  <p>Primary PM tool. Used for one project per client (created at S7), tracking D1-D8 phases, D4 parallel build streams, D6 recurring loops, milestones at phase exits. MCP can create tasks, subtasks, milestones, and update fields. Section creation and section moves require Asana REST API with PAT (see asana-project-setup skill).</p>
+  <div class="install">tools: mcp__[asana]__create_tasks, get_project, get_tasks, update_tasks, get_attachments, etc.</div>
+  <div class="source">Status: confirmed configured at PSG. Source: <a href="https://developers.asana.com" target="_blank">developers.asana.com</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>Obsidian MCP (per-client vault) <span class="tag">Configured</span></h5>
+  <p>Primary knowledge tool. Read and write vault notes directly. Two install options: Local REST API plugin (port 27124) via <code>mcp-obsidian</code>, or filesystem via <code>@bitbonsai/mcpvault</code>. PSG runs one MCP entry per active client vault, named <code>obsidian-vault-[client-slug]</code>.</p>
+  <div class="install">claude mcp add-json obsidian-vault-[client] '{...}' --scope user</div>
+  <div class="source">Status: configured per client at S7. Setup details in claude-obsidian README.</div>
+</div>
+
+<h3>2.5 External APIs and Tools (no MCP wrapper)</h3>
+
+<div class="skill-card">
+  <h5>CallRail or WhatConverts API <span class="tag">PSG Configured</span></h5>
+  <p>Call tracking platform. Dynamic number insertion, call recordings, source attribution, Google Ads offline conversion import.</p>
+  <div class="source">Docs: <a href="https://apidocs.callrail.com" target="_blank">apidocs.callrail.com</a> or <a href="https://app.whatconverts.com/api" target="_blank">whatconverts.com/api</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>Microsoft Clarity <span class="tag">PSG Configured</span></h5>
+  <p>Heatmaps, scroll maps, session replay, rage click detection. GDPR-friendly, free.</p>
+  <div class="source">Docs: <a href="https://learn.microsoft.com/en-us/clarity/" target="_blank">learn.microsoft.com/en-us/clarity</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>Looker Studio <span class="tag">PSG Configured</span></h5>
+  <p>Client-facing dashboards combining GA4, Google Ads, Search Console, CallRail.</p>
+  <div class="source">Docs: <a href="https://support.google.com/looker-studio" target="_blank">support.google.com/looker-studio</a></div>
+</div>
+
+<div class="callout">
+The "PSG Internal" tags need verification against your actual plugin registry. The skills are confirmed installed (visible in the skills list) but the source repos may live in private PSG GitHub orgs or a private Cowork marketplace. Fill in the actual repo URLs once confirmed.
+</div>
+
+<h2 id="sec-3">3. Tool Stack Map (Delivery)</h2>
+
+<table>
+  <tr><th>Job</th><th>Tool</th><th>Type</th><th>Where output goes</th></tr>
+  <tr><td>Live ads account read</td><td><code>mcp__google-ads-mcp__search</code></td><td><span class="badge b-read">Read</span></td><td>Audit deck, weekly loop, verification</td></tr>
+  <tr><td>Ads health audit + recommendations</td><td>claude-ads (<code>/ads audit</code>, <code>/ads google</code>)</td><td><span class="badge b-read">Read</span></td><td><code>apps/ads/reports/</code> + <code>proposed-changes-{date}.md</code></td></tr>
+  <tr><td>Ads mutation (write)</td><td><code>googleads_psg</code> (<code>--dry-run</code> → <code>--execute</code>)</td><td><span class="badge b-write">Write</span></td><td>JSON audit log in <code>logs/</code></td></tr>
+  <tr><td>Mutation verification</td><td><code>mcp__google-ads-mcp__search</code></td><td><span class="badge b-verify">Verify</span></td><td>After-state confirmation</td></tr>
+  <tr><td>Keyword + competitor + site research</td><td>SEMrush MCP (see section 9)</td><td><span class="badge b-read">Read</span></td><td>SOSTAC tactics, content brief, neg keyword list</td></tr>
+  <tr><td>Voice of customer</td><td>Brightdata + <code>collision-repair-content-system</code> social listening</td><td><span class="badge b-customer">Customer</span></td><td>Persona refinement, JTBD map, anxiety priorities</td></tr>
+  <tr><td>Persona development</td><td>PSG 8-persona library + per-client refinement</td><td><span class="badge b-customer">Customer</span></td><td>Persona doc, message-market fit matrix</td></tr>
+  <tr><td>LP content creation</td><td><code>collision-repair-content-system</code> 6-phase + <code>searchfit-seo:create-content</code></td><td><span class="badge b-write">Write</span></td><td>Portable Text in Sanity</td></tr>
+  <tr><td>LP build (structure, schema, frontend)</td><td>Sanity + Next.js or Astro</td><td><span class="badge b-write">Write</span></td><td>Live LP URL + sitemap</td></tr>
+  <tr><td>Schema markup</td><td><code>searchfit-seo:generate-schema</code> + Sanity portable text serialization</td><td><span class="badge b-write">Write</span></td><td>JSON-LD embedded in LP</td></tr>
+  <tr><td>Analytics build</td><td>GA4 + GTM (+ sGTM) + call tracking</td><td><span class="badge b-write">Write</span></td><td>Configured containers + measurement plan</td></tr>
+  <tr><td>Reporting + dashboards</td><td>Looker Studio</td><td><span class="badge b-read">Read</span></td><td>Monthly client dashboard</td></tr>
+  <tr><td>CRO experiments</td><td>claude-ads <code>/ads test</code> + GA4 Experiments + Sanity variants + Edge Middleware</td><td><span class="badge b-write">Write</span></td><td>Variant LP + statistical readout</td></tr>
+  <tr><td>Heatmaps + session replay</td><td>Microsoft Clarity</td><td><span class="badge b-read">Read</span></td><td>CRO hypotheses for monthly loop</td></tr>
+  <tr><td>Project management (one project per client)</td><td>Asana via Asana MCP + asana-project-setup skill</td><td><span class="badge b-plan">Plan</span></td><td>Per-client engagement project structured by D1-D8 phases with milestones at every phase exit gate</td></tr>
+  <tr><td>Sprint planning + risk register</td><td><code>anthropic-skills:project-manager</code></td><td><span class="badge b-plan">Plan</span></td><td>D4 build sprint plan, D6 loop coordination, RACI per initiative</td></tr>
+  <tr><td>Persistent knowledge (one vault per client)</td><td>Obsidian via Obsidian MCP + claude-obsidian skill</td><td><span class="badge b-customer">Knowledge</span></td><td>Per-client vault holding personas, VoC, audits, decisions, meetings, learnings. Inherited from Sales at D1, written to throughout Delivery, exported at offboard</td></tr>
+  <tr><td>Capture conversation as wiki note</td><td>claude-obsidian <code>/save</code></td><td><span class="badge b-write">Write</span></td><td>Meeting transcript, decision rationale, or session summary filed to vault with cross-references</td></tr>
+  <tr><td>Autonomous research into emerging client topics</td><td>claude-obsidian <code>/autoresearch</code></td><td><span class="badge b-read">Read</span></td><td>3-round web research filed to vault (e.g., new EV cert standards, new insurance carrier rules)</td></tr>
+  <tr><td>Vault health check</td><td>claude-obsidian <code>lint the wiki</code></td><td><span class="badge b-verify">Verify</span></td><td>Orphan check, dead link check, gap analysis, stale claim flag - run monthly</td></tr>
+</table>
+
+<h2 id="sec-4">4. Customer Foundation - Where Customer Needs Enter Delivery</h2>
+
+<p>Eight integration points across the delivery lifecycle. Each one has a named source, owner, and downstream use.</p>
+
+<table>
+  <tr><th>#</th><th>Phase</th><th>Customer input</th><th>Method</th><th>Owner</th><th>Artifact</th><th>Used in</th></tr>
+  <tr><td>1</td><td>D1</td><td>Client questionnaire</td><td>Structured intake form</td><td>Account Strategist</td><td>Intake doc</td><td>D2 audit scope, persona library mapping</td></tr>
+  <tr><td>2</td><td>D2e</td><td>Review verbatims (Google, Yelp, Facebook)</td><td>Brightdata scrape</td><td>Content Lead</td><td>Coded review database</td><td>Persona refinement, anxiety stack, FAQ source</td></tr>
+  <tr><td>3</td><td>D2e</td><td>Reddit + Facebook + Nextdoor + Autobody101 posts</td><td>Social listening</td><td>Content Lead</td><td>20-30 verbatim customer questions</td><td>LP question H2s, ad copy, voice search</td></tr>
+  <tr><td>4</td><td>D2e</td><td>Service advisor knowledge</td><td>30-min recorded interview</td><td>Account Strategist</td><td>Top 5 questions, walk-aways, referral sources</td><td>Persona refinement, trust signal hierarchy</td></tr>
+  <tr><td>5</td><td>D2e</td><td>Call recordings (20 recent inbound)</td><td>CallRail + manual coding</td><td>CRO Analyst</td><td>Call coding sheet</td><td>Persona refinement, LP CTA framing</td></tr>
+  <tr><td>6</td><td>D4c</td><td>Customer language in copy</td><td>Verbatim phrasing from D2e</td><td>Content Lead</td><td>LP + ad copy</td><td>Live pages and ads</td></tr>
+  <tr><td>7</td><td>D6a</td><td>Search term reports + weekly call sample</td><td>google-ads-mcp + CallRail sample</td><td>Ads Engineer + CRO Analyst</td><td>Neg keyword sets, copy ideas, weekly insight note</td><td>Weekly mutation runs</td></tr>
+  <tr><td>8</td><td>D6c</td><td>LP behavior + form analytics</td><td>Clarity + GA4 funnel</td><td>CRO Analyst</td><td>CRO hypothesis backlog</td><td>Variant LP tests</td></tr>
+</table>
+
+<div class="callout green">
+The customer voice has to enter at D1 intake, then again at D2e research, then again at every D6 refinement loop. Quarterly D6d refresh is mandatory. If a Delivery team member cannot point to the persona doc and JTBD map for a decision they made, the decision is wrong by default.
+</div>
+
+<h2 id="sec-5">5. Collision Persona Library</h2>
+
+<p>The PSG library is the starting point. Every collision engagement gets the 8 personas mapped to the client's actual customer mix, then refined with VoC research in D2e.</p>
+
+<div class="persona-grid">
+  <div class="persona">
+    <div class="meta-row">Primary - 35-45% of traffic</div>
+    <h5>1. General Collision Repair Customer</h5>
+    <p>Stressed, detail-oriented, comparison-shopping. Has time pressure but wants quality. Anxieties in order: trust, quality, cost, time, insurance. Lands on homepage and service pages.</p>
+  </div>
+  <div class="persona">
+    <div class="meta-row">Primary - 20-30% of traffic</div>
+    <h5>2. First-Time Accident Victim</h5>
+    <p>Anxious, overwhelmed, no prior frame of reference. Needs hand-holding. Anxieties: insurance, cost, trust, time, quality. Lands on "what to do after an accident" content.</p>
+  </div>
+  <div class="persona">
+    <div class="meta-row">Primary - 15-25% of traffic</div>
+    <h5>3. Insurance Claimant</h5>
+    <p>Frustrated with insurer, wants an advocate. Knows DRP exists, suspicious of shop steering. Anxieties: insurance, trust, quality, cost, time. Lands on insurance-specific LPs.</p>
+  </div>
+  <div class="persona">
+    <div class="meta-row">Secondary - 5-10% of traffic</div>
+    <h5>4. Cash-Pay Customer</h5>
+    <p>Independent, cost-conscious, deliberately avoiding insurance. Wants a transparent estimate. Anxieties: cost, trust, quality, time. Lands on PDR and minor damage pages.</p>
+  </div>
+  <div class="persona">
+    <div class="meta-row">Secondary - 5-8% of traffic</div>
+    <h5>5. At-Fault Insured Driver</h5>
+    <p>Guilty, worried about premium impact. Needs reassurance plus discretion. Anxieties: insurance (premium), cost, trust, quality, time. Lands on FAQ and insurance guidance pages.</p>
+  </div>
+  <div class="persona">
+    <div class="meta-row">Secondary - 3-5% of traffic</div>
+    <h5>6. Repeat Accident Victim</h5>
+    <p>Frustrated by recurrence, wants efficiency. Knows the process. Anxieties: time, quality, insurance, cost, trust. Lands on "schedule repair" pages with minimal friction.</p>
+  </div>
+  <div class="persona">
+    <div class="meta-row">Tertiary - 2-5% of traffic</div>
+    <h5>7. OEM-Certified Customer</h5>
+    <p>Luxury vehicle owner, demands factory-correct repair. Anxieties: quality (paramount), trust, time, cost. Lands on brand-specific pages (BMW, Mercedes, Audi, Lexus).</p>
+  </div>
+  <div class="persona">
+    <div class="meta-row">Tertiary - 1-3% of traffic, fastest growing</div>
+    <h5>8. OEM-Certified EV Owner</h5>
+    <p>Tech-savvy, eco-conscious, requires EV-trained tech and certified battery handling. Anxieties: quality, trust (EV-specific), time (parts), cost. Lands on Tesla, Rivian, Lucid pages.</p>
+  </div>
+</div>
+
+<h4>Persona Refinement Per Client (D2 to D3)</h4>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    L["PSG 8-Persona Library"] --> RW["D2e: VoC research<br/>reviews + social + calls"]
+    CD["Client's actual mix:<br/>DRP %, OEM %, cash-pay %"] --> RW
+    RW --> MX["Per-client persona matrix<br/>(ranked 1-N with %)"]
+    MX --> JTBD["Jobs-to-be-Done map<br/>per persona"]
+    JTBD --> MMF["Message-market fit grid<br/>persona x stage x anxiety"]
+    MMF --> P3["D3 SOSTAC<br/>Strategy + Tactics"]
+    MMF --> LP["D4b LP brief"]
+    MMF --> AD["D4d ad copy brief"]
+
+    style L fill:#FCE7F3,stroke:#9D174D
+    style RW fill:#FCE7F3,stroke:#9D174D
+    style CD fill:#FCE7F3,stroke:#9D174D
+    style MX fill:#FEF3C7,stroke:#92400E
+    style JTBD fill:#FEF3C7,stroke:#92400E
+    style MMF fill:#FEF3C7,stroke:#92400E
+</pre>
+</div>
+
+<h4>Five-Anxiety Framework</h4>
+<table>
+  <tr><th>Anxiety</th><th>Customer's question</th><th>Where addressed</th></tr>
+  <tr><td>Cost</td><td>"How much will this cost me out of pocket?"</td><td>LP pricing transparency block, FAQ, ad copy "free estimate"</td></tr>
+  <tr><td>Time</td><td>"How long will I be without my car?"</td><td>LP timeline block, rental car policy, "fast turnaround" extensions</td></tr>
+  <tr><td>Trust</td><td>"Will they do quality work or cut corners?"</td><td>Certifications hierarchy, reviews, process transparency, warranty</td></tr>
+  <tr><td>Insurance</td><td>"Will my insurance cover this? Will my rates go up?"</td><td>DRP page, insurance FAQ, "we work with all insurers" messaging</td></tr>
+  <tr><td>Quality</td><td>"Will my car ever be the same?"</td><td>Before/after gallery, lifetime warranty, OEM cert badges, paint match guarantee</td></tr>
+</table>
+
+<h2 id="sec-6">6. Delivery Lifecycle Map</h2>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    HG((Handoff Gate<br/>complete)):::startNode
+    D1[D1 Onboard]
+    D2[D2 Audit + VoC]
+    D3[D3 Strategy + SOSTAC]
+    D4[D4 Foundation Build<br/>5 parallel streams]
+    D5[D5 Launch + Stabilize]
+    D6{{D6 Refinement Loops<br/>4 concurrent loops}}
+    D7[D7 Report + QBR]
+    D8{D8 Renew, Expand,<br/>Offboard?}
+    R1[Renew or Expand]
+    R2[Offboard with handover]
+    EN(("Complete")):::endNode
+
+    HG --> D1 --> D2 --> D3 --> D4 --> D5 --> D6 --> D7 --> D8
+    D8 -->|Renew or Expand| R1 --> D3
+    D8 -->|Offboard| R2 --> EN
+    D7 -->|weekly findings| D6
+    D6 -->|major change| D3
+
+    classDef startNode fill:#0B1F3A,color:#fff,stroke:#0B1F3A
+    classDef endNode fill:#C8102E,color:#fff,stroke:#C8102E
+</pre>
+</div>
+
+<h3>Full Swimlane View</h3>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    subgraph Client["CLIENT"]
+        C1[Accept access<br/>request bundle]
+        C25[Provide VoC inputs<br/>reviews + call recordings]
+        C3[Approve persona,<br/>JTBD, offer]
+        C4[Approve strategy +<br/>budget plan]
+        C5[Sign off on creative,<br/>LP, tracking]
+        C6[Weekly Slack /<br/>monthly review]
+        C7[Quarterly QBR]
+        C8[Renewal decision]
+    end
+
+    subgraph PSG["PSG DELIVERY"]
+        A1[D1 Onboard +<br/>access bundle]
+        A2a[D2a claude-ads audit]
+        A2b[D2b SEMrush market + competitor]
+        A2c[D2c GA4 + tracking audit]
+        A2d[D2d LP / site audit]
+        A2e[D2e VoC scrape +<br/>social listening]
+        A3a[D3a Refine 8 personas<br/>to client mix]
+        A3b[D3b JTBD + anxiety stack]
+        A3c[D3c-e SOSTAC plan +<br/>LTV + budget]
+        A4a[D4a Analytics build:<br/>GA4 + GTM/sGTM + CAPI]
+        A4b[D4b Sanity schema +<br/>LP frontend build]
+        A4c[D4c Content creation:<br/>LP copy + ad copy]
+        A4d[D4d Ads build PAUSED via<br/>googleads_psg]
+        A4e[D4e CRO instrumentation:<br/>Clarity + experiments]
+        A6[QA against checklist]
+        A7[D5 Enable + 14-day<br/>stabilization watch]
+        A8[D6 Weekly + monthly +<br/>CRO + content loops]
+        A9[D7 Monthly report +<br/>QBR deck]
+    end
+
+    subgraph Data["DATA + INSIGHT SOURCES"]
+        D1d[SEMrush MCP]
+        D2d[Reviews + Reddit +<br/>Facebook + Nextdoor]
+        D3d[GA4 + Search Console]
+        D4d[Call tracking platform]
+    end
+
+    subgraph Google["GOOGLE ADS PLATFORM"]
+        G2[Conversion actions live<br/>GA4 + offline + CAPI]
+        G3[Campaigns PAUSED]
+        G4[Auction serving]
+        G5[Search terms +<br/>QS telemetry]
+    end
+
+    A1 --> C1
+    C1 --> A2a
+    A1 --> A2b
+    A2b --> D1d
+    A1 --> A2c
+    A2c --> D3d
+    A1 --> A2d
+    A1 --> A2e
+    A2e --> D2d
+    C25 --> A2e
+    A2a --> A3a
+    A2e --> A3a
+    A2b --> A3a
+    A3a --> A3b
+    A3b --> A3c
+    A3c --> C3 --> C4
+    C4 --> A4a
+    C4 --> A4b
+    C4 --> A4c
+    C4 --> A4d
+    C4 --> A4e
+    A4a --> G2
+    A4d --> G3
+    A4a --> A6
+    A4b --> A6
+    A4c --> A6
+    A4d --> A6
+    A4e --> A6
+    A6 --> C5 --> A7 --> G4
+    G4 --> G5
+    G5 --> A8
+    D3d --> A8
+    D4d --> A8
+    A8 --> C6
+    A8 --> A9 --> C7 --> C8
+
+    style Client fill:#FEF3C7,stroke:#92400E
+    style PSG fill:#DBEAFE,stroke:#1E3A8A
+    style Data fill:#FCE7F3,stroke:#9D174D
+    style Google fill:#E5E7EB,stroke:#374151
+</pre>
+</div>
+
+<h2 id="sec-7">7. Delivery Lifecycle Phase Detail</h2>
+
+<div class="phase-card">
+  <h3>D1 - Onboard and Access</h3>
+  <div class="phase-meta">
+    <span><strong>Duration:</strong> Days 1-5 post-handoff</span>
+    <span><strong>Owner:</strong> Account Strategist + Analytics Engineer</span>
+    <span><strong>Exit gate:</strong> All access confirmed, baseline data flowing</span>
+  </div>
+  <ul class="tight">
+    <li><strong>Take ownership of the Asana project</strong> created by Sales at S7. Account Strategist becomes the Project Owner. Review the pre-structured D1-D8 sections, confirm milestone dates, assign team members (Ads Eng, Web Eng, Content Lead, CRO Analyst, Analytics Eng) as project members with appropriate roles.</li>
+    <li><strong>Take ownership of the Obsidian vault</strong> created by Sales at S7. Account Strategist becomes the Vault Steward. Verify the MCP entry works (<code>obsidian-vault-[client-slug]</code>), review the seed content (S2 discovery, S3 diagnostic, three selected personas, three named competitors), and run <code>lint the wiki</code> to confirm no orphans. Add Content Lead, CRO Analyst, and Analytics Engineer as vault collaborators if using Obsidian Sync.</li>
+    <li>Send access request bundle: Google Ads MCC link, GA4 admin, GTM publish, Search Console, Sanity editor, Vercel or Netlify deploy access, call tracking admin, CRM read access, review platform admin (GBP, Yelp). Track each access item as an Asana task in the D1 section.</li>
+    <li>Add the customer ID to <code>googleads_psg/.env</code> and to the client registry. Add Sanity project ID and dataset to engagement config.</li>
+    <li>Stand up shared Slack channel + shared Drive folder (Discovery, Strategy, Build, Reports, Audit Logs, VoC). Link the Slack channel and Drive folder to the Asana project description.</li>
+    <li>Schedule recurring weekly check-in (30 min) and monthly review (60 min). Schedule first QBR 90 days out. Add as recurring Asana tasks in D6 / D7 sections.</li>
+    <li>Send client questionnaire from <code>collision-repair-content-system</code>. Get back services, certifications, insurance relationships, top 3 competitors (cross-check against Sales S2 notes), testimonials, geo radius.</li>
+  </ul>
+</div>
+
+<div class="phase-card">
+  <h3>D2 - Audit, Discovery, and Baseline</h3>
+  <div class="phase-meta">
+    <span><strong>Duration:</strong> Days 5-15</span>
+    <span><strong>Owner:</strong> Ads Engineer + Analytics Engineer + Content Lead</span>
+    <span><strong>Exit gate:</strong> Combined audit deck delivered and discussed</span>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D2a Ads Account Audit</h4>
+    <ul class="tight">
+      <li>Read-only pull via <code>mcp__google-ads-mcp__search</code>: account structure, 90 days spend, CPA, ROAS, impression share, quality score, search terms, conversion actions.</li>
+      <li>Run <code>/ads audit</code> with local-service template + monthly spend context + collision repair vertical.</li>
+      <li>Run <code>/ads google</code> for the 80-check Google-specific deep dive.</li>
+      <li>Output: written audit + <code>apps/ads/reports/{client}-audit-{date}.pdf</code>.</li>
+    </ul>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D2b SEMrush Market and Competitor Intelligence</h4>
+    <ul class="tight">
+      <li><code>keyword_research</code> on seed terms (collision repair, auto body, ADAS calibration, etc.).</li>
+      <li><code>organic_research</code> on top 5 local competitors. Pull top 100 organic keywords each.</li>
+      <li><code>overview_research</code> for client + each competitor (DA, organic traffic value, paid estimate).</li>
+      <li><code>backlink_research</code> on competitors for link-building opportunities.</li>
+      <li><code>siteaudit_research</code> on client site for tech SEO baseline (feeds D4b dev backlog).</li>
+      <li><code>trends_research</code> for seasonal collision demand (hail, deer, winter).</li>
+      <li>Output: keyword gap matrix, local long-tail opportunity list, competitor positioning brief.</li>
+    </ul>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D2c Analytics and Tracking Audit</h4>
+    <ul class="tight">
+      <li>GA4 audit: events, conversions, audiences, attribution, BigQuery export, consent mode v2.</li>
+      <li>GTM container audit: triggers, tag firing order, no duplicates, no rogue scripts. sGTM if present.</li>
+      <li>Call tracking audit: DNI working, recordings retained, GA4 events firing, offline import working.</li>
+      <li>Search Console verified, sitemap submitted, coverage report scanned.</li>
+      <li>Conversion Action audit: every Google Ads action mapped to a real outcome, primary-for-goal correct, <code>include_in_conversions_metric</code> reviewed.</li>
+      <li>Output: tracking health report with gaps ranked by impact. Gaps block D4 build, not D3 strategy.</li>
+    </ul>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D2d Landing Page and Site Audit</h4>
+    <ul class="tight">
+      <li><code>/ads landing</code> for ads-perspective LP scoring.</li>
+      <li><code>searchfit-seo:seo-audit</code> for SEO-focused audit. Cross-check with SEMrush <code>siteaudit_research</code>.</li>
+      <li>Core Web Vitals: real user data from Search Console + lab data from PageSpeed Insights.</li>
+      <li>Mobile UX: form friction, tap targets, scroll behavior, sticky CTA, click-to-call.</li>
+      <li>Trust signal audit: certifications above fold, reviews, insurance logos, warranty.</li>
+      <li>Schema audit: LocalBusiness, AutoRepair, FAQPage, Review present or missing.</li>
+      <li>Output: LP backlog scored impact x effort. Feeds D4b build prioritization.</li>
+    </ul>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D2e Voice of Customer Research</h4>
+    <ul class="tight">
+      <li>Review scrape: Google, Yelp, Facebook for client AND top 5 competitors via Brightdata. Code reviews by anxiety + persona.</li>
+      <li>Social listening: Reddit (r/Autobody, r/Insurance, city subs), Facebook groups, Nextdoor, Autobody101. 20-30 verbatim questions.</li>
+      <li>Service advisor interview (30 min): top 5 questions, top 5 walk-aways, top 5 referral sources.</li>
+      <li>Call recording analysis: 20 recent inbound calls from CallRail. Code by persona, JTBD, anxiety, outcome.</li>
+      <li>Output: VoC research filed to <code>wiki/voc/</code> in the Obsidian vault (one note per source: reviews, social listening per platform, service advisor interview, call recording analysis). Cross-referenced to personas in <code>wiki/personas/</code> and used in content brief. Conversational language extracted as wiki entities for ad copy and LP copy. Run <code>ingest [voc-file]</code> after each source to auto-create cross-references.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="phase-card">
+  <h3>D3 - Strategy, Persona, and SOSTAC</h3>
+  <div class="phase-meta">
+    <span><strong>Duration:</strong> Days 12-22</span>
+    <span><strong>Owner:</strong> Account Strategist</span>
+    <span><strong>Exit gate:</strong> Client signs the strategy + budget plan</span>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D3a Persona Refinement</h4>
+    <ul class="tight">
+      <li>Start with 8 PSG canonical personas. Rank by % of client's actual customer mix using VoC research from D2e.</li>
+      <li>Update each priority persona with client-specific demographics, geo, vehicle mix, insurance mix.</li>
+      <li>Drop personas the shop cannot serve.</li>
+      <li>Output: per-client persona doc, max 4 priority personas with % weight.</li>
+    </ul>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D3b JTBD and Anxiety Stack</h4>
+    <ul class="tight">
+      <li>For each priority persona, write 2-4 JTBD statements.</li>
+      <li>Rank the 5 anxieties per persona (cash-pay leads with cost; first-time victim leads with insurance).</li>
+      <li>Output: persona x JTBD x anxiety stack matrix.</li>
+    </ul>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D3c Message-Market Fit Grid</h4>
+    <ul class="tight">
+      <li>3-column grid per persona: stage (awareness / consideration / decision) x message angle x proof point.</li>
+      <li>Output: message-market fit grid. Ad copy headlines, LP hero blocks, and CTA copy all pull from this grid.</li>
+    </ul>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D3d SOSTAC Plan</h4>
+    <table>
+      <tr><th>SOSTAC stage</th><th>Output</th></tr>
+      <tr><td>Situation</td><td>D2 audit findings, persona ranking, LTV model, competitive position, current site baseline.</td></tr>
+      <tr><td>Objectives</td><td>SMART goals: leads/mo, qualified leads/mo, CPA target, ROAS target, impression share floor, LP conversion rate target.</td></tr>
+      <tr><td>Strategy</td><td>Channel mix, account structure, audience strategy, geo + device split, bid strategy, LP architecture, CRO scope.</td></tr>
+      <tr><td>Tactics</td><td>Keywords from SEMrush, ad group taxonomy, ad copy angles per persona, extension matrix, LP brief per persona, negative seed list, schema plan, GA4 event plan.</td></tr>
+      <tr><td>Actions</td><td>Build plan with named owners, due dates, dependencies. D4a-D4e parallel build assignments.</td></tr>
+      <tr><td>Control</td><td>Reporting cadence, Looker Studio dashboard spec, escalation thresholds.</td></tr>
+    </table>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D3e LTV + Target CPA Model</h4>
+    <ul class="tight">
+      <li>Use Smart Insights LTV template. Inputs: average ticket size by persona, gross margin %, repeat rate, referral rate, average claim duration.</li>
+      <li>Output: target CPA per persona, target ROAS, payback period. Calibrates bid strategy.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="phase-card">
+  <h3>D4 - Foundation Build (Five Parallel Streams)</h3>
+  <div class="phase-meta">
+    <span><strong>Duration:</strong> Days 20-40</span>
+    <span><strong>Owner:</strong> Stream-specific</span>
+    <span><strong>Exit gate:</strong> All five streams pass QA, ads PAUSED, LP staged, analytics validated</span>
+  </div>
+  <p>All five streams run in parallel. Dependency: D4a (analytics) must complete before D4d (ads) can verify conversion actions. D4b (LP build) must complete before D4c (content publish) can deploy live. D4e layers on after D4b is live.</p>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    S["D3 Strategy<br/>approved"] --> P4
+    P4{"D4 kickoff"}
+    P4 --> S4a["D4a Analytics Build<br/>(Analytics Engineer)"]
+    P4 --> S4b["D4b LP Build in Sanity + Next/Astro<br/>(Web Engineer)"]
+    P4 --> S4c["D4c Content Creation<br/>(Content Lead)"]
+    P4 --> S4d["D4d Ads Build PAUSED<br/>(Ads Engineer)"]
+    P4 --> S4e["D4e CRO Instrumentation<br/>(CRO Analyst)"]
+
+    S4a --> QA["QA all streams<br/>against checklist"]
+    S4b --> S4c
+    S4c --> QA
+    S4b --> S4e
+    S4d --> QA
+    S4e --> QA
+    QA --> SO["Client signoff"]
+    SO --> P5["D5 Launch"]
+
+    style S4a fill:#DBEAFE,stroke:#1E3A8A
+    style S4b fill:#DBEAFE,stroke:#1E3A8A
+    style S4c fill:#FEF3C7,stroke:#92400E
+    style S4d fill:#FEE2E2,stroke:#C8102E
+    style S4e fill:#DBEAFE,stroke:#1E3A8A
+</pre>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D4a Analytics and Tracking Build</h4>
+    <ul class="tight">
+      <li>GA4 config: data streams, enhanced measurement, custom dimensions (persona, source, LP variant), conversion events.</li>
+      <li>GTM web container: page views, scroll, form interactions, CTA clicks, phone click events, video plays.</li>
+      <li>sGTM (if client tier supports): server container in GCP, GA4 forwarding, Google Ads CAPI for click-to-call and form submit, consent mode v2 server-side.</li>
+      <li>Call tracking: DNI script in Sanity head injection, GA4 events from CallRail or WhatConverts, Google Ads offline import via webhook.</li>
+      <li>Google Ads conversion actions: created via UI or via <code>googleads_psg/mutations/conversion_actions.py</code>. Mark primary-for-goal correctly.</li>
+      <li>Looker Studio: connect GA4, Google Ads, Search Console, CallRail. Build client-facing report.</li>
+      <li>Output: measurement plan, GTM container export, sGTM config in version control, Looker Studio dashboard link.</li>
+    </ul>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D4b Landing Page Build (Sanity + Next.js or Astro)</h4>
+    <ul class="tight">
+      <li>Sanity schema design: <code>landingPage</code> document type with hero, problem statement, anxiety blocks, proof section, FAQ, CTA, schema markup blocks. Portable Text for body content.</li>
+      <li>Persona variant support: one master LP per service, persona-specific variants (insurance claimant, cash-pay, OEM-cert). Variants share schema, differ in hero copy, proof, CTA framing.</li>
+      <li>Frontend (Next.js App Router or Astro): server-rendered, dynamic OG images, embedded JSON-LD schema. Target LCP under 2.0s, INP under 200ms, CLS under 0.1.</li>
+      <li>Edge middleware for CRO splits: cookie-based 50/50 assignment, log to GA4.</li>
+      <li>Sanity Presentation tool wired up for client preview.</li>
+      <li>Reference: <code>sanity:content-modeling-best-practices</code>, <code>sanity:portable-text-serialization</code>, <code>sanity:seo-aeo-best-practices</code>.</li>
+      <li>Output: live staging URL, Sanity Studio access, Lighthouse score above 90 on mobile.</li>
+    </ul>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D4c Content Creation (LP Copy + Ad Copy)</h4>
+    <ul class="tight">
+      <li>Use <code>collision-repair-content-system</code> 6-phase workflow. Skip Phase 1 (done in D2). Run Phases 2-5 (content brief, draft, QA, client review).</li>
+      <li>LP copy structure: question-H2 answer-first blocks (40-60 words), 5-anxiety section in priority order per persona, persona-specific hero, trust signal hierarchy, conversion-focused CTAs.</li>
+      <li>Ad copy: 15 RSA headlines per ad group with persona-aligned angles, 4 descriptions, all extensions populated.</li>
+      <li>Voice search queries from D2e VoC baked into FAQ blocks.</li>
+      <li>Schema markup: <code>searchfit-seo:generate-schema</code> for LocalBusiness, AutoRepair, FAQPage. Embed as JSON-LD in Sanity portable text custom block.</li>
+      <li>Output: published LP content in Sanity (draft), RSA copy in <code>ops/{client}/ads-copy.csv</code> ready for ads build.</li>
+    </ul>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D4d Ads Account Build (PAUSED via googleads_psg)</h4>
+    <p>Same 7-step Smart Insights build sequence used in the original PSG playbook. Every campaign created PAUSED.</p>
+    <table>
+      <tr><th>Smart Insights step</th><th>Build activity</th><th>PSG implementation</th></tr>
+      <tr><td>Step 1 - Keywords</td><td>Finalize keyword list with match types and negatives</td><td>Loaded via builder script (see <code>ops/flower-hill/google-ads/src/data.py</code> pattern)</td></tr>
+      <tr><td>Step 2 - Goals</td><td>Confirm conversion actions, primary-for-goal mapped to LTV-weighted CPA targets</td><td><code>conversion_actions.py</code> dry-run then execute</td></tr>
+      <tr><td>Step 3 - Structure</td><td>Budgets, campaigns, ad groups themed by persona x service intent</td><td>Created PAUSED via builder script</td></tr>
+      <tr><td>Step 4 - Ad placement</td><td>Geo radius from intake, device modifiers, dayparting, audience layers</td><td>Bid modifiers + audience lists attached</td></tr>
+      <tr><td>Step 5 - Offer + creative</td><td>RSAs per persona, extensions, persona-specific LP URL per ad group</td><td>Pinning rules, character QA, extension matrix from D4c output</td></tr>
+      <tr><td>Step 6 - Bidding + budget</td><td>Bid strategy + daily budget calibrated to LTV model from D3e</td><td>Set against the Smart Insights LTV template output</td></tr>
+      <tr><td>Step 7 - Optimization scaffolding</td><td>Naming convention, labels, alerts, audit log path</td><td>Audit log path defined in <code>logs/</code></td></tr>
+    </table>
+  </div>
+
+  <div class="sub-phase">
+    <h4>D4e CRO Instrumentation</h4>
+    <ul class="tight">
+      <li>Microsoft Clarity install on Sanity-rendered pages: heatmaps, scroll maps, session replay, rage click detection.</li>
+      <li>GA4 Experiments enabled. Or self-managed via Next.js edge middleware with cookie-based assignment, logged to GA4.</li>
+      <li>Sanity variant content support: each LP document has a variants array.</li>
+      <li>Sample size calculator in PSG playbook: minimum detectable effect, baseline conversion rate, daily traffic, days to significance.</li>
+      <li>Form analytics: field-by-field abandonment.</li>
+      <li>Output: CRO baseline doc, first 3 experiment hypotheses staged ready for D6c.</li>
+    </ul>
+  </div>
+
+  <div class="callout">
+    Safety rule (from CLAUDE.md): every <code>googleads_psg</code> mutation defaults to <code>--dry-run</code>. The <code>--execute</code> flag is the only way to actually hit the API, and each execute run produces a JSON audit log in <code>logs/</code>.
+  </div>
+</div>
+
+<div class="phase-card">
+  <h3>D5 - Launch and Stabilize</h3>
+  <div class="phase-meta">
+    <span><strong>Duration:</strong> Days 35-50 (14-day stabilization)</span>
+    <span><strong>Owner:</strong> Ads Engineer + Analytics Engineer</span>
+    <span><strong>Exit gate:</strong> 14 days of clean conversion data, no critical errors</span>
+  </div>
+  <ul class="tight">
+    <li>Pre-launch checklist: every D4 stream signed off, every conversion action firing in test traffic, every LP rendering, Looker Studio dashboard populated.</li>
+    <li>Live conversion test: real form submission + real phone call from outside office network. Verify in GA4 within 5 min, in Google Ads within 24 hours, in CallRail immediately.</li>
+    <li>Enable campaigns one cohort at a time (branded first, then high-intent non-branded, then upper-funnel). Watch CPC, CTR, conversion rate hourly for 48 hours.</li>
+    <li>Do not optimize during stabilization unless spend pacing is wildly off or QS below 4.</li>
+    <li>Daily Slack note for first 14 days with KPI snapshot.</li>
+    <li>End-of-stabilization review: conversion volume, CPA, LP CR baselines locked.</li>
+  </ul>
+</div>
+
+<div class="phase-card">
+  <h3>D6 - Continuous Refinement (Four Concurrent Loops)</h3>
+  <div class="phase-meta">
+    <span><strong>Duration:</strong> Continuous post-stabilization</span>
+    <span><strong>Owner:</strong> Per-loop assignment</span>
+    <span><strong>Exit gate:</strong> Loop exits only on offboard</span>
+  </div>
+  <ul class="tight">
+    <li><strong>D6a Weekly tactical (ads):</strong> Ads Engineer, Monday-Friday. Search term mining, negatives, bid + budget, RSA review.</li>
+    <li><strong>D6b Monthly strategic (ads):</strong> Strategist + Ads Engineer. KPI review vs SOSTAC, experiment design.</li>
+    <li><strong>D6c Continuous CRO (LP):</strong> CRO Analyst + Web Engineer. LP variant tests, form opt, trust signal experiments.</li>
+    <li><strong>D6d Quarterly content refresh:</strong> Content Lead. New LPs for emerging personas, FAQ updates, schema refresh.</li>
+  </ul>
+  <p>See section 8 for the detailed loop diagrams.</p>
+</div>
+
+<div class="phase-card">
+  <h3>D7 - Report and QBR</h3>
+  <div class="phase-meta">
+    <span><strong>Cadence:</strong> Monthly report + quarterly business review</span>
+    <span><strong>Owner:</strong> Account Strategist</span>
+    <span><strong>Exit gate:</strong> Client acknowledges report, confirms direction</span>
+  </div>
+  <ul class="tight">
+    <li>Monthly: Looker Studio scorecard against SOSTAC, spend pacing, top wins, top losses, experiments, LP CRO results, next-month plan. File the monthly report to <code>wiki/meetings/monthly-[YYYY-MM].md</code> via <code>/save</code>.</li>
+    <li>Quarterly: revisit SOSTAC stages, refresh persona ranking with last 90 days VoC, refresh LTV-adjusted CPA, refresh SEMrush competitor position, propose budget reallocation. File the QBR deck and conversation notes to <code>wiki/meetings/qbr-[date].md</code>. Update persona docs in <code>wiki/personas/</code> with refreshed weighting.</li>
+    <li>QBR triggers a renewal pricing review at 90 days before SOW end (see Sales companion doc, section 11).</li>
+    <li>Run <code>lint the wiki</code> at the end of each QBR cycle to catch orphans and stale claims before the next quarter.</li>
+  </ul>
+</div>
+
+<div class="phase-card">
+  <h3>D8 - Renew, Expand, or Offboard</h3>
+  <div class="phase-meta">
+    <span><strong>Trigger:</strong> 60 days before SOW end</span>
+    <span><strong>Owner:</strong> Account Strategist (delivery side) + Rex (commercial side)</span>
+  </div>
+  <ul class="tight">
+    <li>Renewal motion is driven by Sales (Rex) in the companion doc. Delivery's job: provide health data, results vs SOSTAC, recommendations for next cycle scope.</li>
+    <li>Expansion: add Meta, LinkedIn, YouTube, Microsoft Ads, Apple Search Ads, SEO. New SOW from Sales triggers a new mini-cycle of D1-D5 for the new channel.</li>
+    <li>Offboard: see Sales companion doc, section 11 for the full offboard checklist. Delivery owns: MCC transfer, Sanity export, container export, audit log export, runbook delivery.</li>
+  </ul>
+</div>
+
+<h2 id="sec-8">8. The Four Refinement Loops (D6)</h2>
+
+<h3>D6a. Weekly Tactical Loop (Ads)</h3>
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    M((Monday)) --> T1["/ads google<br/>(reads via mcp__google-ads-mcp)"]
+    T1 --> T2["Search term mining<br/>+ call recording sample"]
+    T2 --> T3{"Wasted spend<br/>> threshold?"}
+    T3 -->|Yes| T4[Draft negative<br/>keyword set]
+    T3 -->|No| T5
+    T4 --> T5["/ads budget<br/>pacing check"]
+    T5 --> T6{Pacing off<br/>by > 10%?}
+    T6 -->|Yes| T7[Adjust budget /<br/>bid targets]
+    T6 -->|No| T8
+    T7 --> T8[QS scan per ad group]
+    T8 --> T9{Any QS < 5?}
+    T9 -->|Yes| T10[Route to D6c for LP,<br/>or to D6b for ad copy]
+    T9 -->|No| T11
+    T10 --> T11["/ads creative<br/>RSA asset review"]
+    T11 --> T12[Strategist 15-min review]
+    T12 --> T13{Approve?}
+    T13 -->|No| T11
+    T13 -->|Yes| T14[Draft googleads_psg ops<br/>--dry-run]
+    T14 --> T15[Re-approve diff]
+    T15 --> T16["Run --execute<br/>+ audit log"]
+    T16 --> T17["Verify via<br/>mcp__google-ads-mcp__search"]
+    T17 --> T18[Weekly Slack note]
+    T18 --> F((Friday))
+
+    style T16 fill:#FEE2E2,stroke:#C8102E
+    style T17 fill:#ECFDF5,stroke:#047857
+</pre>
+</div>
+
+<h3>D6b. Monthly Strategic Loop (Ads)</h3>
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    M1["Month-end:<br/>full /ads audit"] --> M2["Health Score trend<br/>vs SOSTAC objectives"]
+    M2 --> M3{On track?}
+    M3 -->|Behind| M4["Root cause:<br/>traffic / conv / offer / market?"]
+    M3 -->|On / ahead| M5["/ads plan refresh<br/>scale levers"]
+    M4 --> M6["/ads test<br/>design experiment"]
+    M5 --> M6
+    M6 --> M7{Experiment type?}
+    M7 -->|Ad copy| M8[Ad Variations test]
+    M7 -->|Bid strategy| M9[Campaign Experiment<br/>50/50 split]
+    M7 -->|Audience| M10[Audience layer<br/>observation first]
+    M7 -->|LP layout| M11[Hand off to D6c CRO loop]
+    M8 --> M12[14-day run]
+    M9 --> M12
+    M10 --> M12
+    M11 --> M12
+    M12 --> M13[Statistical review]
+    M13 --> M14{Significant lift?}
+    M14 -->|Yes| M15[Roll out via<br/>googleads_psg --execute]
+    M14 -->|No| M16[Kill + document learning]
+    M15 --> M17[Monthly report to client]
+    M16 --> M17
+
+    style M15 fill:#D1FAE5,stroke:#047857
+    style M16 fill:#FEE2E2,stroke:#C8102E
+</pre>
+</div>
+
+<h3>D6c. Continuous CRO Loop (Landing Pages)</h3>
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    H1[Heatmap + replay review<br/>Clarity weekly] --> H2[Form analytics +<br/>scroll + rage clicks]
+    H2 --> H3[Pull GA4 LP funnel<br/>by persona variant]
+    H3 --> H4{Conversion rate<br/>below baseline?}
+    H4 -->|Yes| H5[Diagnose:<br/>hero / proof / form / CTA?]
+    H4 -->|No| H6[Identify scale<br/>opportunity]
+    H5 --> H7[Hypothesis +<br/>variant brief]
+    H6 --> H7
+    H7 --> H8[Content Lead drafts<br/>variant in Sanity]
+    H8 --> H9[Web Engineer wires<br/>edge middleware split]
+    H9 --> H10[Sample-size calc<br/>days to significance]
+    H10 --> H11[Launch variant<br/>50/50]
+    H11 --> H12[Run to significance]
+    H12 --> H13{Lift vs control?}
+    H13 -->|Yes| H14[Promote variant<br/>as new control]
+    H13 -->|No| H15[Kill + document]
+    H14 --> H16[Schema + analytics<br/>checks on winner]
+    H15 --> H17[Next hypothesis<br/>from backlog]
+    H16 --> H17
+    H17 --> H1
+
+    style H14 fill:#D1FAE5,stroke:#047857
+    style H15 fill:#FEE2E2,stroke:#C8102E
+</pre>
+</div>
+
+<h3>D6d. Quarterly Content Refresh Loop</h3>
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    Q1[QBR data:<br/>last 90 days reviews + calls] --> Q2[Refresh VoC<br/>scrape + social listening]
+    Q2 --> Q3[Update persona<br/>weighting]
+    Q3 --> Q4{New persona<br/>emerging?}
+    Q4 -->|Yes| Q5[New LP brief<br/>via collision-repair-content-system]
+    Q4 -->|No| Q6[Refresh existing LP FAQs<br/>with new VoC questions]
+    Q5 --> Q7[D4b + D4c<br/>build mini-cycle]
+    Q6 --> Q8[Update schema +<br/>internal links]
+    Q7 --> Q9[Launch + measure]
+    Q8 --> Q9
+    Q9 --> Q10[Report in next QBR]
+
+    style Q5 fill:#DBEAFE,stroke:#1E3A8A
+    style Q9 fill:#D1FAE5,stroke:#047857
+</pre>
+</div>
+
+<h2 id="sec-9">9. SEMrush MCP Command Map</h2>
+
+<table>
+  <tr><th>SEMrush MCP tool</th><th>Phase used</th><th>Cadence</th><th>Output feeds</th></tr>
+  <tr><td><code>keyword_research</code></td><td>D2b, D3d, D6b</td><td>One-time + quarterly</td><td>Seed keywords, search volume, intent, difficulty</td></tr>
+  <tr><td><code>organic_research</code></td><td>D2b, D7</td><td>One-time + quarterly</td><td>Competitor top keywords, traffic value, position changes</td></tr>
+  <tr><td><code>overview_research</code></td><td>D2b, D7</td><td>One-time + monthly</td><td>Domain authority, traffic estimate, paid vs organic split</td></tr>
+  <tr><td><code>url_research</code></td><td>D2b, D2d, D6c</td><td>On-demand</td><td>Per-page organic traffic, keywords, backlinks</td></tr>
+  <tr><td><code>subdomain_research</code></td><td>D2b</td><td>One-time</td><td>Subdomain-level competitor view</td></tr>
+  <tr><td><code>subfolder_research</code></td><td>D2b</td><td>One-time</td><td>Subfolder performance comparison</td></tr>
+  <tr><td><code>backlink_research</code></td><td>D2b, D7</td><td>One-time + quarterly</td><td>Link gap, authority benchmark, outreach prospect list</td></tr>
+  <tr><td><code>siteaudit_research</code></td><td>D2d, D6c</td><td>One-time + monthly</td><td>Technical SEO backlog, Core Web Vitals, schema issues</td></tr>
+  <tr><td><code>tracking_research</code></td><td>D7</td><td>Daily during ranking-sensitive periods</td><td>Position tracking for target keywords</td></tr>
+  <tr><td><code>projects_research</code></td><td>D1, D7</td><td>One-time + monthly</td><td>SEMrush projects setup, monitoring health</td></tr>
+  <tr><td><code>trends_research</code></td><td>D2b, D3, D7</td><td>One-time + quarterly</td><td>Seasonal demand patterns (hail, deer, winter)</td></tr>
+  <tr><td><code>execute_report</code> / <code>get_report_schema</code></td><td>D7</td><td>Monthly for QBR</td><td>Custom SEMrush exports for Looker Studio</td></tr>
+</table>
+
+<h2 id="sec-10">10. claude-ads Command Map</h2>
+
+<table>
+  <tr><th>Command</th><th>Type</th><th>Phase</th><th>Cadence</th><th>Output</th></tr>
+  <tr><td><code>/ads audit</code></td><td><span class="badge b-read">Read</span></td><td>D2a, D7</td><td>Onboard + quarterly</td><td>Baseline Health Score + audit PDF</td></tr>
+  <tr><td><code>/ads google</code></td><td><span class="badge b-read">Read</span></td><td>D2a, D6a, D6b</td><td>Weekly + monthly</td><td>80-check Google-specific findings</td></tr>
+  <tr><td><code>/ads competitor</code></td><td><span class="badge b-read">Read</span></td><td>D2a, D7</td><td>Quarterly</td><td>Auction insights + competitor brief</td></tr>
+  <tr><td><code>/ads landing</code></td><td><span class="badge b-read">Read</span></td><td>D2d, D6c</td><td>Onboard + per LP change</td><td>LP quality findings, CRO brief input</td></tr>
+  <tr><td><code>/ads plan local-service</code></td><td><span class="badge b-plan">Plan</span></td><td>D3d</td><td>Onboard + renewal</td><td>Campaign architecture, KPI targets, budget guidelines</td></tr>
+  <tr><td><code>/ads math</code></td><td><span class="badge b-plan">Plan</span></td><td>D3e, D7</td><td>Strategy + quarterly</td><td>CPA target, ROAS, break-even, LTV:CAC</td></tr>
+  <tr><td><code>/ads budget</code></td><td><span class="badge b-write">Recommend</span></td><td>D3, D6a</td><td>Strategy + weekly</td><td>Budget/bid recommendations</td></tr>
+  <tr><td><code>/ads creative</code></td><td><span class="badge b-write">Recommend</span></td><td>D6a</td><td>Bi-weekly</td><td>RSA asset rotation, fatigue flags</td></tr>
+  <tr><td><code>/ads test</code></td><td><span class="badge b-plan">Plan</span></td><td>D6b, D6c</td><td>Monthly</td><td>Hypothesis, sample size, duration</td></tr>
+  <tr><td><code>/ads report</code></td><td><span class="badge b-read">Read</span></td><td>D7</td><td>Monthly + quarterly</td><td>PDF deliverable for client</td></tr>
+  <tr><td><code>/ads meta</code>, <code>/ads linkedin</code>, <code>/ads youtube</code>, <code>/ads tiktok</code>, <code>/ads microsoft</code>, <code>/ads apple</code></td><td><span class="badge b-read">Read</span></td><td>D8 expansion</td><td>On expansion</td><td>Feasibility + SOW input</td></tr>
+</table>
+
+<h2 id="sec-11">11. Analytics Build Detail (D4a)</h2>
+
+<table>
+  <tr><th>Layer</th><th>Tool</th><th>What it does</th><th>Owner</th></tr>
+  <tr><td>Data collection (web)</td><td>GA4 + GTM web container</td><td>Page views, scroll, form interactions, CTA clicks, video plays, outbound clicks</td><td>Analytics Engineer</td></tr>
+  <tr><td>Server-side collection (tier 2+)</td><td>sGTM in GCP</td><td>Cookieless future-proofing, first-party data, CAPI for Ads + Meta, consent mode v2 server-side</td><td>Analytics Engineer</td></tr>
+  <tr><td>Call collection</td><td>CallRail or WhatConverts</td><td>DNI, call recording, source attribution, Google Ads offline import</td><td>Analytics Engineer</td></tr>
+  <tr><td>Conversion mapping</td><td>googleads_psg conversion_actions module</td><td>Maps GA4 + offline events to Google Ads with correct primary-for-goal flags</td><td>Ads Engineer</td></tr>
+  <tr><td>Identity resolution</td><td>GA4 User-ID + Google signals + first-party cookie</td><td>Cross-device + cross-session attribution where consent allows</td><td>Analytics Engineer</td></tr>
+  <tr><td>Reporting layer</td><td>Looker Studio</td><td>Combines GA4, Google Ads, Search Console, CallRail. Persona-segmented funnel views.</td><td>Analytics Engineer</td></tr>
+  <tr><td>BI escalation (optional)</td><td>BigQuery + dbt</td><td>For clients needing raw GA4 export + modeled marts</td><td>Analytics Engineer</td></tr>
+  <tr><td>Validation</td><td>GA4 DebugView + Tag Assistant + GTM Preview</td><td>Pre-launch QA, post-launch sanity check</td><td>Analytics Engineer</td></tr>
+</table>
+
+<h4>Measurement Plan Template (D4a deliverable)</h4>
+<table>
+  <tr><th>Event</th><th>Trigger</th><th>Conversion?</th><th>Primary-for-goal?</th><th>Persona dimension</th></tr>
+  <tr><td><code>generate_lead</code> (form submit)</td><td>Form thank-you page or AJAX success</td><td>Yes</td><td>Yes</td><td>From LP variant cookie</td></tr>
+  <tr><td><code>phone_call</code> (qualified)</td><td>CallRail webhook for calls over 60s</td><td>Yes</td><td>Yes</td><td>From CallRail source pool</td></tr>
+  <tr><td><code>phone_click</code></td><td>GTM trigger on tel: link click</td><td>Yes (secondary)</td><td>No</td><td>From LP variant cookie</td></tr>
+  <tr><td><code>estimate_request</code></td><td>Specific high-intent form submit</td><td>Yes</td><td>Yes (separate goal)</td><td>From form field selection</td></tr>
+  <tr><td><code>scroll_75</code></td><td>GTM scroll trigger</td><td>No (engagement)</td><td>No</td><td>From LP variant cookie</td></tr>
+  <tr><td><code>video_play</code></td><td>GTM YouTube trigger</td><td>No</td><td>No</td><td>From LP variant cookie</td></tr>
+  <tr><td><code>chat_engaged</code></td><td>Chat widget user message</td><td>Yes (secondary)</td><td>No</td><td>From LP variant cookie</td></tr>
+</table>
+
+<h2 id="sec-12">12. Landing Page Build Detail (D4b)</h2>
+
+<h4>Sanity Content Model</h4>
+<pre class="code"><span class="c">// sanity/schemas/landingPage.ts (simplified)</span>
+defineType({
+  name: 'landingPage',
+  type: 'document',
+  fields: [
+    defineField({ name: 'service', type: 'reference', to: [{type: 'service'}] }),
+    defineField({ name: 'primaryPersona', type: 'reference', to: [{type: 'persona'}] }),
+    defineField({ name: 'slug', type: 'slug' }),
+    defineField({ name: 'hero', type: 'heroBlock' }),
+    defineField({ name: 'anxietyBlocks', type: 'array', of: [{type: 'anxietyBlock'}] }),
+    defineField({ name: 'proofSection', type: 'proofSection' }),
+    defineField({ name: 'faq', type: 'array', of: [{type: 'faqItem'}] }),
+    defineField({ name: 'cta', type: 'ctaBlock' }),
+    defineField({ name: 'schemaMarkup', type: 'jsonLdBlock' }),
+    defineField({ name: 'variants', type: 'array', of: [{type: 'landingPageVariant'}] }),
+    defineField({ name: 'seo', type: 'seoBlock' }),
+  ],
+})</pre>
+
+<h4>Frontend Routing (Next.js App Router example)</h4>
+<pre class="code"><span class="c">// app/lp/[slug]/page.tsx - server component</span>
+<span class="c">// 1. Read variant cookie set by middleware</span>
+<span class="c">// 2. Fetch LP from Sanity via GROQ</span>
+<span class="c">// 3. If variant matches, swap variant blocks into the page</span>
+<span class="c">// 4. Server-render full page with embedded JSON-LD schema</span>
+<span class="c">// 5. Fire GA4 page_view with variant dimension</span></pre>
+
+<h4>Edge Middleware for CRO Splits</h4>
+<pre class="code"><span class="c">// middleware.ts</span>
+<span class="c">// Hash visitor IP + UA to a stable variant assignment</span>
+<span class="c">// Set cookie psg_lp_variant=A or B</span>
+<span class="c">// Log assignment to GA4 via Measurement Protocol</span></pre>
+
+<h4>Schema Markup Requirements (per page type)</h4>
+<table>
+  <tr><th>Page type</th><th>Schema types</th></tr>
+  <tr><td>Homepage</td><td>LocalBusiness, AutoRepair, Organization, WebSite, BreadcrumbList</td></tr>
+  <tr><td>Service LP</td><td>AutoRepair, Service, FAQPage, BreadcrumbList</td></tr>
+  <tr><td>Insurance / DRP LP</td><td>AutoRepair, FAQPage, BreadcrumbList, Review</td></tr>
+  <tr><td>Brand-specific (Tesla, BMW)</td><td>AutoRepair, Service (brand-scoped), FAQPage</td></tr>
+  <tr><td>Blog / educational</td><td>Article, BreadcrumbList, FAQPage where relevant</td></tr>
+  <tr><td>Reviews page</td><td>AggregateRating, Review, AutoRepair</td></tr>
+</table>
+
+<h2 id="sec-13">13. Asana Project Setup and Structure</h2>
+
+<p>One Asana project per client engagement. Created by Sales at S7 (right after agreement signing, during commercial setup), handed to the Account Strategist at the Handoff Gate, and used through D8 offboard. Internal PSG team work (sprints, tooling, infrastructure) lives in a separate Asana project in the same workspace.</p>
+
+<div class="callout green">
+The project is created BEFORE delivery starts. Account Strategist inherits a pre-structured project on day one. No "let me build out the Asana project" delay during D1.
+</div>
+
+<h3>Project Naming and Metadata</h3>
+
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Project name</td><td><code>[Client Name] - LocalReach [Tier]</code> (example: "Wallace Collision - LocalReach Premium")</td></tr>
+  <tr><td>Project owner</td><td>Account Strategist</td></tr>
+  <tr><td>Project members</td><td>Ads Engineer, Web Engineer, Content Lead, CRO Analyst, Analytics Engineer, Client Success (read-only client access if granted)</td></tr>
+  <tr><td>Default view</td><td>List view by section (phases visible in order)</td></tr>
+  <tr><td>Custom fields</td><td>Phase (enum D1-D8), Stream (4a-4e), KPI Impact (high/med/low), Audit Log Path (text), Client Visible (checkbox)</td></tr>
+  <tr><td>Linked tools</td><td>Slack channel, shared Drive folder, Looker Studio dashboard, Pipedrive deal record, invoiced.app customer URL, Sanity studio URL</td></tr>
+</table>
+
+<h3>Section Structure</h3>
+
+<p>Sections are created via Asana REST API (the Asana MCP cannot create sections). The asana-project-setup skill handles this. Naming convention follows PSG standard:</p>
+
+<pre class="code">PRE-D1 — Handoff prep, access bundle, calendar setup
+D1 — Wk 1: Onboard & Access
+D2 — Wks 2-3: Audit, Discovery, Baseline
+    (subsections: D2a Ads Audit, D2b SEMrush, D2c Analytics, D2d LP Audit, D2e VoC)
+D3 — Wks 3-4: Strategy, Persona, SOSTAC
+D4 — Wks 4-6: Foundation Build (5 parallel streams)
+    (subsections or labels: D4a Analytics, D4b LP, D4c Content, D4d Ads, D4e CRO)
+D5 — Wks 6-8: Launch & Stabilize (14-day window)
+D6 — Ongoing: Refinement Loops
+    (subsections: D6a Weekly Ads, D6b Monthly Ads, D6c Continuous CRO, D6d Quarterly Content)
+D7 — Monthly + Quarterly: Reports & QBR
+D8 — D-60 from SOW end: Renewal / Expand / Offboard
+COMPLETED — archive bucket</pre>
+
+<h3>Milestones at Every Phase Exit Gate</h3>
+
+<table>
+  <tr><th>Milestone</th><th>Triggered by</th><th>Owner</th></tr>
+  <tr><td>M1: Access confirmed</td><td>D1 exit gate</td><td>Account Strategist</td></tr>
+  <tr><td>M2: Audit deck delivered</td><td>D2 exit gate</td><td>Account Strategist</td></tr>
+  <tr><td>M3: Strategy approved by client</td><td>D3 exit gate</td><td>Account Strategist + Client DM</td></tr>
+  <tr><td>M4: All 5 build streams pass QA</td><td>D4 exit gate</td><td>Stream owners</td></tr>
+  <tr><td>M5: 14-day stabilization complete</td><td>D5 exit gate</td><td>Ads Engineer</td></tr>
+  <tr><td>M6: First monthly report delivered</td><td>D7 monthly cadence start</td><td>Account Strategist</td></tr>
+  <tr><td>M7: First QBR delivered</td><td>D7 quarterly cadence start</td><td>Account Strategist</td></tr>
+  <tr><td>M8: Renewal decision received</td><td>D8 trigger (60 days before SOW end)</td><td>Account Strategist + Rex</td></tr>
+</table>
+
+<h3>Task Structure (Parent + Subtask Pattern)</h3>
+
+<p>D4 build streams are parent tasks with subtasks for each work item. Critical: subtasks must NOT have a <code>project_id</code> set, only the <code>parent</code> field. Setting both causes subtasks to surface as top-level tasks and the project looks like a chaotic flat list. This is the trap the asana-project-setup skill warns about.</p>
+
+<pre class="code">Parent task: "D4b LP Build — Sanity schema + Next.js frontend"
+  ├─ Subtask: Design landingPage Sanity schema
+  ├─ Subtask: Build heroBlock, anxietyBlock, faqItem types
+  ├─ Subtask: Set up persona variant array
+  ├─ Subtask: Wire Edge Middleware for CRO splits
+  ├─ Subtask: Embed JSON-LD via portable text block
+  ├─ Subtask: Configure Sanity Presentation tool
+  └─ Subtask: Lighthouse score validation > 90 mobile</pre>
+
+<h3>Recurring Tasks (D6 Loops)</h3>
+
+<table>
+  <tr><th>Recurring task</th><th>Frequency</th><th>Section</th><th>Owner</th></tr>
+  <tr><td>D6a Weekly tactical ads loop</td><td>Every Monday</td><td>D6</td><td>Ads Engineer</td></tr>
+  <tr><td>D6c Weekly CRO heatmap review</td><td>Every Wednesday</td><td>D6</td><td>CRO Analyst</td></tr>
+  <tr><td>D6a Bi-weekly negatives sprint</td><td>Every other Tuesday</td><td>D6</td><td>Ads Engineer</td></tr>
+  <tr><td>D6b Monthly strategic review</td><td>Last Friday of month</td><td>D6</td><td>Account Strategist + Ads Engineer</td></tr>
+  <tr><td>D7 Monthly report</td><td>1st business day of month</td><td>D7</td><td>Account Strategist</td></tr>
+  <tr><td>D6d Quarterly content refresh + VoC update</td><td>Every 90 days</td><td>D6</td><td>Content Lead</td></tr>
+  <tr><td>D7 Quarterly QBR</td><td>Every 90 days</td><td>D7</td><td>Account Strategist</td></tr>
+  <tr><td>Commercial: Monthly ad spend pull + invoice</td><td>1st of month</td><td>D6</td><td>Finance Lead (linked from Commercial Ops, see Sales doc)</td></tr>
+</table>
+
+<h3>Project Management Cadence</h3>
+
+<table>
+  <tr><th>Cadence</th><th>Activity</th><th>Asana action</th></tr>
+  <tr><td>Daily</td><td>Stream-level task triage</td><td>Each engineer reviews their assigned tasks, updates status, flags blockers as Asana comments</td></tr>
+  <tr><td>Weekly</td><td>Internal team standup (15 min)</td><td>Account Strategist reviews "in progress" tasks across all active client projects, flags risks</td></tr>
+  <tr><td>Weekly</td><td>Client check-in (30 min)</td><td>Account Strategist sends Asana project status report (auto-generated from milestones + completed tasks)</td></tr>
+  <tr><td>Per phase</td><td>Phase exit review</td><td>Account Strategist confirms exit criteria met, marks milestone complete, moves any incomplete tasks forward</td></tr>
+  <tr><td>Monthly</td><td>Risk register review</td><td>Account Strategist reviews open risks, updates probability + impact, assigns mitigation owners</td></tr>
+  <tr><td>Quarterly</td><td>Asana project retrospective</td><td>Cross-stream retro using Start/Stop/Continue. Action items become new Asana tasks.</td></tr>
+</table>
+
+<h3>Definition of Done (applies to every task)</h3>
+
+<ul class="tight">
+  <li>Acceptance criteria in task description are all checked.</li>
+  <li>If the task involves a <code>googleads_psg</code> mutation: <code>--dry-run</code> reviewed, <code>--execute</code> run, audit log path attached to the Asana task.</li>
+  <li>If the task involves a Sanity content change: published in Sanity, verified live on the frontend, schema validates.</li>
+  <li>If the task involves an experiment: hypothesis + sample size documented before launch, statistical readout attached after.</li>
+  <li>Linked to a milestone or parent epic.</li>
+  <li>Reviewed by Account Strategist before being marked Complete (unless explicitly delegated).</li>
+</ul>
+
+<h3>Internal PSG Work (Separate Project, Same Workspace)</h3>
+
+<p>Internal team work (skill maintenance, tool upgrades, repo refactors, hiring, server maintenance) lives in a separate Asana project called <code>PSG Internal - Engineering &amp; Ops</code> in the same workspace. Sprint planning runs there. Out of scope for this document, but the same Asana account and conventions apply.</p>
+
+<h2 id="sec-14">14. Persistent Knowledge in Obsidian (per-client vault)</h2>
+
+<p>Account Strategist inherits the client vault from Sales at D1 (created at S7 alongside the Asana project). The vault is the canonical home for anything that should outlive the engagement, refresh quarterly, or compound across the client lifecycle. Asana holds the operational tasks. Obsidian holds the knowledge.</p>
+
+<div class="callout green">
+The persistence boundary: if it should be true a year from now, it lives in Obsidian. If it has a due date, it lives in Asana. If it has a price tag, it lives in invoiced.app. If it has a stage name, it lives in Pipedrive.
+</div>
+
+<h3>14.1 Persistence Boundary - One Job Per Tool</h3>
+
+<table>
+  <tr><th>Tool</th><th>Owns</th><th>Does not own</th></tr>
+  <tr><td>Asana</td><td>Operational tasks, milestones, sprints, project status</td><td>Reasoning, learnings, persona notes (those compound)</td></tr>
+  <tr><td>Obsidian (per-client vault)</td><td>Personas, VoC, audit findings, decisions, meetings, learnings, client-specific concepts and entities</td><td>Task assignments, due dates, sprint allocations</td></tr>
+  <tr><td>Sanity</td><td>Live LP content (the published deliverable)</td><td>Why a copy choice was made, the persona research that informed it (those live in Obsidian)</td></tr>
+  <tr><td>GA4 / Looker Studio</td><td>Telemetry, dashboards, raw metrics</td><td>Interpretation, what the numbers mean for this client (those live in Obsidian)</td></tr>
+  <tr><td>googleads_psg <code>logs/</code></td><td>Audit log of every mutation (raw JSON)</td><td>The rationale for the mutation (cross-link from Obsidian decisions to audit log path)</td></tr>
+  <tr><td>Slack / Drive</td><td>In-flight conversation, raw files</td><td>Synthesized knowledge worth keeping forever (filed to Obsidian via /save)</td></tr>
+  <tr><td>Pipedrive / PandaDoc / invoiced.app</td><td>CRM state, signed contracts, billing</td><td>Anything that should outlive the deal or the invoice (those live in Obsidian)</td></tr>
+</table>
+
+<h3>14.2 Vault Folder Structure (inherited from S7 bootstrap)</h3>
+
+<pre class="code">psg-[client-slug]-vault/
+├── wiki/
+│   ├── index.md              <span class="c"># master catalog</span>
+│   ├── hot.md                <span class="c"># recent context (rebuilt at session end)</span>
+│   ├── log.md                <span class="c"># append-only operation log</span>
+│   ├── overview.md           <span class="c"># exec summary of client + engagement</span>
+│   ├── personas/             <span class="c"># per-client persona refinement (D3a)</span>
+│   ├── voc/                  <span class="c"># reviews, social listening, call coding (D2e, D6a, D6d)</span>
+│   ├── audits/               <span class="c"># D2a-D2e findings + ongoing audit deltas</span>
+│   ├── decisions/            <span class="c"># strategy choices (D3), scope changes, experiment outcomes (D6b/c)</span>
+│   ├── meetings/             <span class="c"># kickoff, weekly, monthly (D7), QBR (D7)</span>
+│   ├── learnings/            <span class="c"># what worked, what didn't, recurring patterns</span>
+│   ├── entities/             <span class="c"># people, insurers, competitors, vehicle brands</span>
+│   ├── concepts/             <span class="c"># client-specific concepts (DRP rules, geo strategy, EV cert)</span>
+│   ├── experiments/          <span class="c"># hypothesis + sample size + result for every D6b/D6c test</span>
+│   └── meta/dashboard.base   <span class="c"># Bases dashboard</span>
+├── _templates/               <span class="c"># Templater templates</span>
+├── .raw/                     <span class="c"># source docs: signed SOW, audit PDFs, review exports</span>
+├── CLAUDE.md                 <span class="c"># auto-loaded vault instructions for Claude sessions</span>
+└── .obsidian/                <span class="c"># config, snippets, MCP setup</span></pre>
+
+<h3>14.3 What Lives Where (Delivery-side touchpoints)</h3>
+
+<table>
+  <tr><th>Delivery activity</th><th>Vault destination</th><th>How it gets there</th></tr>
+  <tr><td>D1 kickoff call notes</td><td><code>wiki/meetings/kickoff-[date].md</code></td><td><code>/save kickoff</code></td></tr>
+  <tr><td>D1 access request bundle + responses</td><td><code>wiki/log.md</code></td><td>Auto-logged by claude-obsidian on each operation</td></tr>
+  <tr><td>D2a claude-ads full audit findings</td><td><code>wiki/audits/d2a-ads-audit-[date].md</code></td><td><code>ingest .raw/audit.pdf</code></td></tr>
+  <tr><td>D2b SEMrush keyword gap + competitor brief</td><td><code>wiki/audits/d2b-market.md</code> + <code>wiki/entities/competitor-[name].md</code></td><td><code>ingest</code> SEMrush export</td></tr>
+  <tr><td>D2c analytics audit report</td><td><code>wiki/audits/d2c-analytics.md</code></td><td><code>/save</code> from audit session</td></tr>
+  <tr><td>D2d LP audit + Core Web Vitals baseline</td><td><code>wiki/audits/d2d-lp.md</code></td><td><code>ingest</code> from claude-ads landing report</td></tr>
+  <tr><td>D2e VoC verbatims (reviews, social, calls, service advisor)</td><td><code>wiki/voc/</code> (one note per source)</td><td><code>ingest</code> for each source, cross-references auto-built</td></tr>
+  <tr><td>D3a refined per-client persona ranking</td><td><code>wiki/personas/persona-1-[name].md</code> through <code>persona-4-[name].md</code></td><td>Manual update from canonical seeds, then <code>/save</code></td></tr>
+  <tr><td>D3b JTBD + anxiety stack matrix</td><td><code>wiki/decisions/jtbd-anxiety-stack.md</code></td><td><code>/save</code> after working session</td></tr>
+  <tr><td>D3c message-market fit grid</td><td><code>wiki/decisions/message-market-fit.md</code></td><td><code>/save</code></td></tr>
+  <tr><td>D3d SOSTAC plan</td><td><code>wiki/decisions/sostac-plan-v[n].md</code></td><td><code>/save sostac-plan</code></td></tr>
+  <tr><td>D3e LTV + target CPA model</td><td><code>wiki/decisions/ltv-model-v[n].md</code> + xlsx in <code>.raw/</code></td><td><code>/save</code> + manual file copy</td></tr>
+  <tr><td>D4 build sprint plan</td><td><code>wiki/decisions/d4-build-plan.md</code> (Asana has the live tasks; vault has the plan rationale)</td><td><code>/save</code></td></tr>
+  <tr><td>D5 stabilization daily KPI notes</td><td><code>wiki/meetings/stabilization-day-[1-14].md</code></td><td>Daily <code>/save</code></td></tr>
+  <tr><td>D5 launch retrospective</td><td><code>wiki/learnings/launch-retro-[date].md</code></td><td><code>/save</code></td></tr>
+  <tr><td>D6a weekly insight notes</td><td><code>wiki/meetings/weekly-[YYYY-WW].md</code></td><td><code>/save</code> after Friday review</td></tr>
+  <tr><td>D6b/c experiment hypothesis + result</td><td><code>wiki/experiments/exp-[date]-[shortname].md</code></td><td><code>/save</code> before launch and after readout</td></tr>
+  <tr><td>D6d quarterly VoC refresh</td><td>Re-ingest into <code>wiki/voc/</code>; persona docs updated</td><td><code>ingest</code> + manual persona doc updates</td></tr>
+  <tr><td>D7 monthly report + QBR</td><td><code>wiki/meetings/monthly-[YYYY-MM].md</code>, <code>wiki/meetings/qbr-[date].md</code></td><td><code>/save</code></td></tr>
+  <tr><td>D8 renewal or offboard learnings</td><td><code>wiki/learnings/engagement-summary.md</code></td><td><code>/save</code> as final entry</td></tr>
+</table>
+
+<h3>14.4 claude-obsidian Commands by Delivery Phase</h3>
+
+<table>
+  <tr><th>Command</th><th>When in Delivery</th><th>Output</th></tr>
+  <tr><td><code>lint the wiki</code></td><td>D1 inheritance check + monthly + after every QBR</td><td>Orphan check, dead link check, gap analysis</td></tr>
+  <tr><td><code>ingest [file]</code></td><td>D2a-D2e for every audit and VoC source</td><td>8-15 wiki pages per source, cross-references auto-built</td></tr>
+  <tr><td><code>ingest all of these</code></td><td>D2e when processing batch of review exports</td><td>Parallel agents process multiple sources, then cross-reference</td></tr>
+  <tr><td><code>what do you know about [topic]?</code></td><td>D6a weekly loop when investigating a search term cluster or a call recording theme</td><td>Synthesized answer with vault page citations</td></tr>
+  <tr><td><code>/save [name]</code></td><td>After every meeting, every decision, every experiment readout</td><td>Conversation filed with title</td></tr>
+  <tr><td><code>/autoresearch [topic]</code></td><td>D6d when a new persona signal emerges (e.g., new EV cert standard, new insurance carrier rule)</td><td>3-round web research filed to vault</td></tr>
+  <tr><td><code>/canvas</code></td><td>D3 strategy session, D7 QBR prep</td><td>Visual canvas (entity map, journey diagram, decision tree) added to vault</td></tr>
+  <tr><td><code>update hot cache</code></td><td>End of every Claude session</td><td>hot.md rebuilt so next session starts with full recent context</td></tr>
+</table>
+
+<h3>14.5 Cross-Project Power Move (point any repo at the vault)</h3>
+
+<p>The PSG repo per client (where googleads_psg mutations run) reads from the client vault for context. Add this block to the per-client repo's <code>CLAUDE.md</code>:</p>
+
+<pre class="code"><span class="c"># Append to apps/ads/CLAUDE.md or per-client repo CLAUDE.md</span>
+## Client Knowledge Vault
+Path: ~/Obsidian/psg-[client-slug]-vault
+
+When you need client context not already in this repo:
+1. Read wiki/hot.md first (recent context cache)
+2. If not enough, read wiki/index.md (master catalog)
+3. If you need domain detail, read wiki/personas/ or wiki/voc/
+4. If you need decision history, read wiki/decisions/
+5. If you need a past experiment, read wiki/experiments/
+6. Only then drill into specific wiki pages.
+
+Do NOT read the vault for general coding questions or tasks
+unrelated to this client.</pre>
+
+<h3>14.6 Vault Health Cadence</h3>
+
+<table>
+  <tr><th>Cadence</th><th>Activity</th><th>Owner</th></tr>
+  <tr><td>End of every Claude session</td><td>Hot cache auto-updates</td><td>Hook (automatic)</td></tr>
+  <tr><td>Daily during D5 stabilization</td><td>Daily KPI note filed via <code>/save</code></td><td>Ads Engineer</td></tr>
+  <tr><td>Weekly</td><td>Weekly insight note filed Friday via <code>/save</code></td><td>Ads Engineer + Account Strategist</td></tr>
+  <tr><td>Monthly</td><td><code>lint the wiki</code> for orphans, dead links, gaps</td><td>Account Strategist</td></tr>
+  <tr><td>Quarterly (D6d)</td><td>Full VoC re-ingest, persona refresh, vault graph review</td><td>Content Lead</td></tr>
+  <tr><td>At offboard (D8)</td><td>Final lint, export vault, hand to client (if requested) and retain PSG copy in PSG-internal vault for learnings</td><td>Account Strategist</td></tr>
+</table>
+
+<h3>14.7 Offboard - Vault Handover</h3>
+
+<ul class="tight">
+  <li>If client wants the vault: export full <code>psg-[client-slug]-vault/</code> as a zip. Include the <code>.obsidian/</code> folder so they get the dashboard, snippets, and MCP setup. Provide setup instructions.</li>
+  <li>PSG retains a copy of the vault in the PSG-internal vault (separate Obsidian instance) under <code>past-engagements/[client-slug]/</code> for cross-client learnings.</li>
+  <li>Update PSG-internal playbooks (e.g., collision-repair-content-system, objection library) with any pattern that recurred during this engagement.</li>
+  <li>Remove the MCP entry for the client vault from active Claude Code sessions.</li>
+</ul>
+
+<h2 id="sec-15">15. RACI (Delivery)</h2>
+
+<div style="display:flex;gap:14px;font-size:12px;color:var(--muted);margin:8px 0 18px;">
+  <span style="background:#FEE2E2;padding:2px 6px;border-radius:3px;font-weight:600;color:#C8102E;">R = Responsible</span>
+  <span style="background:#FED7AA;padding:2px 6px;border-radius:3px;font-weight:600;color:#B45309;">A = Accountable</span>
+  <span style="background:#DBEAFE;padding:2px 6px;border-radius:3px;font-weight:600;color:#1E3A8A;">C = Consulted</span>
+  <span style="background:#E5E7EB;padding:2px 6px;border-radius:3px;font-weight:600;color:#374151;">I = Informed</span>
+</div>
+
+<table>
+  <tr>
+    <th>Activity</th>
+    <th>Account Strategist</th>
+    <th>Ads Engineer</th>
+    <th>Web Engineer</th>
+    <th>Content Lead</th>
+    <th>CRO Analyst</th>
+    <th>Analytics Eng</th>
+    <th>Client Marketing</th>
+    <th>Client DM</th>
+  </tr>
+  <tr><td>D1 Onboard</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-r">R</td><td class="role-r">R</td><td class="role-c">C</td></tr>
+  <tr><td>D2a Ads audit</td><td class="role-c">C</td><td class="role-r">R/A</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td></tr>
+  <tr><td>D2b SEMrush market</td><td class="role-r">R</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-r">R</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-i">I</td></tr>
+  <tr><td>D2c Analytics audit</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-r">R/A</td><td class="role-i">I</td><td class="role-i">I</td></tr>
+  <tr><td>D2d LP audit</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-r">R</td><td class="role-c">C</td><td class="role-r">R</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td></tr>
+  <tr><td>D2e VoC research</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-i">I</td></tr>
+  <tr><td>D3 SOSTAC + persona</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-r">R</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-a">A (signoff)</td></tr>
+  <tr><td>D4a Analytics build</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-i">I</td></tr>
+  <tr><td>D4b LP build</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-i">I</td></tr>
+  <tr><td>D4c Content creation</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-i">I</td></tr>
+  <tr><td>D4d Ads build</td><td class="role-c">C</td><td class="role-r">R/A</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td></tr>
+  <tr><td>D4e CRO instrumentation</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-r">R</td><td class="role-c">C</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td></tr>
+  <tr><td>D5 Launch + stabilize</td><td class="role-c">C</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-r">R</td><td class="role-i">I</td><td class="role-i">I</td></tr>
+  <tr><td>D6a Weekly ads</td><td class="role-c">C</td><td class="role-r">R/A</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-i">I</td></tr>
+  <tr><td>D6b Monthly ads</td><td class="role-r">R/A</td><td class="role-r">R</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-i">I</td></tr>
+  <tr><td>D6c Continuous CRO</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-r">R</td><td class="role-r">R</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td></tr>
+  <tr><td>D6d Content refresh</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-i">I</td></tr>
+  <tr><td>D7 Monthly + QBR</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-a">A</td></tr>
+  <tr><td>D8 Renew or Offboard (delivery side)</td><td class="role-r">R</td><td class="role-r">R</td><td class="role-r">R</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-r">R</td><td class="role-c">C</td><td class="role-a">A</td></tr>
+</table>
+
+<h2 id="sec-16">16. Decision Points and Gateways</h2>
+
+<table>
+  <tr><th>#</th><th>Gateway</th><th>Type</th><th>Paths</th></tr>
+  <tr><td>DG1</td><td>D2 audit reveals tracking gaps?</td><td>XOR</td><td>Yes: fix tracking in D4a before D3 finalizes CPA. No: proceed.</td></tr>
+  <tr><td>DG2</td><td>VoC yields fewer than 20 verbatims?</td><td>XOR</td><td>Yes: expand to regional. No: proceed to persona refinement.</td></tr>
+  <tr><td>DG3</td><td>Persona ranking matches PSG library order?</td><td>XOR</td><td>Yes: use library defaults. No: re-rank and document.</td></tr>
+  <tr><td>DG4</td><td>D3 strategy approved by client?</td><td>XOR</td><td>Yes: build. No: iterate, max 2 cycles before escalation.</td></tr>
+  <tr><td>DG5</td><td>All 5 D4 streams pass QA?</td><td>AND</td><td>All five: enable. Any one fails: hold launch.</td></tr>
+  <tr><td>DG6</td><td>14-day stabilization KPIs in range?</td><td>XOR</td><td>Yes: enter refinement. No: roll back via audit log.</td></tr>
+  <tr><td>DG7</td><td>Wasted spend over weekly threshold (D6a)?</td><td>XOR</td><td>Yes: negative keyword sprint. No: continue.</td></tr>
+  <tr><td>DG8</td><td>LP CR below baseline (D6c)?</td><td>XOR</td><td>Yes: trigger CRO hypothesis. No: monitor.</td></tr>
+  <tr><td>DG9</td><td>Experiment statistically significant?</td><td>XOR</td><td>Yes: roll out. No: kill, document.</td></tr>
+  <tr><td>DG10</td><td>New persona signal in D6d quarterly?</td><td>XOR</td><td>Yes: trigger D4 mini-cycle. No: refresh existing FAQs.</td></tr>
+  <tr><td>DG11</td><td>SOW within 60 days of end?</td><td>XOR</td><td>Yes: alert Sales to trigger renewal motion (see Sales doc section 11). No: continue refinement.</td></tr>
+</table>
+
+<h2 id="sec-17">17. Cadence, Metrics, and Artifacts</h2>
+
+<table>
+  <tr><th>Cadence</th><th>Activity</th><th>Primary metric</th><th>Artifact</th></tr>
+  <tr><td>Daily (first 14 days)</td><td>Stabilization watch</td><td>Impressions, CTR, conversion fire rate, LP CR</td><td>Slack note</td></tr>
+  <tr><td>Weekly</td><td>D6a tactical ads loop</td><td>CPA, wasted spend, QS, pacing</td><td>Audit log JSON + Slack note</td></tr>
+  <tr><td>Weekly</td><td>D6c CRO heatmap review</td><td>LP CR by variant, scroll, rage clicks</td><td>CRO backlog update</td></tr>
+  <tr><td>Bi-weekly</td><td>Search term + negatives sprint</td><td>% non-converting query spend</td><td>Negatives changelog</td></tr>
+  <tr><td>Monthly</td><td>D6b strategic experiment review</td><td>Lift vs control, LTV-adjusted ROAS</td><td>Experiment log + monthly report</td></tr>
+  <tr><td>Monthly</td><td>SEMrush position tracking</td><td>Avg position for target keywords</td><td>SEMrush dashboard snapshot</td></tr>
+  <tr><td>Quarterly</td><td>D6d content refresh + D7 QBR</td><td>Goals attainment, share of voice, persona accuracy</td><td>QBR deck + Sanity content delta</td></tr>
+  <tr><td>Quarterly</td><td>VoC refresh (D6d)</td><td>New verbatims, anxieties, questions</td><td>VoC delta report</td></tr>
+  <tr><td>Annually</td><td>Persona + LTV model refresh</td><td>Persona accuracy, LTV variance</td><td>Updated persona doc + LTV xlsx</td></tr>
+</table>
+
+<h2 id="sec-18">18. Anti-Patterns to Avoid</h2>
+
+<ul class="tight">
+  <li>Treating personas as a D3 deliverable that never gets refreshed. VoC has to refresh quarterly in D6d or personas drift.</li>
+  <li>Skipping D2e VoC research because the client says they already know their customer. They know their best customer. They do not know the one who searched and bought elsewhere.</li>
+  <li>Building LPs without persona alignment. Every D4c brief starts from the D3c message-market fit grid.</li>
+  <li>Running <code>--execute</code> without a prior <code>--dry-run</code>. Violates the safety rule in <code>CLAUDE.md</code>.</li>
+  <li>Optimizing within the 14-day stabilization window. Kills smart bidding signal.</li>
+  <li>Killing a CRO experiment before statistical significance. Throws away learning.</li>
+  <li>Running CRO on an LP that has not passed Core Web Vitals. You measure speed, not message.</li>
+  <li>Reporting clicks and impressions only. Report CPA, ROAS, LP CR, and LTV-adjusted return per persona.</li>
+  <li>Building one universal LP for all personas. Insurance claimants and cash-pay customers have opposing anxieties.</li>
+  <li>Trusting SEMrush volumes blindly for very local terms. Cross-check with Google Keyword Planner and Search Console actuals.</li>
+  <li>Forgetting that calls are the primary collision conversion. Click-to-call without offline import means bidding blind.</li>
+  <li>Letting Sanity content go stale because nobody owns the quarterly refresh. D6d has a named Content Lead.</li>
+  <li>Removing PSG card from MCC during offboard before confirming client billing is set up. Ads silently stop.</li>
+</ul>
+
+</main>
+
+<footer>
+  Phoenix Solutions Group · Delivery Lifecycle Process Model v3.0 · 2026-05-27 · D1 through D8 · Companion: Sales Lifecycle (S0-S8) + Commercial Operations in <a href="process-model-psg-sales-lifecycle.html">process-model-psg-sales-lifecycle.html</a>
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#DBEAFE',
+      primaryTextColor: '#0B1F3A',
+      primaryBorderColor: '#1E3A8A',
+      lineColor: '#374151',
+      fontFamily: 'Inter, sans-serif'
+    },
+    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+  });
+</script>
+
+</body>
+</html>
