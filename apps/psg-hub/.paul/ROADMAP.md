@@ -8,15 +8,18 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 **v0.3 Customer Analytics** (v0.3.0)
 Status: 🚧 In Progress
-Phases: 0 of 3 complete
+Phases: 0 of 4 complete
 
-Turn the empty analytics surface into a unified, story-led **Google Ads + GA4 + GSC + SEMrush** marketing view, output as the automated **PSG monthly client report** (multi-LLM narrative + branded PDF). Built from the absorbed ads-dashboard canon + BSM Phase 5 Google Ads data.
+Turn the empty analytics surface into a unified, story-led **SEMrush + Google Ads + GA4 + GSC** marketing view, output as the automated **PSG monthly client report** (multi-LLM narrative + branded PDF). Built from the absorbed ads-dashboard canon.
+
+**Re-planned 2026-06-04 (grounding overturned the premise):** the ROADMAP assumed "BSM Phase 5 Google Ads data already exists, no OAuth." Verified FALSE on prod — the `google_ads_*` tables do not exist, no source has stored data, and every source needs ingest groundwork. So phases are re-ordered by ascending OAuth/ingest friction: foundation + the lowest-friction source first to prove the surface end-to-end, heavier sources next, report last. Grew 3 → 4 phases.
 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
-| 9 | Google Ads analytics surface | TBD | Not started | - |
-| 10 | Unified data — GA4 + GSC + SEMrush | TBD | Not started | - |
-| 11 | PSG report — narrative + PDF | TBD | Not started | - |
+| 9 | Analytics foundation + SEMrush | TBD | Not started | - |
+| 10 | Google Ads | TBD | Not started | - |
+| 11 | GA4 + GSC | TBD | Not started | - |
+| 12 | PSG report — narrative + PDF | TBD | Not started | - |
 
 v0.2 Customer MVP (v0.2.0) ✅ COMPLETE 2026-06-04 (3/3 phases; see Completed Milestones).
 
@@ -292,31 +295,40 @@ This pass authored **08-02** + **08-04** + **08-04b** in full; all six Phase-8 p
 
 ---
 
-## v0.3 — Customer Analytics (🚧 In Progress — created 2026-06-04)
+## v0.3 — Customer Analytics (🚧 In Progress — created 2026-06-04; re-planned 2026-06-04)
 
-**Milestone goal:** Fill the empty analytics surface of the customer portal with a unified Google Ads + GA4 + GSC + SEMrush marketing view, output as the automated PSG monthly client report (multi-LLM narrative + branded PDF). The main thing a shop owner logs in to see.
+**Milestone goal:** Fill the empty analytics surface of the customer portal with a unified SEMrush + Google Ads + GA4 + GSC marketing view, output as the automated PSG monthly client report (multi-LLM narrative + branded PDF). The main thing a shop owner logs in to see.
 
-**Data sources (4):** Google Ads (BSM Phase 5 data, no new OAuth) · GA4 (Analytics Data API) · GSC (Search Console API) · SEMrush (account-level MCP, no per-shop OAuth).
+**Data sources (4):** SEMrush (account-level MCP/API, no per-shop OAuth) · Google Ads (OAuth + sync code already built; tables un-provisioned) · GA4 (Analytics Data API, new per-shop OAuth) · GSC (Search Console API, new per-shop OAuth).
 
 **Carried in from v0.2:** MSO cross-shop aggregate view · switcher search/typeahead · LCP <2s perf gate.
 
 **Cut from v0.3 (→ v0.3.5 or later):** digital presence / listings (GBP) · post-repair sentiment. Keeps v0.3 = marketing analytics only.
 
-### Phase 9: Google Ads analytics surface
+### ⚠️ Re-plan rationale (2026-06-04 — grounding overturned the ROADMAP premise)
 
-Focus: Google Ads charts/dashboards from BSM Phase 5 data; MSO cross-shop aggregate view; switcher search/typeahead; LCP <2s perf gate. First because the data already exists (zero OAuth groundwork) — fastest path to a real surface.
+The original 3-phase plan assumed "BSM Phase 5 Google Ads data already exists, no OAuth — surface it first (fastest)." **Verified FALSE against prod `gylkkzmcmbdftxieyabw`:** the `google_ads_accounts` / `google_ads_campaigns` / `ads_api_call_log` tables **do not exist**, no source holds stored data, the ads page is a "coming soon" guard card, and no chart library is installed. The Google Ads OAuth + campaign-CRUD + GAQL-metrics code IS built but reads un-provisioned tables and pulls live per-shop (needs OAuth + a migration + a sync). Every source needs real ingest groundwork. Phases re-ordered by ascending OAuth/ingest friction; grew 3 → 4. (Same pattern as Phase 6.)
+
+### Phase 9: Analytics foundation + SEMrush
+
+Focus: build the reusable analytics surface ONCE, proven with the lowest-friction source. Chart library (Tremor/Recharts canon — pick + brand-conform at plan time); analytics storage data model (per-shop, per-source, time-series snapshots — migration); dashboard shell with MSO cross-shop aggregate + switcher search/typeahead + LCP<2s perf gate; SEMrush ingest (account-level, **no per-shop OAuth, no Google creds**) surfaced as the organic-SEO panel. Lowest-friction real surface; buildable + locally testable without operator secrets (prod SEMrush key + any migration land at the gate batch).
 Plans: TBD (defined during /paul:plan)
 
-### Phase 10: Unified data — GA4 + GSC + SEMrush
+### Phase 10: Google Ads
 
-Focus: per-shop admin-driven Google OAuth (D68); GA4 traffic ingest + surface; GSC search ingest + surface; SEMrush organic-SEO ingest + surface; all four sources in one unified view. OAuth refresh tokens encrypted at rest (pgsodium).
-Plans: TBD (defined during /paul:plan). **Weight flag:** 4 sources is heavy — consider splitting 10a (OAuth + GA4 + GSC) / 10b (SEMrush) at plan time; SEMrush (no OAuth) is the natural split-off.
+Focus: provision the missing `google_ads_*` tables (migration); wire the already-built OAuth-link + metrics-sync code; surface paid metrics (spend, clicks, conversions, CPL) into the Phase-9 shell. Needs operator: Google OAuth app credentials + a pilot-shop link.
+Plans: TBD (defined during /paul:plan)
 
-### Phase 11: PSG report — narrative + PDF
+### Phase 11: GA4 + GSC
 
-Focus: multi-LLM auto-written analysis layer (with eval/quality gate); branded monthly PDF (Playwright + print.css) spec'd to match PSG's existing hand-built client report. Template canon = `archive/local_reach-outputs/` (tracys-research-v3, new-tracys-report-v2 — gitignored on-disk, verify present at kickoff). Email + download. CORE v0.3 output, not a cut-line.
+Focus: new per-shop admin-driven Google OAuth for the Analytics Data API (GA4) + Search Console API (GSC) — distinct scopes, not yet built; ingest + surface (traffic, sessions, channels; rankings, impressions, queries). OAuth refresh tokens encrypted at rest (pgsodium). Heaviest groundwork.
+Plans: TBD (defined during /paul:plan)
+
+### Phase 12: PSG report — narrative + PDF
+
+Focus: multi-LLM auto-written analysis layer (with eval/quality gate); branded monthly PDF (Playwright + print.css) spec'd to match PSG's existing hand-built client report. Template canon = `archive/local_reach-outputs/` (tracys-research-v3, new-tracys-report-v2 — gitignored on-disk, verify present at kickoff). Email + download. CORE v0.3 output. Depends on all four sources being present.
 Plans: TBD (defined during /paul:plan)
 
 ---
 *Roadmap created: 2026-05-29 (populated from SEED ideation v7)*
-*Last updated: 2026-06-04 — **milestone v0.3 Customer Analytics CREATED** (3 phases: 9 Google Ads surface · 10 GA4+GSC+SEMrush unified · 11 PSG report narrative+PDF). v0.2 Customer MVP ✅ COMPLETE (LIVE on hub.psgweb.me). Next: /paul:plan Phase 9.*
+*Last updated: 2026-06-04 — **milestone v0.3 RE-PLANNED** after grounding overturned the "Google Ads data exists" premise (no source has stored data; google_ads_* tables absent on prod). 4 phases by ascending ingest friction: 9 Analytics foundation + SEMrush · 10 Google Ads · 11 GA4 + GSC · 12 PSG report. Next: /paul:plan Phase 9.*

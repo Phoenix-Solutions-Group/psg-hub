@@ -36,6 +36,7 @@ export default defineConfig({
         "src/app/api/shop/switch/route.ts", // 07-03 shop switch
         "src/app/api/reviews/[id]/draft-response/route.ts", // 06-04 reviews API
         "src/app/api/reviews/[id]/approve-response/route.ts",
+        "src/lib/analytics/snapshots.ts", // 09-01 analytics snapshot helpers (v0.3)
       ],
       // Excluded v0.2-adjacent surfaces (covered elsewhere / not unit-gateable
       // in env=node), with rationale:
@@ -47,6 +48,12 @@ export default defineConfig({
       //   (ingest returns 501; list is read-only) -> their owning milestone.
       // - shop-switcher.tsx / onboarding components: client useRouter hooks,
       //   covered by 08-04b Playwright E2E (no jsdom in this node env).
+      // - analytics/charts.tsx (09-01): Recharts 3 renders NO SVG geometry in
+      //   node SSR (geometry computes in effects/Redux) -> chart content can't be
+      //   unit-tested. The wrapper chrome (caption/role/aria/empty-state) IS
+      //   smoke-tested with recharts mocked (charts.test.tsx); real render + axe
+      //   AA -> 09-02 Playwright. Excluded like mobile-nav.tsx.
+      // - analytics/types.ts: pure type declarations, no executable lines.
       thresholds: {
         perFile: true,
         lines: 70,
