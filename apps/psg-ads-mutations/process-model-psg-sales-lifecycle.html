@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PSG Sales Lifecycle - Process Model</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --navy: #0B1F3A;
+    --red: #C8102E;
+    --iron: #2C2C2C;
+    --canvas: #F4F1EA;
+    --muted: #6B7280;
+    --line: #E5E7EB;
+    --accent: #1E3A8A;
+    --green: #047857;
+    --amber: #B45309;
+    --pink: #9D174D;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; color: var(--iron); background: #fff; margin: 0; line-height: 1.55; }
+  header { background: var(--navy); color: var(--canvas); padding: 36px 48px 28px; border-bottom: 4px solid var(--amber); }
+  header h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -0.01em; }
+  header .sub { color: #A8B3C5; font-size: 14px; max-width: 980px; }
+  header .companion {
+    margin-top: 12px;
+    background: rgba(255,255,255,0.08);
+    border-left: 3px solid var(--amber);
+    padding: 8px 14px;
+    font-size: 13px;
+    color: #E5E7EB;
+  }
+  header .companion a { color: #FED7AA; text-decoration: none; }
+  nav.toc { background: #F9FAFB; border-bottom: 1px solid var(--line); padding: 14px 48px; font-size: 13px; }
+  nav.toc a { color: var(--accent); text-decoration: none; margin-right: 16px; white-space: nowrap; }
+  nav.toc a:hover { text-decoration: underline; }
+  nav.toc .toc-section { display: inline-block; color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; margin-right: 10px; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 48px 80px; }
+  h2 { color: var(--navy); border-bottom: 2px solid var(--amber); padding-bottom: 8px; margin-top: 56px; font-size: 22px; }
+  h3 { color: var(--navy); font-size: 17px; margin-top: 30px; }
+  h4 { color: var(--accent); font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 22px; margin-bottom: 8px; }
+  code { background: #F3F4F6; border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; font-size: 13px; font-family: 'JetBrains Mono', Menlo, monospace; }
+  pre.code { background: var(--navy); color: #E5E7EB; padding: 14px 18px; border-radius: 6px; font-size: 13px; overflow-x: auto; font-family: 'JetBrains Mono', Menlo, monospace; }
+  pre.code .c { color: #9CA3AF; }
+  .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 24px; padding: 18px; background: var(--canvas); border-left: 4px solid var(--amber); border-radius: 4px; }
+  .meta div { font-size: 13px; }
+  .meta strong { display: block; color: var(--navy); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .diagram { margin: 20px 0 28px; padding: 20px; background: #FBFAF7; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0 28px; font-size: 13px; }
+  th, td { border: 1px solid var(--line); padding: 9px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--navy); color: var(--canvas); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.role-r { background: #FEE2E2; font-weight: 600; color: var(--red); text-align: center; }
+  td.role-a { background: #FED7AA; font-weight: 600; text-align: center; }
+  td.role-c { background: #DBEAFE; font-weight: 600; text-align: center; }
+  td.role-i { background: #E5E7EB; text-align: center; }
+  .callout { background: #FFF7ED; border-left: 4px solid #EA580C; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
+  .callout.green { background: #ECFDF5; border-color: var(--green); }
+  .callout.blue { background: #EFF6FF; border-color: var(--accent); }
+  .callout.pink { background: #FDF2F8; border-color: var(--pink); }
+  .phase-card { border: 1px solid var(--line); border-radius: 8px; padding: 18px 22px; margin: 18px 0; border-left: 6px solid var(--amber); background: #FCFCFD; }
+  .phase-card.commercial { border-left-color: var(--green); }
+  .phase-card.handoff { border-left-color: var(--red); }
+  .phase-card h3 { margin-top: 0; }
+  .phase-meta { display: flex; flex-wrap: wrap; gap: 18px; font-size: 12px; color: var(--muted); margin: 4px 0 12px; }
+  .phase-meta span strong { color: var(--iron); }
+  ul.tight { margin: 4px 0; padding-left: 22px; }
+  ul.tight li { margin-bottom: 4px; font-size: 14px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+  .b-read { background: #DBEAFE; color: #1E3A8A; }
+  .b-write { background: #FEE2E2; color: #C8102E; }
+  .b-plan { background: #FEF3C7; color: #92400E; }
+  .b-verify { background: #D1FAE5; color: #047857; }
+  .b-sales { background: #FED7AA; color: #B45309; }
+  .b-comm { background: #BBF7D0; color: #166534; }
+  .skill-card { border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; margin: 8px 0; background: #fff; }
+  .skill-card h5 { margin: 0 0 4px; color: var(--navy); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .skill-card .tag { background: var(--canvas); padding: 1px 6px; font-size: 10px; border-radius: 3px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+  .skill-card p { margin: 4px 0 4px; font-size: 13px; }
+  .skill-card .install { margin-top: 6px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; color: var(--accent); }
+  .skill-card .source { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .skill-card .source a { color: var(--accent); text-decoration: none; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PSG Sales Lifecycle - Process Model</h1>
+  <div class="sub">Lead through Closed Won, plus the commercial operations track that runs from the first invoice forward. Covers Pipedrive stages S0-S8, proposal anatomy, contract and signature, invoiced.app billing setup, ad spend pass-through, handoff gate, renewal motion, and offboard. Built for Phoenix Solutions Group's collision repair vertical.</div>
+  <div class="companion">Companion document covers the Delivery side (D1-D8): <a href="process-model-psg-delivery-lifecycle.html">process-model-psg-delivery-lifecycle.html</a></div>
+</header>
+
+<nav class="toc">
+  <span class="toc-section">Foundations</span>
+  <a href="#sec-1">1. Scope</a>
+  <a href="#sec-2">2. Required Skills</a>
+  <a href="#sec-3">3. Tool Stack</a>
+  <a href="#sec-4">4. Customer Foundation</a>
+  <span class="toc-section">Sales</span>
+  <a href="#sec-5">5. Lifecycle Map</a>
+  <a href="#sec-6">6. Sales Phases</a>
+  <a href="#sec-7">7. Proposal Anatomy</a>
+  <a href="#sec-8">8. Contract + Commercial Setup</a>
+  <a href="#sec-9">9. Handoff Gate</a>
+  <span class="toc-section">Commercial</span>
+  <a href="#sec-10">10. Commercial Operations</a>
+  <a href="#sec-11">11. Renew or Cancel</a>
+  <span class="toc-section">Knowledge</span>
+  <a href="#sec-12">12. Obsidian Vault</a>
+  <span class="toc-section">Governance</span>
+  <a href="#sec-13">13. RACI</a>
+  <a href="#sec-14">14. Gateways</a>
+  <a href="#sec-15">15. Cadence</a>
+  <a href="#sec-16">16. Anti-patterns</a>
+</nav>
+
+<main>
+
+<div class="meta">
+  <div><strong>Owner</strong>Rex (VP Sales)</div>
+  <div><strong>Process Type</strong>To-Be (target state)</div>
+  <div><strong>Notation</strong>BPMN swimlane + flowchart (Mermaid)</div>
+  <div><strong>Version</strong>3.0 / 2026-05-27</div>
+  <div><strong>Vertical</strong>Collision repair (NAICS 81112)</div>
+  <div><strong>Scope</strong>Sales (S0-S8) + Commercial Ops (forever)</div>
+  <div><strong>Stack</strong>Pipedrive + PandaDoc + invoiced.app + Asana + Obsidian</div>
+  <div><strong>Companion</strong>Delivery lifecycle (D1-D8) is a separate doc</div>
+</div>
+
+<h2 id="sec-1">1. Scope and Boundaries</h2>
+
+<p><strong>Starts when:</strong> a collision repair shop enters the Prospecting stage in Pipedrive (cold target, inbound lead, or partner referral). <strong>Ends when:</strong> the deal is signed (Closed Won) and the Handoff Gate completes. Commercial Operations starts at S7 and continues until the final invoice is paid after offboard.</p>
+
+<table>
+  <tr><th>Pool</th><th>Lanes (roles)</th><th>Tools they own</th></tr>
+  <tr><td>PSG Sales</td><td>VP Sales (Rex), SDR, Account Executive</td><td>Pipedrive, claude-ads (diagnostic), SEMrush MCP (prospecting), PandaDoc, Apollo, ZoomInfo, Common Room</td></tr>
+  <tr><td>PSG Commercial</td><td>Finance Lead, Account Strategist (signoff)</td><td>invoiced.app, googleads_psg (for ad spend pull), accounting system</td></tr>
+  <tr><td>PSG PM</td><td>Account Strategist (project owner), Rex (commercial check)</td><td>Asana (one project per client engagement, created at S7)</td></tr>
+  <tr><td>PSG Knowledge</td><td>Account Strategist (vault steward), Content Lead (VoC + persona keeper)</td><td>Obsidian (one vault per client, created at S7) + claude-obsidian skill bundle</td></tr>
+  <tr><td>Client</td><td>Decision Maker, Marketing Owner, AP Contact</td><td>Email, e-sign tool, payment method</td></tr>
+  <tr><td>Data and Insight Sources</td><td>SEMrush, Apollo, Google Business Profile, review platforms</td><td>SEMrush MCP, Apollo MCP, Brightdata for review scraping</td></tr>
+</table>
+
+<h2 id="sec-2">2. Required Skills and Plugins</h2>
+
+<p>Install everything below before running this workflow. Items marked <span class="badge b-verify">Verified</span> have a confirmed install path. Items marked <span class="badge b-plan">PSG Internal</span> are private to PSG and require access to the PSG plugin registry. Items marked <span class="badge b-read">Built-in</span> ship with Claude Code.</p>
+
+<h3>2.1 Built-in Claude Code Skills (no install needed)</h3>
+
+<div class="skill-card">
+  <h5>docx <span class="tag">Built-in</span></h5>
+  <p>Word document creation, used for proposal exports and contract drafts.</p>
+  <div class="source">Path: <code>anthropic-skills:docx</code></div>
+</div>
+
+<div class="skill-card">
+  <h5>xlsx <span class="tag">Built-in</span></h5>
+  <p>Spreadsheet creation, used for LTV models, forecast reports, ad spend reconciliation worksheets.</p>
+  <div class="source">Path: <code>anthropic-skills:xlsx</code></div>
+</div>
+
+<div class="skill-card">
+  <h5>pptx <span class="tag">Built-in</span></h5>
+  <p>PowerPoint deck creation, used for proposal walkthroughs and QBR decks.</p>
+  <div class="source">Path: <code>anthropic-skills:pptx</code></div>
+</div>
+
+<div class="skill-card">
+  <h5>pdf <span class="tag">Built-in</span></h5>
+  <p>PDF generation, used for proposal final PDFs and signed contract storage.</p>
+  <div class="source">Path: <code>anthropic-skills:pdf</code></div>
+</div>
+
+<div class="skill-card">
+  <h5>pipedrive <span class="tag">Built-in</span></h5>
+  <p>Pipedrive API integration for managing deals, persons, organizations, activities, and pipelines.</p>
+  <div class="source">Path: <code>anthropic-skills:pipedrive</code></div>
+</div>
+
+<div class="skill-card">
+  <h5>email-assistant <span class="tag">Built-in</span></h5>
+  <p>Drafts emails in Nick Schoolcraft's voice for PSG. Used for prospect outreach, follow-ups, and client-facing communication.</p>
+  <div class="source">Path: <code>anthropic-skills:email-assistant</code></div>
+</div>
+
+<div class="skill-card">
+  <h5>graphic-design-expert <span class="tag">Built-in</span></h5>
+  <p>Enforces PSG brand system (Foundation Navy, Phoenix Red, Iron, Canvas; Outfit/Inter typography). Used for proposals and decks.</p>
+  <div class="source">Path: <code>anthropic-skills:graphic-design-expert</code></div>
+</div>
+
+<h3>2.2 Marketplace Plugins to Install</h3>
+
+<div class="skill-card">
+  <h5>claude-ads (AgriciDaniel/claude-ads) <span class="tag">Verified</span></h5>
+  <p>250+ audit checks, 17 commands, 19 sub-skills, 10 agents. Used in S3 for the prospect diagnostic that becomes Section 2 of the proposal.</p>
+  <div class="install">/plugin marketplace add AgriciDaniel/claude-ads</div>
+  <div class="install">/plugin install claude-ads@agricidaniel-claude-ads</div>
+  <div class="source">GitHub: <a href="https://github.com/AgriciDaniel/claude-ads" target="_blank">github.com/AgriciDaniel/claude-ads</a> · License: MIT</div>
+</div>
+
+<div class="skill-card">
+  <h5>brightdata-plugin <span class="tag">Installed</span></h5>
+  <p>Web scraping plus 81112 collision-mode research. Used for VoC research (review scrape, social listening, competitor sites).</p>
+  <div class="install">/plugin install brightdata-plugin</div>
+  <div class="source">Status: confirmed installed at PSG. Bright Data docs: <a href="https://docs.brightdata.com" target="_blank">docs.brightdata.com</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>apollo <span class="tag">Scheduled</span></h5>
+  <p>Apollo MCP for lead enrichment and prospect list building. Used in S0 prospecting and S1 outreach. Skills: enrich-lead, prospect, sequence-load.</p>
+  <div class="install">/plugin install apollo</div>
+  <div class="source">Status: scheduled for install at PSG. Apollo docs: <a href="https://docs.apollo.io" target="_blank">docs.apollo.io</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>zoominfo <span class="tag">Scheduled</span></h5>
+  <p>ZoomInfo plugin for account research, buying committee mapping, contact enrichment, meeting prep, competitor analysis.</p>
+  <div class="install">/plugin install zoominfo</div>
+  <div class="source">Status: scheduled for install at PSG.</div>
+</div>
+
+<div class="skill-card">
+  <h5>common-room <span class="tag">Scheduled</span></h5>
+  <p>Common Room for account research, contact research, call prep, weekly prep brief, outreach composition with signals from connected sources.</p>
+  <div class="install">/plugin install common-room</div>
+  <div class="source">Status: scheduled for install at PSG.</div>
+</div>
+
+<div class="skill-card">
+  <h5>asana-project-setup <span class="tag">Installed</span></h5>
+  <p>PSG's hard-won Asana setup automation. Encodes the Asana MCP limitations and API quirks that otherwise break project structure (section creation via REST, subtask visibility trap). Used at S7 to create the client engagement project.</p>
+  <div class="install">tool: anthropic-skills:asana-project-setup</div>
+  <div class="source">Status: confirmed installed at PSG.</div>
+</div>
+
+<div class="skill-card">
+  <h5>claude-obsidian (AgriciDaniel/claude-obsidian) <span class="tag">Verified</span></h5>
+  <p>11 skills, 4 commands (/wiki, /save, /autoresearch, /canvas). Persistent compounding wiki vault using Karpathy's LLM Wiki pattern. Used at S7 to bootstrap the per-client vault (Business mode), then continuously through Delivery to capture VoC, personas, meeting notes, decisions, and learnings. Hot cache survives between sessions so the next Claude session starts with full client context.</p>
+  <div class="install">claude plugin marketplace add AgriciDaniel/claude-obsidian</div>
+  <div class="install">claude plugin install claude-obsidian@claude-obsidian-marketplace</div>
+  <div class="source">GitHub: <a href="https://github.com/AgriciDaniel/claude-obsidian" target="_blank">github.com/AgriciDaniel/claude-obsidian</a> · License: MIT · 4.1k stars</div>
+</div>
+
+<div class="skill-card">
+  <h5>sales <span class="tag">PSG Internal</span></h5>
+  <p>Sales skill bundle: account-research, call-prep, call-summary, competitive-intelligence, daily-briefing, draft-outreach, forecast, pipeline-review, create-an-asset.</p>
+  <div class="install">/plugin install sales</div>
+  <div class="source">Source: confirm in PSG plugin registry.</div>
+</div>
+
+<div class="skill-card">
+  <h5>small-business <span class="tag">PSG Internal</span></h5>
+  <p>Small-business skill bundle including invoice-chase, cash-flow-snapshot, contract-review, lead-triage. Used in Commercial Operations track.</p>
+  <div class="install">/plugin install small-business</div>
+  <div class="source">Source: confirm in PSG plugin registry.</div>
+</div>
+
+<div class="skill-card">
+  <h5>legal <span class="tag">PSG Internal</span></h5>
+  <p>Legal skill bundle for contract review, NDA triage, signature requests, vendor checks.</p>
+  <div class="install">/plugin install legal</div>
+  <div class="source">Source: confirm in PSG plugin registry.</div>
+</div>
+
+<h3>2.3 PSG Custom Skills (private repos)</h3>
+
+<div class="skill-card">
+  <h5>psg-sales-team <span class="tag">PSG Internal</span></h5>
+  <p>Full-cycle sales operations suite for PSG. 18 tasks, 18 frameworks, 10 templates, 14 checklists. Includes proposal-document, proposal-summary-sheet, deal-close-plan, handoff-summary templates plus proposal-quality-checklist.</p>
+  <div class="source">Source: PSG internal skills repo. Currently installed at <code>anthropic-skills:psg-sales-team</code>.</div>
+</div>
+
+<div class="skill-card">
+  <h5>graphic-design-expert <span class="tag">PSG Internal</span></h5>
+  <p>PSG brand system enforcement: Authority Palette (Foundation Navy, Phoenix Red, Iron, Canvas), Energy Palettes, Outfit/Inter typography, Swiss airline aesthetic.</p>
+  <div class="source">Source: PSG internal skills repo.</div>
+</div>
+
+<h3>2.4 MCPs to Configure (separate from skills)</h3>
+
+<div class="skill-card">
+  <h5>google-ads-mcp <span class="tag">PSG Configured</span></h5>
+  <p>Read-only Google Ads telemetry. Used at S3 for prospect diagnostic if access granted, and continuously for Commercial Operations ad spend pull.</p>
+  <div class="install">tool: mcp__google-ads-mcp__search</div>
+  <div class="source">Source: confirm in PSG MCP configuration. See <code>apps/ads/CLAUDE.md</code>.</div>
+</div>
+
+<div class="skill-card">
+  <h5>SEMrush MCP <span class="tag">PSG Configured</span></h5>
+  <p>Keyword, organic, competitor, backlink, site audit research. Used in S0, S1, S3 for sales-side prospect intelligence.</p>
+  <div class="install">tools: mcp__[semrush]__overview_research, organic_research, keyword_research, backlink_research, siteaudit_research, trends_research</div>
+  <div class="source">Source: SEMrush API. See <a href="https://www.semrush.com/api-documentation/" target="_blank">semrush.com/api-documentation</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>Pipedrive MCP <span class="tag">PSG Configured</span></h5>
+  <p>CRM operations: deals, persons, activities, pipelines, custom fields. Used across S0-S8.</p>
+  <div class="source">Source: Pipedrive REST API v2. See <a href="https://developers.pipedrive.com" target="_blank">developers.pipedrive.com</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>Brightdata MCP <span class="tag">Configured</span></h5>
+  <p>Web scraping, search, structured data extraction. Used in S0 prospecting and ongoing competitor monitoring.</p>
+  <div class="source">Status: confirmed configured at PSG. Source: <a href="https://github.com/brightdata-com/brightdata-mcp" target="_blank">github.com/brightdata-com/brightdata-mcp</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>Asana MCP <span class="tag">Configured</span></h5>
+  <p>Asana operations: task creation, subtasks, milestones, project lookup, assignee management. Used at S7 to create the client engagement project. Section creation and section moves require direct REST API via curl + PAT (see asana-project-setup skill).</p>
+  <div class="install">tools: mcp__[asana]__create_tasks, get_project, get_tasks, etc.</div>
+  <div class="source">Status: confirmed configured at PSG. Asana API: <a href="https://developers.asana.com" target="_blank">developers.asana.com</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>Obsidian MCP <span class="tag">Configured</span></h5>
+  <p>Read and write vault notes directly. Two install options: Local REST API plugin (port 27124) via <code>mcp-obsidian</code>, or filesystem-based via <code>@bitbonsai/mcpvault</code>. Recommended: REST API option since Obsidian is open on the team's machines during work.</p>
+  <div class="install">claude mcp add-json obsidian-vault '{...}' --scope user</div>
+  <div class="source">Setup details in claude-obsidian README. PSG configures one MCP entry per active client vault.</div>
+</div>
+
+<h3>2.5 External APIs (no MCP wrapper yet, use REST)</h3>
+
+<div class="skill-card">
+  <h5>invoiced.app API <span class="tag">Configured</span></h5>
+  <p>Customer creation, invoice issuance, subscription management, dunning. The entire Commercial Operations track depends on this. Used from S7 onward.</p>
+  <div class="install">REST: https://api.invoiced.com</div>
+  <div class="source">Status: PSG API connection established. Docs: <a href="https://invoiced.com/api" target="_blank">invoiced.com/api</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>PandaDoc API <span class="tag">Configured</span></h5>
+  <p>Proposal authoring with e-sign, tracking, MSA bundling. Used at S4-S6 for proposal delivery and contract signature.</p>
+  <div class="install">REST: https://api.pandadoc.com</div>
+  <div class="source">Status: confirmed in use at PSG. Docs: <a href="https://developers.pandadoc.com" target="_blank">developers.pandadoc.com</a></div>
+</div>
+
+<div class="skill-card">
+  <h5>Asana REST API (with PAT) <span class="tag">Configured</span></h5>
+  <p>Required for section creation and task-to-section moves (MCP cannot do these). Used by asana-project-setup skill at S7.</p>
+  <div class="install">REST: https://app.asana.com/api/1.0/</div>
+  <div class="source">Status: PSG has PAT configured. Docs: <a href="https://developers.asana.com/reference" target="_blank">developers.asana.com/reference</a></div>
+</div>
+
+<div class="callout">
+The "PSG Internal" tags above need verification against your actual plugin registry. The skills are confirmed installed (visible in the skills list at session start) but the source repos may live in private PSG GitHub orgs or a private Cowork marketplace. Fill in the actual repo URLs in this section once confirmed.
+</div>
+
+<h2 id="sec-3">3. Tool Stack Map (Sales + Commercial)</h2>
+
+<table>
+  <tr><th>Job</th><th>Tool</th><th>Type</th><th>Where output goes</th></tr>
+  <tr><td>Prospect + ICP scoring</td><td>Pipedrive + Apollo + claude-ads diagnostic + SEMrush <code>overview_research</code></td><td><span class="badge b-sales">Sales</span></td><td>Account qualification scorecard</td></tr>
+  <tr><td>Outreach sequencing</td><td>Pipedrive sequences (or Apollo, Outreach if integrated)</td><td><span class="badge b-sales">Sales</span></td><td>Activity log + reply tracking in Pipedrive</td></tr>
+  <tr><td>Discovery meeting prep</td><td><code>psg-sales-team</code> discovery-meeting-plan template</td><td><span class="badge b-plan">Plan</span></td><td>Discovery meeting deck</td></tr>
+  <tr><td>Pre-proposal diagnostic</td><td>claude-ads <code>/ads audit</code> + SEMrush <code>organic_research</code> on prospect + competitors</td><td><span class="badge b-read">Read</span></td><td>Current Situation section of proposal</td></tr>
+  <tr><td>Solution design + tier match</td><td><code>psg-sales-team</code> solution-designer task</td><td><span class="badge b-plan">Plan</span></td><td>Recommended tier + custom scope</td></tr>
+  <tr><td>Proposal authoring</td><td><code>psg-sales-team</code> proposal-document template</td><td><span class="badge b-write">Write</span></td><td>Draft proposal</td></tr>
+  <tr><td>Proposal delivery + signature</td><td>PandaDoc</td><td><span class="badge b-write">Write</span></td><td>Signed SOW + MSA, status push to Pipedrive</td></tr>
+  <tr><td>Contract terms review</td><td><code>psg-sales-team</code> contract-and-negotiation-guidelines + <code>legal:review-contract</code></td><td><span class="badge b-verify">Verify</span></td><td>Redlines or approval</td></tr>
+  <tr><td>Pipeline hygiene</td><td>Pipedrive + <code>psg-sales-team</code> crm-manager task</td><td><span class="badge b-sales">Sales</span></td><td>Clean stage-by-stage view</td></tr>
+  <tr><td>Forecast reporting</td><td><code>psg-sales-team</code> forecast-report template</td><td><span class="badge b-read">Read</span></td><td>Weekly pipeline review deck</td></tr>
+  <tr><td>Customer + payment setup</td><td>invoiced.app API (at S7)</td><td><span class="badge b-comm">Commercial</span></td><td>invoiced.app customer with payment source</td></tr>
+  <tr><td>Client engagement project creation</td><td>Asana via asana-project-setup skill (at S7, after agreement signed)</td><td><span class="badge b-plan">Plan</span></td><td>One Asana project per client with all D1-D8 phases pre-structured; handed to Account Strategist at Handoff Gate</td></tr>
+  <tr><td>Persistent client knowledge vault</td><td>Obsidian via claude-obsidian (at S7, alongside the Asana project)</td><td><span class="badge b-plan">Plan</span></td><td>One Obsidian vault per client; bootstrapped in Business mode; handed to Account Strategist at Handoff Gate</td></tr>
+  <tr><td>Capture discovery + negotiation learnings</td><td>Obsidian /save command on S2 + S5 transcripts</td><td><span class="badge b-write">Write</span></td><td>Discovery notes filed to vault, objection patterns added to PSG objection library</td></tr>
+  <tr><td>Setup fee invoice (one-time)</td><td>invoiced.app API</td><td><span class="badge b-comm">Commercial</span></td><td>Paid invoice before D1 kickoff</td></tr>
+  <tr><td>Monthly retainer invoice (recurring)</td><td>invoiced.app subscription</td><td><span class="badge b-comm">Commercial</span></td><td>Auto-issued on the 1st of each month</td></tr>
+  <tr><td>Ad spend pull (previous month)</td><td><code>mcp__google-ads-mcp__search</code> on day-end of previous month</td><td><span class="badge b-read">Read</span></td><td>Spend line item appended to that month's invoice</td></tr>
+  <tr><td>Payment monitoring + dunning</td><td>invoiced.app dunning workflow</td><td><span class="badge b-comm">Commercial</span></td><td>Reminders at +3, +7, +14; escalation at +21</td></tr>
+  <tr><td>Revenue reporting</td><td>invoiced.app reports</td><td><span class="badge b-read">Read</span></td><td>Monthly MRR + cash collected</td></tr>
+  <tr><td>Renewal pricing review</td><td>Manual at D7 QBR + 60 days before SOW end</td><td><span class="badge b-plan">Plan</span></td><td>Renewal proposal or expansion SOW</td></tr>
+</table>
+
+<h2 id="sec-4">4. Customer Foundation - Sales Side</h2>
+
+<p>The customer voice enters at three integration points during the sales cycle. The deeper VoC research happens on the Delivery side (see companion doc), but Sales has its own customer-listening responsibilities.</p>
+
+<table>
+  <tr><th>#</th><th>Integration point</th><th>Input source</th><th>Output that the customer voice shapes</th></tr>
+  <tr><td>1</td><td>S2 discovery call + shop tour</td><td>Owner conversation, manager conversation, shop walkthrough</td><td>Differentiators, current pain, growth goals, qualification scorecard inputs</td></tr>
+  <tr><td>2</td><td>S3 pre-proposal diagnostic</td><td>claude-ads audit + SEMrush competitor scan + review snapshot</td><td>Current Situation section of proposal, anchored in their actual digital footprint</td></tr>
+  <tr><td>3</td><td>S5 negotiation pushback</td><td>Live conversation about objections</td><td>Concession log + future objection library updates</td></tr>
+</table>
+
+<div class="callout green">
+The Sales team is the first PSG voice the customer hears. Discovery is not a qualification interrogation. It is the first time PSG shows the prospect that we listen better than the agencies they have worked with before. Capture pain in their words, not in PSG categories.
+</div>
+
+<h2 id="sec-5">5. Sales Lifecycle Map</h2>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    L((Lead<br/>created)):::startNode
+    S0((S0 Prospect)):::stage
+    S1((S1 Outreach)):::stage
+    S2((S2 Discovery)):::stage
+    S3((S3 Solution)):::stage
+    S4((S4 Proposal)):::stage
+    S5((S5 Negotiate)):::stage
+    S6((S6 Contract)):::stage
+    S7((S7 Commercial)):::stage
+    S8((S8 Won)):::win
+    HG{HANDOFF GATE}:::handoff
+    HO((To Delivery D1)):::handoff
+    LL((Closed Lost)):::lost
+    N((Nurture)):::nurture
+
+    L --> S0 --> S1
+    S1 -->|"no reply"| N
+    S1 --> S2
+    S2 -->|"bad fit"| LL
+    S2 -->|"not now"| N
+    S2 --> S3
+    S3 --> S4
+    S4 -->|"no follow-up"| N
+    S4 --> S5
+    S5 -->|"price"| LL
+    S5 -->|"timing"| N
+    S5 --> S6
+    S6 -->|"deal breaker"| LL
+    S6 --> S7 --> S8
+    S8 --> HG --> HO
+    N -.->|"re-engages"| S1
+
+    classDef startNode fill:#0B1F3A,color:#fff,stroke:#0B1F3A
+    classDef stage fill:#FEF3C7,stroke:#B45309
+    classDef win fill:#D1FAE5,stroke:#047857
+    classDef lost fill:#FEE2E2,stroke:#C8102E
+    classDef nurture fill:#E5E7EB,stroke:#374151
+    classDef handoff fill:#FEE2E2,stroke:#C8102E
+</pre>
+</div>
+
+<h2 id="sec-6">6. Sales Lifecycle Phase Detail</h2>
+
+<div class="phase-card">
+  <h3>S0 - Prospecting</h3>
+  <div class="phase-meta">
+    <span><strong>Owner:</strong> SDR + Rex</span>
+    <span><strong>Forecast confidence:</strong> 10%</span>
+    <span><strong>Exit:</strong> Initial contact made + decision-maker verified</span>
+  </div>
+  <ul class="tight">
+    <li>Build target list from ICP: independent collision shops, 3-15 bays, geo within PSG service area, no comprehensive marketing system. Source from Apollo, SEMrush <code>overview_research</code>, partner referrals, inbound.</li>
+    <li>Score each account against the qualification scorecard before any outreach. Disqualify: in-house marketing director, current agency on long contract, owner uninterested.</li>
+    <li>Stale-deal rule: no contact attempt within 14 days = stale.</li>
+  </ul>
+</div>
+
+<div class="phase-card">
+  <h3>S1 - Outreach</h3>
+  <div class="phase-meta">
+    <span><strong>Owner:</strong> SDR</span>
+    <span><strong>Forecast confidence:</strong> 25%</span>
+    <span><strong>Exit:</strong> Discovery meeting scheduled or interest confirmed</span>
+  </div>
+  <ul class="tight">
+    <li>Multi-touch sequence: 5-7 touches over 14 days across phone, email, LinkedIn. PSG voice (calm, credible, operationally minded).</li>
+    <li>Pre-outreach research: shop's GBP, review count, current paid ads via SEMrush <code>overview_research</code>.</li>
+    <li>Stale-deal rule: no response after 5 attempts in 14 days = Nurture or Closed Lost.</li>
+  </ul>
+</div>
+
+<div class="phase-card">
+  <h3>S2 - Discovery</h3>
+  <div class="phase-meta">
+    <span><strong>Owner:</strong> Rex or AE</span>
+    <span><strong>Forecast confidence:</strong> 40%</span>
+    <span><strong>Exit:</strong> Pain documented + agreement to proceed</span>
+  </div>
+  <ul class="tight">
+    <li>60-90 min discovery call. Shop tour or video walkthrough when possible.</li>
+    <li>Use PSG qualification methodology: Fit, Problem, Urgency, Authority, Economics, Readiness.</li>
+    <li>Capture in Pipedrive: pain points, current marketing tools, growth goals, budget range, decision-maker, DRP relationships, OEM certifications, three named competitors.</li>
+    <li>Special Ad Categories check: confirm not in housing, finance, healthcare.</li>
+    <li>Red flag: budget undiscussable, no decision-maker involvement, growth goals unclear.</li>
+    <li>Stale-deal rule: no follow-up within 10 days = Nurture.</li>
+  </ul>
+</div>
+
+<div class="phase-card">
+  <h3>S3 - Solution Design</h3>
+  <div class="phase-meta">
+    <span><strong>Owner:</strong> Rex + Account Strategist</span>
+    <span><strong>Forecast confidence:</strong> 60%</span>
+    <span><strong>Exit:</strong> Internal solution approved + proposal presentation scheduled</span>
+  </div>
+  <p>Sales pulls Delivery in for the diagnostic. The diagnostic becomes the Current Situation section of the proposal.</p>
+  <ul class="tight">
+    <li>Run claude-ads <code>/ads audit</code> on prospect (if access granted) or in spend-context mode.</li>
+    <li>Run SEMrush <code>organic_research</code> on prospect + 3 top local competitors named in discovery.</li>
+    <li>Pull prospect's Google Business Profile snapshot, review count, rating.</li>
+    <li>Match findings to LocalReach tier (Basic, Plus, Premium). Include add-ons (extra LPs, sGTM, expanded CRO).</li>
+    <li>Get internal approval (Rex + Account Strategist) on tier and any custom scope.</li>
+  </ul>
+</div>
+
+<div class="phase-card">
+  <h3>S4 - Proposal</h3>
+  <div class="phase-meta">
+    <span><strong>Owner:</strong> Rex or AE</span>
+    <span><strong>Forecast confidence:</strong> 70%</span>
+    <span><strong>Exit:</strong> Prospect acknowledges proposal + provides feedback or schedules review</span>
+  </div>
+  <ul class="tight">
+    <li>Author proposal using the standard template (see section 7 for full anatomy).</li>
+    <li>Build in PandaDoc: e-signable, trackable (open + section views), SOW and MSA bundled.</li>
+    <li>Deliver live (screen-share walkthrough) rather than emailing a PDF cold. Win rate 2-3x higher.</li>
+    <li>Stale-deal rule: no response in 14 days = follow up twice; if still silent, Nurture or Closed Lost.</li>
+  </ul>
+</div>
+
+<div class="phase-card">
+  <h3>S5 - Negotiation</h3>
+  <div class="phase-meta">
+    <span><strong>Owner:</strong> Rex</span>
+    <span><strong>Forecast confidence:</strong> 85%</span>
+    <span><strong>Exit:</strong> Terms agreed + signed or verbal commit pending signature</span>
+  </div>
+  <ul class="tight">
+    <li>Work through objections from PSG objection-library framework.</li>
+    <li>Allowed concessions: shift setup-fee timing, defer one month of monthly retainer for 6-month-instead-of-12 trade.</li>
+    <li>Non-negotiables: ad spend pass-through model, monthly retainer floor, audit log discipline, 14-day stabilization rule.</li>
+    <li>Red flag: over 21 days without progress, unreasonable concessions, insistence on paying Google directly without MCC access.</li>
+    <li>Stale-deal rule: no progress in 21 days = escalate or Closed Lost.</li>
+  </ul>
+</div>
+
+<div class="phase-card">
+  <h3>S6 - Contract and Signature</h3>
+  <div class="phase-meta">
+    <span><strong>Owner:</strong> Rex + Legal (if non-standard)</span>
+    <span><strong>Forecast confidence:</strong> 95%</span>
+    <span><strong>Exit:</strong> Both parties signed in PandaDoc</span>
+  </div>
+  <ul class="tight">
+    <li>SOW + MSA bundled in one envelope. Client signs first, PSG counter-signs.</li>
+    <li>Standard MSA clauses to verify: scope, term (12 months default), payment terms (net 30 default), ad spend pass-through, cancellation notice (30 days), data ownership (client owns ad account + LP content), audit log retention (PSG keeps).</li>
+    <li>Collision-specific clauses: insurance carrier exclusion lists, DRP non-interference, geo exclusivity if granted.</li>
+    <li>Non-standard clauses: route through <code>legal:review-contract</code>.</li>
+  </ul>
+</div>
+
+<div class="phase-card commercial">
+  <h3>S7 - Commercial Setup</h3>
+  <div class="phase-meta">
+    <span><strong>Owner:</strong> Finance Lead + Rex</span>
+    <span><strong>Forecast confidence:</strong> 100% (signed deal)</span>
+    <span><strong>Exit:</strong> Setup fee invoice paid + recurring billing scheduled</span>
+  </div>
+  <ul class="tight">
+    <li>Create customer in invoiced.app via API: name, billing email, AP contact, payment method (ACH preferred for $3k+ monthly), tax info, signed SOW attached.</li>
+    <li>Issue setup fee invoice via invoiced.app API. Net 0 to net 7 typical. Setup fee must be paid before D1 kickoff.</li>
+    <li>Schedule recurring monthly retainer subscription. First invoice issues on 1st of month following kickoff.</li>
+    <li>Configure dunning workflow: reminders at +3, +7, +14 days; escalation to Account Strategist at +21.</li>
+    <li>Capture autopay authorization (ACH preferred). Manual ACH or check fallback documented.</li>
+    <li><strong>Create Asana project</strong> for the client engagement using the asana-project-setup skill. Project name: "[Client Name] - LocalReach [Tier]". Pre-structure with sections for PRE-D1, D1, D2 (with D2a-D2e), D3, D4 (with D4a-D4e), D5, D6 (recurring loops), D7, D8. Add milestones at each phase exit gate. Add Account Strategist as project owner.</li>
+    <li><strong>Bootstrap Obsidian vault</strong> for the client using claude-obsidian (<code>/wiki</code> command, Mode C: Business). Vault name: <code>psg-[client-slug]-vault</code>. Configure MCP entry. Seed with the S2 discovery notes, S3 diagnostic findings, named competitors, and three PSG canonical personas selected for this client. Vault stores: personas, VoC, decisions, meetings, learnings (see Section 12 for full structure).</li>
+    <li>Add both the Asana project URL and the Obsidian vault path to the handoff package and the Pipedrive deal record.</li>
+    <li>See section 8 for the full setup detail and section 10 for ongoing operations.</li>
+  </ul>
+</div>
+
+<div class="phase-card">
+  <h3>S8 - Closed Won</h3>
+  <div class="phase-meta">
+    <span><strong>Owner:</strong> Rex</span>
+    <span><strong>Forecast confidence:</strong> 100%</span>
+    <span><strong>Exit:</strong> Closed Won in Pipedrive + Handoff Gate triggered</span>
+  </div>
+  <ul class="tight">
+    <li>Mark Closed Won in Pipedrive with: contract signed date, total value (MRR + setup + 12-month), service start date, onboarding owner (Account Strategist).</li>
+    <li>Trigger Handoff Gate (section 9). Do not let Delivery start without it.</li>
+  </ul>
+</div>
+
+<h2 id="sec-7">7. Proposal Anatomy - What a PSG Proposal Looks Like</h2>
+
+<p>Every PSG proposal contains the same eight sections in the same order. Variation lives in scope and pricing tier, not in structure. The standard template lives in <code>psg-sales-team/templates/proposal-document.md</code>.</p>
+
+<h3>Required Sections (always present)</h3>
+
+<table>
+  <tr><th>#</th><th>Section</th><th>What it contains</th><th>Why it has to be there</th></tr>
+  <tr><td>1</td><td>Cover + Executive Summary</td><td>One paragraph: shop's current state, recommended solution, expected outcome.</td><td>Decision-makers read this paragraph and skip to pricing. It has to stand alone.</td></tr>
+  <tr><td>2</td><td>Current Situation</td><td>Factual findings from the S3 diagnostic: GBP completeness, review count and rating, current paid ads, local SEO position vs named competitors, site quality. No judgment, no hype.</td><td>Shows the prospect that PSG looked. Anchors the proposal in their data.</td></tr>
+  <tr><td>3</td><td>Recommended Solution</td><td>Selected LocalReach tier plus any add-ons. Frames the solution as the answer to the gaps in Section 2.</td><td>Connects what PSG saw to what PSG will do.</td></tr>
+  <tr><td>4</td><td>Scope of Work</td><td>Table: deliverable, description, timeline, owner. Both PSG and Client work shown.</td><td>Removes "what does this include" objections.</td></tr>
+  <tr><td>5</td><td>Investment + Commercial Terms</td><td>Setup fee, monthly retainer, ad spend model, term, payment terms, billing cadence, included vs billed separately.</td><td>The most-read section after Section 1. Hide nothing.</td></tr>
+  <tr><td>6</td><td>Why PSG</td><td>Collision-only specialization, LocalReach system, audit-log discipline, the team. Three to four sentences max.</td><td>Credibility without bragging.</td></tr>
+  <tr><td>7</td><td>Assumptions, Dependencies, Out-of-Scope</td><td>Explicit list: what PSG assumes is true, what PSG depends on (access, SLA), what is NOT included.</td><td>Prevents 90% of scope disputes in month 3.</td></tr>
+  <tr><td>8</td><td>Next Steps + Signature Block</td><td>Five numbered steps from sign to launch. SOW + MSA bundled. E-sign block.</td><td>Removes friction.</td></tr>
+</table>
+
+<h3>What to Always Include (cross-cutting)</h3>
+
+<table>
+  <tr><th>Element</th><th>Where</th><th>Why</th></tr>
+  <tr><td>Shop name in every section header and body</td><td>Throughout</td><td>Signals not a template. PandaDoc variable substitution.</td></tr>
+  <tr><td>3 specific competitor names from S2 discovery</td><td>Current Situation + Why PSG</td><td>Proves PSG looked at their actual market.</td></tr>
+  <tr><td>Specific KPI targets per tier (leads/mo, CPA, LP CR)</td><td>Recommended Solution + Investment</td><td>Anchors expectation.</td></tr>
+  <tr><td>12-month term + 30-day cancellation notice</td><td>Investment</td><td>Standard frame. Reduces back-and-forth.</td></tr>
+  <tr><td>Ad spend pass-through line item explanation</td><td>Investment</td><td>Critical: client needs to know PSG fronts ad spend and bills it back as a separate line item next month.</td></tr>
+  <tr><td>Setup fee + first month retainer due-date schedule</td><td>Investment</td><td>Removes cash-flow surprises.</td></tr>
+  <tr><td>Reporting cadence + Looker Studio dashboard mention</td><td>Scope of Work</td><td>Sets the expectation that reporting is included.</td></tr>
+  <tr><td>Named PSG contacts post-signature</td><td>Next Steps</td><td>Removes "who do I talk to" friction at handoff.</td></tr>
+  <tr><td>Proposal expiry date (30 days)</td><td>Cover + Signature block</td><td>Prevents stale pricing being used 6 months later.</td></tr>
+  <tr><td>Standard MSA bundled (not separate envelope)</td><td>Appendix</td><td>One signature event, not two.</td></tr>
+</table>
+
+<h3>What to Explicitly Point Out (don't bury these)</h3>
+
+<div class="callout">
+These cause disputes when not surfaced clearly. They go in Section 7 (Assumptions, Dependencies, Out-of-Scope) and are restated verbally in the live walkthrough.
+</div>
+
+<table>
+  <tr><th>Item</th><th>How to phrase it</th></tr>
+  <tr><td>Ad spend billed back at cost on next month's invoice</td><td>"You will see two charges per month from PSG: the fixed retainer for our services, and your Google Ads spend from the previous month at cost. We front the ad spend so you do not have to manage a card on Google's side."</td></tr>
+  <tr><td>Standing access required to multiple systems</td><td>"To do this work, we need standing access to your Google Ads (MCC), GA4, GTM, your CMS, and your call tracking. We will send a single access request bundle on day 1."</td></tr>
+  <tr><td>Client owns everything PSG builds</td><td>"You own everything we build. If we ever part ways, we hand over the account, the LP content (Sanity export), the GA4 + GTM containers, and a complete runbook."</td></tr>
+  <tr><td>LPs live on PSG-managed Sanity + Next.js or Astro during engagement</td><td>"During the engagement, your landing pages live on our managed infrastructure. At offboard, you can either move them to your hosting or continue paying a hosting fee."</td></tr>
+  <tr><td>14-day stabilization rule</td><td>"For the first 14 days after launch, we let Google's machine learning gather signal. Optimizing too early is the most common mistake new agencies make. We will report daily but we will not optimize."</td></tr>
+  <tr><td>Cancellation notice is 30 days, term is 12 months</td><td>"The agreement runs 12 months with a 30-day cancellation notice. If you ever want out, we will not hold you hostage, but we ask for 30 days to clean up properly."</td></tr>
+  <tr><td>VoC access required (reviews, recent call sample)</td><td>"To write copy that sounds like your customers, we need read access to your reviews and a sample of your recent call recordings. We will sign a confidentiality clause."</td></tr>
+  <tr><td>Out of scope (always listed by name)</td><td>"This SOW does not include website redesign, CRM setup, social media management, organic SEO (unless added), email marketing, or in-shop process changes. We are happy to scope any of these separately."</td></tr>
+</table>
+
+<h3>Proposal Quality Checklist (pre-send)</h3>
+
+<ul class="tight">
+  <li>Shop name appears correctly in every section header and variable slot.</li>
+  <li>Three competitors named in Section 2 are real and were named by the prospect in S2.</li>
+  <li>KPI targets in Section 3 match the LTV math from the diagnostic, not generic averages.</li>
+  <li>Setup fee + monthly + 12-month total value shown in Section 5.</li>
+  <li>Ad spend pass-through explicitly named in Section 5 AND Section 7.</li>
+  <li>Section 7 lists at least 5 out-of-scope items.</li>
+  <li>SOW + MSA bundled in one PandaDoc envelope.</li>
+  <li>Proposal expiry date set (30 days from send).</li>
+  <li>E-signature block: client first, PSG counter-sign.</li>
+  <li>Voice check: reads like PSG (calm, credible, operationally minded).</li>
+  <li>Final pass against PSG <code>proposal-quality-checklist.md</code>.</li>
+</ul>
+
+<h2 id="sec-8">8. Contract and Commercial Setup Detail (S6 + S7)</h2>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    A[Final proposal +<br/>SOW + MSA in<br/>PandaDoc] --> B{Standard terms?}
+    B -->|Yes| D[Send for signature]
+    B -->|No| C[Route to<br/>legal:review-contract]
+    C --> C2{Approved?}
+    C2 -->|Yes| D
+    C2 -->|No| C3[Renegotiate<br/>or escalate]
+    C3 --> C2
+    D --> E[Client signs]
+    E --> F[PSG counter-signs]
+    F --> G[Mark Closed Won<br/>in Pipedrive]
+    G --> H[Create customer<br/>in invoiced.app via API]
+    H --> I[Attach signed SOW<br/>to customer record]
+    I --> J[Issue setup<br/>fee invoice]
+    J --> K[Configure recurring<br/>monthly subscription]
+    K --> L[Configure dunning:<br/>+3, +7, +14, +21 days]
+    L --> M[Capture payment<br/>method (ACH preferred)]
+    M --> M2["Create Asana project<br/>via asana-project-setup skill"]
+    M2 --> M3["Pre-populate sections<br/>D1-D8 + milestones"]
+    M3 --> M4["Bootstrap Obsidian vault<br/>via /wiki Mode C Business"]
+    M4 --> M5["Seed vault with S2 discovery,<br/>S3 diagnostic, personas"]
+    M5 --> N{Setup fee paid?}
+    N -->|Yes| O[Trigger Handoff Gate +<br/>hand Asana project to AS]
+    N -->|No at +14| P[Hold D1 kickoff +<br/>escalate to Rex]
+    P --> N
+
+    style F fill:#D1FAE5,stroke:#047857
+    style J fill:#ECFDF5,stroke:#047857
+    style M2 fill:#DBEAFE,stroke:#1E3A8A
+    style M4 fill:#FCE7F3,stroke:#9D174D
+    style O fill:#FEE2E2,stroke:#C8102E
+</pre>
+</div>
+
+<h4>invoiced.app API Setup at S7</h4>
+
+<pre class="code"><span class="c"># Conceptual API flow at S7 (Finance Lead + Rex)</span>
+<span class="c"># Reference: https://invoiced.com/api</span>
+
+<span class="c"># 1. Create customer</span>
+POST /customers
+  name, email, autopay (true/false), payment_terms, tax_exempt
+
+<span class="c"># 2. Attach payment source (ACH preferred for monthly >= $3k)</span>
+POST /customers/{id}/payment_sources
+  type: ach | card
+  routing, account (ACH) or token (card)
+
+<span class="c"># 3. Issue setup fee invoice (one-time)</span>
+POST /invoices
+  customer, items: [{name: "LocalReach Setup", amount: SETUP_FEE}]
+  due_date: today + 7
+  attachments: [signed_sow.pdf]
+
+<span class="c"># 4. Create recurring subscription (monthly retainer)</span>
+POST /subscriptions
+  customer, plan: localreach_{tier}_monthly
+  start_date: 1st of next month
+  payment_terms: NET 30
+
+<span class="c"># 5. Configure dunning workflow</span>
+PUT /customers/{id}/dunning_schedule
+  reminders: [+3, +7, +14]
+  escalation_at: +21</pre>
+
+<h2 id="sec-9">9. Handoff Gate - From Sales to Delivery</h2>
+
+<div class="callout pink">
+The Handoff Gate is a hard boundary. Delivery does not start until the gate is passed. Skipping the gate is the single largest cause of bad early-engagement experience.
+</div>
+
+<h4>Handoff Package (built by AE at S8, reviewed by Account Strategist before D1)</h4>
+
+<table>
+  <tr><th>Item</th><th>Source</th><th>Owner</th></tr>
+  <tr><td>Signed SOW + MSA</td><td>PandaDoc</td><td>AE</td></tr>
+  <tr><td>Discovery notes from S2</td><td>Pipedrive</td><td>AE</td></tr>
+  <tr><td>Diagnostic findings from S3 (claude-ads + SEMrush snapshots)</td><td>S3 artifacts</td><td>AE</td></tr>
+  <tr><td>Selected tier + custom scope notes</td><td>Proposal Section 3</td><td>AE</td></tr>
+  <tr><td>KPI targets from proposal</td><td>Proposal Sections 3 + 5</td><td>AE</td></tr>
+  <tr><td>Client decision-maker + AP contact + access contacts</td><td>S6 contract data</td><td>AE</td></tr>
+  <tr><td>Special considerations (insurance exclusions, DRP rules, geo exclusivity)</td><td>S6 negotiation notes</td><td>Rex</td></tr>
+  <tr><td>Commercial state (setup paid, recurring billing scheduled)</td><td>invoiced.app</td><td>Finance Lead</td></tr>
+  <tr><td>Three named competitors</td><td>S2 discovery</td><td>AE</td></tr>
+  <tr><td>Asana project URL (pre-structured D1-D8)</td><td>Asana (created at S7)</td><td>AE + Account Strategist</td></tr>
+  <tr><td>Project owner assignment in Asana (Account Strategist)</td><td>Asana</td><td>AE</td></tr>
+  <tr><td>Obsidian vault path + MCP entry (psg-[client-slug]-vault, Mode C: Business, seeded with discovery + diagnostic + personas)</td><td>Obsidian (created at S7)</td><td>AE + Account Strategist</td></tr>
+  <tr><td>Vault steward assignment (Account Strategist)</td><td>Obsidian</td><td>AE</td></tr>
+</table>
+
+<h4>Internal Handoff Meeting (30 min, mandatory)</h4>
+
+<ul class="tight">
+  <li>Attendees: Rex, AE, Account Strategist, Ads Engineer, Analytics Engineer.</li>
+  <li>Agenda: review handoff package, identify ambiguities, agree on D1 kickoff agenda, confirm Account Strategist as ongoing owner.</li>
+  <li>Output: open items added to client onboarding checklist. Account Strategist sends D1 kickoff invite.</li>
+</ul>
+
+<h4>Client Kickoff (D1, 60 min)</h4>
+
+<ul class="tight">
+  <li>Attendees: Account Strategist, Ads Engineer or Analytics Engineer, client decision-maker, client marketing or tech owner.</li>
+  <li>Agenda: confirm scope from proposal, walk through D2-D5 timeline, send access request bundle live, schedule weekly check-in and first QBR (90 days out).</li>
+  <li>From here, the Delivery lifecycle takes over. See companion document for D1-D8.</li>
+</ul>
+
+<h2 id="sec-10">10. Commercial Operations - Billing, Ad Spend, Cash</h2>
+
+<p>Commercial Operations runs on its own clock (monthly billing cycle) and has its own owner (Finance Lead). It starts at S7 and runs forever, in parallel with Delivery.</p>
+
+<h3>Monthly Billing Cycle</h3>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    D0[Day -1 of previous month:<br/>spend pull window opens] --> D1[Day 1 of month:<br/>pull prior month ad spend<br/>via mcp__google-ads-mcp__search]
+    D1 --> D2[Reconcile pulled spend<br/>vs Google Ads invoice<br/>vs PSG card statement]
+    D2 --> D3{Variance > 2%?}
+    D3 -->|Yes| D4[Investigate +<br/>flag to Ads Engineer]
+    D3 -->|No| D5
+    D4 --> D5[Append spend line item<br/>to monthly invoice draft]
+    D5 --> D6[invoiced.app API:<br/>finalize + send invoice]
+    D6 --> D7[Auto-charge ACH or card<br/>on file (if autopay)]
+    D7 --> D8{Paid by net 30?}
+    D8 -->|Yes| D9[Close billing cycle +<br/>book revenue]
+    D8 -->|No| D10[Dunning sequence:<br/>+3, +7, +14 day reminders]
+    D10 --> D11{Paid by +21?}
+    D11 -->|Yes| D9
+    D11 -->|No| D12[Escalate to Account Strategist<br/>+ Rex]
+    D12 --> D13{Resolution?}
+    D13 -->|Paid| D9
+    D13 -->|Pause services| D14[Pause campaigns +<br/>notify client]
+    D13 -->|Churn| D15[Trigger offboard motion]
+
+    style D6 fill:#ECFDF5,stroke:#047857
+    style D9 fill:#D1FAE5,stroke:#047857
+    style D14 fill:#FEF3C7,stroke:#B45309
+    style D15 fill:#FEE2E2,stroke:#C8102E
+</pre>
+</div>
+
+<h3>Ad Spend Pass-Through Model</h3>
+
+<table>
+  <tr><th>Step</th><th>What happens</th><th>System</th></tr>
+  <tr><td>1</td><td>PSG card sits on the Google Ads MCC. All ad spend charges PSG monthly.</td><td>Google Ads billing</td></tr>
+  <tr><td>2</td><td>Day 1 of month: Finance Lead pulls prior-month spend per customer via <code>mcp__google-ads-mcp__search</code>.</td><td>google-ads-mcp</td></tr>
+  <tr><td>3</td><td>Spend reconciled against Google Ads monthly invoice and PSG card statement. Tolerance: 2% variance triggers investigation.</td><td>Manual or BigQuery if scaled</td></tr>
+  <tr><td>4</td><td>Spend appears on client's monthly invoice as a separate line item ("Google Ads media spend - Month YYYY-MM"), at cost.</td><td>invoiced.app API</td></tr>
+  <tr><td>5</td><td>Client invoice = retainer (fixed) + ad spend (variable) + any add-ons.</td><td>invoiced.app</td></tr>
+  <tr><td>6</td><td>Auto-charge ACH or card on file (if autopay).</td><td>invoiced.app</td></tr>
+</table>
+
+<div class="callout">
+The pass-through model gives PSG full control of the ad account (no card-on-file disruption from client) but creates a one-month cash float exposure per client. Finance Lead has to monitor clients whose monthly spend exceeds a credit threshold (typically $5k/mo) and require ACH autopay with shorter terms (net 15) at that scale.
+</div>
+
+<h3>invoiced.app Configuration Standards</h3>
+
+<table>
+  <tr><th>Setting</th><th>Standard value</th><th>Why</th></tr>
+  <tr><td>Customer creation</td><td>Via API at S7 only</td><td>No manual customer creation. API ensures every customer has a signed SOW attached.</td></tr>
+  <tr><td>Default payment terms</td><td>NET 30</td><td>Standard SOW terms.</td></tr>
+  <tr><td>High-spend (>$5k/mo) payment terms</td><td>NET 15 + ACH autopay required</td><td>Cash flow protection on ad spend float.</td></tr>
+  <tr><td>Invoice issue day</td><td>1st of month</td><td>Predictable. Aligned to PSG's own monthly close.</td></tr>
+  <tr><td>Dunning schedule</td><td>+3, +7, +14 days past due</td><td>Three soft reminders before escalation.</td></tr>
+  <tr><td>Escalation at</td><td>+21 days past due</td><td>Email to Account Strategist + Rex.</td></tr>
+  <tr><td>Service pause threshold</td><td>+30 days past due</td><td>Campaigns paused via <code>googleads_psg</code> if invoice still unpaid at 30 days. Client notified in writing.</td></tr>
+  <tr><td>Late fees</td><td>None by default (negotiable per SOW)</td><td>PSG prioritizes relationship over small late fees.</td></tr>
+  <tr><td>Attached documents</td><td>Signed SOW + MSA + monthly Looker Studio summary link</td><td>Customer can see what they are paying for and what was delivered.</td></tr>
+</table>
+
+<h3>Revenue Reporting</h3>
+
+<table>
+  <tr><th>Report</th><th>Cadence</th><th>Source</th><th>Owner</th></tr>
+  <tr><td>MRR snapshot</td><td>Weekly</td><td>invoiced.app subscription list</td><td>Finance Lead</td></tr>
+  <tr><td>Cash collected vs billed</td><td>Monthly</td><td>invoiced.app payments report</td><td>Finance Lead</td></tr>
+  <tr><td>Days Sales Outstanding (DSO)</td><td>Monthly</td><td>invoiced.app aging</td><td>Finance Lead</td></tr>
+  <tr><td>Ad spend float exposure</td><td>Weekly</td><td>googleads_psg spend pull vs invoiced.app balance</td><td>Finance Lead</td></tr>
+  <tr><td>Churn risk early warning</td><td>Monthly</td><td>invoiced.app aging + payment failure log + Account Strategist input</td><td>Finance Lead + Rex</td></tr>
+  <tr><td>Net Revenue Retention (NRR)</td><td>Quarterly</td><td>invoiced.app comparison over time</td><td>Rex</td></tr>
+</table>
+
+<h2 id="sec-11">11. Renew, Expand, or Offboard</h2>
+
+<h3>Renewal Motion (60-day timeline)</h3>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    T90["Day -90 from SOW end:<br/>Account Strategist flags<br/>renewal in Pipedrive"] --> T75[Internal renewal review:<br/>health, results, scope changes]
+    T75 --> T60["Day -60: Renewal pricing<br/>review with Rex"]
+    T60 --> T50[Draft renewal proposal:<br/>refreshed scope, fresh KPIs]
+    T50 --> T45[Send renewal proposal<br/>via PandaDoc]
+    T45 --> T30{Client decision<br/>by day -30?}
+    T30 -->|Renew| R1[Sign new SOW]
+    T30 -->|Expand| R2[Sign expansion SOW<br/>new service line]
+    T30 -->|Cancel| R3[Trigger offboard motion]
+    T30 -->|No response| T20[Day -20 escalation<br/>to decision maker]
+    T20 --> T30
+    R1 --> R4[invoiced.app: extend<br/>subscription or create new]
+    R2 --> R4
+    R3 --> O1
+    O1[Day 0: SOW end] --> O2[Offboard kickoff +<br/>checklist start]
+
+    style R1 fill:#D1FAE5,stroke:#047857
+    style R2 fill:#D1FAE5,stroke:#047857
+    style R3 fill:#FEE2E2,stroke:#C8102E
+</pre>
+</div>
+
+<h3>Offboard Checklist (some items owned by Delivery team)</h3>
+
+<table>
+  <tr><th>Step</th><th>Owner</th><th>Output</th></tr>
+  <tr><td>Final QBR + exit interview</td><td>Account Strategist + Rex</td><td>Learnings doc for PSG playbook</td></tr>
+  <tr><td>Transfer Google Ads MCC ownership</td><td>Ads Engineer</td><td>Client owns MCC, admin access confirmed</td></tr>
+  <tr><td>Export Sanity content (NDJSON + assets)</td><td>Web Engineer</td><td>Sanity export delivered</td></tr>
+  <tr><td>Hand over LP frontend code (if self-hosting)</td><td>Web Engineer</td><td>Git repo transferred or zip delivered</td></tr>
+  <tr><td>Export GA4 + GTM + sGTM (if applicable)</td><td>Analytics Engineer</td><td>Container exports + handover docs</td></tr>
+  <tr><td>Export call tracking config + recordings</td><td>Analytics Engineer</td><td>CallRail or WhatConverts export</td></tr>
+  <tr><td>Export all audit logs from <code>logs/</code></td><td>Ads Engineer</td><td>JSON audit log archive</td></tr>
+  <tr><td>Deliver runbook</td><td>Account Strategist</td><td>Current campaign structure, conversion map, LP map, persona doc, ongoing operations checklist</td></tr>
+  <tr><td>Issue final invoice (prorated retainer + final ad spend)</td><td>Finance Lead</td><td>Final invoice in invoiced.app, payment collected</td></tr>
+  <tr><td>Cancel invoiced.app subscription</td><td>Finance Lead</td><td>Subscription canceled, customer record retained for tax</td></tr>
+  <tr><td>Remove PSG card from MCC</td><td>Ads Engineer</td><td>Only after client billing setup confirmed</td></tr>
+  <tr><td>Update Pipedrive: Closed (offboarded), loss reason</td><td>Rex</td><td>Clean CRM exit</td></tr>
+  <tr><td>Move client to Nurture for future re-engagement</td><td>Rex</td><td>6-month check-in scheduled</td></tr>
+</table>
+
+<h3>Cancellation Mid-Term (before SOW end)</h3>
+
+<ul class="tight">
+  <li>30-day cancellation notice required per standard MSA.</li>
+  <li>Notice triggers: final 30 days delivered as scoped, no new builds initiated, refinement loops continue at reduced intensity.</li>
+  <li>Final invoice covers: prorated retainer + final ad spend.</li>
+  <li>Offboard checklist runs in the 30-day notice window.</li>
+  <li>Capture cancellation reason in Pipedrive: pricing, results, internal change, vendor change. Feeds Rex's quarterly playbook update.</li>
+</ul>
+
+<h2 id="sec-12">12. Persistent Knowledge in Obsidian (per-client vault)</h2>
+
+<p>Every client engagement gets its own Obsidian vault created at S7 alongside the Asana project. Obsidian holds anything that compounds: the persona doc, VoC research, meeting notes, decisions, learnings. Asana holds the operational tasks. Pipedrive holds the CRM state. invoiced.app holds the billing. PandaDoc holds the contracts. Each tool has one job.</p>
+
+<div class="callout green">
+The vault is created BEFORE Delivery starts. Account Strategist inherits a vault on day one that already contains the discovery notes, the diagnostic, and the three canonical personas selected for this client.
+</div>
+
+<h3>The Persistence Boundary - One Job Per Tool</h3>
+
+<table>
+  <tr><th>Tool</th><th>Owns</th><th>Does not own</th></tr>
+  <tr><td>Pipedrive</td><td>CRM state: deal stage, contacts, activities, forecast, win/loss reasons</td><td>Anything that should outlive the deal</td></tr>
+  <tr><td>PandaDoc</td><td>Signed contracts and SOWs (legal artifacts)</td><td>Negotiation notes, objection patterns</td></tr>
+  <tr><td>invoiced.app</td><td>Billing state: invoices, payments, subscriptions, dunning</td><td>Why a price was set, expansion conversations</td></tr>
+  <tr><td>Asana</td><td>Operational tasks: who is doing what by when, sprints, milestones, project status</td><td>The reasoning behind the work or what was learned</td></tr>
+  <tr><td>Sanity</td><td>Live LP content (the deliverable)</td><td>Why a copy choice was made, persona research that informed it</td></tr>
+  <tr><td>Slack / Drive</td><td>In-flight conversation, raw files</td><td>Synthesized knowledge worth keeping forever</td></tr>
+  <tr><td>Obsidian</td><td>Persistent knowledge that compounds: personas, VoC, decisions, meetings, learnings, playbooks for this client</td><td>Operational tasks (those live in Asana)</td></tr>
+</table>
+
+<h3>Vault Bootstrap at S7</h3>
+
+<table>
+  <tr><th>Step</th><th>Action</th><th>Tool</th></tr>
+  <tr><td>1</td><td>Create vault directory: <code>psg-[client-slug]-vault</code>. Sync via Obsidian Sync (Cloud) or local with git mirror.</td><td>Obsidian</td></tr>
+  <tr><td>2</td><td>Run <code>/wiki</code> in Claude Code session pointed at vault. Choose Mode C (Business).</td><td>claude-obsidian skill</td></tr>
+  <tr><td>3</td><td>Install Local REST API plugin in Obsidian, capture API key.</td><td>Obsidian</td></tr>
+  <tr><td>4</td><td>Add MCP entry: <code>claude mcp add-json obsidian-vault-[client-slug] '{...}' --scope user</code>.</td><td>Claude Code</td></tr>
+  <tr><td>5</td><td>Seed with: S2 discovery notes, S3 diagnostic findings, three named competitors, three canonical personas selected for this client, signed SOW PDF in <code>.raw/</code>.</td><td>claude-obsidian /save and ingest commands</td></tr>
+  <tr><td>6</td><td>Add vault path to handoff package and Pipedrive deal record.</td><td>Pipedrive</td></tr>
+</table>
+
+<h3>Vault Folder Structure (Mode C: Business)</h3>
+
+<pre class="code">psg-[client-slug]-vault/
+├── wiki/
+│   ├── index.md              <span class="c"># master catalog</span>
+│   ├── hot.md                <span class="c"># recent context (rebuilt at session end)</span>
+│   ├── log.md                <span class="c"># append-only operation log</span>
+│   ├── overview.md           <span class="c"># exec summary of client + engagement</span>
+│   ├── personas/             <span class="c"># per-client persona refinement</span>
+│   ├── voc/                  <span class="c"># reviews, social listening, call coding</span>
+│   ├── audits/               <span class="c"># D2a-D2e findings</span>
+│   ├── decisions/            <span class="c"># strategy choices, scope changes, experiment outcomes</span>
+│   ├── meetings/             <span class="c"># discovery, weekly, monthly, QBR notes</span>
+│   ├── learnings/            <span class="c"># what worked, what didn't, recurring patterns</span>
+│   ├── entities/             <span class="c"># people, insurers, competitors, vehicle brands</span>
+│   ├── concepts/             <span class="c"># client-specific concepts (DRP rules, geo strategy)</span>
+│   └── meta/dashboard.base   <span class="c"># Bases dashboard</span>
+├── _templates/               <span class="c"># Templater templates</span>
+├── .raw/                     <span class="c"># source docs: signed SOW, audit PDFs, review exports</span>
+├── CLAUDE.md                 <span class="c"># auto-loaded vault instructions for Claude sessions</span>
+└── .obsidian/                <span class="c"># config, snippets, MCP setup</span></pre>
+
+<h3>What Lives Where (Sales-side touchpoints)</h3>
+
+<table>
+  <tr><th>Sales activity</th><th>Vault destination</th><th>How it gets there</th></tr>
+  <tr><td>S2 discovery call notes</td><td><code>wiki/meetings/discovery-call-[date].md</code></td><td><code>/save discovery-call</code> after the call</td></tr>
+  <tr><td>S3 claude-ads diagnostic report</td><td><code>wiki/audits/sales-diagnostic-[date].md</code></td><td>Ingest the audit PDF: <code>ingest .raw/diagnostic.pdf</code></td></tr>
+  <tr><td>S3 SEMrush competitor scan</td><td><code>wiki/audits/competitor-scan-[date].md</code></td><td>Ingest the SEMrush export</td></tr>
+  <tr><td>S5 negotiation pushback + concessions</td><td><code>wiki/decisions/negotiation-[date].md</code> + cross-link to PSG objection library in PSG-internal vault</td><td><code>/save negotiation</code></td></tr>
+  <tr><td>Competitor names + insurance carriers</td><td><code>wiki/entities/</code></td><td>Auto-created during S3 ingest</td></tr>
+  <tr><td>Selected canonical personas (3 of 8) with PSG-standard descriptions</td><td><code>wiki/personas/</code></td><td>Seeded at vault bootstrap</td></tr>
+  <tr><td>Signed SOW + MSA (PDF)</td><td><code>.raw/sow-[date].pdf</code></td><td>Manual file copy at S6 close</td></tr>
+</table>
+
+<h3>claude-obsidian Commands Used in Sales</h3>
+
+<table>
+  <tr><th>Command</th><th>When</th><th>Output</th></tr>
+  <tr><td><code>/wiki</code></td><td>At S7 vault bootstrap</td><td>Vault scaffolded in Business mode</td></tr>
+  <tr><td><code>ingest [file]</code></td><td>S3 diagnostic outputs, competitor scans</td><td>8-15 wiki pages created, index + log updated</td></tr>
+  <tr><td><code>/save [name]</code></td><td>After S2 discovery, after S5 negotiation</td><td>Conversation filed as wiki note with cross-references</td></tr>
+  <tr><td><code>/autoresearch [topic]</code></td><td>When S3 surfaces a topic Sales wants more depth on (e.g., new EV repair certification a competitor has)</td><td>3-round web research filed to vault</td></tr>
+  <tr><td><code>lint the wiki</code></td><td>Before Handoff Gate</td><td>Orphan check, dead link check, gap analysis - vault is clean before Delivery inherits it</td></tr>
+</table>
+
+<h3>Cross-Project Power Move (the handoff that matters)</h3>
+
+<p>The PSG repo per client (where googleads_psg mutations run) gets its <code>CLAUDE.md</code> updated to point at the client vault. This is the claude-obsidian "cross-project power move" pattern.</p>
+
+<pre class="code"><span class="c"># Append to apps/ads/CLAUDE.md or per-client repo CLAUDE.md</span>
+## Client Knowledge Vault
+Path: ~/Obsidian/psg-[client-slug]-vault
+
+When you need client context not already in this repo:
+1. Read wiki/hot.md first (recent context cache)
+2. If not enough, read wiki/index.md
+3. If you need domain detail, read wiki/personas/ or wiki/voc/
+4. Only then drill into specific wiki pages.
+
+Do NOT read the vault for general coding questions or tasks
+unrelated to this client.</pre>
+
+<h2 id="sec-13">13. RACI (Sales + Commercial)</h2>
+
+<div style="display:flex;gap:14px;font-size:12px;color:var(--muted);margin:8px 0 18px;">
+  <span style="background:#FEE2E2;padding:2px 6px;border-radius:3px;font-weight:600;color:#C8102E;">R = Responsible</span>
+  <span style="background:#FED7AA;padding:2px 6px;border-radius:3px;font-weight:600;color:#B45309;">A = Accountable</span>
+  <span style="background:#DBEAFE;padding:2px 6px;border-radius:3px;font-weight:600;color:#1E3A8A;">C = Consulted</span>
+  <span style="background:#E5E7EB;padding:2px 6px;border-radius:3px;font-weight:600;color:#374151;">I = Informed</span>
+</div>
+
+<table>
+  <tr>
+    <th>Activity</th>
+    <th>Rex / VP Sales</th>
+    <th>SDR / AE</th>
+    <th>Account Strategist</th>
+    <th>Finance Lead</th>
+    <th>Client DM</th>
+  </tr>
+  <tr><td>S0 Prospect</td><td class="role-a">A</td><td class="role-r">R</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-i">I</td></tr>
+  <tr><td>S1 Outreach</td><td class="role-a">A</td><td class="role-r">R</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-i">I</td></tr>
+  <tr><td>S2 Discovery</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-r">R</td></tr>
+  <tr><td>S3 Diagnostic + Solution</td><td class="role-a">A</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td></tr>
+  <tr><td>S4 Proposal</td><td class="role-r">R/A</td><td class="role-r">R</td><td class="role-c">C</td><td class="role-c">C</td><td class="role-c">C</td></tr>
+  <tr><td>S5 Negotiate</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-r">R</td></tr>
+  <tr><td>S6 Contract</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-r">R</td></tr>
+  <tr><td>S7 Commercial Setup</td><td class="role-a">A</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-r">R</td><td class="role-c">C</td></tr>
+  <tr><td>S8 Closed Won + Handoff Gate</td><td class="role-a">A</td><td class="role-r">R</td><td class="role-r">R</td><td class="role-c">C</td><td class="role-i">I</td></tr>
+  <tr><td>Commercial Ops monthly</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-i">I</td><td class="role-r">R/A</td><td class="role-i">I</td></tr>
+  <tr><td>Commercial dunning escalation</td><td class="role-c">C</td><td class="role-i">I</td><td class="role-c">C</td><td class="role-r">R/A</td><td class="role-r">R</td></tr>
+  <tr><td>Renewal motion (D-90 to D0)</td><td class="role-r">R</td><td class="role-i">I</td><td class="role-r">R/A</td><td class="role-c">C</td><td class="role-a">A</td></tr>
+  <tr><td>Cancellation processing</td><td class="role-a">A</td><td class="role-i">I</td><td class="role-r">R</td><td class="role-r">R</td><td class="role-c">C</td></tr>
+</table>
+
+<h2 id="sec-14">14. Decision Points and Gateways</h2>
+
+<h4>Sales-side gateways</h4>
+<table>
+  <tr><th>#</th><th>Gateway</th><th>Type</th><th>Paths</th></tr>
+  <tr><td>SG0</td><td>ICP fit at S0?</td><td>XOR</td><td>Yes: enter S1. No: disqualify or refer out.</td></tr>
+  <tr><td>SG1</td><td>Prospect responds to S1 outreach?</td><td>XOR</td><td>Yes: schedule S2. No after 5 attempts: Nurture or Closed Lost.</td></tr>
+  <tr><td>SG2</td><td>S2 reveals ICP fit + budget + authority?</td><td>AND</td><td>All three: proceed to S3. Missing any: Nurture or disqualify.</td></tr>
+  <tr><td>SG3</td><td>S3 diagnostic surfaces a real solvable problem?</td><td>XOR</td><td>Yes: build proposal. No: educate and Nurture.</td></tr>
+  <tr><td>SG4</td><td>Special Ad Category present?</td><td>XOR</td><td>Yes: route through compliance review. No: continue.</td></tr>
+  <tr><td>SG5</td><td>Standard terms in S6?</td><td>XOR</td><td>Yes: send for signature. No: route through legal:review-contract.</td></tr>
+  <tr><td>SG6</td><td>Setup fee paid by +14 days at S7?</td><td>XOR</td><td>Yes: trigger Handoff Gate. No: hold D1 kickoff, escalate to Rex.</td></tr>
+</table>
+
+<h4>Commercial-side gateways</h4>
+<table>
+  <tr><th>#</th><th>Gateway</th><th>Type</th><th>Paths</th></tr>
+  <tr><td>CG1</td><td>Ad spend variance > 2% at month-end?</td><td>XOR</td><td>Yes: investigate before invoicing. No: include and invoice.</td></tr>
+  <tr><td>CG2</td><td>Client invoice paid by net 30?</td><td>XOR</td><td>Yes: close cycle. No: enter dunning.</td></tr>
+  <tr><td>CG3</td><td>Invoice unpaid at +21 days?</td><td>XOR</td><td>Yes: escalate to Account Strategist + Rex. No: continue monitoring.</td></tr>
+  <tr><td>CG4</td><td>Invoice unpaid at +30 days?</td><td>XOR</td><td>Yes: pause campaigns + written notice. No: continue.</td></tr>
+  <tr><td>CG5</td><td>Client renewing at D8?</td><td>XOR</td><td>Yes: extend or replace subscription. No: trigger offboard + final invoice.</td></tr>
+</table>
+
+<h2 id="sec-15">15. Cadence, Metrics, and Artifacts</h2>
+
+<table>
+  <tr><th>Cadence</th><th>Activity</th><th>Primary metric</th><th>Artifact</th></tr>
+  <tr><td>Daily</td><td>Pipedrive hygiene</td><td>Stage age, activity completion</td><td>Pipedrive dashboard</td></tr>
+  <tr><td>Weekly</td><td>Pipeline review</td><td>Pipeline coverage, stage age, forecast confidence</td><td>Forecast pipeline report</td></tr>
+  <tr><td>Weekly</td><td>Commercial MRR + cash snapshot</td><td>MRR, cash collected, ad spend float</td><td>invoiced.app dashboard</td></tr>
+  <tr><td>Monthly</td><td>Invoicing + ad spend reconciliation</td><td>DSO, payment timeliness</td><td>invoiced.app monthly report</td></tr>
+  <tr><td>Monthly</td><td>Closed-won + closed-lost review</td><td>Win rate, loss reasons</td><td>Pipeline retrospective</td></tr>
+  <tr><td>Quarterly</td><td>NRR + churn analysis</td><td>NRR, churn rate, churn reasons</td><td>Rex commercial report</td></tr>
+  <tr><td>Annually</td><td>Pricing review</td><td>Tier pricing vs market vs cost-to-serve</td><td>Pricing update memo</td></tr>
+</table>
+
+<h2 id="sec-16">16. Anti-Patterns to Avoid</h2>
+
+<h4>Sales anti-patterns</h4>
+<ul class="tight">
+  <li>Skipping the S3 diagnostic and writing the proposal from intuition. Section 2 reads generic and the prospect notices.</li>
+  <li>Emailing a cold proposal PDF instead of walking through it live. Win rate drops 2-3x.</li>
+  <li>Hiding ad spend pass-through in small print. Causes month-3 disputes when the first ad spend line item appears.</li>
+  <li>Advancing a stage without meeting the exit criteria. Inflates the forecast and rots the pipeline.</li>
+  <li>Negotiating away the audit log discipline or the 14-day stabilization rule. Non-negotiables.</li>
+  <li>Closing without the Handoff Gate. Delivery starts blind and the first month is a mess.</li>
+</ul>
+
+<h4>Commercial anti-patterns</h4>
+<ul class="tight">
+  <li>Letting setup fee go uncollected before kickoff. PSG ends up doing free work and the client takes longer to value the engagement.</li>
+  <li>Not pulling ad spend monthly and reconciling against the Google Ads invoice. Variance compounds.</li>
+  <li>Manual invoicing in invoiced.app UI instead of via API. Inconsistent formatting, no SOW attached, no audit trail.</li>
+  <li>No autopay on high-spend clients. Ad spend float blows up cash position.</li>
+  <li>Pausing campaigns at +30 days without written notice. Becomes a relationship rupture instead of a billing escalation.</li>
+  <li>Skipping the renewal motion until day -10. No time to address pricing, churn risk, or expansion conversation.</li>
+  <li>Cancellation with no exit interview. Lose the learning.</li>
+  <li>Removing PSG card from MCC before confirming client billing. Ads silently stop.</li>
+</ul>
+
+</main>
+
+<footer>
+  Phoenix Solutions Group · Sales Lifecycle Process Model v3.0 · 2026-05-27 · Lead → Closed Won + Commercial Operations · Companion: Delivery Lifecycle (D1-D8) in <a href="process-model-psg-delivery-lifecycle.html">process-model-psg-delivery-lifecycle.html</a>
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#FEF3C7',
+      primaryTextColor: '#0B1F3A',
+      primaryBorderColor: '#B45309',
+      lineColor: '#374151',
+      fontFamily: 'Inter, sans-serif'
+    },
+    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+  });
+</script>
+
+</body>
+</html>

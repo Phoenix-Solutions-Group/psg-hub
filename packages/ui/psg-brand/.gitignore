@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node / build artifacts (in case a UI kit gains a build step)
+node_modules/
+dist/
+build/
+.cache/
+.next/
+.turbo/
+
+# Logs / temp
+*.log
+.tmp/
+.env
+.env.local
+.env.*.local

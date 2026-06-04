@@ -1,0 +1,72 @@
+{
+  "agency_name": "Shop Marketing Pros",
+  "domain": "shopmarketingpros.com",
+  "hq_location": "Hammond, LA",
+  "specialty": "AR (mechanical) — primary focus is independent auto repair shops; some collision exposure but not a CR specialist [uncertain]",
+  "services": [
+    "Website",
+    "SEO",
+    "Google Ads",
+    "Meta Ads",
+    "Social",
+    "Content",
+    "Video",
+    "Email/SMS",
+    "Reviews",
+    "Listings",
+    "Podcast / brand-building"
+  ],
+  "base_monthly_low_usd": "[uncertain] — no published low-tier price. Industry-standard floor for full-service AR agencies is $1,500–$2,000/mo; SMP positions as premium done-for-you, so realistic floor is likely $2,000+",
+  "base_monthly_high_usd": "[uncertain] — top tier likely $5,000–$8,000+/mo for full done-for-you (SEO + ads + social + content + video). Not published.",
+  "typical_monthly_usd": "[uncertain] ~$2,500–$5,000/mo for a single-location shop based on industry mid-market positioning and competitor benchmarks. SMP publishes a 'marketing investment' guide recommending 7–10% of gross revenue but does not list package prices.",
+  "setup_fee_usd": "[uncertain] — not published. Custom-website builds in this segment commonly run $2,000–$5,000 one-time; SMP often bundles into onboarding.",
+  "min_ad_spend_usd": "[uncertain] — not published. SMP's own content recommends $500–$1,500/mo Google Ads to start.",
+  "contract_length_months": "[uncertain] — not published. SMP markets itself as a 'trusted advisor' partnership; competitor norm is 6–12 months for done-for-you AR shops.",
+  "cancellation_policy": "[uncertain] — not published on website.",
+  "asset_ownership": "[uncertain] — not published. Operating company 5 Stones Media builds custom WordPress sites; ownership terms not disclosed publicly.",
+  "pricing_transparency": "Quote-only. No pricing on website. Published a long-form 'What Auto Repair Shops Should Expect to Invest in Marketing' blog (Dec 2025) explaining budget frameworks (7–10% of revenue) but no SKU prices.",
+  "pricing_confidence": "low",
+  "pricing_sources": [
+    "https://shopmarketingpros.com/what-auto-repair-shops-should-expect-to-invest-in-marketing/",
+    "https://shopmarketingpros.com/auto-repair-shop-marketing/",
+    "https://shopmarketingpros.com/meet-the-pros/",
+    "https://agencyanalytics.com/company/case-study/kim-walker",
+    "https://www.glassdoor.com/Reviews/Shop-Marketing-Pros-Reviews-E7453754.htm",
+    "https://www.linkedin.com/company/shop-marketing-pros",
+    "https://www.zoominfo.com/c/5-stones-media-llc/357160534"
+  ],
+  "known_pain_points": [
+    "[uncertain] — only 23 Glassdoor reviews and no significant public client complaints surfaced. Brian Walker (CEO) actively responds to reviews, suggesting reputation management is tight.",
+    "Pricing opacity makes it hard for prospects to compare without a discovery call."
+  ],
+  "notable_clients": [
+    "[uncertain] — agency reports 75+ automotive clients (per Agency Analytics case study) but does not publish a public client roster. Podcast features industry guests rather than client logos."
+  ],
+  "pros": [
+    "Founders (Brian and Kim Walker) are former independent shop owners — deep domain credibility",
+    "Strong inbound brand via the 'Auto Repair Marketing Podcast' (200+ episodes)",
+    "Active in industry events (ASTA, ASTE, Vision, AAPEX)",
+    "Tailored / boutique approach rather than templated packages",
+    "Operating company 5 Stones Media gives them in-house dev + design capacity"
+  ],
+  "cons": [
+    "No published pricing — friction for budget-conscious buyers",
+    "Smaller team (~23) than national competitors; capacity constraints possible",
+    "Stronger in mechanical AR than collision — limited public collision case studies",
+    "Louisiana-based; Wisconsin / Midwest client base not publicly demonstrated"
+  ],
+  "koffman_relevance": "Plausible upgrade vs Hibu (Hibu has 6-month contracts, widespread BBB/Trustpilot complaints about lock-in, deliverables, and account management; SMP positions explicitly as the anti-Hibu trusted-advisor model). Vs Turnkey Marketing: SMP is more digital/content/podcast-led and brand-building, Turnkey is more direct-mail + retention-funnel oriented — they solve different problems. For Koffman (single-location WI, AR + collision), SMP is a credible Hibu replacement if Koffman can stomach $2.5K–$5K/mo and a quote-only process, but the lack of a collision-heavy portfolio is a real gap vs a CR-specialist. Recommend a discovery call to get an actual quote and ask for 3+ collision-shop references before signing.",
+  "uncertain": [
+    "base_monthly_low_usd",
+    "base_monthly_high_usd",
+    "typical_monthly_usd",
+    "setup_fee_usd",
+    "min_ad_spend_usd",
+    "contract_length_months",
+    "cancellation_policy",
+    "asset_ownership",
+    "specialty",
+    "notable_clients",
+    "known_pain_points"
+  ]
+}

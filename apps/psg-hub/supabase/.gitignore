@@ -1,0 +1,4 @@
+# Supabase local state — never commit
+.branches
+.temp
+.env

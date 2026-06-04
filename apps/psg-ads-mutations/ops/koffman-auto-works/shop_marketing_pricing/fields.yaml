@@ -1,0 +1,88 @@
+fields:
+  - name: agency_name
+    type: string
+    description: Full agency name
+
+  - name: domain
+    type: string
+    description: Primary website domain
+
+  - name: hq_location
+    type: string
+    description: City, state of HQ
+
+  - name: specialty
+    type: string
+    description: AR (mechanical), CR (collision), Both, or General SMB
+
+  - name: services
+    type: list
+    description: List of marketing services offered (Website, SEO, Google Ads, Meta Ads, CRM, Reviews, Social, Direct Mail, Call Tracking, Content, Video, Email/SMS, Listings)
+
+  - name: base_monthly_low_usd
+    type: number
+    description: Lowest published or reported monthly retainer in USD
+
+  - name: base_monthly_high_usd
+    type: number
+    description: Highest published or reported monthly retainer in USD
+
+  - name: typical_monthly_usd
+    type: string
+    description: Typical mid-range monthly spend for a single-location independent shop
+
+  - name: setup_fee_usd
+    type: string
+    description: One-time setup or onboarding fee range
+
+  - name: min_ad_spend_usd
+    type: string
+    description: Minimum monthly ad spend required, if any
+
+  - name: contract_length_months
+    type: string
+    description: Standard contract term (e.g. 6, 12, month-to-month)
+
+  - name: cancellation_policy
+    type: string
+    description: Notice required, auto-renewal, friction level
+
+  - name: asset_ownership
+    type: string
+    description: Who owns website, domain, ad accounts, creative after cancellation
+
+  - name: pricing_transparency
+    type: string
+    description: Published / Quote-only / Tiered. Note if pricing is on website.
+
+  - name: pricing_confidence
+    type: string
+    description: high / medium / low — confidence in pricing data
+
+  - name: pricing_sources
+    type: list
+    description: URLs cited for pricing claims
+
+  - name: known_pain_points
+    type: list
+    description: Recurring complaints from clients (Glassdoor, BBB, Reddit, Trustpilot)
+
+  - name: notable_clients
+    type: list
+    description: Named auto repair or collision shop clients if public
+
+  - name: pros
+    type: list
+    description: Strengths vs peer group
+
+  - name: cons
+    type: list
+    description: Weaknesses vs peer group
+
+  - name: koffman_relevance
+    type: string
+    description: How this vendor compares to what Koffman currently uses, or whether they would replace Hibu, Turnkey, or both
+
+  - name: uncertain
+    type: list
+    description: List of field names where data could not be confirmed

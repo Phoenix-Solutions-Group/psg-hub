@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body{margin:0;padding:24px;background:var(--psg-paper);font-family:var(--font-body)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .tile{border:1px solid var(--color-border);border-radius:6px;padding:24px;display:flex;align-items:center;justify-content:center;min-height:140px}
+  .tile-paper{background:#fff}
+  .tile-dark{background:var(--psg-midnight)}
+  .tile img{max-width:90%;max-height:100px}
+  .meta{font-family:var(--font-mono);font-size:10px;color:var(--psg-mist);margin-top:8px;letter-spacing:0.04em}
+</style></head>
+<body>
+  <div class="grid">
+    <div>
+      <div class="tile tile-paper"><img src="../assets/psg-logo-primary.svg" alt=""></div>
+      <div class="meta">PRIMARY · psg-logo-primary.svg</div>
+    </div>
+    <div>
+      <div class="tile tile-dark"><img src="../assets/psg-logo-reverse.svg" alt=""></div>
+      <div class="meta">REVERSE · psg-logo-reverse.svg</div>
+    </div>
+  </div>
+</body></html>

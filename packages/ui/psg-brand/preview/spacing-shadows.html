@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body{margin:0;padding:36px 28px;background:var(--psg-paper);font-family:var(--font-body)}
+  .grid{display:flex;gap:24px}
+  .item{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .box{width:96px;height:64px;background:#fff;border-radius:6px}
+  .lbl{font-family:var(--font-mono);font-size:11px;color:var(--psg-graphite)}
+  .desc{font-size:10px;color:var(--psg-mist);text-align:center}
+</style></head>
+<body>
+  <div class="grid">
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-hairline)"></div><div class="lbl">hairline</div><div class="desc">surface separation</div></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-sm)"></div><div class="lbl">sm</div><div class="desc">resting state</div></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-md)"></div><div class="lbl">md</div><div class="desc">hover lift</div></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-lg)"></div><div class="lbl">lg</div><div class="desc">overlays, popovers</div></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-xl)"></div><div class="lbl">xl</div><div class="desc">modals</div></div>
+  </div>
+</body></html>

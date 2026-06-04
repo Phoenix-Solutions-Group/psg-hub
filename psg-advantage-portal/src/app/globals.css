@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+/* ============================================================
+   PSG Advantage Portal — Design Tokens
+   Single source of truth. Mirrored in src/lib/psgTokens.ts for
+   non-Tailwind contexts (Recharts, MapLibre, raw SVG).
+   ============================================================ */
+
+@font-face {
+  font-family: 'Gotham';
+  src: url('/brand/fonts/Gotham-Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gotham';
+  src: url('/brand/fonts/Gotham-Book.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gotham';
+  src: url('/brand/fonts/Gotham-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Didact Gothic';
+  src: url('/brand/fonts/DidactGothic-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  /* ---- Brand Primary ---- */
+  --color-navy: #1E3A52;            /* Midnight — primary, headers, CTAs */
+  --color-navy-deep: #142838;       /* Navy hover/active */
+  --color-phoenix-red: #B8483E;     /* Ember — single focal accent per view */
+  --color-phoenix-red-deep: #8C362D;/* Ember text on light tint */
+  --color-slate: #4A4257;           /* Dark Ash — secondary */
+
+  /* ---- Neutrals (single canonical scale) ---- */
+  --color-paper: #FAFAFA;           /* Page background */
+  --color-bone: #F0F0F0;            /* Card surface tint, input bg */
+  --color-stone: #E0E0E0;           /* Borders, dividers, chart grid */
+  --color-fog: #C4C4C4;             /* Inactive, placeholder */
+  --color-mist: #949494;            /* Tertiary text, captions */
+  --color-graphite: #2A2A2A;        /* Body text */
+  --color-iron: #161616;            /* Strongest text */
+
+  /* ---- Semantic State Colors ---- */
+  --color-success: #0EA5A5;         /* Clarity teal — positive trends */
+  --color-success-bg: #E6F7F7;      /* Horizon — success tint surface */
+  --color-success-deep: #0A7F7F;    /* Success text on tint */
+
+  --color-grove: #4A6B4D;           /* Forest green — "Improving" state */
+  --color-grove-bg: #EEF3EE;        /* Grove tint surface */
+
+  --color-warning: #C28E3A;         /* Amber/Catalyst — warning, review */
+  --color-warning-bg: #FBF3E4;      /* Warning tint surface */
+  --color-warning-deep: #8E6620;    /* Warning text on tint */
+
+  --color-danger: #B8483E;          /* Phoenix red — error, urgent */
+  --color-danger-bg: #FAEEEC;       /* Error tint surface */
+  --color-danger-deep: #8C362D;     /* Error text on tint */
+
+  --color-info: #FF8700;            /* Hermes — high-visibility alert */
+
+  /* ---- Legacy aliases (preserve existing class usage) ---- */
+  --color-clarity: var(--color-success);
+  --color-canvas: var(--color-paper);
+  --color-horizon: var(--color-success-bg);
+  --color-catalyst: var(--color-warning);
+  --color-hermes: var(--color-info);
+
+  /* ---- Map fills (cluster heat scale) ---- */
+  --color-map-cluster-1: #DCE8EC;
+  --color-map-cluster-2: #AFC9D2;
+  --color-map-cluster-3: #7FA8B8;
+  --color-map-cluster-4: #527F95;
+
+  /* ---- Typography ---- */
+  --font-heading: 'Gotham', system-ui, sans-serif;
+  --font-body: 'Didact Gothic', 'Gotham', system-ui, sans-serif;
+
+  /* Type scale — fixed rem ladder for product UI (no fluid clamp).
+     Ratio ~1.25 between adjacent steps for clear hierarchy. */
+  --text-eyebrow: 0.6875rem;        /* 11px — uppercase eyebrows */
+  --text-caption: 0.75rem;          /* 12px — captions, helper text */
+  --text-label: 0.8125rem;          /* 13px — labels, table cells */
+  --text-body: 0.875rem;            /* 14px — body, table data */
+  --text-base: 1rem;                /* 16px — default reading size */
+  --text-h3: 1.125rem;              /* 18px — panel/section heading */
+  --text-h2: 1.5rem;                /* 24px — page subhead */
+  --text-h1: 1.875rem;              /* 30px — page heading */
+  --text-display-1: 2.25rem;        /* 36px — login title sm */
+  --text-display-2: 3rem;           /* 48px — login title md */
+  --text-display-3: 3.75rem;        /* 60px — login title lg */
+
+  /* Line heights — tighter on display, looser on body */
+  --leading-display: 1.08;
+  --leading-heading: 1.2;
+  --leading-body: 1.65;
+  --leading-tight: 1.35;
+
+  /* ---- Radius (sharp-corner brand rule) ---- */
+  --radius-none: 0;
+  --radius-pin: 9999px;             /* Map pins, status dots only */
+  --radius-bar: 2px;                /* Progress bar fills only */
+
+  /* ---- Spacing scale (4pt) ---- */
+  --space-xs: 0.25rem;              /* 4px */
+  --space-sm: 0.5rem;               /* 8px */
+  --space-md: 0.75rem;              /* 12px */
+  --space-lg: 1rem;                 /* 16px */
+  --space-xl: 1.5rem;               /* 24px */
+  --space-2xl: 2rem;                /* 32px */
+  --space-3xl: 3rem;                /* 48px */
+  --space-4xl: 4rem;                /* 64px */
+  --space-5xl: 6rem;                /* 96px */
+
+  /* ---- Shadows (subtle, intentional) ---- */
+  --shadow-card: 0 1px 2px rgba(22, 21, 20, 0.04);
+  --shadow-elevated: 0 32px 64px -28px rgba(30, 58, 82, 0.22);
+}
+
+/* ============================================================
+   MapLibre popup styling (cannot use Tailwind tokens directly)
+   ============================================================ */
+
+.market-map-location-popup .maplibregl-popup-content {
+  border: 1px solid var(--color-stone);
+  border-radius: 0;
+  box-shadow: 0 18px 44px rgb(30 58 82 / 16%);
+  padding: 0;
+}
+
+.market-map-location-popup .maplibregl-popup-close-button {
+  color: var(--color-slate);
+  font-size: 18px;
+  padding: 6px 8px;
+}
+
+.market-map-popup {
+  min-width: 220px;
+  padding: 12px;
+  color: var(--color-navy);
+  font-family: var(--font-body);
+}
+
+.market-map-popup-badge {
+  color: var(--color-phoenix-red);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.market-map-popup-title {
+  margin-top: 4px;
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.market-map-popup-address {
+  margin-top: 6px;
+  color: var(--color-slate);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.market-map-popup-row {
+  align-items: baseline;
+  border-top: 1px solid var(--color-bone);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 7px;
+}
+
+.market-map-popup-row span {
+  color: var(--color-mist);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.market-map-popup-row strong {
+  color: var(--color-navy);
+  font-size: 12px;
+  font-weight: 500;
+  max-width: 150px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}

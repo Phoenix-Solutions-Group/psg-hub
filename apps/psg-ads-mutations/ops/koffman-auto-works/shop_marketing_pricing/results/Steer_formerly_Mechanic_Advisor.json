@@ -1,0 +1,72 @@
+{
+  "agency_name": "Steer (formerly Mechanic Advisor)",
+  "domain": "steer.io",
+  "hq_location": "Waltham, MA",
+  "specialty": "AR",
+  "services": ["CRM", "Email/SMS", "Reviews", "Online Appointments / Scheduler", "Listings", "Direct Mail (postcards via partner)", "Marketing Automation", "Customer Vehicle Web Pages", "Shop Management System integrations"],
+  "base_monthly_low_usd": 294,
+  "base_monthly_high_usd": 479,
+  "typical_monthly_usd": "$349-$479 (Contact to Engage tier) for a single-location independent AR shop; some sources cite Contact $294 / Communicate $379 / Engage $469",
+  "setup_fee_usd": "$199 onboarding & integration fee for Contact plan; sometimes waived via demo promo ($300 off first month + free onboarding)",
+  "min_ad_spend_usd": "None — Steer is a CRM/marketing-automation platform, not an ad-buying agency. No PPC ad spend required or managed.",
+  "contract_length_months": "Annual (most common) or month-to-month; annual cannot be terminated for convenience mid-term",
+  "cancellation_policy": "30 days written notice required to help@steer.io. Annual subscriptions: notice must be given 30 days before annual term expires or it auto-renews. Month-to-month: terminates 30 days after the next billing cycle following notice. No refunds for prepaid amounts. Auto-renews if notice not given.",
+  "asset_ownership": "Steer is SaaS — customer data (contacts, vehicles, RO history) is owned by client but lives in Steer's CRM. No website product, so no website-ownership dispute. Phone numbers used for SMS may be Steer-provisioned (portability unclear). Review widgets and customer vehicle web pages are hosted on Steer infrastructure.",
+  "pricing_transparency": "Tiered + published on steer.io/pricing and steercrm.com/pricing-plans (three named tiers: Contact, Communicate/Engage variations). More transparent than most peers (Kukui, Hibu, Turnkey are all quote-only).",
+  "pricing_confidence": "high",
+  "pricing_sources": [
+    "https://steercrm.com/pricing-plans",
+    "https://steer.io/pricing",
+    "https://steer.io/terms-conditions",
+    "https://www.saasworthy.com/product/steer-crm/pricing",
+    "https://softwarefinder.com/crm/steer-crm",
+    "https://www.capterra.com/p/160170/MechanicAdvisor/",
+    "https://www.g2.com/products/steer-by-mechanic-advisor-steer/reviews",
+    "https://www.softwareadvice.com/product/302135-steer/",
+    "https://www.b2breviews.com/reviews/mechanic-advisor/",
+    "https://www.xpay.sh/saas-pricing/steer-crm/"
+  ],
+  "known_pain_points": [
+    "Not fully automated — some workflows require manual triggering despite 'automation' marketing",
+    "Message inbox UX: hard to bulk-clear messages, must click each individually",
+    "Reported case of review-request SMS silently failing for months without Steer noticing until client flagged it",
+    "30-day notice + annual auto-renewal creates same lock-in pattern as Kukui/Hibu",
+    "No refunds for prepaid annual amounts",
+    "Pricing-tier name confusion post-rebrand (Mechanic Advisor → Steer): old sources cite Contact/Engage, newer cite Contact/Communicate/Engage; actual quoted price varies $294-$479 across same plan names in 2024-2026 listings",
+    "Limited functionality outside CRM/communication: no website, no SEO, no PPC, no display, no creative production"
+  ],
+  "notable_clients": [
+    "Advance Professional (Advance Auto Parts) program partner",
+    "Tekmetric integration shops",
+    "Mitchell1 / ShopKey integration shops",
+    "NAPA TRACS integration shops",
+    "Pit Crew Marketing co-marketing partner shops",
+    "Autoshop Solutions partner shops (legacy MA partnership)"
+  ],
+  "pros": [
+    "Published pricing (rare among auto-repair vendors)",
+    "Lower entry price than Kukui ($294-$349 vs $499 floor)",
+    "Deep SMS integrations with major shop management systems (Tekmetric, Mitchell1, NAPA TRACS, Shop-Ware, R.O. Writer)",
+    "No ad spend dependency — predictable monthly cost",
+    "Industry-credible (R+W coverage, Advance Pro partnership, long history under Mechanic Advisor brand since 2010s)",
+    "Month-to-month option available (most peers force annual)",
+    "Strong appointment-reminder and review-request automation",
+    "AR-vertical built — terminology and workflows match a service writer's day"
+  ],
+  "cons": [
+    "Point solution, not a full marketing stack — does NOT build websites, run Google Ads, manage SEO, or do creative",
+    "Shop still needs a separate website vendor and ad agency on top of Steer",
+    "Annual contract still auto-renews and is non-cancelable mid-term",
+    "No collision (CR) workflow support — assumes mechanical service-writer flow",
+    "Reported reliability gap (SMS silently failing) erodes trust in 'set it and forget it' positioning",
+    "Onboarding fee on lowest tier ($199) is a soft friction point"
+  ],
+  "koffman_relevance": "Wrong tool to compare 1:1 with Hibu — Steer is a CRM/communications platform, not a marketing stack. It would NOT replace Hibu's website + Google Ads + display. It would replace a separate retention/CRM layer that Koffman currently does not appear to have. At $349-$479/mo, Steer could plug into a PSG-managed stack (PSG website + PSG ads + Steer for customer retention SMS/email/reviews) and would NOT compete with Turnkey Marketing either — Turnkey is fractional CMO + ad management, Steer is the automation layer below it. Best fit: complement, not replacement. If Koffman wants one vendor doing everything, Kukui or Turnkey are closer comps; Steer is the right pick only if Koffman keeps website + ads in-house (or with PSG) and just needs the retention automation stack on top. Note: Steer does NOT serve the collision side at all, so it's purely an AR-side tool for the mechanical book of business.",
+  "uncertain": [
+    "current 2026 tier names (Contact / Communicate / Engage vs Contact / Engage) — sources conflict",
+    "exact differential features between tiers (only headline pricing is public)",
+    "whether onboarding fee applies to all tiers or only Contact",
+    "whether SMS phone numbers are portable on cancellation",
+    "min_ad_spend_usd N/A (no ads product), but uncertain whether any tier requires minimum SMS volume commitments"
+  ]
+}

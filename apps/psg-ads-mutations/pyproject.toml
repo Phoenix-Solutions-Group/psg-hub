@@ -1,0 +1,23 @@
+[project]
+name = "psg-ads-mutations"
+version = "0.1.0"
+description = "Google Ads + GTM API mutation tooling for PSG-managed client accounts"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "google-ads>=25.0.0",
+    "google-auth-oauthlib>=1.2.0",
+    "google-api-python-client>=2.120.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["googleads_psg", "gtm_psg", "ops"]

@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body{margin:0;padding:24px;background:var(--psg-paper);font-family:var(--font-body)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:#fff;border:1px solid var(--color-border);border-radius:6px;padding:24px;box-shadow:0 1px 2px rgba(22,21,20,0.04)}
+  .card-dark{background:var(--psg-midnight);color:var(--psg-paper);border:none}
+  .eb{font-family:var(--font-display);font-size:11px;font-weight: 500;text-transform:uppercase;letter-spacing:0.18em;color:var(--psg-ember);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+  .eb::before{content:"";width:18px;height:1px;background:currentColor}
+  .card-dark .eb{color:#D88378}
+  h4{font-family:var(--font-display);font-size:20px;font-weight: 500;color:var(--psg-midnight);margin:0 0 8px;letter-spacing:-0.005em}
+  .card-dark h4{color:var(--psg-paper)}
+  p{font-size:13px;line-height:1.6;color:var(--psg-graphite);margin:0}
+  .card-dark p{color:#C4C4C4}
+  .meta{font-family:var(--font-mono);font-size:10px;color:var(--psg-mist);margin-top:14px;letter-spacing:0.04em}
+</style></head>
+<body>
+  <div class="grid">
+    <div class="card">
+      <div class="eb">Capability</div>
+      <h4>DRP performance audits</h4>
+      <p>Cycle time, severity, and CSI benchmarks measured against your insurer's targets.</p>
+      <div class="meta">CASE STUDY · 12 MIN READ</div>
+    </div>
+    <div class="card card-dark">
+      <div class="eb">Engagement</div>
+      <h4>The Quarterly Playbook</h4>
+      <p>A structured 90-day cycle of strategy, execution, and review. Built around your bay schedule.</p>
+      <div class="meta" style="color:#949494">RECURRING · QUARTERLY</div>
+    </div>
+  </div>
+</body></html>

@@ -1,0 +1,151 @@
+{
+  "exportFormatVersion": 2,
+  "exportTime": "2026-05-06 00:00:00",
+  "containerVersion": {
+    "path": "accounts/0/containers/0/versions/0",
+    "accountId": "0",
+    "containerId": "0",
+    "containerVersionId": "0",
+    "container": {
+      "path": "accounts/0/containers/0",
+      "accountId": "0",
+      "containerId": "0",
+      "name": "Wallace Collision",
+      "publicId": "GTM-KF7JXTB",
+      "usageContext": ["WEB"]
+    },
+    "variable": [
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "variableId": "1",
+        "name": "Variable - Click URL",
+        "type": "aev",
+        "parameter": [
+          { "type": "TEMPLATE", "key": "varType", "value": "HREF" }
+        ],
+        "fingerprint": "1"
+      }
+    ],
+    "trigger": [
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "triggerId": "10",
+        "name": "Trigger - Repair Estimate Page View",
+        "type": "PAGEVIEW",
+        "filter": [
+          {
+            "type": "CONTAINS",
+            "parameter": [
+              { "type": "TEMPLATE", "key": "arg0", "value": "{{Page URL}}" },
+              { "type": "TEMPLATE", "key": "arg1", "value": "/repair-estimate/" }
+            ]
+          }
+        ],
+        "fingerprint": "10"
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "triggerId": "11",
+        "name": "Trigger - Phone Link Click",
+        "type": "CLICK",
+        "filter": [
+          {
+            "type": "STARTS_WITH",
+            "parameter": [
+              { "type": "TEMPLATE", "key": "arg0", "value": "{{Variable - Click URL}}" },
+              { "type": "TEMPLATE", "key": "arg1", "value": "tel:" }
+            ]
+          }
+        ],
+        "fingerprint": "11"
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "triggerId": "12",
+        "name": "Trigger - Elementor Form Submit (Custom Event)",
+        "type": "CUSTOM_EVENT",
+        "customEventFilter": [
+          {
+            "type": "EQUALS",
+            "parameter": [
+              { "type": "TEMPLATE", "key": "arg0", "value": "{{_event}}" },
+              { "type": "TEMPLATE", "key": "arg1", "value": "form_submit_estimate" }
+            ]
+          }
+        ],
+        "fingerprint": "12"
+      }
+    ],
+    "tag": [
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "tagId": "1",
+        "name": "GA4 - Configuration",
+        "type": "gaawc",
+        "parameter": [
+          { "type": "TEMPLATE", "key": "measurementId", "value": "G-1TT9NE6912" },
+          { "type": "BOOLEAN", "key": "sendPageView", "value": "true" }
+        ],
+        "firingTriggerId": ["2147479553"],
+        "fingerprint": "1"
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "tagId": "2",
+        "name": "GA4 - qualify_lead (Repair Estimate Page)",
+        "type": "gaawe",
+        "parameter": [
+          { "type": "TEMPLATE", "key": "eventName", "value": "qualify_lead" },
+          { "type": "TEMPLATE", "key": "measurementIdOverride", "value": "G-1TT9NE6912" }
+        ],
+        "firingTriggerId": ["10"],
+        "fingerprint": "2"
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "tagId": "3",
+        "name": "GA4 - qualify_lead (Elementor dataLayer)",
+        "type": "gaawe",
+        "parameter": [
+          { "type": "TEMPLATE", "key": "eventName", "value": "qualify_lead" },
+          { "type": "TEMPLATE", "key": "measurementIdOverride", "value": "G-1TT9NE6912" }
+        ],
+        "firingTriggerId": ["12"],
+        "fingerprint": "3"
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "tagId": "4",
+        "name": "GA4 - phone_click",
+        "type": "gaawe",
+        "parameter": [
+          { "type": "TEMPLATE", "key": "eventName", "value": "phone_click" },
+          { "type": "TEMPLATE", "key": "measurementIdOverride", "value": "G-1TT9NE6912" },
+          {
+            "type": "LIST",
+            "key": "eventSettingsTable",
+            "list": [
+              {
+                "type": "MAP",
+                "map": [
+                  { "type": "TEMPLATE", "key": "parameter", "value": "phone_number" },
+                  { "type": "TEMPLATE", "key": "parameterValue", "value": "{{Variable - Click URL}}" }
+                ]
+              }
+            ]
+          }
+        ],
+        "firingTriggerId": ["11"],
+        "fingerprint": "4"
+      }
+    ]
+  }
+}

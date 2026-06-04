@@ -1,0 +1,68 @@
+topic: shop_marketing_pricing
+description: |
+  Pricing intelligence for marketing agencies serving auto body (collision repair) and mechanical (auto repair) shops.
+  Goal: build defensible pricing comparison for Koffman AutoWorks proposal.
+  Focus on what they actually charge, contract terms, asset ownership, service scope.
+
+execution:
+  output_dir: ./results
+  batch_size: 4
+  items_per_agent: 2
+  background: true
+
+items:
+  - name: Hibu
+    category: General SMB Reseller
+    description: National outside-sales digital marketing reseller. Serves auto repair, home services, etc. Sells websites, SEO, Google Ads (Smart Search), display retargeting (iPromote), listings, reputation, social. Currently used by Koffman AutoWorks.
+
+  - name: Turnkey Marketing (TKMKT)
+    category: Auto-Repair Specialist
+    description: Overland Park KS agency, auto repair + collision specialty. Domain tkmkt.com / turnkeyautomarketing.com. Social, paid social, Shopgenie CRM (Tekmetric), call scoring, gift bags. Currently used by Koffman AutoWorks AR side.
+
+  - name: KUKUI
+    category: Auto-Repair Platform
+    description: All-in-one platform for independent auto repair shops. CRM + website + reviews + marketing. Platform-led, lighter touch.
+
+  - name: Steer (formerly Mechanic Advisor)
+    category: Auto-Repair Platform
+    description: CRM + marketing platform for independent auto repair shops. SMS/email automation, reviews, scheduling.
+
+  - name: Shop Marketing Pros
+    category: Auto-Repair Specialist
+    description: Auto repair + collision marketing agency. Podcast-driven brand (Auto Repair Marketing Podcast). Done-for-you services.
+
+  - name: Autoshop Solutions
+    category: Auto-Repair Specialist
+    description: Cary NC agency. Websites, SEO, PPC for auto repair + tire shops. Partner of Turnkey Marketing.
+
+  - name: BodyShop Booster
+    category: Collision Specialist
+    description: Collision-repair-specific marketing + estimate platform. Image-based estimates, customer acquisition. CR niche.
+
+  - name: Element DMA
+    category: Auto-Repair Specialist
+    description: Independent shop focused. Web + paid ads + SEO. Transparent pricing.
+
+  - name: Repair Shop Websites
+    category: Niche Website Builder
+    description: Auto repair shop website builder. Templates + hosting + basic SEO.
+
+  - name: AutoLeap Marketing
+    category: Bundled SaaS + Marketing
+    description: Shop management software with bundled marketing add-on (SMS, reviews, website).
+
+  - name: PureCars
+    category: Enterprise / Dealer
+    description: Enterprise digital marketing for auto dealers and large multi-location collision groups.
+
+  - name: Tread Partners
+    category: Tire + Auto Repair Specialist
+    description: Tire dealer + independent shop marketing. Houston-based.
+
+  - name: 360 Payments / Shop Genie legacy / Tekmetric Marketing
+    category: Integrated CRM + Marketing
+    description: Tekmetric acquired Shopgenie Oct 2024. CRM-led email/SMS lifecycle for auto repair.
+
+  - name: BodyShop Marketing (UK / generic CR agencies)
+    category: Collision Specialist
+    description: Collision-only marketing agencies. RepairShopr / CCC integrations, insurance DRP positioning.

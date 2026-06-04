@@ -1,0 +1,1177 @@
+'use client'
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import maplibregl, {
+  type GeoJSONSource,
+  type LngLatBoundsLike,
+  type Map as MapLibreMap,
+  type MapGeoJSONFeature,
+  type StyleSpecification,
+} from 'maplibre-gl'
+import type {
+  MarketMapData,
+  MarketMapPoint,
+  MarketViewportIntelligence,
+  ShopCompetitorPoint,
+} from '@/types'
+import { Metric, EmptyState } from '@/components/ui'
+import { PSG_TOKENS } from '@/lib/psgTokens'
+
+const QUICK_STATES = ['CA', 'TX', 'FL', 'NY', 'IL', 'PA', 'NJ', 'MN', 'NE', 'MO']
+const NATIONAL_DIRECTORY_LIMIT = 5000
+const STATE_DIRECTORY_LIMIT = 12000
+const EMPTY_COLLECTION: PointFeatureCollection = { type: 'FeatureCollection', features: [] }
+const USA_BOUNDS: LngLatBoundsLike = [[-124.8, 24.5], [-66.9, 49.5]]
+
+const MAP_STYLE: StyleSpecification = {
+  version: 8,
+  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+  sources: {
+    carto: {
+      type: 'raster',
+      tiles: [
+        'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+        'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+        'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+      ],
+      tileSize: 256,
+      attribution:
+        '&copy; OpenStreetMap contributors &copy; CARTO',
+    },
+  },
+  layers: [
+    {
+      id: 'carto',
+      type: 'raster',
+      source: 'carto',
+      paint: {
+        'raster-opacity': 0.96,
+      },
+    },
+  ],
+}
+
+type PointFeature = {
+  type: 'Feature'
+  id: string
+  properties: {
+    key: string
+    id: string
+    layer: MarketMapPoint['layer'] | 'competitor_shop'
+    shopName: string
+  }
+  geometry: {
+    type: 'Point'
+    coordinates: [number, number]
+  }
+}
+
+type PointFeatureCollection = {
+  type: 'FeatureCollection'
+  features: PointFeature[]
+}
+
+function compact(value: number) {
+  return Intl.NumberFormat('en-US', {
+    notation: value >= 10000 ? 'compact' : 'standard',
+    maximumFractionDigits: 1,
+  }).format(value)
+}
+
+function pointKey(point: Pick<MarketMapPoint, 'layer' | 'id'>) {
+  return `${point.layer}:${point.id}`
+}
+
+function pointLabel(point: MarketMapPoint) {
+  if (point.layer === 'psg_customer') {
+    return `${point.shop_name}${point.psg_id ? ` | ${point.psg_id}` : ''}`
+  }
+  return point.shop_name
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function referenceRows(rows: Array<[string, string | number | null | undefined]>) {
+  return rows
+    .filter(([, value]) => value !== null && value !== undefined && value !== '')
+    .map(([label, value]) => (
+      `<div class="market-map-popup-row">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(String(value))}</strong>
+      </div>`
+    ))
+    .join('')
+}
+
+function marketPointPopupHtml(point: MarketMapPoint) {
+  const badge = point.layer === 'psg_customer' ? 'PSG customer' : 'Directory shop'
+  return `
+    <div class="market-map-popup">
+      <div class="market-map-popup-badge">${escapeHtml(badge)}</div>
+      <div class="market-map-popup-title">${escapeHtml(point.shop_name)}</div>
+      ${point.address ? `<div class="market-map-popup-address">${escapeHtml(point.address)}</div>` : ''}
+      ${referenceRows([
+        ['City', [point.city, point.state].filter(Boolean).join(', ')],
+        ['PSG ID', point.psg_id],
+        ['Invoiced', point.invoiced_id],
+        ['Surveys', point.survey_count],
+        ['EMI', point.avg_emi_pct !== null ? `${point.avg_emi_pct}%` : null],
+        ['Rating', point.rating !== null ? point.rating.toFixed(1) : null],
+        ['Phone', point.phone],
+      ])}
+    </div>
+  `
+}
+
+function competitorPopupHtml(point: ShopCompetitorPoint) {
+  return `
+    <div class="market-map-popup">
+      <div class="market-map-popup-badge">Competitor</div>
+      <div class="market-map-popup-title">${escapeHtml(point.shop_name)}</div>
+      ${point.address ? `<div class="market-map-popup-address">${escapeHtml(point.address)}</div>` : ''}
+      ${referenceRows([
+        ['Distance', formatDistance(point.distance_miles)],
+        ['Rating', point.rating !== null ? point.rating.toFixed(1) : null],
+        ['Phone', point.phone],
+        ['Category', point.category],
+      ])}
+    </div>
+  `
+}
+
+function toFeature(point: MarketMapPoint): PointFeature {
+  return {
+    type: 'Feature',
+    id: pointKey(point),
+    properties: {
+      key: pointKey(point),
+      id: point.id,
+      layer: point.layer,
+      shopName: point.shop_name,
+    },
+    geometry: {
+      type: 'Point',
+      coordinates: [point.longitude, point.latitude],
+    },
+  }
+}
+
+function toFeatureCollection(points: MarketMapPoint[]): PointFeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: points.map(toFeature),
+  }
+}
+
+function dedupeMarketMapPoints(points: MarketMapPoint[]) {
+  const seen = new Set<string>()
+  const deduped: MarketMapPoint[] = []
+  for (const point of points) {
+    const key = `${point.layer}:${point.id}:${point.latitude}:${point.longitude}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(point)
+  }
+  return deduped
+}
+
+function competitorKey(point: ShopCompetitorPoint) {
+  return `competitor:${point.place_id || point.shop_name}:${point.distance_miles}`
+}
+
+function competitorToFeature(point: ShopCompetitorPoint): PointFeature {
+  return {
+    type: 'Feature',
+    id: competitorKey(point),
+    properties: {
+      key: competitorKey(point),
+      id: point.place_id || point.shop_name,
+      layer: 'competitor_shop',
+      shopName: point.shop_name,
+    },
+    geometry: {
+      type: 'Point',
+      coordinates: [point.longitude, point.latitude],
+    },
+  }
+}
+
+function toCompetitorFeatureCollection(points: ShopCompetitorPoint[]): PointFeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: points.map(competitorToFeature),
+  }
+}
+
+function source(map: MapLibreMap, id: string) {
+  return map.getSource(id) as GeoJSONSource | undefined
+}
+
+function fitPoints(map: MapLibreMap | null, points: MarketMapPoint[], selectedState: string) {
+  if (!map) return
+
+  if (!points.length) {
+    map.fitBounds(USA_BOUNDS, { padding: 24, duration: 500 })
+    return
+  }
+
+  const bounds = new maplibregl.LngLatBounds()
+  for (const point of points) {
+    bounds.extend([point.longitude, point.latitude])
+  }
+  map.fitBounds(bounds, {
+    padding: { top: 60, right: 56, bottom: 56, left: 56 },
+    maxZoom: selectedState ? 8.5 : 4.25,
+    duration: 650,
+  })
+}
+
+function featureKey(feature: MapGeoJSONFeature) {
+  const key = feature.properties?.key
+  return typeof key === 'string' ? key : ''
+}
+
+function focusOnPoint(map: MapLibreMap | null, point: MarketMapPoint) {
+  if (!map) return
+
+  map.easeTo({
+    center: [point.longitude, point.latitude],
+    zoom: Math.max(map.getZoom(), point.layer === 'psg_customer' ? 6 : 8),
+    duration: 550,
+  })
+}
+
+function fitCompetitorOverlay(map: MapLibreMap | null, points: ShopCompetitorPoint[]) {
+  if (!map || !points.length) return
+
+  const bounds = new maplibregl.LngLatBounds()
+  for (const point of points) {
+    bounds.extend([point.longitude, point.latitude])
+  }
+  map.fitBounds(bounds, {
+    padding: { top: 76, right: 64, bottom: 64, left: 64 },
+    maxZoom: 11,
+    duration: 650,
+  })
+}
+
+function formatDistance(value: number) {
+  if (value === 0) return 'Here'
+  return `${value.toFixed(value < 10 ? 1 : 0)} mi`
+}
+
+function viewportIntelligenceUrl(map: MapLibreMap) {
+  const bounds = map.getBounds()
+  const params = new URLSearchParams({
+    west: bounds.getWest().toFixed(6),
+    south: bounds.getSouth().toFixed(6),
+    east: bounds.getEast().toFixed(6),
+    north: bounds.getNorth().toFixed(6),
+    zoom: map.getZoom().toFixed(2),
+  })
+  return `/api/market-map/intelligence?${params.toString()}`
+}
+
+export default function MarketMapDashboard() {
+  const mapNodeRef = useRef<HTMLDivElement | null>(null)
+  const mapRef = useRef<MapLibreMap | null>(null)
+  const popupRef = useRef<maplibregl.Popup | null>(null)
+  const pointLookupRef = useRef<Map<string, MarketMapPoint>>(new Map())
+  const competitorLookupRef = useRef<Map<string, ShopCompetitorPoint>>(new Map())
+  const selectedPointRef = useRef<MarketMapPoint | null>(null)
+  const [data, setData] = useState<MarketMapData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isMapReady, setIsMapReady] = useState(false)
+  const [error, setError] = useState('')
+  const [selectedState, setSelectedState] = useState('')
+  const [showPsg, setShowPsg] = useState(true)
+  const [showDirectory, setShowDirectory] = useState(true)
+  const [selectedPoint, setSelectedPoint] = useState<MarketMapPoint | null>(null)
+  const [competitorOverlay, setCompetitorOverlay] = useState<ShopCompetitorPoint[]>([])
+  const [isCompetitorLoading, setIsCompetitorLoading] = useState(false)
+  const [competitorError, setCompetitorError] = useState('')
+  const [viewportIntel, setViewportIntel] = useState<MarketViewportIntelligence | null>(null)
+  const [isViewportIntelLoading, setIsViewportIntelLoading] = useState(false)
+  const [viewportIntelError, setViewportIntelError] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [searchResults, setSearchResults] = useState<MarketMapPoint[]>([])
+  const [isSearchMenuOpen, setIsSearchMenuOpen] = useState(false)
+  const [isSearchLoading, setIsSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState('')
+
+  useEffect(() => {
+    if (!mapNodeRef.current || mapRef.current) return
+
+    const map = new maplibregl.Map({
+      container: mapNodeRef.current,
+      style: MAP_STYLE,
+      bounds: USA_BOUNDS,
+      fitBoundsOptions: { padding: 18 },
+      attributionControl: false,
+    })
+
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right')
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right')
+
+    map.on('load', () => {
+      map.addSource('directory-points-source', {
+        type: 'geojson',
+        data: EMPTY_COLLECTION,
+        cluster: true,
+        clusterMaxZoom: 9,
+        clusterRadius: 42,
+      })
+      map.addSource('psg-points-source', {
+        type: 'geojson',
+        data: EMPTY_COLLECTION,
+      })
+      map.addSource('competitor-points-source', {
+        type: 'geojson',
+        data: EMPTY_COLLECTION,
+      })
+      map.addSource('selected-market-point', {
+        type: 'geojson',
+        data: EMPTY_COLLECTION,
+      })
+
+      map.addLayer({
+        id: 'directory-clusters',
+        type: 'circle',
+        source: 'directory-points-source',
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': [
+            'step',
+            ['get', 'point_count'],
+            PSG_TOKENS.mapCluster1,
+            50,
+            PSG_TOKENS.mapCluster2,
+            250,
+            PSG_TOKENS.mapCluster3,
+            1000,
+            PSG_TOKENS.mapCluster4,
+          ],
+          'circle-opacity': 0.86,
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            14,
+            50,
+            19,
+            250,
+            25,
+            1000,
+            32,
+          ],
+          'circle-stroke-color': PSG_TOKENS.white,
+          'circle-stroke-width': 1.5,
+        },
+      })
+
+      map.addLayer({
+        id: 'directory-cluster-count',
+        type: 'symbol',
+        source: 'directory-points-source',
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': 11,
+        },
+        paint: {
+          'text-color': PSG_TOKENS.navy,
+        },
+      })
+
+      map.addLayer({
+        id: 'directory-points',
+        type: 'circle',
+        source: 'directory-points-source',
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-color': PSG_TOKENS.navy,
+          'circle-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0.25, 8, 0.45],
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 2, 7, 3.6, 11, 6],
+          'circle-stroke-color': PSG_TOKENS.white,
+          'circle-stroke-opacity': 0.55,
+          'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 5, 0, 9, 0.8],
+        },
+      })
+
+      map.addLayer({
+        id: 'psg-points',
+        type: 'circle',
+        source: 'psg-points-source',
+        paint: {
+          'circle-color': PSG_TOKENS.phoenixRed,
+          'circle-opacity': 0.95,
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 5, 7, 7, 11, 10],
+          'circle-stroke-color': PSG_TOKENS.white,
+          'circle-stroke-width': 1.8,
+        },
+      })
+
+      map.addLayer({
+        id: 'selected-point-halo',
+        type: 'circle',
+        source: 'selected-market-point',
+        paint: {
+          'circle-color': PSG_TOKENS.success,
+          'circle-opacity': 0.18,
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 12, 8, 22, 12, 34],
+          'circle-stroke-color': PSG_TOKENS.success,
+          'circle-stroke-opacity': 0.9,
+          'circle-stroke-width': 2,
+        },
+      })
+
+      map.addLayer({
+        id: 'competitor-points',
+        type: 'circle',
+        source: 'competitor-points-source',
+        paint: {
+          'circle-color': PSG_TOKENS.warning,
+          'circle-opacity': 0.96,
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 4.5, 9, 7, 12, 9],
+          'circle-stroke-color': PSG_TOKENS.white,
+          'circle-stroke-width': 1.6,
+        },
+      })
+
+      const showPopup = (coordinates: [number, number], html: string) => {
+        popupRef.current?.remove()
+        popupRef.current = new maplibregl.Popup({
+          closeButton: true,
+          closeOnClick: false,
+          maxWidth: '280px',
+          offset: 14,
+          className: 'market-map-location-popup',
+        })
+          .setLngLat(coordinates)
+          .setHTML(html)
+          .addTo(map)
+      }
+
+      const handleClick = (event: maplibregl.MapLayerMouseEvent) => {
+        const key = event.features?.[0] ? featureKey(event.features[0]) : ''
+        const point = pointLookupRef.current.get(key)
+        if (!point) return
+
+        setSelectedPoint(point)
+        showPopup([point.longitude, point.latitude], marketPointPopupHtml(point))
+      }
+      const handleSelectedClick = () => {
+        const point = selectedPointRef.current
+        if (!point) return
+
+        showPopup([point.longitude, point.latitude], marketPointPopupHtml(point))
+      }
+      const handleCompetitorClick = (event: maplibregl.MapLayerMouseEvent) => {
+        const key = event.features?.[0] ? featureKey(event.features[0]) : ''
+        const point = competitorLookupRef.current.get(key)
+        if (!point) return
+
+        showPopup([point.longitude, point.latitude], competitorPopupHtml(point))
+      }
+      const handleClusterClick = async (event: maplibregl.MapLayerMouseEvent) => {
+        const feature = event.features?.[0]
+        const clusterId = feature?.properties?.cluster_id
+        const geometry = feature?.geometry
+        if (typeof clusterId !== 'number' || !geometry || geometry.type !== 'Point') return
+
+        const directorySource = source(map, 'directory-points-source')
+        const zoom = await directorySource?.getClusterExpansionZoom(clusterId)
+        if (typeof zoom !== 'number') return
+
+        map.easeTo({
+          center: geometry.coordinates as [number, number],
+          zoom,
+          duration: 550,
+        })
+      }
+      const setPointer = () => {
+        map.getCanvas().style.cursor = 'pointer'
+      }
+      const clearPointer = () => {
+        map.getCanvas().style.cursor = ''
+      }
+
+      map.on('click', 'directory-clusters', handleClusterClick)
+      map.on('mouseenter', 'directory-clusters', setPointer)
+      map.on('mouseleave', 'directory-clusters', clearPointer)
+
+      for (const layer of ['psg-points', 'directory-points']) {
+        map.on('click', layer, handleClick)
+        map.on('mouseenter', layer, setPointer)
+        map.on('mouseleave', layer, clearPointer)
+      }
+      map.on('click', 'selected-point-halo', handleSelectedClick)
+      map.on('click', 'competitor-points', handleCompetitorClick)
+      map.on('mouseenter', 'selected-point-halo', setPointer)
+      map.on('mouseleave', 'selected-point-halo', clearPointer)
+      map.on('mouseenter', 'competitor-points', setPointer)
+      map.on('mouseleave', 'competitor-points', clearPointer)
+
+      setIsMapReady(true)
+    })
+
+    mapRef.current = map
+
+    return () => {
+      popupRef.current?.remove()
+      map.remove()
+      mapRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    let isActive = true
+
+    async function load() {
+      setIsLoading(true)
+      setError('')
+      try {
+        const params = new URLSearchParams({
+          limit: String(selectedState ? STATE_DIRECTORY_LIMIT : NATIONAL_DIRECTORY_LIMIT),
+        })
+        if (selectedState) params.set('state', selectedState)
+        const response = await fetch(`/api/market-map?${params.toString()}`)
+        if (!response.ok) {
+          throw new Error(`Map request failed: ${response.status}`)
+        }
+        const nextData = (await response.json()) as MarketMapData
+        if (isActive) {
+          setData(nextData)
+          setSelectedPoint(null)
+        }
+      } catch (err) {
+        if (isActive) setError(err instanceof Error ? err.message : 'Map request failed')
+      } finally {
+        if (isActive) setIsLoading(false)
+      }
+    }
+
+    load()
+    return () => {
+      isActive = false
+    }
+  }, [selectedState])
+
+  useEffect(() => {
+    const query = searchTerm.trim()
+    if (query.length < 2) {
+      setSearchResults([])
+      setSearchError('')
+      setIsSearchLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(async () => {
+      setIsSearchLoading(true)
+      setSearchError('')
+      try {
+        const params = new URLSearchParams({ q: query, limit: '18' })
+        const response = await fetch(`/api/market-map/search?${params.toString()}`, {
+          signal: controller.signal,
+        })
+        if (!response.ok) {
+          throw new Error(`Search failed: ${response.status}`)
+        }
+        setSearchResults(dedupeMarketMapPoints(await response.json() as MarketMapPoint[]))
+      } catch (err) {
+        if (controller.signal.aborted) return
+        setSearchResults([])
+        setSearchError(err instanceof Error ? err.message : 'Search failed')
+      } finally {
+        if (!controller.signal.aborted) setIsSearchLoading(false)
+      }
+    }, 220)
+
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [searchTerm])
+
+  const filteredPoints = useMemo(() => {
+    const points = data?.points || []
+    return points.filter((point) => {
+      if (point.layer === 'psg_customer' && !showPsg) return false
+      if (point.layer === 'directory_shop' && !showDirectory) return false
+      return true
+    })
+  }, [data?.points, showDirectory, showPsg])
+
+  const filteredPsg = useMemo(
+    () => filteredPoints.filter((point) => point.layer === 'psg_customer'),
+    [filteredPoints]
+  )
+  const filteredDirectory = useMemo(
+    () => filteredPoints.filter((point) => point.layer === 'directory_shop'),
+    [filteredPoints]
+  )
+  const states = Array.from(new Set([...QUICK_STATES, ...(data?.summary.states || [])]))
+    .sort((a, b) => a.localeCompare(b))
+  const topCustomers = [...filteredPsg]
+    .sort((a, b) => (b.survey_count || 0) - (a.survey_count || 0))
+    .slice(0, 12)
+  const competitors = useMemo(
+    () => competitorOverlay.filter((point) => !point.is_anchor),
+    [competitorOverlay]
+  )
+  const competitorAnchor = useMemo(
+    () => competitorOverlay.find((point) => point.is_anchor),
+    [competitorOverlay]
+  )
+
+  useEffect(() => {
+    pointLookupRef.current = new Map(filteredPoints.map((point) => [pointKey(point), point]))
+  }, [filteredPoints])
+
+  useEffect(() => {
+    competitorLookupRef.current = new Map(competitors.map((point) => [competitorKey(point), point]))
+  }, [competitors])
+
+  useEffect(() => {
+    selectedPointRef.current = selectedPoint
+    if (!selectedPoint) {
+      popupRef.current?.remove()
+      popupRef.current = null
+    }
+  }, [selectedPoint])
+
+  useEffect(() => {
+    if (!selectedPoint) {
+      setCompetitorOverlay([])
+      setCompetitorError('')
+      setIsCompetitorLoading(false)
+      return
+    }
+
+    const point = selectedPoint
+    const controller = new AbortController()
+    let isActive = true
+
+    async function loadCompetitors() {
+      setIsCompetitorLoading(true)
+      setCompetitorError('')
+      try {
+        const params = new URLSearchParams({
+          radiusMiles: '25',
+          limit: '25',
+        })
+        if (point.place_id) {
+          params.set('placeId', point.place_id)
+        } else {
+          params.set('shopName', point.shop_name)
+        }
+        const response = await fetch(`/api/market-map/competitors?${params.toString()}`, {
+          signal: controller.signal,
+        })
+        if (!response.ok) {
+          throw new Error(`Competitor request failed: ${response.status}`)
+        }
+        const rows = (await response.json()) as ShopCompetitorPoint[]
+        if (isActive) {
+          setCompetitorOverlay(rows)
+          fitCompetitorOverlay(mapRef.current, rows)
+        }
+      } catch (err) {
+        if (controller.signal.aborted || !isActive) return
+        setCompetitorOverlay([])
+        setCompetitorError(err instanceof Error ? err.message : 'Competitor request failed')
+      } finally {
+        if (isActive) setIsCompetitorLoading(false)
+      }
+    }
+
+    loadCompetitors()
+    return () => {
+      isActive = false
+      controller.abort()
+    }
+  }, [selectedPoint])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !isMapReady) return
+
+    source(map, 'directory-points-source')?.setData(toFeatureCollection(filteredDirectory))
+    source(map, 'psg-points-source')?.setData(toFeatureCollection(filteredPsg))
+    fitPoints(map, filteredPoints, selectedState)
+  }, [filteredDirectory, filteredPoints, filteredPsg, isMapReady, selectedState])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !isMapReady) return
+
+    source(map, 'selected-market-point')?.setData(
+      selectedPoint ? toFeatureCollection([selectedPoint]) : EMPTY_COLLECTION
+    )
+  }, [isMapReady, selectedPoint])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !isMapReady) return
+
+    source(map, 'competitor-points-source')?.setData(toCompetitorFeatureCollection(competitors))
+  }, [competitors, isMapReady])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !isMapReady) return
+
+    const activeMap = map
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    let controller: AbortController | null = null
+
+    async function loadViewportIntelligence() {
+      controller?.abort()
+      const activeController = new AbortController()
+      controller = activeController
+      setIsViewportIntelLoading(true)
+      setViewportIntelError('')
+      try {
+        const response = await fetch(viewportIntelligenceUrl(activeMap), {
+          signal: activeController.signal,
+        })
+        if (!response.ok) {
+          throw new Error(`Viewport request failed: ${response.status}`)
+        }
+        setViewportIntel(await response.json() as MarketViewportIntelligence)
+      } catch (err) {
+        if (activeController.signal.aborted) return
+        setViewportIntelError(err instanceof Error ? err.message : 'Viewport request failed')
+      } finally {
+        if (!activeController.signal.aborted) setIsViewportIntelLoading(false)
+      }
+    }
+
+    function scheduleViewportIntelligence() {
+      if (timeout) clearTimeout(timeout)
+      timeout = setTimeout(loadViewportIntelligence, 240)
+    }
+
+    activeMap.on('moveend', scheduleViewportIntelligence)
+    scheduleViewportIntelligence()
+
+    return () => {
+      if (timeout) clearTimeout(timeout)
+      controller?.abort()
+      activeMap.off('moveend', scheduleViewportIntelligence)
+    }
+  }, [isMapReady])
+
+  return (
+    <div className="space-y-6">
+      <section className="border border-stone bg-white">
+        <div className="grid gap-5 p-5 xl:grid-cols-[1fr_420px] xl:items-end">
+          <div>
+            <p className="text-xs font-medium uppercase text-phoenix-red">
+              Customer geography
+            </p>
+            <h2 className="mt-1 font-heading text-2xl font-medium text-navy">
+              PSG Customers vs Directory Shops
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate">
+              PSG customers are anchored from Invoiced IDs and displayed against the
+              national body shop directory.
+            </p>
+            <div className="relative mt-4 max-w-2xl">
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => {
+                  setSearchTerm(event.target.value)
+                  setIsSearchMenuOpen(true)
+                }}
+                onFocus={() => {
+                  if (searchTerm.trim().length >= 2) setIsSearchMenuOpen(true)
+                }}
+                placeholder="Search any body shop, PSG ID, city, address, or phone"
+                className="w-full border border-stone bg-white px-3 py-2.5 text-sm text-navy shadow-sm focus:border-phoenix-red focus:outline-none focus:ring-2 focus:ring-phoenix-red focus:ring-offset-2"
+              />
+              {isSearchMenuOpen && (searchTerm.trim().length >= 2 || searchError) && (
+                <div className="absolute z-20 mt-2 max-h-96 w-full overflow-y-auto border border-stone bg-white shadow-lg">
+                  <div className="border-b border-stone px-3 py-2 text-xs font-medium uppercase text-slate">
+                    {isSearchLoading ? 'Searching' : `${searchResults.length} results`}
+                  </div>
+                  {searchError && (
+                    <div className="px-3 py-2 text-sm text-phoenix-red">{searchError}</div>
+                  )}
+                  {!isSearchLoading && !searchError && !searchResults.length && (
+                    <div className="px-3 py-3 text-sm text-slate">
+                      No body shops match your search. Try a partial name, PSG ID, or city.
+                    </div>
+                  )}
+                  {searchResults.map((point, index) => (
+                    <button
+                      key={`${point.layer}-${point.id}-${point.latitude}-${point.longitude}-${index}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPoint(point)
+                        setSearchTerm(point.shop_name)
+                        setSearchResults([])
+                        setIsSearchMenuOpen(false)
+                        popupRef.current?.remove()
+                        focusOnPoint(mapRef.current, point)
+                      }}
+                      className="block w-full border-b border-stone px-3 py-3 text-left last:border-b-0 hover:bg-bone/40"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-heading text-sm font-medium text-navy">
+                            {point.shop_name}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-slate">
+                            {[point.city, point.state].filter(Boolean).join(', ') || point.address || 'Mapped shop'}
+                          </p>
+                        </div>
+                        <span
+                          className={`whitespace-nowrap px-2 py-1 text-xs font-medium ${
+                            point.layer === 'psg_customer'
+                              ? 'bg-phoenix-red/10 text-phoenix-red'
+                              : 'bg-bone text-navy'
+                          }`}
+                        >
+                          {point.layer === 'psg_customer' ? 'PSG' : 'Directory'}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_auto_auto]">
+            <select
+              value={selectedState}
+              onChange={(event) => {
+                setSelectedState(event.target.value)
+                setSelectedPoint(null)
+                setCompetitorOverlay([])
+              }}
+              className="border border-stone px-3 py-2 text-sm text-navy focus:border-phoenix-red focus:outline-none focus:ring-2 focus:ring-phoenix-red focus:ring-offset-2"
+            >
+              <option value="">All states</option>
+              {states.map((state) => (
+                <option key={state} value={state}>{state}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowPsg((value) => !value)}
+              aria-pressed={showPsg}
+              aria-label={`Toggle PSG customers layer ${showPsg ? 'off' : 'on'}`}
+              className={`px-3 py-2 text-sm font-medium ring-1 ring-iron/15 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phoenix-red ${
+                showPsg ? 'bg-navy text-white' : 'bg-white text-slate hover:bg-bone'
+              }`}
+            >
+              PSG
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDirectory((value) => !value)}
+              aria-pressed={showDirectory}
+              aria-label={`Toggle directory shops layer ${showDirectory ? 'off' : 'on'}`}
+              className={`px-3 py-2 text-sm font-medium ring-1 ring-iron/15 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phoenix-red ${
+                showDirectory ? 'bg-success text-white' : 'bg-white text-slate hover:bg-bone'
+              }`}
+            >
+              Directory
+            </button>
+          </div>
+        </div>
+        {error && (
+          <div className="border-t border-phoenix-red/20 bg-phoenix-red/5 px-5 py-3 text-sm text-phoenix-red">
+            {error}
+          </div>
+        )}
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <Metric label="Mapped PSG Customers" value={compact(filteredPsg.length)} />
+        <Metric
+          label="Surveyed PSG Customers"
+          value={compact(filteredPsg.filter((point) => (point.survey_count || 0) > 0).length)}
+        />
+        <Metric label="Directory Shops" value={compact(filteredDirectory.length)} />
+        <Metric
+          label="States"
+          value={compact(new Set(filteredPoints.map((point) => point.state).filter(Boolean)).size)}
+        />
+      </section>
+
+      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px] xl:items-start">
+        <div className="overflow-hidden border border-stone bg-white">
+          <div className="flex items-center justify-between border-b border-stone px-5 py-3 text-xs text-slate">
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="inline-flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full bg-phoenix-red" />
+                PSG customers
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full bg-navy/30" />
+                Directory shops
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full bg-catalyst" />
+                Selected competitors
+              </span>
+            </div>
+            <span>{isLoading ? 'Loading map...' : `${compact(filteredPoints.length)} points`}</span>
+          </div>
+          <div className="relative h-[620px] w-full bg-paper">
+            <div ref={mapNodeRef} className="h-full w-full" />
+            {isLoading && (
+              <div className="absolute inset-x-4 top-4 border border-stone bg-white/90 px-4 py-3 text-sm font-medium text-navy shadow-sm backdrop-blur">
+                Loading geography
+              </div>
+            )}
+          </div>
+        </div>
+
+        <aside className="border border-stone bg-white">
+          <div className="border-b border-stone p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase text-phoenix-red">
+                  Map Intelligence
+                </p>
+                <h3 className="mt-2 font-heading text-base font-medium text-navy">
+                  {viewportIntel?.viewport_label || 'Current view'}
+                </h3>
+              </div>
+              <span className="bg-bone px-2 py-1 text-xs font-medium text-navy">
+                {isViewportIntelLoading ? 'Updating' : `z${Math.round(viewportIntel?.zoom || mapRef.current?.getZoom() || 0)}`}
+              </span>
+            </div>
+            {viewportIntelError && (
+              <p className="mt-2 text-xs leading-5 text-phoenix-red">{viewportIntelError}</p>
+            )}
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <Metric compact label="PSG" value={compact(viewportIntel?.psg_customer_count || filteredPsg.length)} />
+              <Metric compact label="Directory" value={compact(viewportIntel?.directory_shop_count || filteredDirectory.length)} />
+              <Metric compact label="Crashes" value={compact(viewportIntel?.crash_count || 0)} />
+              <Metric compact label="Storms" value={compact(viewportIntel?.storm_event_count || 0)} />
+            </div>
+          </div>
+
+          <div className="border-b border-stone p-4">
+            <p className="text-xs font-medium uppercase text-phoenix-red">
+              Selected Point
+            </p>
+            {selectedPoint ? (
+              <div className="mt-2">
+                <h3 className="font-heading text-base font-medium text-navy">
+                  {pointLabel(selectedPoint)}
+                </h3>
+                <div className="mt-2">
+                  <span
+                    className={`px-2 py-1 text-xs font-medium ${
+                      selectedPoint.layer === 'psg_customer'
+                        ? 'bg-phoenix-red/10 text-phoenix-red'
+                        : 'bg-bone text-navy'
+                    }`}
+                  >
+                    {selectedPoint.layer === 'psg_customer' ? 'PSG customer' : 'Directory shop'}
+                  </span>
+                </div>
+                {selectedPoint.address && (
+                  <p className="mt-1 text-sm leading-5 text-slate">{selectedPoint.address}</p>
+                )}
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate">
+                  {selectedPoint.psg_id && <span>PSG {selectedPoint.psg_id}</span>}
+                  {selectedPoint.invoiced_id && <span>Invoiced {selectedPoint.invoiced_id}</span>}
+                  {selectedPoint.avg_emi_pct !== null && <span>{selectedPoint.avg_emi_pct}% EMI</span>}
+                  {selectedPoint.survey_count !== null && <span>{selectedPoint.survey_count} surveys</span>}
+                  {selectedPoint.rating !== null && <span>{selectedPoint.rating.toFixed(1)} rating</span>}
+                  {selectedPoint.phone && <span>{selectedPoint.phone}</span>}
+                  {selectedPoint.website && (
+                    <a
+                      href={selectedPoint.website}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-phoenix-red hover:underline"
+                    >
+                      Website
+                    </a>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPoint(null)
+                    setCompetitorOverlay([])
+                    popupRef.current?.remove()
+                    fitPoints(mapRef.current, filteredPoints, selectedState)
+                  }}
+                  className="mt-3 border border-iron/15 px-2.5 py-1.5 text-xs font-medium text-slate transition-colors hover:bg-paper"
+                >
+                  Choose another shop
+                </button>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm leading-6 text-slate">
+                Search or select any body shop to show its details and local competitor set.
+              </p>
+            )}
+          </div>
+
+          <div className="max-h-[500px] overflow-y-auto">
+            {selectedPoint ? (
+              <div>
+                <div className="border-b border-stone bg-paper/70 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-medium uppercase text-slate">
+                      Competitors within 25 miles
+                    </p>
+                    <span className="bg-white px-2 py-1 text-xs font-medium text-navy ring-1 ring-iron/10">
+                      {isCompetitorLoading ? 'Loading' : competitors.length}
+                    </span>
+                  </div>
+                  {competitorAnchor?.address && (
+                    <p className="mt-2 text-xs leading-5 text-slate">
+                      Anchored at {competitorAnchor.address}
+                    </p>
+                  )}
+                  {competitorError && (
+                    <p className="mt-2 text-xs leading-5 text-phoenix-red">{competitorError}</p>
+                  )}
+                </div>
+                {competitors.length ? competitors.map((competitor) => (
+                  <div
+                    key={`${competitor.place_id || competitor.shop_name}-${competitor.latitude}-${competitor.longitude}-${competitor.distance_miles}`}
+                    className="border-b border-stone p-4 last:border-b-0"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-heading text-sm font-medium text-navy">
+                          {competitor.shop_name}
+                        </p>
+                        {competitor.address && (
+                          <p className="mt-1 text-xs leading-5 text-slate">{competitor.address}</p>
+                        )}
+                      </div>
+                      <span className="whitespace-nowrap bg-bone px-2 py-1 text-xs font-medium text-navy">
+                        {formatDistance(competitor.distance_miles)}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate">
+                      {competitor.rating !== null && <span>{competitor.rating.toFixed(1)} rating</span>}
+                      {competitor.phone && <span>{competitor.phone}</span>}
+                      {competitor.website && (
+                        <a
+                          href={competitor.website}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-phoenix-red hover:underline"
+                        >
+                          Website
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )) : isCompetitorLoading ? (
+                  <div className="p-4 text-sm leading-6 text-slate">Loading competitor set…</div>
+                ) : (
+                  <div className="p-4">
+                    <EmptyState
+                      title="No competitors within 25 miles"
+                      description="Try widening the search radius, or check that the directory has coverage for this region."
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                {viewportIntel?.top_zips.length ? (
+                  <div>
+                    <div className="border-b border-stone bg-paper/70 px-4 py-3">
+                      <p className="text-xs font-medium uppercase text-slate">
+                        Priority ZIPs in View
+                      </p>
+                    </div>
+                    {viewportIntel.top_zips.map((zip) => (
+                      <div key={`${zip.year}-${zip.zip}`} className="border-b border-stone p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-heading text-sm font-medium text-navy">{zip.zip}</p>
+                            <p className="mt-1 text-xs text-slate">
+                              {[zip.city, zip.state, zip.year].filter(Boolean).join(', ')}
+                            </p>
+                          </div>
+                          <span className="bg-bone px-2 py-1 text-xs font-medium text-navy">
+                            {Math.round(zip.targeting_score).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate">
+                          <span>{compact(zip.total_crashes)} crashes</span>
+                          <span>{compact(zip.injury_crashes)} injury</span>
+                          <span>{compact(zip.storm_events)} storms</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="border-b border-stone bg-paper/70 px-4 py-3">
+                  <p className="text-xs font-medium uppercase text-slate">
+                    PSG Customers in View
+                  </p>
+                </div>
+                {topCustomers.map((point) => (
+                  <button
+                    key={`${pointKey(point)}:${point.latitude}:${point.longitude}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPoint(point)
+                      popupRef.current?.remove()
+                      focusOnPoint(mapRef.current, point)
+                    }}
+                    className="block w-full border-b border-stone p-4 text-left transition-colors hover:bg-bone/40"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-heading text-sm font-medium text-navy">{point.shop_name}</p>
+                        <p className="mt-1 text-xs text-slate">
+                          {[point.city, point.state].filter(Boolean).join(', ') || point.address || 'Mapped customer'}
+                        </p>
+                      </div>
+                      {point.psg_id && (
+                        <span className="bg-paper px-2 py-1 text-xs font-medium text-slate">
+                          {point.psg_id}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 flex gap-3 text-xs text-slate">
+                      <span>{compact(point.survey_count || 0)} surveys</span>
+                      {point.avg_emi_pct !== null && <span>{point.avg_emi_pct}% EMI</span>}
+                    </div>
+                  </button>
+                ))}
+                {!topCustomers.length && (
+                  <div className="p-4">
+                    <EmptyState
+                      title="No PSG customers in this view"
+                      description="Pan or zoom the map to discover PSG-customer shops in a different region, or remove the state filter."
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </aside>
+      </section>
+    </div>
+  )
+}
+

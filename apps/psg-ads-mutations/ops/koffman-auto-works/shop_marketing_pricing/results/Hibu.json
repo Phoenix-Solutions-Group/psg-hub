@@ -1,0 +1,50 @@
+{
+  "agency_name": "Hibu",
+  "domain": "hibu.com",
+  "hq_location": "Cedar Rapids, IA",
+  "specialty": "General SMB",
+  "services": ["Website", "SEO", "Google Ads (Smart Search)", "Display/Retargeting (iPromote)", "Listings", "Reputation", "Social"],
+  "base_monthly_low_usd": 300,
+  "base_monthly_high_usd": 3000,
+  "typical_monthly_usd": "$1,200-$2,500 for mid-tier SMB bundle; ~$800 rep target package",
+  "setup_fee_usd": "Up to $499 one-time",
+  "min_ad_spend_usd": "Bundled into invoice; ~$300-$500/mo ad spend inside packages",
+  "contract_length_months": "6 or 12, auto-renewal",
+  "cancellation_policy": "Phone-only cancellation (email rejected), 15-day written notice required, customers report 1+ hr hold times and denied cancellations even with proper notice",
+  "asset_ownership": "Hibu retains website, domain, ad accounts, GBP access, creative. $250/mo ransom fee reported to keep site post-cancellation",
+  "pricing_transparency": "Quote-only; not published on website",
+  "pricing_confidence": "medium",
+  "pricing_sources": [
+    "https://www.top10.com/website-builders/reviews/hibu",
+    "https://www.consumeraffairs.com/business/hibu.html",
+    "https://www.bbb.org/us/ia/cedar-rapids/profile/digital-marketing/hibu-inc-0664-32057924/complaints",
+    "https://www.glassdoor.com/Reviews/Hibu-sales-reps-Reviews-EI_IE7640.0,4_KH5,15.htm",
+    "https://clutch.co/profile/hibu",
+    "https://www.capterra.com/p/207701/Hibu/pricing/",
+    "https://umatechnology.org/hibu-website-builder-review-2025-pricing-pros-cons/"
+  ],
+  "known_pain_points": [
+    "Blended invoice obscures ad spend vs management fee",
+    "Wrong-city geo-targeting reported",
+    "Mid-contract +8.3% price hike with 17-day notice",
+    "Phone-only cancellation friction",
+    "Customer does not own website after cancellation",
+    "No reporting transparency on Google Ads performance"
+  ],
+  "notable_clients": ["Koffman AutoWorks (Campbellsport WI)"],
+  "pros": [
+    "Bundled stack (website + SEO + ads + listings) under one vendor",
+    "Outside sales rep gives face-to-face support",
+    "Low entry barrier for businesses with no in-house marketing"
+  ],
+  "cons": [
+    "No conversion tracking on client site (no GA4/GTM/Meta Pixel verified on Koffman site)",
+    "iPromote display network is proprietary; low quality vs Google Display Network",
+    "Asset capture (client cannot leave easily)",
+    "Auto-renewal + cancellation friction",
+    "Generic templates; no vertical specialty for auto repair or collision",
+    "Backlink profile = directory spam (superpages, dexknows, yellowpages, factmags, egyptiandirectory, etc.)"
+  ],
+  "koffman_relevance": "Current vendor for AR + CR website, SEO, Google Ads, display. Site has zero standard pixels (no GA4/GTM/Meta Pixel/Google Ads conversion tag), only iPromote pixel. SEMrush shows 0 paid keywords detected = Google Ads either dormant, brand-only, or below detection threshold. Backlink profile is 100% directory spam from Hibu submission kit. Would be fully replaced by PSG engagement.",
+  "uncertain": ["base_monthly_low_usd exact floor for solo services", "exact Koffman invoice amount"]
+}

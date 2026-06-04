@@ -1,0 +1,56 @@
+import { defineConfig } from "vitest/config";
+import path from "node:path";
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+  test: {
+    environment: "node",
+    include: [
+      "src/**/__tests__/**/*.test.{ts,tsx}",
+      "src/**/*.test.{ts,tsx}",
+    ],
+    setupFiles: ["./vitest.setup.ts"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text"],
+      // ── v0.2 quality gate (Phase 8 / 08-04, S5) ──────────────────────────
+      // The denominator is the v0.2 NEW-CODE surface (Phases 6/7/8 authored
+      // logic), NOT all of src/. A whole-src threshold would dilute the gate
+      // against inherited/v0.1 + v0.3-gated code (google-ads, ads, mail, sms,
+      // resilience, ui, billing) and make the 70% number meaningless.
+      // The threshold is enforced per-file at >=70% lines (PROJECT metric).
+      include: [
+        "src/lib/tier/gate.ts", // 07-02 tier-gate helper
+        "src/lib/shop/context.ts", // 07-03 active-shop context
+        "src/lib/auth/shop-access.ts", // 06-03 dashboard gate
+        "src/lib/reviews/prompts.ts", // 06-04 reviews reconcile
+        "src/lib/reviews/safety.ts",
+        "src/lib/reviews/responder.ts",
+        "src/lib/reviews/rate-limit.ts",
+        "src/lib/logging/llm-call.ts", // 06-05 llm_call_log logger
+        "src/app/api/onboarding/route.ts", // 07-01 onboarding bootstrap
+        "src/app/api/shop/switch/route.ts", // 07-03 shop switch
+        "src/app/api/reviews/[id]/draft-response/route.ts", // 06-04 reviews API
+        "src/app/api/reviews/[id]/approve-response/route.ts",
+      ],
+      // Excluded v0.2-adjacent surfaces (covered elsewhere / not unit-gateable
+      // in env=node), with rationale:
+      // - mobile-nav.tsx: the pure MobileNavPanel render branches ARE unit-tested
+      //   (mobile-nav.test.tsx), but the stateful MobileNav disclosure (useState
+      //   toggle + open panel) needs a DOM/click -> covered by 08-04b Playwright
+      //   E2E. Not in the include set (env=node has no jsdom).
+      // - reviews/list + reviews/ingest routes: guarded/deferred surfaces
+      //   (ingest returns 501; list is read-only) -> their owning milestone.
+      // - shop-switcher.tsx / onboarding components: client useRouter hooks,
+      //   covered by 08-04b Playwright E2E (no jsdom in this node env).
+      thresholds: {
+        perFile: true,
+        lines: 70,
+      },
+    },
+  },
+});

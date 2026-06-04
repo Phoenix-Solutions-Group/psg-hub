@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body{margin:0;padding:24px;background:var(--psg-paper);font-family:var(--font-body)}
+  .field{margin-bottom:16px}
+  .field:last-child{margin-bottom:0}
+  label{display:block;font-family:var(--font-display);font-size:11px;font-weight: 500;text-transform:uppercase;letter-spacing:0.12em;color:var(--psg-graphite);margin-bottom:6px}
+  input,textarea,select{width:100%;font-family:var(--font-body);font-size:14px;padding:11px 14px;border:1px solid var(--color-border);border-radius:6px;background:#fff;color:var(--psg-graphite);box-sizing:border-box;outline:none;transition:border-color 140ms ease, box-shadow 140ms ease}
+  input:focus{border-color:var(--psg-ember);box-shadow:0 0 0 2px var(--psg-paper), 0 0 0 4px var(--psg-ember)}
+  .help{font-size:12px;color:var(--psg-mist);margin-top:4px}
+  .error input{border-color:#8C362D;background:#FAEEEC}
+  .error .help{color:#8C362D}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+</style></head>
+<body>
+  <div class="row">
+    <div class="field"><label>Shop name</label><input type="text" value="Apex Collision Center"/></div>
+    <div class="field"><label>Email</label><input type="email" placeholder="you@shop.com" autofocus/><div class="help">We respond within one business day.</div></div>
+  </div>
+  <div class="field error"><label>Monthly volume</label><input type="text" value=""/><div class="help">This field is required.</div></div>
+</body></html>
