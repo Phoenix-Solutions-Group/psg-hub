@@ -26,6 +26,25 @@ export const MULTI = {
   shopB: "E2E Multi Shop B",
 };
 
+// 9-shop owner (big MSO) — drives the 09-02 switcher-typeahead branch (>=8).
+export const MEGA = {
+  email: "mega@e2e.test",
+  statePath: path.join(AUTH_DIR, "mega.json"),
+  shopNames: Array.from({ length: 9 }, (_, i) => `E2E Mega Shop ${i + 1}`),
+};
+
+// 09-02 analytics snapshot seed. End date = "today" at module load (NOT a hard
+// constant — the page reads a trailing-30-day runtime window, so a frozen date
+// would rot out of range). Metric VALUES are formula-derived from the day
+// index, so the data is deterministic given the run date.
+export const SNAPSHOT_END_DATE = new Date().toISOString().slice(0, 10);
+export const SNAPSHOT_SYNCED_AT = `${SNAPSHOT_END_DATE}T12:00:00Z`;
+
 // Every fixture shop name (used by the idempotent cleanup before re-seeding).
-export const FIXTURE_SHOP_NAMES = [OWNER.shopName, MULTI.shopA, MULTI.shopB];
-export const FIXTURE_EMAILS = [OWNER.email, MULTI.email];
+export const FIXTURE_SHOP_NAMES = [
+  OWNER.shopName,
+  MULTI.shopA,
+  MULTI.shopB,
+  ...MEGA.shopNames,
+];
+export const FIXTURE_EMAILS = [OWNER.email, MULTI.email, MEGA.email];

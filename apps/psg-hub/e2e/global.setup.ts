@@ -6,6 +6,9 @@ import {
   AUTH_DIR,
   OWNER,
   MULTI,
+  MEGA,
+  SNAPSHOT_END_DATE,
+  SNAPSHOT_SYNCED_AT,
   FIXTURE_SHOP_NAMES,
   FIXTURE_EMAILS,
 } from "./fixtures";
@@ -72,6 +75,38 @@ async function seedShop(ownerId: string, name: string, role: string): Promise<st
   return shop.id;
 }
 
+/**
+ * 09-02: deterministic daily semrush snapshots for a shop (trailing `days`
+ * ending SNAPSHOT_END_DATE). Values are formula-derived from the day index —
+ * no randomness. Upsert on the idempotency key, so re-runs net zero new rows.
+ */
+async function seedSnapshots(shopId: string, days: number): Promise<void> {
+  const end = new Date(`${SNAPSHOT_END_DATE}T00:00:00Z`).getTime();
+  const rows = Array.from({ length: days }, (_, i) => {
+    const d = new Date(end - (days - 1 - i) * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    return {
+      shop_id: shopId,
+      source: "semrush",
+      date: d,
+      period: "daily",
+      synced_at: SNAPSHOT_SYNCED_AT,
+      metrics: {
+        organic_traffic: 400 + i * 7,
+        organic_keywords: 120 + i,
+        organic_traffic_cost: 900 + i * 11,
+        backlinks: 60 + i * 2,
+        authority_score: 38,
+      },
+    };
+  });
+  const { error } = await admin
+    .from("analytics_snapshots")
+    .upsert(rows, { onConflict: "shop_id,source,date,period" });
+  if (error) throw new Error(`[e2e] snapshot seed failed: ${error.message}`);
+}
+
 async function ensureCustomerRole(userId: string): Promise<void> {
   const { data: existing } = await admin
     .from("app_user_roles")
@@ -90,6 +125,7 @@ async function cleanup(): Promise<void> {
     .select("id, client_id")
     .in("name", FIXTURE_SHOP_NAMES);
   for (const s of shops ?? []) {
+    await admin.from("analytics_snapshots").delete().eq("shop_id", s.id);
     await admin.from("shop_users").delete().eq("shop_id", s.id);
     await admin.from("shops").delete().eq("id", s.id);
     if (s.client_id) await admin.from("clients").delete().eq("id", s.client_id);
@@ -128,18 +164,32 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
   const ownerId = await createUser(OWNER.email);
   await seedProfile(ownerId, "E2E Owner");
   await ensureCustomerRole(ownerId);
-  await seedShop(ownerId, OWNER.shopName, "owner");
+  const ownerShopId = await seedShop(ownerId, OWNER.shopName, "owner");
 
   const multiId = await createUser(MULTI.email);
   await seedProfile(multiId, "E2E Multi");
   await ensureCustomerRole(multiId);
-  await seedShop(multiId, MULTI.shopA, "owner");
-  await seedShop(multiId, MULTI.shopB, "viewer");
+  const shopAId = await seedShop(multiId, MULTI.shopA, "owner");
+  const shopBId = await seedShop(multiId, MULTI.shopB, "viewer");
+
+  // 09-02: big-MSO fixture — 9 owned shops drives the switcher typeahead (>=8).
+  const megaId = await createUser(MEGA.email);
+  await seedProfile(megaId, "E2E Mega");
+  await ensureCustomerRole(megaId);
+  for (const name of MEGA.shopNames) {
+    await seedShop(megaId, name, "owner");
+  }
+
+  // 09-02: deterministic analytics snapshots (charts + MSO aggregate data).
+  await seedSnapshots(ownerShopId, 30);
+  await seedSnapshots(shopAId, 14);
+  await seedSnapshots(shopBId, 14);
 
   // 2. Real UI login per role -> persist @supabase/ssr cookies as storageState.
   for (const fx of [
     { email: OWNER.email, statePath: OWNER.statePath },
     { email: MULTI.email, statePath: MULTI.statePath },
+    { email: MEGA.email, statePath: MEGA.statePath },
   ]) {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();

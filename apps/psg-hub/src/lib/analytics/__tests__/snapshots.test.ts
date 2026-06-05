@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { upsertSnapshots, getSnapshots } from "../snapshots";
+import { upsertSnapshots, getSnapshots, getSnapshotsForShops } from "../snapshots";
 import type { AnalyticsSnapshotInsert } from "../types";
 
 /** Minimal chainable supabase client mock. */
@@ -11,6 +11,7 @@ function makeClient(opts: {
   const calls = {
     from: [] as string[],
     upsert: [] as [unknown, unknown][],
+    in: [] as [string, unknown][],
     eq: [] as [string, unknown][],
     gte: [] as [string, unknown][],
     lte: [] as [string, unknown][],
@@ -18,6 +19,10 @@ function makeClient(opts: {
   };
 
   const selectBuilder: Record<string, unknown> = {
+    in: vi.fn((c: string, v: unknown) => {
+      calls.in.push([c, v]);
+      return selectBuilder;
+    }),
     eq: vi.fn((c: string, v: unknown) => {
       calls.eq.push([c, v]);
       return selectBuilder;
@@ -114,5 +119,48 @@ describe("getSnapshots", () => {
   it("throws on read error", async () => {
     const { client } = makeClient({ selectResult: { data: null, error: { message: "nope" } } });
     await expect(getSnapshots(client, args)).rejects.toThrow(/getSnapshots failed: nope/);
+  });
+});
+
+describe("getSnapshotsForShops (09-02 MSO aggregate read)", () => {
+  const args = {
+    shopIds: ["shop-1", "shop-2"],
+    source: "semrush" as const,
+    period: "daily" as const,
+    from: "2026-05-05",
+    to: "2026-06-04",
+  };
+
+  it("clamps with .in(shop_id, ids) + source/period/date filters", async () => {
+    const data = [{ id: "a", shop_id: "shop-1", location_id: null, source: "semrush", date: "2026-06-01", period: "daily", metrics: {}, synced_at: "", created_at: "" }];
+    const { client, calls } = makeClient({ selectResult: { data, error: null } });
+    const res = await getSnapshotsForShops(client, args);
+    expect(res).toEqual(data);
+    expect(calls.in).toEqual([["shop_id", ["shop-1", "shop-2"]]]);
+    expect(calls.eq).toEqual([
+      ["source", "semrush"],
+      ["period", "daily"],
+    ]);
+    expect(calls.gte).toEqual([["date", "2026-05-05"]]);
+    expect(calls.lte).toEqual([["date", "2026-06-04"]]);
+    expect(calls.order).toEqual([["date", { ascending: true }]]);
+  });
+
+  it("[] on empty shopIds (no db call)", async () => {
+    const { client, calls } = makeClient({});
+    await expect(getSnapshotsForShops(client, { ...args, shopIds: [] })).resolves.toEqual([]);
+    expect(calls.from).toHaveLength(0);
+  });
+
+  it("[] on null data (no-data shops, no throw)", async () => {
+    const { client } = makeClient({ selectResult: { data: null, error: null } });
+    await expect(getSnapshotsForShops(client, args)).resolves.toEqual([]);
+  });
+
+  it("throws on read error", async () => {
+    const { client } = makeClient({ selectResult: { data: null, error: { message: "nope" } } });
+    await expect(getSnapshotsForShops(client, args)).rejects.toThrow(
+      /getSnapshotsForShops failed: nope/
+    );
   });
 });

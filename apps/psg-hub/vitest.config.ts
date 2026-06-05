@@ -37,6 +37,10 @@ export default defineConfig({
         "src/app/api/reviews/[id]/draft-response/route.ts", // 06-04 reviews API
         "src/app/api/reviews/[id]/approve-response/route.ts",
         "src/lib/analytics/snapshots.ts", // 09-01 analytics snapshot helpers (v0.3)
+        "src/lib/analytics/aggregate.ts", // 09-02 MSO aggregate + series shaping (v0.3)
+        "src/lib/semrush/client.ts", // 09-03 SEMrush HTTP client (v0.3)
+        "src/lib/semrush/sync.ts", // 09-03 ingest orchestrator (v0.3)
+        "src/app/api/cron/semrush-sync/route.ts", // 09-03 cron route (v0.3)
       ],
       // Excluded v0.2-adjacent surfaces (covered elsewhere / not unit-gateable
       // in env=node), with rationale:
