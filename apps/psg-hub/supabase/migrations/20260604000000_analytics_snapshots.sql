@@ -19,6 +19,16 @@ alter table public.analytics_snapshots
   add column if not exists period text,
   add column if not exists synced_at timestamptz not null default now();
 
+-- 09-02 amendment (caught at E2E seed): the inherited table has location_id
+-- NOT NULL, but the 09-01 source-agnostic design stores SHOP-level snapshots
+-- (location_id null — types.ts + snapshots.ts already model it nullable; the
+-- 09-01 migration missed implementing it). Location-granular rows remain
+-- supported; nullability matches the documented design. 0 rows on prod = zero
+-- data risk; the location-scoped INSERT policy half only applies to non-null
+-- location writes (ingest is service-role anyway).
+alter table public.analytics_snapshots
+  alter column location_id drop not null;
+
 -- Source/period are nullable (other writers of this inherited table may not set
 -- them); our ingest always sets both. CHECK allows null OR a known value.
 alter table public.analytics_snapshots

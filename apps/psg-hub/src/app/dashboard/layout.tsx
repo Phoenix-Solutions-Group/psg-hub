@@ -9,6 +9,7 @@ import { getActiveShopContext } from "@/lib/shop/context";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard/analytics", label: "Analytics" },
   { href: "/dashboard/content", label: "Content" },
   { href: "/dashboard/reviews", label: "Reviews" },
   { href: "/dashboard/ads", label: "Ads" },

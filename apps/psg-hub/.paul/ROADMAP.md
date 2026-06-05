@@ -8,7 +8,7 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 **v0.3 Customer Analytics** (v0.3.0)
 Status: 🚧 In Progress
-Phases: 0 of 4 complete
+Phases: 1 of 4 complete
 
 Turn the empty analytics surface into a unified, story-led **SEMrush + Google Ads + GA4 + GSC** marketing view, output as the automated **PSG monthly client report** (multi-LLM narrative + branded PDF). Built from the absorbed ads-dashboard canon.
 
@@ -16,7 +16,7 @@ Turn the empty analytics surface into a unified, story-led **SEMrush + Google Ad
 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
-| 9 | Analytics foundation + SEMrush | TBD | Not started | - |
+| 9 | Analytics foundation + SEMrush | 3/3 ✅ | ✅ Complete (prod activation at gate batch) | 2026-06-05 |
 | 10 | Google Ads | TBD | Not started | - |
 | 11 | GA4 + GSC | TBD | Not started | - |
 | 12 | PSG report — narrative + PDF | TBD | Not started | - |
@@ -309,10 +309,16 @@ This pass authored **08-02** + **08-04** + **08-04b** in full; all six Phase-8 p
 
 The original 3-phase plan assumed "BSM Phase 5 Google Ads data already exists, no OAuth — surface it first (fastest)." **Verified FALSE against prod `gylkkzmcmbdftxieyabw`:** the `google_ads_accounts` / `google_ads_campaigns` / `ads_api_call_log` tables **do not exist**, no source holds stored data, the ads page is a "coming soon" guard card, and no chart library is installed. The Google Ads OAuth + campaign-CRUD + GAQL-metrics code IS built but reads un-provisioned tables and pulls live per-shop (needs OAuth + a migration + a sync). Every source needs real ingest groundwork. Phases re-ordered by ascending OAuth/ingest friction; grew 3 → 4. (Same pattern as Phase 6.)
 
-### Phase 9: Analytics foundation + SEMrush
+### Phase 9: Analytics foundation + SEMrush — ✅ COMPLETE 2026-06-05 (3/3 plans)
 
 Focus: build the reusable analytics surface ONCE, proven with the lowest-friction source. Chart library (Tremor/Recharts canon — pick + brand-conform at plan time); analytics storage data model (per-shop, per-source, time-series snapshots — migration); dashboard shell with MSO cross-shop aggregate + switcher search/typeahead + LCP<2s perf gate; SEMrush ingest (account-level, **no per-shop OAuth, no Google creds**) surfaced as the organic-SEO panel. Lowest-friction real surface; buildable + locally testable without operator secrets (prod SEMrush key + any migration land at the gate batch).
-Plans: TBD (defined during /paul:plan)
+
+**Shipped:**
+- [x] 09-01: analytics data model (EXTEND pre-existing `analytics_snapshots`: source/period/synced_at + idempotency key, LOCAL-applied) + recharts@3.8.1 brand chart primitives — ✅ LOOP CLOSED 2026-06-04
+- [x] 09-02: `/dashboard/analytics` shell (per-shop + MSO aggregate + empty/loading/error + Last synced, tier-ungated) + switcher typeahead ≥8 + LCP gate (/dashboard HARD<2000ms=80ms; analytics 4000ms ceiling=84ms) + real chart render + axe AA + aggregation proof (982=491+491) — ✅ LOOP CLOSED 2026-06-05
+- [x] 09-03: SEMrush ingest — contract-correct client (fail-loud header guard, key redaction, retry+breaker) + daily idempotent sync + `analytics_sync_runs` ledger migration + CRON_SECRET-gated cron (daily 06:00 UTC) — ✅ LOOP CLOSED 2026-06-05
+
+**⚠️ OPERATOR GATE BATCH (pending — the single Phase-9 pause; nothing outward-facing happens without it):** whole-phase diff review · prod migrations ×2 under PROTOCOL (20260604000000 incl. location_id amendment + 20260605000000 sync ledger; advisor baseline+diff each) · prod secrets ×2 (`SEMRUSH_API_KEY` + `CRON_SECRET`) · `.vercel` link resolution → deploy · **first-live-run verify = real numbers on /dashboard/analytics for the 4 url-bearing shops, NOT cron-200** · visual/brand verify · commit/push psg-hub.git.
 
 ### Phase 10: Google Ads
 

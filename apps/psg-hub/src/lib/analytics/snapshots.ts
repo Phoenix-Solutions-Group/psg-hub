@@ -35,6 +35,41 @@ export async function upsertSnapshots(
   return rows.length;
 }
 
+/**
+ * Read snapshots across MANY shops (MSO aggregate view). Same contract as
+ * getSnapshots but clamps with an EXPLICIT membership-derived id list
+ * (`.in("shop_id", shopIds)`) — defense in depth on top of the RLS backstop
+ * (`shop_id IN user_shop_ids()`), mirroring the `.eq(shop_id)` page pattern.
+ * Call with the request's user-session client. [] on empty input or no data.
+ */
+export async function getSnapshotsForShops(
+  client: SupabaseClient,
+  {
+    shopIds,
+    source,
+    period,
+    from,
+    to,
+  }: Omit<GetSnapshotsArgs, "shopId"> & { shopIds: string[] }
+): Promise<AnalyticsSnapshot[]> {
+  if (shopIds.length === 0) return [];
+
+  const { data, error } = await client
+    .from(TABLE)
+    .select("*")
+    .in("shop_id", shopIds)
+    .eq("source", source)
+    .eq("period", period)
+    .gte("date", from)
+    .lte("date", to)
+    .order("date", { ascending: true });
+
+  if (error) {
+    throw new Error(`getSnapshotsForShops failed: ${error.message}`);
+  }
+  return (data ?? []) as AnalyticsSnapshot[];
+}
+
 export type GetSnapshotsArgs = {
   shopId: string;
   source: AnalyticsSource;
