@@ -179,7 +179,7 @@ PLAN ──▶ APPLY ──▶ UNIFY          (v0.2 Phase 6 / plan 06-05 — LAS
 
 ### Git State (updated 2026-06-05 after Phase 9 transition)
 - Repo: **psg-hub.git** (`github.com/Phoenix-Solutions-Group/psg-hub`) — split out of psg-internal 2026-06-04.
-- Last commit: **`2f8f237` feat(09-analytics-foundation-semrush): Phase 9 complete** (33 files: 09-02 + 09-03 src/tests/e2e/migrations + .paul docs evolved). Branch `feature/09-analytics`, **ahead of origin by 1 — NOT pushed (gate batch)**. Prior: `9f2f266` wip 09-01 (pushed).
+- Last commit: **`cb65992` feat(09-analytics-foundation-semrush): Phase 9 complete** (33 files: 09-02 + 09-03 src/tests/e2e/migrations + .paul docs evolved; SHA moved 2f8f237→cb65992 by a git-state amend — the in-commit STATE cites the pre-amend SHA, this working-copy line is canonical and rides into the gate-batch commit). Branch `feature/09-analytics`, **ahead of origin by 1 — NOT pushed (gate batch)**. Prior: `9f2f266` wip 09-01 (pushed).
 - main = v0.2 (`fc6e1cc`, tag `psg-hub-v0.2.0`). Phase-9 merge→main + push = gate-batch item 7.
 - Migrations LOCAL-only (NOT on prod): `20260604000000_analytics_snapshots.sql` (incl. location_id amendment) + `20260605000000_analytics_sync_runs.sql`.
 
@@ -502,10 +502,11 @@ From 01-01-PLAN.md:
 
 ## Session Continuity
 
-Last session: 2026-06-05 (**PHASE 9 ✅ COMPLETE** — 09-02 AND 09-03 both full PLAN→APPLY→UNIFY this session + phase transition; resumed from HANDOFF-2026-06-04, archived.)
-Stopped at: **v0.3 Phase 9 ✅ COMPLETE (3/3 loop-closed) — transition done (PROJECT/ROADMAP/STATE/paul.json evolved + phase commit on `feature/09-analytics`, LOCAL only). OPERATOR GATE BATCH PENDING — nothing outward-facing has run.** ── v0.2 ✅ LIVE (main `fc6e1cc`, tag `psg-hub-v0.2.0`, dpl_Wyi5).
-Next action: **OPERATOR GATE BATCH:** (1) review whole-phase diff on `feature/09-analytics` · (2) prod migrations ×2 (20260604000000 incl. location_id amendment + 20260605000000 sync ledger; PROTOCOL + advisor baseline/diff each) · (3) prod secrets `SEMRUSH_API_KEY` + `CRON_SECRET` · (4) `.vercel` resolution → `vercel --prod` · (5) first-live-run verify = REAL numbers on /dashboard/analytics for 4 url-bearing shops (not cron-200) · (6) visual/brand verify · (7) merge/push psg-hub.git. **Then `/paul:plan` Phase 10 (Google Ads).**
-Resume file: `.paul/phases/09-analytics-foundation-semrush/09-03-SUMMARY.md` (gate-batch checklist in its Next Phase Readiness).
+Last session: 2026-06-08 (EOD pause — `/paul:pause`. HANDOFF-2026-06-08.md written. **PHASE 9 ✅ COMPLETE; gate batch still pending — no outward-facing action taken since the 06-05 close.**)
+Stopped at: **v0.3 Phase 9 ✅ COMPLETE (3/3 loop-closed) — transition done (PROJECT/ROADMAP/STATE/paul.json evolved + phase commit `cb65992` on `feature/09-analytics`, LOCAL only, ahead of origin by 1). OPERATOR GATE BATCH PENDING — nothing outward-facing has run.** ── v0.2 ✅ LIVE (main `fc6e1cc`, tag `psg-hub-v0.2.0`, dpl_Wyi5).
+Next action: **OPERATOR GATE BATCH (resume here):** (1) review whole-phase diff on `feature/09-analytics` · (2) prod migrations ×2 (20260604000000 incl. location_id amendment + 20260605000000 sync ledger; PROTOCOL + advisor baseline/diff each) · (3) prod secrets `SEMRUSH_API_KEY` + `CRON_SECRET` · (4) `.vercel` resolution → `vercel --prod` · (5) first-live-run verify = REAL numbers on /dashboard/analytics for 4 url-bearing shops (not cron-200) · (6) visual/brand verify · (7) merge/push psg-hub.git. **Then `/paul:plan` Phase 10 (Google Ads).**
+Resume file: `.paul/HANDOFF-2026-06-08.md` (full context); gate-batch checklist also in `09-03-SUMMARY.md` Next Phase Readiness.
+Git strategy: feature/09-analytics (phase commit `cb65992` local; merge→main + push = gate-batch item 7).
 Resume context:
 - **REPO SPLIT TODAY (supersedes the 06-02 absorb note below):** psg-hub is now its OWN repo → `psg-hub.git` at `~/dev/psg/internal/psg-hub/` (app at `psg-hub/apps/psg-hub`). psg-import → `import.git`, sitemap-maker → `sitemap-maker.git`. psg-internal main `e156e5b` gitignores all three. `cd` under psg-hub → git targets psg-hub.git. `.vercel` links exist at BOTH psg-internal root and psg-hub repo → resolve at deploy gate.
 - **Phase-12 report template GONE** — `archive/local_reach-outputs` didn't survive the split; not on disk. Nick re-supplies before Phase 12 (PDF spec + data-model typed columns). Phase 9 unaffected.
