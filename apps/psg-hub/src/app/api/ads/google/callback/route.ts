@@ -133,7 +133,11 @@ export async function GET(request: Request) {
       shop_id: stateShop,
       customer_id: customerId,
       login_customer_id: loginCustomerId,
-      encrypted_refresh_token: ciphertext,
+      // bytea over PostgREST: a raw Node Buffer JSON-serializes to
+      // {"type":"Buffer","data":[...]} and is stored as that literal string, NOT
+      // the bytes (10-01 finding — the blind-built code never ran against a real
+      // DB). Send the Postgres `\x<hex>` bytea text form; client.ts decodes it.
+      encrypted_refresh_token: `\\x${ciphertext.toString("hex")}`,
       key_version: keyVersion,
       scope: tokens.scope,
       status: "linked",
