@@ -17,7 +17,7 @@ Turn the empty analytics surface into a unified, story-led **SEMrush + Google Ad
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
 | 9 | Analytics foundation + SEMrush | 3/3 ✅ | ✅ Complete (prod activation at gate batch) | 2026-06-05 |
-| 10 | Google Ads | 10-01 planned (3-plan map) | 🚧 Planning | - |
+| 10 | Google Ads | 10-01 ✅ · 10-02 ✅ · 10-03 gate batch (3-plan map) | 🚧 In Progress (2/3) | - |
 | 11 | GA4 + GSC | TBD | Not started | - |
 | 12 | PSG report — narrative + PDF | TBD | Not started | - |
 
@@ -328,8 +328,8 @@ Focus: provision the missing `google_ads_*` tables (migration); wire the already
 
 **3-plan map (Phase-9 build-local → operator-gate pattern):**
 - [ ] 10-01: provision the 4 tables + per-table RLS (membership SELECT on accounts/campaigns; default-deny on oauth_states/ads_api_call_log) LOCAL-applied + real-client schema proof of the blind-built code + flip `/dashboard/ads` to the real unlinked accounts/link surface. autonomous, ZERO prod. **PLAN created 2026-06-08, awaiting approval.**
-- [ ] 10-02: `google_ads` → `analytics_snapshots` daily ingest (`syncGoogleAdsSnapshots` mirroring SEMrush; account-level date-windowed GAQL, NOT the per-campaign LAST_30_DAYS path; only shops with a `status='linked'` account) + `GoogleAdsMetrics` type + `analytics_sync_runs` ledger + CRON_SECRET cron + paid panel on `/dashboard/analytics`.
-- [ ] 10-03 / operator gate batch: Google OAuth app credentials + secrets (`GOOGLE_OAUTH_CLIENT_ID/SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_OAUTH_REDIRECT_URI`, `GOOGLE_ADS_LOGIN_CUSTOMER_ID`, `ADS_STATE_SECRET`, `ADS_ENCRYPTION_KEY`) + prod migration + pilot-shop OAuth link + first-live-run verify.
+- [x] 10-02: `google_ads` → `analytics_snapshots` daily ingest (`syncGoogleAdsSnapshots` mirroring SEMrush; account-level date-windowed GAQL, NOT the per-campaign LAST_30_DAYS path; only shops with a `status='linked'` account) + `GoogleAdsMetrics` type + `analytics_sync_runs` ledger + CRON_SECRET cron + paid panel on `/dashboard/analytics`. **✅ LOOP CLOSED 2026-06-08** (standard/autonomous; NO migration — source CHECKs already admit google_ads; ZERO prod contact). `FROM customer` + `segments.date BETWEEN 'd' AND 'd'` (refuted `=`), micros→spend, cpl-in-code, CircuitBreaker+withRetry; `mapGoogleAdsError`→GoogleAdsFailure branch (real-tested); date=**yesterday + 7d trailing re-sync** (deviation from date=today — RESEARCH #2); MSO aggregate excludes CPL; own unlinked panel state. Gates: tsc clean · vitest 350/350 (+28) · build ✓ · playwright 19/19. AC-5 first-live-run verification deferred to 10-03. 10-02-SUMMARY.md.
+- [ ] 10-03 / operator gate batch: **PLAN created 2026-06-08, awaiting approval.** Authors `10-03-GATE-BATCH.md` — ONE ordered prod-activation runbook for the COMBINED Phase-9 + Phase-10 gate batch (one branch/one deploy ships both; nothing from either phase is activated yet). Stage 0 lead-time blockers (dev-token ≥ Explorer ~2 biz-day review · OAuth consent → In Production else 7-day adwords-token revoke) → Stage A Phase-9 SEMrush (2 migrations under PROTOCOL + `SEMRUSH_API_KEY`/`CRON_SECRET` + `vercel --prod` from repo root + first-live-run = real numbers on /dashboard/analytics for the 4 url-shops, NOT cron-200) → Stage B Phase-10 Google Ads (google_ads_tables migration + 6 Google secrets [`GOOGLE_OAUTH_CLIENT_ID/SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_OAUTH_REDIRECT_URI`, `ADS_STATE_SECRET`, `ADS_ENCRYPTION_KEY`; login_customer_id is per-account in DB] + pilot OAuth link + first-live-run = real paid metrics, single-row/non-zero/account-tz) → Stage C merge/push. Plan authors the runbook + a local commit; the operator executes (checkpoint:human-action). Loop closes on REAL NUMBERS for both sources; if Google lead-time blocks Ads, Phase 9 closes live + Google Ads = activation-pending (honest, not a defect).
 
 ### Phase 11: GA4 + GSC
 

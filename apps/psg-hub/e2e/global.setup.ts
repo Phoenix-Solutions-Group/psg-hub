@@ -107,6 +107,44 @@ async function seedSnapshots(shopId: string, days: number): Promise<void> {
   if (error) throw new Error(`[e2e] snapshot seed failed: ${error.message}`);
 }
 
+/**
+ * 10-02: deterministic daily google_ads snapshots for a shop. Spend rises by
+ * day index from `spendBase`; cpl = spend/conversions. Same idempotency key.
+ */
+async function seedGoogleAdsSnapshots(
+  shopId: string,
+  days: number,
+  spendBase: number
+): Promise<void> {
+  const end = new Date(`${SNAPSHOT_END_DATE}T00:00:00Z`).getTime();
+  const rows = Array.from({ length: days }, (_, i) => {
+    const d = new Date(end - (days - 1 - i) * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const spend = spendBase + i;
+    const conversions = 5 + i;
+    return {
+      shop_id: shopId,
+      source: "google_ads",
+      date: d,
+      period: "daily",
+      synced_at: SNAPSHOT_SYNCED_AT,
+      metrics: {
+        spend,
+        clicks: 50 + i,
+        impressions: 1000 + i * 10,
+        conversions,
+        cpl: spend / conversions,
+        cost_micros: spend * 1_000_000,
+      },
+    };
+  });
+  const { error } = await admin
+    .from("analytics_snapshots")
+    .upsert(rows, { onConflict: "shop_id,source,date,period" });
+  if (error) throw new Error(`[e2e] google_ads snapshot seed failed: ${error.message}`);
+}
+
 async function ensureCustomerRole(userId: string): Promise<void> {
   const { data: existing } = await admin
     .from("app_user_roles")
@@ -184,6 +222,13 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
   await seedSnapshots(ownerShopId, 30);
   await seedSnapshots(shopAId, 14);
   await seedSnapshots(shopBId, 14);
+
+  // 10-02: paid (google_ads) snapshots for OWNER + the MULTI shops. MEGA is left
+  // WITHOUT a paid source on purpose — drives the "No Google Ads account linked"
+  // unlinked-state assertion. Aggregate spend on the latest day = 113 + 213 = 326.
+  await seedGoogleAdsSnapshots(ownerShopId, 30, 100);
+  await seedGoogleAdsSnapshots(shopAId, 14, 100);
+  await seedGoogleAdsSnapshots(shopBId, 14, 200);
 
   // 2. Real UI login per role -> persist @supabase/ssr cookies as storageState.
   for (const fx of [

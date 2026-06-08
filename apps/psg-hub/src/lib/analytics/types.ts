@@ -51,6 +51,23 @@ export type SemrushMetrics = {
   };
 };
 
+/**
+ * Google Ads paid-marketing `metrics` shape — Phase 10 / 10-02. One row per
+ * (shop, date) account-level daily total. `spend = cost_micros / 1_000_000`;
+ * `cpl = spend / conversions` (null on zero conversions — true "no data", not a
+ * real 0). `cost_micros` retained raw for audit. NOTE: cpl is a RATIO — never
+ * surface it from a cross-shop aggregate (a summed ratio lies; the page excludes
+ * it from the MSO KPIs, mirroring authority_score).
+ */
+export type GoogleAdsMetrics = {
+  spend: number; // USD
+  clicks: number; // INT64
+  impressions: number; // INT64
+  conversions: number; // DOUBLE (can be fractional)
+  cpl: number | null; // spend / conversions, null when conversions = 0
+  cost_micros: number; // raw, for audit
+};
+
 /** Ingest audit ledger row (public.analytics_sync_runs). */
 export type AnalyticsSyncRun = {
   id: string;
