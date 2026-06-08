@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { shopHasTier } from "@/lib/tier/gate";
 import { TierGateCard } from "./tier-gate-card";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AccountsTable } from "./accounts-table";
+import type { ShopRole } from "@/lib/ads/view-state";
 
 type Props = {
   searchParams: Promise<{ shop_id?: string }>;
@@ -52,31 +52,33 @@ export default async function AdsPage({ searchParams }: Props) {
     return <TierGateCard />;
   }
 
-  // Shop name for the "coming soon" copy below.
-  const service = createServiceClient();
-  const { data: shop } = await service
-    .from("shops")
-    .select("id, name")
-    .eq("id", shopId)
-    .maybeSingle();
+  // Phase 10 / 10-01: the Google Ads tables are now provisioned (migration
+  // 20260608000000), so surface the real accounts state. Read via the
+  // user-session client — RLS (google_ads_accounts_select: shop_id IN
+  // user_shop_ids()) clamps tenancy. An unlinked shop gets the empty state +
+  // "Link Google Ads" CTA from <AccountsTable>. Campaign metrics ingest + the
+  // campaign management view land in 10-02; campaign MUTATION stays out of scope
+  // (v1.2 Ads Mutation Studio, D52/D66 — Python on Vercel Sandbox).
+  const { data: accounts } = await supabase
+    .from("google_ads_accounts")
+    .select("id, customer_id, status, linked_at, last_error")
+    .eq("shop_id", shopId)
+    .order("linked_at", { ascending: false });
 
-  // Tier passed. Google Ads analytics (accounts, campaigns, metrics) is deferred to
-  // v0.3 — the underlying ad-platform tables are not yet provisioned. Guard the surface
-  // so a tiered shop sees a clear "coming soon" state instead of a phantom-table error.
   return (
     <div className="space-y-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>Google Ads</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">
-            Google Ads analytics and campaign management arrive in a later
-            release for {shop?.name ?? "your shop"}. Your subscription already
-            includes this; we will enable it here when it ships.
-          </p>
-        </CardContent>
-      </Card>
+      <div>
+        <h1 className="text-lg font-semibold">Google Ads</h1>
+        <p className="text-sm text-muted-foreground">
+          Connect your Google Ads account to bring paid performance into your
+          analytics.
+        </p>
+      </div>
+      <AccountsTable
+        accounts={accounts ?? []}
+        shopId={shopId}
+        userRole={membership.role as ShopRole}
+      />
     </div>
   );
 }

@@ -150,10 +150,16 @@ export async function getGoogleAdsClient(
     throw new AdsApiError("auth_failed", "No linked Google Ads account");
   }
 
+  // bytea round-trips as a Postgres `\x<hex>` text string over PostgREST (NOT a
+  // Buffer). Decode that form; keep the Buffer + ArrayBuffer fallbacks for other
+  // transports/tests. (10-01: the write side now stores `\x<hex>` from callback.)
+  const rawTok = row.encrypted_refresh_token as unknown;
   const ct =
-    row.encrypted_refresh_token instanceof Buffer
-      ? row.encrypted_refresh_token
-      : Buffer.from(row.encrypted_refresh_token as ArrayBufferLike);
+    rawTok instanceof Buffer
+      ? rawTok
+      : typeof rawTok === "string" && rawTok.startsWith("\\x")
+        ? Buffer.from(rawTok.slice(2), "hex")
+        : Buffer.from(rawTok as ArrayBufferLike);
 
   let refreshToken: string;
   try {

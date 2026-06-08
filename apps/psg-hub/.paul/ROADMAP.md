@@ -17,7 +17,7 @@ Turn the empty analytics surface into a unified, story-led **SEMrush + Google Ad
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
 | 9 | Analytics foundation + SEMrush | 3/3 ✅ | ✅ Complete (prod activation at gate batch) | 2026-06-05 |
-| 10 | Google Ads | TBD | Not started | - |
+| 10 | Google Ads | 10-01 planned (3-plan map) | 🚧 Planning | - |
 | 11 | GA4 + GSC | TBD | Not started | - |
 | 12 | PSG report — narrative + PDF | TBD | Not started | - |
 
@@ -323,7 +323,13 @@ Focus: build the reusable analytics surface ONCE, proven with the lowest-frictio
 ### Phase 10: Google Ads
 
 Focus: provision the missing `google_ads_*` tables (migration); wire the already-built OAuth-link + metrics-sync code; surface paid metrics (spend, clicks, conversions, CPL) into the Phase-9 shell. Needs operator: Google OAuth app credentials + a pilot-shop link.
-Plans: TBD (defined during /paul:plan)
+
+**Grounding (2026-06-08, /paul:plan):** the Google Ads OAuth/client/campaigns lib + 7 API routes + the full `/dashboard/ads` UI are ALREADY BUILT, but read 4 tables absent from prod AND every migration AND the remote_schema dump: `google_ads_accounts`, `google_ads_campaigns`, `google_ads_oauth_states`, `ads_api_call_log`. **Encryption decision (operator):** refresh tokens use the built app-key AES-256-GCM (`encrypted_refresh_token bytea` + `key_version`), NOT pgsodium — recorded deviation from the PROJECT constraint; Phase 11 inherits the choice. **Scope boundary:** Phase 10 = read/link/ingest/display only; campaign MUTATION (createCampaign/updateCampaign) stays out (v1.2 Ads Mutation Studio; D52/D66 route Google Ads writes through Python on Vercel Sandbox).
+
+**3-plan map (Phase-9 build-local → operator-gate pattern):**
+- [ ] 10-01: provision the 4 tables + per-table RLS (membership SELECT on accounts/campaigns; default-deny on oauth_states/ads_api_call_log) LOCAL-applied + real-client schema proof of the blind-built code + flip `/dashboard/ads` to the real unlinked accounts/link surface. autonomous, ZERO prod. **PLAN created 2026-06-08, awaiting approval.**
+- [ ] 10-02: `google_ads` → `analytics_snapshots` daily ingest (`syncGoogleAdsSnapshots` mirroring SEMrush; account-level date-windowed GAQL, NOT the per-campaign LAST_30_DAYS path; only shops with a `status='linked'` account) + `GoogleAdsMetrics` type + `analytics_sync_runs` ledger + CRON_SECRET cron + paid panel on `/dashboard/analytics`.
+- [ ] 10-03 / operator gate batch: Google OAuth app credentials + secrets (`GOOGLE_OAUTH_CLIENT_ID/SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_OAUTH_REDIRECT_URI`, `GOOGLE_ADS_LOGIN_CUSTOMER_ID`, `ADS_STATE_SECRET`, `ADS_ENCRYPTION_KEY`) + prod migration + pilot-shop OAuth link + first-live-run verify.
 
 ### Phase 11: GA4 + GSC
 
