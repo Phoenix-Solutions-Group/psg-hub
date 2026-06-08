@@ -1,5 +1,5 @@
 import "server-only";
-import { GoogleAdsApi } from "google-ads-api";
+import { GoogleAdsApi, errors as googleAdsErrors } from "google-ads-api";
 import { createServiceClient } from "@/lib/supabase/service";
 import { decryptRefreshToken } from "./crypto";
 import { sanitizeLastError } from "./sanitize";
@@ -93,7 +93,32 @@ export async function logAdsCall(entry: LogAdsCallInput): Promise<void> {
 }
 
 export function mapGoogleAdsError(err: unknown): AdsApiError {
+  // 10-02: real GAQL failures are `GoogleAdsFailure` objects (NOT instanceof
+  // Error), so the substring fallback below misses them and they degrade to a
+  // generic `upstream` that stringifies as `[object Object]`. Branch on the
+  // structured failure FIRST and classify by the first error's `error_code`
+  // oneof key — the per-shop `auth_failed` skip in the ingest depends on this.
+  if (err instanceof googleAdsErrors.GoogleAdsFailure) {
+    const first = err.errors?.[0];
+    const codeKey = first?.error_code
+      ? (Object.keys(first.error_code)[0] ?? "")
+      : "";
+    const msg = sanitizeLastError(first?.message ?? "Google Ads request failed");
+    if (codeKey.includes("authentication") || codeKey.includes("authorization")) {
+      return new AdsApiError("auth_failed", msg);
+    }
+    if (codeKey.includes("quota") || codeKey.includes("rate")) {
+      return new AdsApiError("rate_limited", msg);
+    }
+    if (codeKey.includes("request") || codeKey.includes("query")) {
+      return new AdsApiError("bad_request", msg);
+    }
+    return new AdsApiError("upstream", msg);
+  }
+
   // google-ads-api throws errors with varying shapes; normalize.
+  // Fallback for non-Failure throws (e.g. OAuth `invalid_grant` from the token
+  // refresh, network/timeout) — kept as the string-match path.
   const raw = err instanceof Error ? err.message : String(err);
   const lower = raw.toLowerCase();
   if (lower.includes("quota") || lower.includes("rate")) {
