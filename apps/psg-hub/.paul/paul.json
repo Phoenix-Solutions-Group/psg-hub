@@ -7,13 +7,13 @@
     "status": "in_progress"
   },
   "phase": {
-    "number": 10,
-    "name": "Google Ads",
-    "status": "complete"
+    "number": 11,
+    "name": "GA4 + GSC",
+    "status": "in_progress"
   },
   "loop": {
-    "plan": null,
-    "position": "IDLE"
+    "plan": "11-01",
+    "position": "PLAN"
   },
   "timestamps": {
     "created_at": "2026-05-29T00:00:00Z",
