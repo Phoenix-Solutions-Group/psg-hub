@@ -14,7 +14,7 @@ function esc(s: string): string {
 function page(body: string, status: number): Response {
   return new Response(
     `<!doctype html><html><head><title>Google Ads</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;padding:2rem;max-width:32rem;margin:0 auto;">${body}</body></html>`,
-    { status, headers: { "content-type": "text/html" } }
+    { status, headers: { "content-type": "text/html; charset=utf-8" } }
   );
 }
 
