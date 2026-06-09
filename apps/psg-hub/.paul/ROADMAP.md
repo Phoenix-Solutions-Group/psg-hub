@@ -18,7 +18,7 @@ Turn the empty analytics surface into a unified, story-led **SEMrush + Google Ad
 |-------|------|-------|--------|-----------|
 | 9 | Analytics foundation + SEMrush | 3/3 ✅ | ✅ Complete + LIVE on prod (real numbers, 4 url-shops; activated 2026-06-09) | 2026-06-05 |
 | 10 | Google Ads | 10-01 ✅ · 10-02 ✅ · 10-03 ✅ (gate batch executed live) · 10-04 ✅ (MCC account-selection) | ✅ Complete + LIVE on prod (Wallace pilot real paid numbers) | 2026-06-09 |
-| 11 | GA4 + GSC | TBD | Not started | - |
+| 11 | GA4 + GSC | 11-01 foundation (planned) · 11-02 GA4 · 11-03 GSC (3-plan map) | 🔵 Planning (RESEARCH.md ✅ ultracode wf_b732175b-025; 11-01-PLAN created) | - |
 | 12 | PSG report — narrative + PDF | TBD | Not started | - |
 
 v0.2 Customer MVP (v0.2.0) ✅ COMPLETE 2026-06-04 (3/3 phases; see Completed Milestones).

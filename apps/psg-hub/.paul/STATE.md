@@ -31,6 +31,12 @@ Progress:
 ## Loop Position
 
 ```
+PLAN ──▶ APPLY ──▶ UNIFY          (v0.3 Phase 11 / plan 11-01 — PLAN created, awaiting approval)
+  ✓        ○        ○     [11-01 PLAN created 2026-06-09 — Shared Google OAuth foundation for GA4+GSC: ONE combined-scope consent (analytics.readonly + webmasters.readonly = one refresh token, both APIs — adversarially confirmed), dual-source enumeration (GA4 Admin accountSummaries.list + GSC sites.list), the 10-04 two-step picker, persisted as 2 rows in a NEW generic google_oauth_accounts table sharing one encrypted token. 2 new migrations (google_oauth_accounts + google_oauth_pending_states, LOCAL only) — analytics_snapshots/sync_runs source CHECK ALREADY admits ga4/gsc (zero churn). Parameterized clone of google-ads/oauth.ts (SCOPE+redirect generalized; Ads flow untouched). Crypto = reused ADS_ENCRYPTION_KEY AES-GCM (NOT pgsodium — the operator-approved 10-01 deviation the migration binds to Phase 11; reconciles ROADMAP). 3 tasks; autonomous (build local + test-gated; live link = Phase-11 gate batch). RESEARCH-first gate ✅ (11-ga4-gsc/RESEARCH.md, ultracode Workflow wf_b732175b-025, 17 agents, adversarially validated; 3 UNVERIFIED items flagged: gax authClient injection, GSC dataState default, sc-domain encoding → isolated/smoke-tested at activation). Phase = 3-plan map (11-01 foundation · 11-02 GA4 ingest+panel · 11-03 GSC ingest+panel). Next: review/approve → /paul:apply 11-01.]
+```
+
+Prior loop:
+```
 PLAN ──▶ APPLY ──▶ UNIFY          (v0.3 Phase 10 — UNIFY ✓ LOOP CLOSED; Phase 10 ✅ COMPLETE)
   ✓        ✓        ✓     [10-03 + 10-04 ✅ LOOP CLOSED 2026-06-09 — gate batch EXECUTED LIVE (Claude-driven, operator-gated). Both SEMrush (Phase 9) + Google Ads (Phase 10) live on REAL numbers. 3 gate-batch migrations + the 10-04 pending-cols migration applied under PROTOCOL (advisor diffs clean). 10-04 MCC account-selection shipped (callback customer_client enumeration + picker + /api/ads/google/select + migration; tsc/lint/vitest 372/build green). Wallace linked (customer_id 6048611995 / login_customer_id MCC 6935795509); google-ads cron synced:7 → real paid metrics. Merged feature/09-analytics → main + pushed (origin/main d0ea613). 10-03-SUMMARY + 10-04-SUMMARY written. Phase 10 ✅ COMPLETE (10-01/02/03 + 10-04 scope add). Milestone v0.3 = 2 of 4 phases. Next: /paul:plan Phase 11 (GA4 + GSC).]
 ```
