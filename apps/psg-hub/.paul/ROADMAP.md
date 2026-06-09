@@ -18,7 +18,7 @@ Turn the empty analytics surface into a unified, story-led **SEMrush + Google Ad
 |-------|------|-------|--------|-----------|
 | 9 | Analytics foundation + SEMrush | 3/3 ✅ | ✅ Complete + LIVE on prod (real numbers, 4 url-shops; activated 2026-06-09) | 2026-06-05 |
 | 10 | Google Ads | 10-01 ✅ · 10-02 ✅ · 10-03 ✅ (gate batch executed live) · 10-04 ✅ (MCC account-selection) | ✅ Complete + LIVE on prod (Wallace pilot real paid numbers) | 2026-06-09 |
-| 11 | GA4 + GSC | 11-01 foundation (planned) · 11-02 GA4 · 11-03 GSC (3-plan map) | 🔵 Planning (RESEARCH.md ✅ ultracode wf_b732175b-025; 11-01-PLAN created) | - |
+| 11 | GA4 + GSC | 11-01 foundation ✅ · 11-02 GA4 ingest ✅ LOOP CLOSED · 11-03 GSC (planned) | 🚧 In Progress (2/3; RESEARCH.md ✅ ultracode wf_b732175b-025) | - |
 | 12 | PSG report — narrative + PDF | TBD | Not started | - |
 
 v0.2 Customer MVP (v0.2.0) ✅ COMPLETE 2026-06-04 (3/3 phases; see Completed Milestones).
@@ -333,8 +333,12 @@ Focus: provision the missing `google_ads_*` tables (migration); wire the already
 
 ### Phase 11: GA4 + GSC
 
-Focus: new per-shop admin-driven Google OAuth for the Analytics Data API (GA4) + Search Console API (GSC) — distinct scopes, not yet built; ingest + surface (traffic, sessions, channels; rankings, impressions, queries). OAuth refresh tokens encrypted at rest (pgsodium). Heaviest groundwork.
-Plans: TBD (defined during /paul:plan)
+Focus: new per-shop admin-driven Google OAuth for the Analytics Data API (GA4) + Search Console API (GSC) — distinct scopes; ingest + surface (traffic, sessions, key events; clicks, impressions, position). Refresh tokens encrypted at rest with the inherited AES-256-GCM app-key (ADS_ENCRYPTION_KEY), NOT pgsodium — recorded Phase-10 deviation Phase 11 inherits (RESEARCH reconciliation). Heaviest groundwork. **RESEARCH.md ✅ (ultracode wf_b732175b-025).**
+
+**3-plan map (foundation → per-source ingest, mirrors the Phase-9/10 build-local → operator-gate pattern):**
+- [x] 11-01: shared Google OAuth foundation — one combined-scope consent (`analytics.readonly` + `webmasters.readonly`) → one refresh token → enumerate GA4 properties + GSC sites → pick one of each → two `google_oauth_accounts` rows share one encrypted token. 2 NEW tables (LOCAL), parameterized state machine, 3 link routes, link button. **✅ LOOP CLOSED 2026-06-09** (6/6 ACs; tsc/vitest 421/build/playwright 24; ZERO prod contact). 11-01-SUMMARY.md.
+- [x] 11-02: GA4 daily ingest — linked `ga4` account → decrypt → `BetaAnalyticsDataClient` (gax authClient) → ONE trailing-window `runReport` per property (dimensions=[date], `keyEvents` as conversions, GA4_RESYNC_DAYS=3) → `Map<date,Ga4Metrics>` → one `analytics_snapshots` row/day (source='ga4') + ledger + CRON_SECRET cron (30 6) + additive "Website traffic" panel; shared `getLinkedAccount`/`markAccountError` (GSC 11-03 reuses). **✅ LOOP CLOSED 2026-06-09** (standard/autonomous; NO migration — CHECK admits ga4; NO new dep — 11-01 installed; ZERO prod contact). GA4 contract traps encoded (keyEvents-not-conversions · YYYYMMDD→ISO · string-coerce · header-indexed · sampling/quota logged); deterministic 1-row-per-shop (multi-property deferred, mirrors the ads snapshot-key decision); cron creds = OAuth id/secret+redirect (NO dev token) + runtime=nodejs. Gates: tsc 0 · vitest 444/444 (+23) · build ✓ · playwright 27/27. LIVE runReport + authClient smoke = Phase-11 gate batch (⭐ Wallace GA4 access now available). 11-02-SUMMARY.md.
+- [ ] 11-03: GSC ingest — `sites.list`/`searchanalytics.query` (clicks/impressions/ctr/position; PT dates, wider resync window for the longer lag) + additive panel, reusing the 11-02 orchestrator/cron/account-read pattern. Planned.
 
 ### Phase 12: PSG report — narrative + PDF
 

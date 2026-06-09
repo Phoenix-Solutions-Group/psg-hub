@@ -23,6 +23,7 @@ import {
   Sparkline,
 } from "@/components/analytics/charts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LinkGoogleButton } from "./link-google-button";
 
 // 09-02: the v0.3 analytics surface. Source-agnostic shell — SEMrush (09-03) is
 // the first source; Google Ads / GA4 / GSC panels plug into the same snapshot
@@ -68,6 +69,25 @@ const PAID_AGGREGATE_KPIS = [
   { key: "conversions", label: "Conversions" },
 ] as const;
 
+/** GA4 website-traffic KPIs — Phase 11 / 11-02. */
+const GA4_SOURCE = "ga4" as const;
+const GA4_KPIS = [
+  { key: "sessions", label: "Sessions" },
+  { key: "total_users", label: "Users" },
+  { key: "key_events", label: "Key events" },
+  { key: "engagement_rate", label: "Engagement rate" },
+] as const;
+/**
+ * Aggregate GA4 view DROPS engagement_rate — a summed ratio lies (same reason the
+ * organic aggregate drops authority_score and paid drops cpl). Sessions/users/
+ * key_events sum honestly; engagement_rate is per-shop only.
+ */
+const GA4_AGGREGATE_KPIS = [
+  { key: "sessions", label: "Sessions" },
+  { key: "total_users", label: "Users" },
+  { key: "key_events", label: "Key events" },
+] as const;
+
 type Props = {
   searchParams: Promise<{ scope?: string }>;
 };
@@ -95,6 +115,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const scopeAll = params.scope === "all" && shops.length > 1;
   const activeShopName =
     shops.find((s) => s.id === activeShopId)?.name || "Your shop";
+  // 11-01: the GA4 + GSC link is owner-only (the authorize route also enforces it).
+  const activeRole =
+    shops.find((s) => s.id === activeShopId)?.role ?? "viewer";
 
   // Date window: trailing 30 days. Clock read lives in trailingWindow (server
   // helper) — client islands receive plain props so hydration stays deterministic.
@@ -158,6 +181,37 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     value: p.value,
   }));
   const conversionsSeries = toSeries(paidRows, "conversions").map((p) => ({
+    date: formatShortDate(p.date),
+    value: p.value,
+  }));
+
+  // GA4 website traffic (11-02) — same source-agnostic snapshot read, source='ga4'.
+  // Own unlinked state below; the organic + paid blocks above are untouched.
+  const gaSnapshots = scopeAll
+    ? await getSnapshotsForShops(supabase, {
+        shopIds: shops.map((s) => s.id),
+        source: GA4_SOURCE,
+        period: PERIOD,
+        from,
+        to,
+      })
+    : await getSnapshots(supabase, {
+        shopId: activeShopId,
+        source: GA4_SOURCE,
+        period: PERIOD,
+        from,
+        to,
+      });
+  const gaRows: DatedMetrics[] = scopeAll
+    ? aggregateByDate(gaSnapshots)
+    : gaSnapshots;
+  const gaLatest = latestSnapshot(gaRows);
+  const gaKpis = scopeAll ? GA4_AGGREGATE_KPIS : GA4_KPIS;
+  const sessionsSeries = toSeries(gaRows, "sessions").map((p) => ({
+    date: formatShortDate(p.date),
+    value: p.value,
+  }));
+  const keyEventsSeries = toSeries(gaRows, "key_events").map((p) => ({
     date: formatShortDate(p.date),
     value: p.value,
   }));
@@ -358,6 +412,110 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </>
         )}
       </section>
+
+      <section aria-labelledby="traffic-heading" className="space-y-4">
+        <h2
+          id="traffic-heading"
+          className="font-heading text-lg font-semibold tracking-tight"
+        >
+          Website traffic
+        </h2>
+
+        {gaRows.length === 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>No Google Analytics property linked</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-muted-foreground">
+                Connect a Google Analytics property to see sessions, users, key
+                events, and engagement alongside your search and paid performance.
+              </p>
+              <Link
+                href="/dashboard/analytics"
+                className="inline-block font-heading text-sm font-medium text-primary hover:underline"
+              >
+                Connect Google Analytics
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {gaKpis.map((kpi) => {
+                const raw = gaLatest?.metrics[kpi.key];
+                const value =
+                  typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+                return (
+                  <Card key={kpi.key}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        {kpi.label}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold tracking-tight">
+                        {value === null ? "—" : formatNumber(value)}
+                      </p>
+                      <div className="mt-2">
+                        <Sparkline
+                          data={toSeries(gaRows, kpi.key)}
+                          dataKey="value"
+                          ariaLabel={`${kpi.label}, last ${WINDOW_DAYS} days`}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <LineChartCard
+                title="Sessions"
+                caption={`Daily website sessions, trailing ${WINDOW_DAYS} days.`}
+                data={sessionsSeries}
+                dataKey="value"
+                xKey="date"
+                ariaLabel={`Website sessions over the last ${WINDOW_DAYS} days`}
+              />
+              <BarChartCard
+                title="Key events"
+                caption="Daily key events (conversions) tracked in Google Analytics."
+                data={keyEventsSeries}
+                dataKey="value"
+                xKey="date"
+                ariaLabel={`Key events over the last ${WINDOW_DAYS} days`}
+                color="var(--chart-2)"
+              />
+            </div>
+          </>
+        )}
+      </section>
+
+      {activeRole === "owner" ? (
+        <section aria-labelledby="connect-google-heading" className="space-y-4">
+          <h2
+            id="connect-google-heading"
+            className="font-heading text-lg font-semibold tracking-tight"
+          >
+            Connect more sources
+          </h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>Google Analytics &amp; Search Console</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-muted-foreground">
+                Link this shop&rsquo;s Google account once to add organic traffic,
+                engagement, and search performance to your analytics. One sign-in
+                covers both Google Analytics and Search Console.
+              </p>
+              <LinkGoogleButton shopId={activeShopId} userRole={activeRole} />
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
     </div>
   );
 }

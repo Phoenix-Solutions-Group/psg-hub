@@ -14,6 +14,10 @@ process.env.GOOGLE_OAUTH_CLIENT_ID = "test-client-id";
 process.env.GOOGLE_OAUTH_CLIENT_SECRET = "test-client-secret";
 process.env.GOOGLE_ADS_OAUTH_REDIRECT_URI =
   "https://test.example.com/api/ads/google/callback";
+// Phase 11 (GA4 + GSC): the one new env this flow adds (the combined-consent
+// redirect). Reuses GOOGLE_OAUTH_CLIENT_ID/SECRET + ADS_STATE_SECRET + ADS_ENCRYPTION_KEY.
+process.env.GOOGLE_ANALYTICS_OAUTH_REDIRECT_URI =
+  "https://test.example.com/api/analytics/google/callback";
 process.env.GOOGLE_ADS_DEVELOPER_TOKEN = "test-developer-token";
 process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID = "1234567890";
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";

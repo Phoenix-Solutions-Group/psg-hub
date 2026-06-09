@@ -68,6 +68,23 @@ export type GoogleAdsMetrics = {
   cost_micros: number; // raw, for audit
 };
 
+/**
+ * GA4 website-traffic `metrics` shape — Phase 11 / 11-02. One row per (shop, date)
+ * account-level daily total from a single runReport (dimensions=[date]). `key_events`
+ * is the 2024 conversions rename (NOT the deprecated `conversions`). NOTE:
+ * engagement_rate is a RATIO (0..1) — never surface it from a cross-shop aggregate
+ * (a summed ratio lies; the page excludes it from the MSO KPIs, like cpl/authority_score).
+ */
+export type Ga4Metrics = {
+  sessions: number;
+  total_users: number;
+  active_users: number;
+  new_users: number;
+  engaged_sessions: number;
+  key_events: number; // conversions (keyEvents — the 2024 rename)
+  engagement_rate: number; // 0..1 ratio — aggregate-excluded
+};
+
 /** Ingest audit ledger row (public.analytics_sync_runs). */
 export type AnalyticsSyncRun = {
   id: string;
