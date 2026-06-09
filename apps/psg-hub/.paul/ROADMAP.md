@@ -8,7 +8,7 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 **v0.3 Customer Analytics** (v0.3.0)
 Status: 🚧 In Progress
-Phases: 1 of 4 complete
+Phases: 2 of 4 complete
 
 Turn the empty analytics surface into a unified, story-led **SEMrush + Google Ads + GA4 + GSC** marketing view, output as the automated **PSG monthly client report** (multi-LLM narrative + branded PDF). Built from the absorbed ads-dashboard canon.
 
@@ -16,8 +16,8 @@ Turn the empty analytics surface into a unified, story-led **SEMrush + Google Ad
 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
-| 9 | Analytics foundation + SEMrush | 3/3 ✅ | ✅ Complete (prod activation at gate batch) | 2026-06-05 |
-| 10 | Google Ads | 10-01 ✅ · 10-02 ✅ · 10-03 gate batch (3-plan map) | 🚧 In Progress (2/3) | - |
+| 9 | Analytics foundation + SEMrush | 3/3 ✅ | ✅ Complete + LIVE on prod (real numbers, 4 url-shops; activated 2026-06-09) | 2026-06-05 |
+| 10 | Google Ads | 10-01 ✅ · 10-02 ✅ · 10-03 ✅ (gate batch executed live) · 10-04 ✅ (MCC account-selection) | ✅ Complete + LIVE on prod (Wallace pilot real paid numbers) | 2026-06-09 |
 | 11 | GA4 + GSC | TBD | Not started | - |
 | 12 | PSG report — narrative + PDF | TBD | Not started | - |
 
