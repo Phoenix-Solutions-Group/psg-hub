@@ -184,6 +184,42 @@ async function seedGa4Snapshots(
   if (error) throw new Error(`[e2e] ga4 snapshot seed failed: ${error.message}`);
 }
 
+/**
+ * 11-03: deterministic daily gsc snapshots for a shop. Clicks rise by 2 per day
+ * index from `clicksBase`; ctr + position are constant ratios/averages
+ * (aggregate-excluded). Same idempotency key.
+ */
+async function seedGscSnapshots(
+  shopId: string,
+  days: number,
+  clicksBase: number
+): Promise<void> {
+  const end = new Date(`${SNAPSHOT_END_DATE}T00:00:00Z`).getTime();
+  const rows = Array.from({ length: days }, (_, i) => {
+    const d = new Date(end - (days - 1 - i) * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const clicks = clicksBase + i * 2;
+    return {
+      shop_id: shopId,
+      source: "gsc",
+      date: d,
+      period: "daily",
+      synced_at: SNAPSHOT_SYNCED_AT,
+      metrics: {
+        clicks,
+        impressions: clicks * 12,
+        ctr: 0.08,
+        position: 9.5,
+      },
+    };
+  });
+  const { error } = await admin
+    .from("analytics_snapshots")
+    .upsert(rows, { onConflict: "shop_id,source,date,period" });
+  if (error) throw new Error(`[e2e] gsc snapshot seed failed: ${error.message}`);
+}
+
 async function ensureCustomerRole(userId: string): Promise<void> {
   const { data: existing } = await admin
     .from("app_user_roles")
@@ -276,6 +312,14 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
   await seedGa4Snapshots(ownerShopId, 30, 500);
   await seedGa4Snapshots(shopAId, 14, 500);
   await seedGa4Snapshots(shopBId, 14, 800);
+
+  // 11-03: gsc (search performance) snapshots for OWNER + the MULTI shops. MEGA is
+  // left WITHOUT a gsc source on purpose — drives the "No Google Search Console site
+  // linked" unlinked-state assertion. Latest-day clicks: OWNER 200+29*2=258, A
+  // 200+13*2=226, B 400+13*2=426; aggregate A+B = 652.
+  await seedGscSnapshots(ownerShopId, 30, 200);
+  await seedGscSnapshots(shopAId, 14, 200);
+  await seedGscSnapshots(shopBId, 14, 400);
 
   // 2. Real UI login per role -> persist @supabase/ssr cookies as storageState.
   for (const fx of [
