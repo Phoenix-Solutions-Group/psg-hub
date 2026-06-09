@@ -145,6 +145,45 @@ async function seedGoogleAdsSnapshots(
   if (error) throw new Error(`[e2e] google_ads snapshot seed failed: ${error.message}`);
 }
 
+/**
+ * 11-02: deterministic daily ga4 snapshots for a shop. Sessions rise by day index
+ * from `sessionsBase`; engagement_rate is a constant ratio (aggregate-excluded).
+ * Same idempotency key.
+ */
+async function seedGa4Snapshots(
+  shopId: string,
+  days: number,
+  sessionsBase: number
+): Promise<void> {
+  const end = new Date(`${SNAPSHOT_END_DATE}T00:00:00Z`).getTime();
+  const rows = Array.from({ length: days }, (_, i) => {
+    const d = new Date(end - (days - 1 - i) * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const sessions = sessionsBase + i * 5;
+    return {
+      shop_id: shopId,
+      source: "ga4",
+      date: d,
+      period: "daily",
+      synced_at: SNAPSHOT_SYNCED_AT,
+      metrics: {
+        sessions,
+        total_users: sessions - 10,
+        active_users: sessions - 20,
+        new_users: 20 + i,
+        engaged_sessions: sessions - 30,
+        key_events: 3 + i,
+        engagement_rate: 0.6,
+      },
+    };
+  });
+  const { error } = await admin
+    .from("analytics_snapshots")
+    .upsert(rows, { onConflict: "shop_id,source,date,period" });
+  if (error) throw new Error(`[e2e] ga4 snapshot seed failed: ${error.message}`);
+}
+
 async function ensureCustomerRole(userId: string): Promise<void> {
   const { data: existing } = await admin
     .from("app_user_roles")
@@ -229,6 +268,14 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
   await seedGoogleAdsSnapshots(ownerShopId, 30, 100);
   await seedGoogleAdsSnapshots(shopAId, 14, 100);
   await seedGoogleAdsSnapshots(shopBId, 14, 200);
+
+  // 11-02: ga4 (website traffic) snapshots for OWNER + the MULTI shops. MEGA is
+  // left WITHOUT a ga4 source on purpose — drives the "No Google Analytics
+  // property linked" unlinked-state assertion. Latest-day sessions: OWNER
+  // 500+29*5=645, A 500+13*5=565, B 800+13*5=865; aggregate A+B = 1430.
+  await seedGa4Snapshots(ownerShopId, 30, 500);
+  await seedGa4Snapshots(shopAId, 14, 500);
+  await seedGa4Snapshots(shopBId, 14, 800);
 
   // 2. Real UI login per role -> persist @supabase/ssr cookies as storageState.
   for (const fx of [
