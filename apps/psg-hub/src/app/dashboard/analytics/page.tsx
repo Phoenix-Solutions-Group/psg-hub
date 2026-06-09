@@ -88,6 +88,25 @@ const GA4_AGGREGATE_KPIS = [
   { key: "key_events", label: "Key events" },
 ] as const;
 
+/** GSC search-performance KPIs — Phase 11 / 11-03. */
+const GSC_SOURCE = "gsc" as const;
+const GSC_KPIS = [
+  { key: "clicks", label: "Clicks" },
+  { key: "impressions", label: "Impressions" },
+  { key: "ctr", label: "CTR" },
+  { key: "position", label: "Avg. position" },
+] as const;
+/**
+ * Aggregate GSC view DROPS BOTH ctr AND position — both are ratios/averages, and a
+ * summed ratio lies (same reason the organic aggregate drops authority_score, paid
+ * drops cpl, GA4 drops engagement_rate). clicks/impressions sum honestly; ctr and
+ * position are per-shop only.
+ */
+const GSC_AGGREGATE_KPIS = [
+  { key: "clicks", label: "Clicks" },
+  { key: "impressions", label: "Impressions" },
+] as const;
+
 type Props = {
   searchParams: Promise<{ scope?: string }>;
 };
@@ -212,6 +231,37 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     value: p.value,
   }));
   const keyEventsSeries = toSeries(gaRows, "key_events").map((p) => ({
+    date: formatShortDate(p.date),
+    value: p.value,
+  }));
+
+  // GSC search performance (11-03) — same source-agnostic snapshot read, source='gsc'.
+  // Own unlinked state below; the organic + paid + GA4 blocks above are untouched.
+  const gscSnapshots = scopeAll
+    ? await getSnapshotsForShops(supabase, {
+        shopIds: shops.map((s) => s.id),
+        source: GSC_SOURCE,
+        period: PERIOD,
+        from,
+        to,
+      })
+    : await getSnapshots(supabase, {
+        shopId: activeShopId,
+        source: GSC_SOURCE,
+        period: PERIOD,
+        from,
+        to,
+      });
+  const gscRows: DatedMetrics[] = scopeAll
+    ? aggregateByDate(gscSnapshots)
+    : gscSnapshots;
+  const gscLatest = latestSnapshot(gscRows);
+  const gscKpis = scopeAll ? GSC_AGGREGATE_KPIS : GSC_KPIS;
+  const clicksSeries = toSeries(gscRows, "clicks").map((p) => ({
+    date: formatShortDate(p.date),
+    value: p.value,
+  }));
+  const impressionsSeries = toSeries(gscRows, "impressions").map((p) => ({
     date: formatShortDate(p.date),
     value: p.value,
   }));
@@ -486,6 +536,86 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 dataKey="value"
                 xKey="date"
                 ariaLabel={`Key events over the last ${WINDOW_DAYS} days`}
+                color="var(--chart-2)"
+              />
+            </div>
+          </>
+        )}
+      </section>
+
+      <section aria-labelledby="search-heading" className="space-y-4">
+        <h2
+          id="search-heading"
+          className="font-heading text-lg font-semibold tracking-tight"
+        >
+          Search performance
+        </h2>
+
+        {gscRows.length === 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>No Google Search Console site linked</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-muted-foreground">
+                Connect a Google Search Console site to see clicks, impressions,
+                click-through rate, and average position from organic search.
+              </p>
+              <Link
+                href="/dashboard/analytics"
+                className="inline-block font-heading text-sm font-medium text-primary hover:underline"
+              >
+                Connect Search Console
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {gscKpis.map((kpi) => {
+                const raw = gscLatest?.metrics[kpi.key];
+                const value =
+                  typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+                return (
+                  <Card key={kpi.key}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        {kpi.label}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold tracking-tight">
+                        {value === null ? "—" : formatNumber(value)}
+                      </p>
+                      <div className="mt-2">
+                        <Sparkline
+                          data={toSeries(gscRows, kpi.key)}
+                          dataKey="value"
+                          ariaLabel={`${kpi.label}, last ${WINDOW_DAYS} days`}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <LineChartCard
+                title="Search clicks"
+                caption={`Daily clicks from Google organic search, trailing ${WINDOW_DAYS} days.`}
+                data={clicksSeries}
+                dataKey="value"
+                xKey="date"
+                ariaLabel={`Search clicks over the last ${WINDOW_DAYS} days`}
+              />
+              <BarChartCard
+                title="Impressions"
+                caption="Daily search impressions in Google organic results."
+                data={impressionsSeries}
+                dataKey="value"
+                xKey="date"
+                ariaLabel={`Search impressions over the last ${WINDOW_DAYS} days`}
                 color="var(--chart-2)"
               />
             </div>
