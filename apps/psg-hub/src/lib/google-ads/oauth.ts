@@ -155,6 +155,122 @@ export async function verifyAndConsumeState(
   return { userId: updated.user_id, shopId: updated.shop_id };
 }
 
+/**
+ * Verify a state token's signature/expiry and confirm the row exists and is not
+ * yet consumed — WITHOUT consuming it. Used at the top of the callback so the
+ * multi-account picker can leave the state open for `/select` to consume.
+ */
+export async function peekState(
+  stateToken: string
+): Promise<{ userId: string; shopId: string }> {
+  verify(stateToken);
+
+  const service = createServiceClient();
+  const { data, error } = await service
+    .from("google_ads_oauth_states")
+    .select("user_id, shop_id, consumed_at")
+    .eq("state_token", stateToken)
+    .maybeSingle();
+
+  if (error) throw new Error(`state read failed: ${error.message}`);
+  if (!data) throw new StateError("not_found");
+  if (data.consumed_at) throw new StateError("replayed");
+  return { userId: data.user_id, shopId: data.shop_id };
+}
+
+/** A selectable account offered to the user in the picker. */
+export type PendingAccount = { id: string; name: string };
+
+/** Transient link state carried from `callback` to `/select`. */
+export type PendingSelection = {
+  encryptedTokenHex: string; // Postgres `\x<hex>` bytea text form
+  keyVersion: number;
+  scope: string;
+  loginCustomerId: string | null;
+  customers: PendingAccount[];
+};
+
+/**
+ * Stash the encrypted refresh token + enumerated account list on an UNCONSUMED
+ * state row, so the user can pick an account in a second request. Throws
+ * `replayed` if the row is missing or already consumed.
+ */
+export async function stashPendingSelection(
+  stateToken: string,
+  p: PendingSelection
+): Promise<void> {
+  verify(stateToken);
+
+  const service = createServiceClient();
+  const { data, error } = await service
+    .from("google_ads_oauth_states")
+    .update({
+      pending_encrypted_token: p.encryptedTokenHex,
+      pending_key_version: p.keyVersion,
+      pending_scope: p.scope,
+      pending_login_customer_id: p.loginCustomerId,
+      pending_customers: p.customers,
+    })
+    .eq("state_token", stateToken)
+    .is("consumed_at", null)
+    .select("state_token")
+    .maybeSingle();
+
+  if (error) throw new Error(`stash failed: ${error.message}`);
+  if (!data) throw new StateError("replayed");
+}
+
+/**
+ * Atomically consume a state row that carries a stashed pending selection,
+ * returning the binding (userId/shopId) and the pending payload. Mirrors
+ * `verifyAndConsumeState`'s replay protection. Throws `malformed` if no pending
+ * selection was stashed on the row.
+ */
+export async function consumePendingSelection(stateToken: string): Promise<{
+  userId: string;
+  shopId: string;
+  pending: PendingSelection;
+}> {
+  verify(stateToken);
+
+  const service = createServiceClient();
+  const { data: updated, error } = await service
+    .from("google_ads_oauth_states")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("state_token", stateToken)
+    .is("consumed_at", null)
+    .select(
+      "user_id, shop_id, pending_encrypted_token, pending_key_version, pending_scope, pending_login_customer_id, pending_customers"
+    )
+    .maybeSingle();
+
+  if (error) throw new Error(`pending consume failed: ${error.message}`);
+  if (!updated) {
+    const { data: existing } = await service
+      .from("google_ads_oauth_states")
+      .select("consumed_at")
+      .eq("state_token", stateToken)
+      .maybeSingle();
+    if (!existing) throw new StateError("not_found");
+    throw new StateError("replayed");
+  }
+  if (!updated.pending_encrypted_token || updated.pending_key_version == null) {
+    throw new StateError("malformed");
+  }
+
+  return {
+    userId: updated.user_id,
+    shopId: updated.shop_id,
+    pending: {
+      encryptedTokenHex: updated.pending_encrypted_token,
+      keyVersion: updated.pending_key_version,
+      scope: updated.pending_scope ?? "",
+      loginCustomerId: updated.pending_login_customer_id ?? null,
+      customers: (updated.pending_customers as PendingAccount[] | null) ?? [],
+    },
+  };
+}
+
 export async function exchangeCodeForTokens(code: string): Promise<{
   access_token: string;
   refresh_token: string;
