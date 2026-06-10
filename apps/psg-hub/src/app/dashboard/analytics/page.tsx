@@ -161,7 +161,6 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   // Per-shop rows pass through; the MSO view sums numeric metrics per date.
   const rows: DatedMetrics[] = scopeAll ? aggregateByDate(snapshots) : snapshots;
   const latest = latestSnapshot(rows);
-  const syncedAt = latestSyncedAt(snapshots);
   const kpis = scopeAll ? AGGREGATE_KPIS : PER_SHOP_KPIS;
 
   const trafficSeries = toSeries(rows, "organic_traffic").map((p) => ({
@@ -266,6 +265,15 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     value: p.value,
   }));
 
+  // Header status reflects the most recent sync across ALL sources, not just
+  // organic. A shop with only GA4/GSC linked is "Last synced", not "Awaiting".
+  const syncedAt = latestSyncedAt([
+    ...snapshots,
+    ...paidSnapshots,
+    ...gaSnapshots,
+    ...gscSnapshots,
+  ]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -317,11 +325,11 @@ export default async function AnalyticsPage({ searchParams }: Props) {
       {rows.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>No analytics data yet</CardTitle>
+            <CardTitle>No organic search data yet</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-muted-foreground">
-              Analytics data syncs automatically — your first report lands
+              Organic search data syncs automatically. Your first report lands
               after the next sync. Nothing to set up on your end.
             </p>
             <p className="text-sm text-muted-foreground">
