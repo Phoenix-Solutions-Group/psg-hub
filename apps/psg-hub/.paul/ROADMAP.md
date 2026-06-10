@@ -19,7 +19,7 @@ Turn the empty analytics surface into a unified, story-led **SEMrush + Google Ad
 | 9 | Analytics foundation + SEMrush | 3/3 ✅ | ✅ Complete + LIVE on prod (real numbers, 4 url-shops; activated 2026-06-09) | 2026-06-05 |
 | 10 | Google Ads | 10-01 ✅ · 10-02 ✅ · 10-03 ✅ (gate batch executed live) · 10-04 ✅ (MCC account-selection) | ✅ Complete + LIVE on prod (Wallace pilot real paid numbers) | 2026-06-09 |
 | 11 | GA4 + GSC | 4/4 ✅ (11-01 foundation · 11-02 GA4 · 11-03 GSC · 11-04 gate batch executed live) | ✅ Complete + LIVE on prod (Wallace pilot real GA4 + GSC numbers on the live surface; activated 2026-06-10) | 2026-06-10 |
-| 12 | PSG report — narrative + PDF | TBD | Not started | - |
+| 12 | PSG report — narrative + PDF | 4-plan shape (RESEARCH.md ✅ wf_8f01e69a-625); 12-01 data-pipeline plan created | 🚧 Planning (12-01 awaiting approval) | - |
 
 v0.2 Customer MVP (v0.2.0) ✅ COMPLETE 2026-06-04 (3/3 phases; see Completed Milestones).
 
@@ -343,8 +343,16 @@ Focus: new per-shop admin-driven Google OAuth for the Analytics Data API (GA4) +
 
 ### Phase 12: PSG report — narrative + PDF
 
-Focus: multi-LLM auto-written analysis layer (with eval/quality gate); branded monthly PDF (Playwright + print.css) spec'd to match PSG's existing hand-built client report. Template canon = `archive/local_reach-outputs/` (tracys-research-v3, new-tracys-report-v2 — gitignored on-disk, verify present at kickoff). Email + download. CORE v0.3 output. Depends on all four sources being present.
-Plans: TBD (defined during /paul:plan)
+Focus: multi-LLM auto-written analysis layer (with eval/quality gate); branded monthly PDF spec'd to match PSG's existing hand-built client report. Template canon = `/Users/schoolcraft_mbpro/dev/psg/clients/tracys` (the recurring monthly template is `tracys-ai-visibility-report.html` + `assets/design-system/`). Email + download. CORE v0.3 output. Depends on all four sources being live (they are).
+
+**RESEARCH.md ✅** (ultracode `wf_8f01e69a-625`, 12 agents, committed `f917f2b`). Two adversarial findings drive the plan: (1) PDF on Vercel Fluid Compute REFUTED (libnss3.so launch break) -> render Chromium on a controlled host (Hetzner) over HTTP; (2) the canon's headline is built on Peec AI + Local Falcon, neither ingested -> Option A: ship the live-data base (SEMrush + GA4 + GSC + Ads in the canon design language) now, queue Peec AI + Local Falcon as a follow-on.
+
+**4-plan shape (operator defaults locked 2026-06-10):**
+- [x] 12-01 data pipeline + ReportData (monthly FLOW/STOCK/DERIVED rollup, MoM, graceful degradation; pure + fully testable, ZERO prod contact). **✅ LOOP CLOSED 2026-06-10** (analytics/rollup.ts + report/{types,report-data}.ts; 4/4 ACs; vitest 482/482 +19; no migration/dep; a487b33 on feature/12-psg-report). 12-01-SUMMARY.md.
+- [ ] 12-02 multi-LLM narrative (AI SDK v6 generateText + Output.object, single writer + deterministic numeric verifier) + eval gate (schema -> numeric groundedness -> brand lint -> judge; never auto-email an unverified report).
+- [ ] 12-03 branded print route + Chromium render (Hetzner worker) + private Supabase storage + membership-gated download + link-email.
+- [ ] 12-04 monthly cron (`0 0 1 * *`, CRON_SECRET) + `monthly_reports` table + operator activation runbook.
+Follow-on milestone: Peec AI (AI share-of-voice) + Local Falcon (local maps/SoLV) ingestion to complete the full canon report.
 
 ---
 *Roadmap created: 2026-05-29 (populated from SEED ideation v7)*
