@@ -105,7 +105,7 @@ test.describe("analytics — designed empty state (MEGA shops have no snapshots)
     await page.goto("/dashboard/analytics");
 
     // CardTitle renders a div (08-04b precedent) — match by text.
-    await expect(page.getByText("No analytics data yet")).toBeVisible();
+    await expect(page.getByText("No organic search data yet")).toBeVisible();
     await expect(page.getByText("Awaiting first sync")).toBeVisible();
     // No chart shells and no KPI lies on a no-data shop (scoped to main —
     // the brand Logo outside it is also role=img).

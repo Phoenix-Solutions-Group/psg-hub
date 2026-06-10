@@ -85,6 +85,21 @@ export type Ga4Metrics = {
   engagement_rate: number; // 0..1 ratio — aggregate-excluded
 };
 
+/**
+ * GSC search-performance `metrics` shape — Phase 11 / 11-03. One row per (shop, date)
+ * site-level daily total from a single searchanalytics.query (dimensions=['date']).
+ * NOTE: BOTH ctr (0..1) and position (average rank) are RATIOS/averages — never
+ * surface either from a cross-shop aggregate (a summed ratio lies; the page excludes
+ * both from the MSO KPIs, like engagement_rate/cpl/authority_score). clicks and
+ * impressions sum honestly.
+ */
+export type GscMetrics = {
+  clicks: number;
+  impressions: number;
+  ctr: number; // 0..1 ratio — aggregate-excluded
+  position: number; // average position — aggregate-excluded
+};
+
 /** Ingest audit ledger row (public.analytics_sync_runs). */
 export type AnalyticsSyncRun = {
   id: string;

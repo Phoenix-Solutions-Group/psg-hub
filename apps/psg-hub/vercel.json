@@ -18,6 +18,10 @@
     {
       "path": "/api/cron/ga4-sync",
       "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/gsc-sync",
+      "schedule": "45 6 * * *"
     }
   ]
 }
