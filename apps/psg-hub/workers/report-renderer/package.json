@@ -1,0 +1,17 @@
+{
+  "name": "psg-report-renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PSG monthly-report Chromium PDF worker (Hetzner). Deploy is the Phase 12 / 12-04 gate batch. SEPARATE from the psg-hub app: puppeteer lives here only, the app gains no dependency.",
+  "main": "render.mjs",
+  "scripts": {
+    "start": "node render.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "puppeteer": "24.15.0"
+  }
+}
