@@ -51,5 +51,8 @@ export function buildReportEmail(
       monthLabel: monthLabel(period),
       reportUrl: downloadUrl,
     },
+    // The report link is transactional + membership-gated; never route it through
+    // SendGrid click-tracking (link-branding host serves a mismatched cert).
+    clickTracking: false,
   };
 }
