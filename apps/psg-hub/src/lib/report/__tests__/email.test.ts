@@ -17,6 +17,9 @@ describe("buildReportEmail", () => {
     // It is a LINK email: no html/text body carrying an attachment.
     expect(msg.html).toBeUndefined();
     expect(msg.text).toBeUndefined();
+    // Click tracking MUST be disabled: a tracked link routes through SendGrid's
+    // link-branding host, which serves a mismatched cert (COMMON_NAME_INVALID).
+    expect(msg.clickTracking).toBe(false);
   });
 
   it("reads the template id from REPORT_EMAIL_TEMPLATE_ID when no dep is given", () => {
