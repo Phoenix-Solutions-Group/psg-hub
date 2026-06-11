@@ -41,6 +41,16 @@ const STRAY_PLACEHOLDER = /\{\{[a-z0-9_]+\}\}/i;
 const NUMERAL = /[-+]?\$?\d[\d,]*(?:\.\d+)?%?/g;
 const SIGNED_PCT = /[-+]\d+%/g;
 
+// Canonical source names, longest-first so the two-token "google_ads" is matched
+// before any single-token prefix. Placeholder keys are `${source}_${metric}`, so a
+// naive split on "_" mis-files google_ads_* under "google" (F3 false positives).
+const SOURCE_NAMES: AnalyticsSource[] = ["google_ads", "semrush", "ga4", "gsc"];
+
+/** Resolve the source prefix of a placeholder key (`google_ads_spend` -> "google_ads"). */
+function sourceOfKey(key: string): string {
+  return SOURCE_NAMES.find((s) => key === s || key.startsWith(`${s}_`)) ?? key.split("_")[0];
+}
+
 /** Normalize a numeral token for set membership ("$1,500" -> "1500", "+20%" -> "+20%"). */
 function norm(token: string): string {
   return token.replace(/[$,]/g, "");
@@ -57,7 +67,7 @@ function buildAllowedNumbers(reportData: ReportData): {
 
   for (const [key, formatted] of Object.entries(values)) {
     if (formatted === "n/a" || formatted === "flat") continue;
-    const source = key.split("_")[0];
+    const source = sourceOfKey(key);
     const tokens = formatted.match(NUMERAL) ?? [];
     for (const tok of tokens) {
       const n = norm(tok);
