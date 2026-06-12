@@ -5,6 +5,8 @@ import type {
   AnalyticsSnapshotInsert,
   AnalyticsSource,
   AnalyticsPeriod,
+  SnapshotSource,
+  MonthlySnapshotRow,
 } from "./types";
 
 const TABLE = "analytics_snapshots";
@@ -104,4 +106,39 @@ export async function getSnapshots(
     throw new Error(`getSnapshots failed: ${error.message}`);
   }
   return (data ?? []) as AnalyticsSnapshot[];
+}
+
+export type GetMonthlySnapshotArgs = {
+  shopId: string;
+  /** SnapshotSource superset — admits the monthly-only 'ga4_dimensions' / 'performance'. */
+  source: SnapshotSource;
+  /** Report month 'YYYY-MM'; the stored row's date is `${month}-01`. */
+  month: string;
+};
+
+/**
+ * Read the ONE period='monthly' snapshot row for a shop + extended source + month
+ * (Phase 12 / 12-05c). Distinct from getSnapshots because the monthly sources
+ * ('ga4_dimensions', 'performance') are deliberately NOT in the four-value
+ * AnalyticsSource union getSnapshots is typed to — they are insert-layer
+ * SnapshotSources. Returns null for no row (never throws on empty); throws on a real
+ * error. Bound by the print route to assembleReportData's optional monthly readers.
+ */
+export async function getMonthlySnapshot(
+  client: SupabaseClient,
+  { shopId, source, month }: GetMonthlySnapshotArgs
+): Promise<MonthlySnapshotRow | null> {
+  const { data, error } = await client
+    .from(TABLE)
+    .select("*")
+    .eq("shop_id", shopId)
+    .eq("source", source)
+    .eq("period", "monthly")
+    .eq("date", `${month}-01`)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`getMonthlySnapshot failed: ${error.message}`);
+  }
+  return (data as MonthlySnapshotRow) ?? null;
 }

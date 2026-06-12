@@ -1,5 +1,26 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { GET, parsePrintSlug } from "@/app/reports/[slug]/print/route";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import {
+  GET,
+  parsePrintSlug,
+  defaultLoader,
+} from "@/app/reports/[slug]/print/route";
+import { getMonthlySnapshot, getSnapshots } from "@/lib/analytics/snapshots";
+import { loadReportNarrative } from "@/lib/report/storage";
+
+// 12-05c wiring guard — the print (PDF) path must bind BOTH monthly readers so the
+// GA4 dimensional sections + the Website-performance block reach the report. These
+// mocks let defaultLoader run without a DB/storage; the assertion fails loudly if the
+// reader binding is ever removed (the advisor's silent-un-wiring regression).
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => ({}),
+}));
+vi.mock("@/lib/analytics/snapshots", () => ({
+  getSnapshots: vi.fn(async () => []),
+  getMonthlySnapshot: vi.fn(async () => null),
+}));
+vi.mock("@/lib/report/storage", () => ({
+  loadReportNarrative: vi.fn(async () => ({ headline: "h" })),
+}));
 
 // AC-1 auth + slug clauses for the INTERNAL print route. The route renders ANY
 // shop's data via the service client (RLS-bypass), so the RENDER_TOKEN bearer is the
@@ -39,6 +60,41 @@ describe("print route auth", () => {
   it("400 on a malformed slug (valid token, gate passed)", async () => {
     const res = await call({ authorization: "Bearer test-render-token" }, "not-a-valid-slug");
     expect(res.status).toBe(400);
+  });
+});
+
+describe("print defaultLoader wires the monthly readers (12-05c)", () => {
+  beforeEach(() => {
+    vi.mocked(getMonthlySnapshot).mockClear();
+    vi.mocked(getSnapshots).mockClear();
+    vi.mocked(loadReportNarrative).mockResolvedValue({ headline: "h" } as never);
+  });
+
+  it("reads BOTH ga4_dimensions and performance monthly rows for the report month", async () => {
+    const shopId = "11111111-1111-1111-1111-111111111111";
+    const payload = await defaultLoader(shopId, "2026-05");
+
+    expect(payload).not.toBeNull();
+    // the binding ran for each extended monthly source
+    const sources = vi
+      .mocked(getMonthlySnapshot)
+      .mock.calls.map((c) => c[1].source);
+    expect(sources).toContain("ga4_dimensions");
+    expect(sources).toContain("performance");
+    // and for the correct month (date = {month}-01 happens inside the reader)
+    for (const call of vi.mocked(getMonthlySnapshot).mock.calls) {
+      expect(call[1]).toMatchObject({ shopId, month: "2026-05" });
+    }
+  });
+
+  it("returns null (no render) when no eval-passed narrative is persisted", async () => {
+    vi.mocked(loadReportNarrative).mockResolvedValueOnce(null as never);
+    const payload = await defaultLoader(
+      "11111111-1111-1111-1111-111111111111",
+      "2026-05"
+    );
+    expect(payload).toBeNull();
+    expect(getMonthlySnapshot).not.toHaveBeenCalled();
   });
 });
 
