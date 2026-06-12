@@ -1,7 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getSnapshots } from "@/lib/analytics/snapshots";
-import { assembleReportData, type SnapshotReader } from "@/lib/report/report-data";
+import { getSnapshots, getMonthlySnapshot } from "@/lib/analytics/snapshots";
+import {
+  assembleReportData,
+  type SnapshotReader,
+  type MonthlyDimensionsReader,
+  type MonthlyPerformanceReader,
+} from "@/lib/report/report-data";
 import { loadReportNarrative } from "@/lib/report/storage";
 import { renderReportHtml } from "@/lib/report/render";
 import type { ReportData } from "@/lib/report/types";
@@ -42,14 +47,26 @@ export type PrintPayloadLoader = (
 ) => Promise<{ reportData: ReportData; narrative: ReportNarrative } | null>;
 
 /** Default loader: assemble ReportData from snapshots + load the persisted narrative. */
-const defaultLoader: PrintPayloadLoader = async (shopId, period) => {
+export const defaultLoader: PrintPayloadLoader = async (shopId, period) => {
   const narrative = await loadReportNarrative(shopId, period);
   if (!narrative) return null; // no eval-passed narrative persisted yet
   const service = createServiceClient();
   const readSnapshots: SnapshotReader = (query) => getSnapshots(service, query);
+  // 12-05c: bind the optional monthly readers so the GA4 dimensional sections (12-05a)
+  // + the Website-performance block (12-05b) reach the PDF. Service client is correct
+  // here (this route is RENDER_TOKEN-gated/internal, not a user session). The
+  // monthly-report cron's narrative binding deliberately does NOT wire these — the
+  // writer only sees linkedSources, so leaving the dims/perf out of the narrative keeps
+  // the eval gate from holding on an ungrounded number (the 12-04 lesson).
+  const readMonthlyDimensions: MonthlyDimensionsReader = ({ shopId: s, month }) =>
+    getMonthlySnapshot(service, { shopId: s, source: "ga4_dimensions", month });
+  const readMonthlyPerformance: MonthlyPerformanceReader = ({ shopId: s, month }) =>
+    getMonthlySnapshot(service, { shopId: s, source: "performance", month });
   const reportData = await assembleReportData(shopId, period, {
     readSnapshots,
     generatedAt: new Date().toISOString(),
+    readMonthlyDimensions,
+    readMonthlyPerformance,
   });
   return { reportData, narrative };
 };
