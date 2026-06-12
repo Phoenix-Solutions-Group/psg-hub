@@ -20,8 +20,13 @@
 
 import { formatNumber, formatShortDate } from "../analytics/aggregate";
 import type { SeriesPoint } from "../analytics/aggregate";
-import type { AnalyticsSource } from "../analytics/types";
-import type { ReportData, SourceReportBlock } from "./types";
+import type { AnalyticsSource, Ga4DimensionRow } from "../analytics/types";
+import type {
+  ReportData,
+  SourceReportBlock,
+  Ga4DimensionsReport,
+  PerformanceReport,
+} from "./types";
 import type { ReportNarrative } from "./schema";
 
 /** Per-source display label + section title (per-source order: GSC, GA4, Ads, SEMrush). */
@@ -265,6 +270,7 @@ table.psg { width: 100%; border-collapse: collapse; font-variant-numeric: tabula
 table.psg th { text-align: left; background: var(--psg-midnight); color: var(--psg-paper); font-family: var(--font-display); font-weight: var(--fw-medium); font-size: var(--fs-13); padding: var(--space-3) var(--space-4); }
 table.psg td { font-size: var(--fs-14); color: var(--psg-graphite); border-bottom: 1px solid var(--psg-stone); padding: var(--space-3) var(--space-4); vertical-align: top; }
 table.psg tbody tr:last-child td { border-bottom: none; }
+table.psg td.lp { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .up { color: var(--color-success); font-weight: var(--fw-bold); }
 .down { color: var(--color-danger); font-weight: var(--fw-bold); }
 .now { color: var(--psg-dark-ash); font-weight: var(--fw-medium); }
@@ -287,6 +293,227 @@ footer.psg p { color: var(--psg-midnight-90); font-size: var(--fs-13); line-heig
 @media print { body { background: #fff; } section.panel { break-inside: avoid; box-shadow: none; } header.masthead, footer.psg { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 @page { size: Letter; margin: 0.5in; }
 </style>`;
+}
+
+/** Seconds -> "m:ss" (e.g. 135 -> "2:15"). For averageSessionDuration KPIs. */
+function formatDuration(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/** A 0..1 ratio -> "XX.X%". For share / engagement-rate / bounce-rate cells. */
+function formatRatioPct(ratio: number): string {
+  return `${(ratio * 100).toFixed(1)}%`;
+}
+
+/** Total sessions across a dimension's rows (top-N + the (other) remainder). */
+function dimensionTotal(rows: Ga4DimensionRow[]): number {
+  return rows.reduce((sum, r) => sum + r.sessions, 0);
+}
+
+/**
+ * One GA4 dimensional .panel: badge + title, optional KPI stat line, and a table.psg
+ * whose columns are caller-supplied. Every GA4 string value is HTML-escaped; the share
+ * column is each row's sessions over the section total (the (other) row keeps the total
+ * honest). Returns "" for an empty dimension so no blank card renders.
+ */
+function renderDimensionPanel(
+  title: string,
+  rows: Ga4DimensionRow[],
+  columns: { header: string; cell: (r: Ga4DimensionRow, total: number) => string }[],
+  statLine = ""
+): string {
+  if (rows.length === 0) return "";
+  const total = dimensionTotal(rows);
+  const head = columns.map((c) => `<th>${escapeHtml(c.header)}</th>`).join("");
+  const body = rows
+    .map(
+      (r) => `<tr>${columns.map((c) => c.cell(r, total)).join("")}</tr>`
+    )
+    .join("");
+  return (
+    `<section class="panel"><span class="badge-src">GA4</span>` +
+    `<h2>${escapeHtml(title)}</h2>` +
+    statLine +
+    `<table class="psg"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` +
+    `</section>`
+  );
+}
+
+/** The four GA4 dimensional sections (12-05a), rendered only when data is present. */
+function renderDimensionSections(dim: Ga4DimensionsReport): string {
+  const sessionsCell = (r: Ga4DimensionRow) =>
+    `<td class="tgt">${formatNumber(Math.round(r.sessions))}</td>`;
+  const usersCell = (r: Ga4DimensionRow) =>
+    `<td>${formatNumber(Math.round(r.users))}</td>`;
+  const shareCell = (r: Ga4DimensionRow, total: number) =>
+    `<td>${total > 0 ? formatRatioPct(r.sessions / total) : "n/a"}</td>`;
+  const nameCell = (r: Ga4DimensionRow) =>
+    `<td>${escapeHtml(r.name)}</td>`;
+
+  // Two scalar KPIs surfaced above Traffic Drivers (omit each when absent).
+  const statBits: string[] = [];
+  if (dim.averageSessionDuration > 0) {
+    statBits.push(`Avg. session duration ${formatDuration(dim.averageSessionDuration)}`);
+  }
+  if (dim.bounceRate !== null) {
+    statBits.push(`Bounce rate ${formatRatioPct(dim.bounceRate)}`);
+  }
+  const statLine = statBits.length
+    ? `<p class="src">${escapeHtml(statBits.join("  ·  "))}</p>`
+    : "";
+
+  const trafficDrivers = renderDimensionPanel(
+    "Top traffic drivers",
+    dim.topChannels,
+    [
+      { header: "Channel", cell: nameCell },
+      { header: "Sessions", cell: sessionsCell },
+      { header: "Users", cell: usersCell },
+      { header: "Share", cell: shareCell },
+    ],
+    statLine
+  );
+
+  const landingPages = renderDimensionPanel(
+    "Top landing pages",
+    dim.topLandingPages,
+    [
+      {
+        header: "Landing page",
+        cell: (r) => `<td class="lp">${escapeHtml(r.name)}</td>`,
+      },
+      { header: "Sessions", cell: sessionsCell },
+      {
+        header: "Engagement rate",
+        cell: (r) =>
+          `<td>${
+            typeof r.engagement_rate === "number"
+              ? formatRatioPct(r.engagement_rate)
+              : "n/a"
+          }</td>`,
+      },
+    ]
+  );
+
+  const devices = renderDimensionPanel(
+    "Device breakdown",
+    dim.devices,
+    [
+      { header: "Device", cell: nameCell },
+      { header: "Sessions", cell: sessionsCell },
+      { header: "Share", cell: shareCell },
+    ]
+  );
+
+  const newVsReturning = renderDimensionPanel(
+    "New vs returning",
+    dim.newVsReturning,
+    [
+      { header: "Segment", cell: nameCell },
+      { header: "Sessions", cell: sessionsCell },
+      { header: "Share", cell: shareCell },
+    ]
+  );
+
+  return trafficDrivers + landingPages + devices + newVsReturning;
+}
+
+/** Milliseconds -> "N.N s" (e.g. 3200 -> "3.2 s"); null -> "n/a". For perf timings. */
+function formatMsToS(ms: number | null): string {
+  return ms === null ? "n/a" : `${(ms / 1000).toFixed(1)} s`;
+}
+
+/** Bytes -> "N.N MB" / "N KB"; null -> "n/a". For GTMetrix page weight. */
+function formatBytes(bytes: number | null): string {
+  if (bytes === null) return "n/a";
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  return `${Math.round(bytes / 1000)} KB`;
+}
+
+/** CLS to 3 dp; null -> "n/a". */
+function formatCls(value: number | null): string {
+  return value === null ? "n/a" : value.toFixed(3);
+}
+
+/** Performance-score band -> the canon tint class: good(>=90)=up, warn(50-89)="", danger(<50)=down. */
+function scoreClass(score: number | null): string {
+  if (score === null) return "";
+  if (score >= 90) return "up";
+  if (score < 50) return "down";
+  return "";
+}
+
+/** One perf KPI stat card (reuses the canon .kpi structure). */
+function perfKpi(value: string, sub: string, label: string, cls = ""): string {
+  return (
+    `<div class="kpi"><div class="n">${escapeHtml(value)}</div>` +
+    `<div class="chg ${cls}">${escapeHtml(sub)}</div>` +
+    `<div class="l">${escapeHtml(label)}</div></div>`
+  );
+}
+
+/**
+ * The "Website performance" block (12-05b) — REPLACES the old GA4 "Performance Status / server
+ * response 14:49" panel with real PSI lab (+ GTMetrix when present) numbers and a CrUX field row
+ * rendered ONLY when real-user data exists (else a "Lab data" label, never a blank field block).
+ */
+function renderPerformanceBlock(perf: PerformanceReport): string {
+  const { psi, gtmetrix } = perf;
+  const hasField = psi.field !== null;
+
+  const badges =
+    `<span class="badge-src">PageSpeed</span>` +
+    (gtmetrix ? ` <span class="badge-src">GTMetrix</span>` : "");
+
+  // LCP / CLS prefer the real-user field value when present, else the lab value.
+  const lcpMs = hasField ? psi.field!.lcp_ms : psi.lab_lcp_ms;
+  const cls = hasField ? psi.field!.cls : psi.lab_cls;
+  // TTFB: GTMetrix backend_duration is the richest real measurement; else PSI server-response-time.
+  const ttfbMs = gtmetrix?.backend_duration ?? psi.lab_ttfb_ms;
+
+  const cards: string[] = [
+    perfKpi(
+      psi.perf_score === null ? "n/a" : String(psi.perf_score),
+      hasField ? "Real-user + lab" : "Lab data",
+      "Performance score",
+      scoreClass(psi.perf_score)
+    ),
+    perfKpi(formatMsToS(lcpMs), hasField ? "Real-user" : "Lab", "Largest contentful paint"),
+    perfKpi(formatCls(cls), hasField ? "Real-user" : "Lab", "Cumulative layout shift"),
+    perfKpi(
+      formatMsToS(ttfbMs),
+      gtmetrix ? "GTMetrix backend" : "Lab server response",
+      "Server response (TTFB)"
+    ),
+  ];
+  if (gtmetrix) {
+    cards.push(
+      perfKpi(formatMsToS(gtmetrix.fully_loaded_time), "GTMetrix", "Fully loaded"),
+      perfKpi(formatBytes(gtmetrix.page_bytes), "GTMetrix", "Page weight")
+    );
+  }
+
+  // Field row only when CrUX real-user data is present.
+  const fieldRow = hasField
+    ? `<p class="src">Real-user data (CrUX)${
+        psi.field!.overall_category
+          ? ` &middot; ${escapeHtml(psi.field!.overall_category)}`
+          : ""
+      }: LCP ${escapeHtml(formatMsToS(psi.field!.lcp_ms))}, INP ${
+        psi.field!.inp_ms === null ? "n/a" : `${Math.round(psi.field!.inp_ms)} ms`
+      }, CLS ${escapeHtml(formatCls(psi.field!.cls))}.</p>`
+    : `<p class="src">Lab data (Lighthouse). Real-user (CrUX) data is not yet available for this site.</p>`;
+
+  return (
+    `<section class="panel">${badges}` +
+    `<h2>Website performance</h2>` +
+    fieldRow +
+    `<div class="kpis">${cards.join("")}</div>` +
+    `</section>`
+  );
 }
 
 /**
@@ -346,6 +573,16 @@ export function renderReportHtml(
       );
     })
     .join("");
+
+  // GA4 dimensional sections (12-05a): only when a dimensions block is present.
+  const dimensionSections = reportData.dimensions
+    ? renderDimensionSections(reportData.dimensions)
+    : "";
+
+  // Website performance block (12-05b): only when a performance block is present.
+  const performanceBlock = reportData.performance
+    ? renderPerformanceBlock(reportData.performance)
+    : "";
 
   // This month vs prior: one headline-KPI row per linked source.
   const momRows = KPI_SET.filter((k) => reportData.linkedSources.includes(k.source))
@@ -417,6 +654,8 @@ export function renderReportHtml(
     `<div class="wrap">` +
     story +
     sourceSections +
+    dimensionSections +
+    performanceBlock +
     momTable +
     drivers +
     recommendations +

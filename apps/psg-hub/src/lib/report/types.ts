@@ -4,7 +4,12 @@
 // four live sources by report-data.ts. Pure data: no clock read, no IO.
 
 import type { SeriesPoint } from "../analytics/aggregate";
-import type { AnalyticsSource } from "../analytics/types";
+import type {
+  AnalyticsSource,
+  Ga4DimensionRow,
+  PsiResult,
+  GtmetrixResult,
+} from "../analytics/types";
 
 /**
  * One source's monthly block. `current`/`prior` are the rolled-up monthly values
@@ -37,4 +42,47 @@ export type ReportData = {
   linkedSources: AnalyticsSource[];
   sourcesWithPriorMonth: AnalyticsSource[];
   generatedAt: string; // ISO timestamp, injected by the caller
+  /**
+   * GA4 secondary-dimension block (Phase 12 / 12-05a). ADDITIVE + OPTIONAL: present
+   * only when a ga4_dimensions monthly row exists for the shop+month, read off a
+   * separate monthly path that bypasses rollupMonth entirely (top-N arrays are not
+   * FLOW/STOCK/DERIVED and never enter METRIC_REGISTRY). Undefined => the four render
+   * sections are omitted. Lives OUTSIDE `sources`, parallel to SourceReportBlock —
+   * never threaded through it, never added to the AnalyticsSource union.
+   */
+  dimensions?: Ga4DimensionsReport;
+  /**
+   * Website-performance block (Phase 12 / 12-05b). ADDITIVE + OPTIONAL: present only when a
+   * `performance` monthly row exists for the shop+month, read off the same rollup-bypassing
+   * monthly path as `dimensions`. Undefined => the perf render block is omitted. Point-in-time
+   * STOCK, never rolled up, never in the AnalyticsSource union.
+   */
+  performance?: PerformanceReport;
+};
+
+/**
+ * The report-layer view of website-performance data — Phase 12 / 12-05b. PSI lab is always
+ * present; `psi.field` (CrUX real-user) is null when CrUX has no data (render lab-only with a
+ * "Lab data" label); `gtmetrix` is null when its key is unset or the shop is out of GTMetrix scope.
+ */
+export type PerformanceReport = {
+  psi: PsiResult;
+  gtmetrix: GtmetrixResult | null;
+  strategy: "mobile";
+  testedUrl: string;
+};
+
+/**
+ * The report-layer view of the GA4 dimensional data — Phase 12 / 12-05a. The four
+ * top-N tables plus the sessions-weighted averageSessionDuration (seconds) and a
+ * derived bounceRate (1 - the monthly engagement_rate from the assembled ga4 block;
+ * null when ga4 is not linked, never a fabricated 0).
+ */
+export type Ga4DimensionsReport = {
+  topChannels: Ga4DimensionRow[];
+  topLandingPages: Ga4DimensionRow[];
+  devices: Ga4DimensionRow[];
+  newVsReturning: Ga4DimensionRow[];
+  averageSessionDuration: number; // seconds
+  bounceRate: number | null; // derived 1 - engagement_rate; null when ga4 absent
 };
