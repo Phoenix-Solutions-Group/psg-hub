@@ -197,3 +197,162 @@ describe("renderReportHtml", () => {
     expect(html).not.toMatch(/url\("fonts\//);
   });
 });
+
+// ── GA4 dimensional sections (12-05a) ────────────────────────────────────────
+
+const dataWithDims: ReportData = {
+  ...fullData,
+  dimensions: {
+    topChannels: [
+      { name: "Organic Search", sessions: 700, users: 540 },
+      { name: "(other)", sessions: 300, users: 220 },
+    ],
+    topLandingPages: [
+      { name: "/search?q=<script>", sessions: 120, users: 90, engagement_rate: 0.61 },
+      { name: "(other)", sessions: 80, users: 60 },
+    ],
+    devices: [
+      { name: "mobile", sessions: 600, users: 460 },
+      { name: "desktop", sessions: 400, users: 320 },
+    ],
+    newVsReturning: [
+      { name: "new", sessions: 650, users: 600 },
+      { name: "returning", sessions: 350, users: 200 },
+    ],
+    averageSessionDuration: 135,
+    bounceRate: 0.366,
+  },
+};
+
+describe("renderReportHtml — GA4 dimensional sections", () => {
+  it("emits the four dimensional section headings + a GA4 badge when dimensions present", () => {
+    const html = renderReportHtml(dataWithDims, narrative);
+    expect(html).toContain("Top traffic drivers");
+    expect(html).toContain("Top landing pages");
+    expect(html).toContain("Device breakdown");
+    expect(html).toContain("New vs returning");
+    expect(html).toContain('class="badge-src">GA4');
+  });
+
+  it("HTML-escapes GA4 string values and renders the (other) remainder row", () => {
+    const html = renderReportHtml(dataWithDims, narrative);
+    // the raw landing-page value is escaped, never injected as a live tag
+    expect(html).toContain("/search?q=&lt;script&gt;");
+    expect(html).not.toContain("/search?q=<script>");
+    // the reconciling (other) row is present
+    expect(html).toContain("(other)");
+  });
+
+  it("surfaces the avg session duration (m:ss) and bounce rate KPI line", () => {
+    const html = renderReportHtml(dataWithDims, narrative);
+    expect(html).toContain("Avg. session duration 2:15"); // 135s
+    expect(html).toContain("Bounce rate 36.6%"); // 0.366
+  });
+
+  it("renders NONE of the four sections when dimensions is undefined (no empty cards)", () => {
+    const html = renderReportHtml(fullData, narrative);
+    expect(html).not.toContain("Top traffic drivers");
+    expect(html).not.toContain("Top landing pages");
+    expect(html).not.toContain("Device breakdown");
+    expect(html).not.toContain("New vs returning");
+    expect(html).not.toContain('class="badge-src">GA4');
+  });
+});
+
+// ── Website performance block (12-05b) ───────────────────────────────────────
+
+const labPsi = {
+  perf_score: 62,
+  lab_lcp_ms: 3200,
+  lab_cls: 0.05,
+  lab_tbt_ms: 410,
+  lab_fcp_ms: 1800,
+  lab_speed_index_ms: 4100,
+  lab_ttfb_ms: 620,
+  field: null as null | {
+    lcp_ms: number | null;
+    inp_ms: number | null;
+    cls: number | null;
+    fcp_ms: number | null;
+    ttfb_ms: number | null;
+    overall_category: string | null;
+  },
+  origin_field: false,
+};
+
+const dataPerfFull: ReportData = {
+  ...fullData,
+  performance: {
+    psi: {
+      ...labPsi,
+      field: {
+        lcp_ms: 2900,
+        inp_ms: 180,
+        cls: 0.12,
+        fcp_ms: 1700,
+        ttfb_ms: 540,
+        overall_category: "AVERAGE",
+      },
+    },
+    gtmetrix: {
+      fully_loaded_time: 5200,
+      onload_time: null,
+      time_to_first_byte: 480,
+      backend_duration: 360,
+      page_bytes: 2_400_000,
+      html_bytes: null,
+      page_requests: 78,
+      redirect_duration: null,
+      connect_duration: null,
+      largest_contentful_paint: 3100,
+      total_blocking_time: 220,
+      cumulative_layout_shift: 0.04,
+      speed_index: null,
+      time_to_interactive: null,
+      gtmetrix_grade: "B",
+      gtmetrix_score: null,
+      performance_score: 84,
+      structure_score: 91,
+    },
+    strategy: "mobile",
+    testedUrl: "https://wallacecollisionrepair.com",
+  },
+};
+
+const dataPerfLabOnly: ReportData = {
+  ...fullData,
+  performance: { psi: labPsi, gtmetrix: null, strategy: "mobile", testedUrl: "https://x.com" },
+};
+
+describe("renderReportHtml — Website performance block", () => {
+  it("renders the panel + PageSpeed/GTMetrix badges + a real-user field row when field present", () => {
+    const html = renderReportHtml(dataPerfFull, narrative);
+    expect(html).toContain("Website performance");
+    expect(html).toContain('class="badge-src">PageSpeed');
+    expect(html).toContain('class="badge-src">GTMetrix');
+    expect(html).toContain("Real-user data (CrUX)");
+    expect(html).toContain("AVERAGE");
+    // GTMetrix-only cards present
+    expect(html).toContain("Fully loaded");
+    expect(html).toContain("Page weight");
+    // no GA4-style bogus strings
+    expect(html).not.toContain("Performance Status");
+    expect(html).not.toContain("server response 14:49");
+  });
+
+  it("renders lab-only with a Lab data label and NO field row when psi.field is null", () => {
+    const html = renderReportHtml(dataPerfLabOnly, narrative);
+    expect(html).toContain("Website performance");
+    expect(html).toContain('class="badge-src">PageSpeed');
+    expect(html).not.toContain('class="badge-src">GTMetrix'); // gtmetrix null
+    expect(html).toContain("Lab data");
+    expect(html).not.toContain("Real-user data (CrUX)");
+    expect(html).not.toContain("Fully loaded"); // GTMetrix cards absent
+  });
+
+  it("does NOT render the block when performance is undefined", () => {
+    const html = renderReportHtml(fullData, narrative);
+    expect(html).not.toContain("Website performance");
+    expect(html).not.toContain('class="badge-src">PageSpeed');
+  });
+});

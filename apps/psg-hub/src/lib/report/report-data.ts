@@ -5,11 +5,22 @@
 // and the clock is injected as `deps.generatedAt`. This module never imports the
 // server-only snapshots module, so it runs under vitest's node env.
 
-import type { AnalyticsSnapshot, AnalyticsSource } from "../analytics/types";
+import type {
+  AnalyticsSnapshot,
+  AnalyticsSource,
+  Ga4DimensionsMetrics,
+  MonthlySnapshotRow,
+  PerformanceMetrics,
+} from "../analytics/types";
 import { toSeries } from "../analytics/aggregate";
 import type { SeriesPoint } from "../analytics/aggregate";
 import { monthWindow, priorMonth, rollupMonth, momDelta } from "../analytics/rollup";
-import type { ReportData, SourceReportBlock } from "./types";
+import type {
+  ReportData,
+  SourceReportBlock,
+  Ga4DimensionsReport,
+  PerformanceReport,
+} from "./types";
 
 /** The four live sources, in report display order. */
 const SOURCES: AnalyticsSource[] = ["semrush", "google_ads", "ga4", "gsc"];
@@ -31,11 +42,75 @@ export type SnapshotReader = (query: {
   to: string;
 }) => Promise<AnalyticsSnapshot[]>;
 
+/**
+ * A pre-bound reader for the ONE monthly ga4_dimensions row (Phase 12 / 12-05a). The
+ * caller binds it to getSnapshots(client, { source:'ga4_dimensions', period:'monthly',
+ * from/to = first-of-month }) in the cron/route layer. OPTIONAL: when absent (the daily
+ * callers and every existing test) ReportData.dimensions stays undefined.
+ */
+export type MonthlyDimensionsReader = (query: {
+  shopId: string;
+  month: string; // 'YYYY-MM'
+}) => Promise<MonthlySnapshotRow | null>;
+
+/**
+ * A pre-bound reader for the ONE monthly performance row (Phase 12 / 12-05b). MIRRORS
+ * MonthlyDimensionsReader — the caller binds it to getSnapshots(client, { source:'performance',
+ * period:'monthly', ... }). OPTIONAL: absent => ReportData.performance stays undefined.
+ */
+export type MonthlyPerformanceReader = (query: {
+  shopId: string;
+  month: string; // 'YYYY-MM'
+}) => Promise<MonthlySnapshotRow | null>;
+
 export type AssembleDeps = {
   readSnapshots: SnapshotReader;
   /** ISO timestamp stamped onto the report (injected for purity/determinism). */
   generatedAt: string;
+  /** Optional rollup-bypassing reader for the monthly GA4 dimensional row (12-05a). */
+  readMonthlyDimensions?: MonthlyDimensionsReader;
+  /** Optional rollup-bypassing reader for the monthly performance row (12-05b). */
+  readMonthlyPerformance?: MonthlyPerformanceReader;
 };
+
+/**
+ * Build the additive ReportData.dimensions block from a monthly ga4_dimensions row.
+ * bounce_rate is DERIVED (1 - the rolled-up monthly engagement_rate of the assembled
+ * ga4 block), null when ga4 is not linked. This NEVER calls rollupMonth on the
+ * dimensional arrays — they are not summable metric-class data.
+ */
+function buildDimensions(
+  row: MonthlySnapshotRow,
+  ga4Block: SourceReportBlock | undefined
+): Ga4DimensionsReport {
+  const m = row.metrics as unknown as Partial<Ga4DimensionsMetrics>;
+  const engagementRate = ga4Block?.current.engagement_rate;
+  const bounceRate =
+    typeof engagementRate === "number" ? 1 - engagementRate : null;
+  return {
+    topChannels: m.topChannels ?? [],
+    topLandingPages: m.topLandingPages ?? [],
+    devices: m.devices ?? [],
+    newVsReturning: m.newVsReturning ?? [],
+    averageSessionDuration: m.averageSessionDuration ?? 0,
+    bounceRate,
+  };
+}
+
+/**
+ * Build the additive ReportData.performance block from a monthly performance row. NEVER calls
+ * rollupMonth — perf is point-in-time STOCK. Returns null when the row has no PSI payload.
+ */
+function buildPerformance(row: MonthlySnapshotRow): PerformanceReport | null {
+  const m = row.metrics as unknown as Partial<PerformanceMetrics>;
+  if (!m.psi) return null;
+  return {
+    psi: m.psi,
+    gtmetrix: m.gtmetrix ?? null,
+    strategy: "mobile",
+    testedUrl: typeof m.tested_url === "string" ? m.tested_url : "",
+  };
+}
 
 /** Inclusive ISO-date filter for rows within [start, end]. */
 function within(rows: AnalyticsSnapshot[], start: string, end: string): AnalyticsSnapshot[] {
@@ -100,6 +175,22 @@ export async function assembleReportData(
     if (block.prior !== null) sourcesWithPriorMonth.push(block.source);
   }
 
+  // Additive monthly dimensional block (12-05a). Read off a SEPARATE path that
+  // bypasses the daily SOURCES rollup loop entirely; omitted when no reader is wired
+  // or no monthly row exists (graceful omission — the daily assembly above is unchanged).
+  let dimensions: Ga4DimensionsReport | undefined;
+  if (deps.readMonthlyDimensions) {
+    const row = await deps.readMonthlyDimensions({ shopId, month: periodMonth });
+    if (row) dimensions = buildDimensions(row, sources.ga4);
+  }
+
+  // Additive monthly performance block (12-05b) — same separate, rollup-bypassing path.
+  let performance: PerformanceReport | undefined;
+  if (deps.readMonthlyPerformance) {
+    const row = await deps.readMonthlyPerformance({ shopId, month: periodMonth });
+    if (row) performance = buildPerformance(row) ?? undefined;
+  }
+
   return {
     shopId,
     periodMonth,
@@ -108,6 +199,8 @@ export async function assembleReportData(
     linkedSources,
     sourcesWithPriorMonth,
     generatedAt: deps.generatedAt,
+    ...(dimensions ? { dimensions } : {}),
+    ...(performance ? { performance } : {}),
   };
 }
 
