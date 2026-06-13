@@ -9,19 +9,25 @@
 //
 // The same RENDER_TOKEN authenticates BOTH hops: this worker checks the incoming
 // bearer, and forwards it as page.setExtraHTTPHeaders so the print route (which is
-// itself RENDER_TOKEN-gated) authorizes the page.goto.
+// itself RENDER_TOKEN-gated) authorizes the page.goto. Because the bearer is forwarded,
+// the requested URL is allowlisted to EXACTLY the print route on REPORT_APP_ORIGIN before
+// any navigation (assertAllowedPrintUrl) — otherwise a token holder could aim the worker
+// and its bearer at an arbitrary or internal target (SSRF / token forwarding).
 //
 // DEPLOY IS THE 12-04 GATE BATCH. This file is authored + version-pinned in-repo
 // now; it is built into the container (Dockerfile) and run on Hetzner at activation.
-// The app gains NO dependency from this directory — puppeteer lives in this worker's
-// OWN package.json only.
+// REPORT_APP_ORIGIN must be set at deploy (e.g. https://hub.psgweb.me) or every render
+// fails closed with 400. The app gains NO dependency from this directory — puppeteer
+// lives in this worker's OWN package.json only.
 
 import { createServer } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import puppeteer from "puppeteer";
+import { assertAllowedPrintUrl } from "./url-allowlist.mjs";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const TOKEN = process.env.RENDER_TOKEN ?? "";
+const APP_ORIGIN = process.env.REPORT_APP_ORIGIN ?? "";
 
 /** Constant-time bearer check against RENDER_TOKEN. */
 function authorized(req) {
@@ -89,12 +95,17 @@ const server = createServer(async (req, res) => {
   try {
     const raw = await readBody(req);
     const { url } = JSON.parse(raw || "{}");
-    if (!url || typeof url !== "string") {
+    let target;
+    try {
+      // Allowlist BEFORE navigation: only the print route on REPORT_APP_ORIGIN is
+      // reachable, so the forwarded bearer can never be aimed elsewhere.
+      target = assertAllowedPrintUrl(url, APP_ORIGIN);
+    } catch (e) {
       res.writeHead(400, { "Content-Type": "text/plain" });
-      res.end("missing url");
+      res.end(`bad url: ${e instanceof Error ? e.message : String(e)}`);
       return;
     }
-    const pdf = await renderPdf(url);
+    const pdf = await renderPdf(target.href);
     res.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Length": pdf.length,

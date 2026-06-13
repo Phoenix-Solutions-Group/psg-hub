@@ -7,7 +7,10 @@
 // Invariants:
 //  - NEVER emails an unverified report: a "hold" outcome stores/sends nothing.
 //  - Narrative is persisted BEFORE render (the print route loads the persisted JSON).
-//  - Idempotent: a shop already emailed for the period is skipped (unless force).
+//  - EXACTLY-ONE delivery under overlap: an atomic claim (claimForSend) is taken
+//    AFTER recordReport and BEFORE the non-idempotent sendEmail. Two overlapping
+//    runs both reach the claim, but only one wins; the loser skips without emailing.
+//    The preflight alreadySent read is a cheap early-skip optimization, NOT the gate.
 //  - Per-shop failure is CONTAINED: one shop throwing never aborts the rest.
 
 import type { ReportData } from "./types";
@@ -44,8 +47,14 @@ export type MonthlyDeps = {
   renderReportPdf: (slug: string) => Promise<Uint8Array>;
   storeReportPdf: (shopId: string, period: string, bytes: Uint8Array) => Promise<unknown>;
   recordReport: (shopId: string, period: string, storagePath: string) => Promise<unknown>;
-  /** True if this shop already has an emailed report for the period (idempotency). */
+  /** True if this shop already has an emailed report for the period. CHEAP PREFLIGHT
+   *  optimization only (skips expensive assemble/generate/render) — it is a non-atomic
+   *  read and is NOT the delivery gate. The authoritative gate is claimForSend. */
   alreadySent: (shopId: string, period: string) => Promise<boolean>;
+  /** Atomically claim the send slot AFTER recordReport, BEFORE sendEmail. Returns true
+   *  if THIS run won the exclusive claim (proceed to send); false if another run already
+   *  holds or completed it (skip without emailing). This is the real idempotency gate. */
+  claimForSend: (shopId: string, period: string) => Promise<boolean>;
   markEmailed: (shopId: string, period: string) => Promise<unknown>;
   buildReportEmail: (shop: MonthlyShop, period: string, downloadUrl: string) => MailMessage;
   sendEmail: (message: MailMessage) => Promise<unknown>;
@@ -95,6 +104,14 @@ export async function runMonthlyReports(
       const pdf = await deps.renderReportPdf(slug);
       await deps.storeReportPdf(shop.id, period, pdf);
       await deps.recordReport(shop.id, period, deps.pdfKey(shop.id, period));
+
+      // Atomic claim BEFORE the non-idempotent send. Overlapping runs both reach here;
+      // only the claim winner emails. A lost claim is a clean skip, never a failure.
+      const claimed = await deps.claimForSend(shop.id, period);
+      if (!claimed) {
+        results.push({ shop, status: "skipped" });
+        continue;
+      }
 
       const message = deps.buildReportEmail(shop, period, deps.downloadUrl(shop.id, period));
       await deps.sendEmail(message);

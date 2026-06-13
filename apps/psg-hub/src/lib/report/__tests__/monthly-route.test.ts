@@ -6,9 +6,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // orchestrator. runMonthlyReports is mocked so no real DB/LLM/network runs.
 
 const { runMonthlyReports } = vi.hoisted(() => ({ runMonthlyReports: vi.fn() }));
+// Stub the service client so we can spy on the claim RPC. runMonthlyReports is mocked and
+// never invokes the deps closures, so only `.rpc` (exercised when we call claimForSend by
+// hand) is needed.
+const { serviceStub } = vi.hoisted(() => ({ serviceStub: { rpc: vi.fn() } }));
 vi.mock("@/lib/report/monthly", () => ({ runMonthlyReports }));
+vi.mock("@/lib/supabase/service", () => ({ createServiceClient: () => serviceStub }));
 
-import { GET } from "@/app/api/cron/monthly-report/route";
+import { GET, POST } from "@/app/api/cron/monthly-report/route";
+import type { MonthlyDeps } from "@/lib/report/monthly";
 
 const CONFIGURED = {
   REPORT_RENDER_URL: "https://render.example.com",
@@ -17,9 +23,15 @@ const CONFIGURED = {
   AI_GATEWAY_API_KEY: "gw-key",
 };
 
-function req(headers: Record<string, string> = {}) {
-  return new Request("https://hub.psgweb.me/api/cron/monthly-report", { headers });
+function req(headers: Record<string, string> = {}, url = "https://hub.psgweb.me/api/cron/monthly-report") {
+  return new Request(url, { headers });
 }
+
+/** The deps object the route passed into the (mocked) orchestrator on its last call. */
+function lastDeps(): MonthlyDeps {
+  return runMonthlyReports.mock.calls.at(-1)![1] as MonthlyDeps;
+}
+const AUTH = { authorization: "Bearer cron-secret" };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -28,6 +40,7 @@ beforeEach(() => {
     results: [],
     counts: { sent: 0, skipped: 0, held: 0, failed: 0 },
   });
+  serviceStub.rpc.mockResolvedValue({ data: true, error: null });
   process.env.CRON_SECRET = "cron-secret";
   Object.assign(process.env, CONFIGURED);
 });
@@ -59,5 +72,40 @@ describe("monthly-report cron route", () => {
     const body = await res.json();
     expect(body).toHaveProperty("counts");
     expect(body).toHaveProperty("period");
+  });
+
+  it("scheduled GET never forces, even with ?force=1", async () => {
+    const res = await GET(req(AUTH, "https://hub.psgweb.me/api/cron/monthly-report?force=1"));
+    expect(res.status).toBe(200);
+    expect(lastDeps().force).toBe(false);
+    expect((await res.json()).force).toBe(false);
+  });
+
+  it("manual POST honors ?force=1: force reaches BOTH the preflight bypass AND the claim RPC", async () => {
+    const res = await POST(req(AUTH, "https://hub.psgweb.me/api/cron/monthly-report?force=1"));
+    expect(res.status).toBe(200);
+    expect((await res.json()).force).toBe(true);
+
+    const deps = lastDeps();
+    expect(deps.force).toBe(true); // seam 1: preflight alreadySent bypass
+    // seam 2: the claim binding — the seam that had the original double-send bug. Invoke
+    // it and prove the same flag reaches the RPC as p_force, not a hardcoded false.
+    await deps.claimForSend("aaaaaaaa-0000-0000-0000-000000000001", "2026-05");
+    expect(serviceStub.rpc).toHaveBeenCalledWith(
+      "claim_monthly_report",
+      expect.objectContaining({ p_force: true })
+    );
+  });
+
+  it("manual POST without ?force=1 does not force (preflight AND claim see false)", async () => {
+    const res = await POST(req(AUTH));
+    expect(res.status).toBe(200);
+    const deps = lastDeps();
+    expect(deps.force).toBe(false);
+    await deps.claimForSend("aaaaaaaa-0000-0000-0000-000000000001", "2026-05");
+    expect(serviceStub.rpc).toHaveBeenCalledWith(
+      "claim_monthly_report",
+      expect.objectContaining({ p_force: false })
+    );
   });
 });

@@ -27,6 +27,7 @@ function makeDeps(over: Partial<MonthlyDeps> = {}, order: string[] = []): Monthl
     storeReportPdf: vi.fn(async () => { order.push("storePdf"); }),
     recordReport: vi.fn(async () => { order.push("record"); }),
     alreadySent: vi.fn(async () => false),
+    claimForSend: vi.fn(async () => { order.push("claim"); return true; }),
     markEmailed: vi.fn(async () => { order.push("markEmailed"); }),
     buildReportEmail: vi.fn((shop, period, url) => ({ to: shop.ownerEmail, templateId: "t", dynamicTemplateData: { reportUrl: url } })),
     sendEmail: vi.fn(async () => { order.push("sendEmail"); }),
@@ -46,8 +47,8 @@ describe("runMonthlyReports", () => {
 
     expect(res.counts).toEqual({ sent: 1, skipped: 0, held: 0, failed: 0 });
     expect(res.results[0]!.status).toBe("sent");
-    // narrative persisted BEFORE render; emailed_at stamped AFTER send.
-    expect(order).toEqual(["storeNarrative", "render", "storePdf", "record", "sendEmail", "markEmailed"]);
+    // narrative persisted BEFORE render; claim taken AFTER record + BEFORE send; emailed_at stamped AFTER send.
+    expect(order).toEqual(["storeNarrative", "render", "storePdf", "record", "claim", "sendEmail", "markEmailed"]);
     expect(deps.renderReportPdf).toHaveBeenCalledWith(`${shopA.id}__${PERIOD}`);
     expect(deps.recordReport).toHaveBeenCalledWith(shopA.id, PERIOD, `${shopA.id}/${PERIOD}.pdf`);
     expect(deps.buildReportEmail).toHaveBeenCalledWith(
@@ -76,6 +77,21 @@ describe("runMonthlyReports", () => {
     expect(deps.generateNarrative).not.toHaveBeenCalled();
     expect(deps.renderReportPdf).not.toHaveBeenCalled();
     expect(deps.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("loses the atomic claim (concurrent run) -> skips without emailing or marking", async () => {
+    const order: string[] = [];
+    // Preflight passed (alreadySent=false) but another overlapping run already claimed:
+    // the report is rendered/stored, yet THIS run must NOT send or mark.
+    const deps = makeDeps({ claimForSend: vi.fn(async () => { order.push("claim"); return false; }) }, order);
+    const res = await runMonthlyReports(PERIOD, deps);
+
+    expect(res.counts).toEqual({ sent: 0, skipped: 1, held: 0, failed: 0 });
+    expect(res.results[0]!.status).toBe("skipped");
+    expect(deps.recordReport).toHaveBeenCalledTimes(1); // render path ran up to the claim
+    expect(deps.sendEmail).not.toHaveBeenCalled();      // but the send is gated
+    expect(deps.markEmailed).not.toHaveBeenCalled();
+    expect(order).toEqual(["storeNarrative", "render", "storePdf", "record", "claim"]);
   });
 
   it("force=true overrides alreadySent and re-runs the pipeline", async () => {
