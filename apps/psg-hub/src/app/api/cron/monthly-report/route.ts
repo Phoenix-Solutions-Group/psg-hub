@@ -114,6 +114,25 @@ async function recordReport(
   if (error) throw new Error(`recordReport: ${error.message}`);
 }
 
+// Atomic exclusive claim of the send slot (see 20260613000000_monthly_reports_claim.sql).
+// Returns true iff THIS call won the claim. Server-side conditional UPDATE: two
+// overlapping runs serialize on the row lock and exactly one wins. force=false here —
+// the cron never re-sends a delivered report; force is reserved for a manual re-run.
+async function claimReport(
+  service: SupabaseClient,
+  shopId: string,
+  period: string,
+  force: boolean
+): Promise<boolean> {
+  const { data, error } = await service.rpc("claim_monthly_report", {
+    p_shop_id: shopId,
+    p_period_month: period,
+    p_force: force,
+  });
+  if (error) throw new Error(`claimReport: ${error.message}`);
+  return data === true;
+}
+
 async function markEmailed(service: SupabaseClient, shopId: string, period: string): Promise<void> {
   const { error } = await service
     .from(MONTHLY)
@@ -123,7 +142,9 @@ async function markEmailed(service: SupabaseClient, shopId: string, period: stri
   if (error) throw new Error(`markEmailed: ${error.message}`);
 }
 
-async function handle(request: Request): Promise<NextResponse> {
+// allowForce gates the manual re-send: the scheduled GET passes false (a cron run never
+// re-sends a delivered report); the manual POST passes true and honors ?force=1.
+async function handle(request: Request, allowForce: boolean): Promise<NextResponse> {
   if (!authorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -137,6 +158,7 @@ async function handle(request: Request): Promise<NextResponse> {
   const period = priorMonth(new Date().toISOString().slice(0, 7)); // just-completed prior month
   const { start, end } = monthWindow(period);
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  const force = allowForce && new URL(request.url).searchParams.get("force") === "1";
 
   const result = await runMonthlyReports(period, {
     listShops: () => listEligibleShops(service, start, end),
@@ -150,6 +172,11 @@ async function handle(request: Request): Promise<NextResponse> {
     storeReportPdf: (s, p, b) => storeReportPdf(s, p, b),
     recordReport: (s, p, path) => recordReport(service, s, p, path),
     alreadySent: (s, p) => alreadySent(service, s, p),
+    // force MUST be threaded into BOTH `force` (preflight bypass) and this claim arg in
+    // lockstep: a force that bypasses the preflight but claims with force=false would
+    // skip at the claim (emailed_at set) and silently never re-send.
+    force,
+    claimForSend: (s, p) => claimReport(service, s, p, force),
     markEmailed: (s, p) => markEmailed(service, s, p),
     buildReportEmail: (shop, p, url) => buildReportEmail(shop, p, url),
     sendEmail: (m) => sendEmail(m),
@@ -157,13 +184,13 @@ async function handle(request: Request): Promise<NextResponse> {
     pdfKey,
   });
 
-  return NextResponse.json({ period, counts: result.counts });
+  return NextResponse.json({ period, force, counts: result.counts });
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
-  return handle(request);
+  return handle(request, false); // scheduled cron: never force
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  return handle(request);
+  return handle(request, true); // manual trigger: ?force=1 re-sends a delivered report
 }
