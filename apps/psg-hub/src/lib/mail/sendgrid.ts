@@ -72,6 +72,11 @@ function buildPayload(
     text: message.text,
     templateId: message.templateId,
     dynamicTemplateData: message.dynamicTemplateData,
+    // Per-message click-tracking override. Only emitted when explicitly disabled,
+    // so account-default behavior is untouched for every other send.
+    ...(message.clickTracking === false
+      ? { trackingSettings: { clickTracking: { enable: false, enableText: false } } }
+      : {}),
   } as unknown as MailDataRequired;
 }
 
