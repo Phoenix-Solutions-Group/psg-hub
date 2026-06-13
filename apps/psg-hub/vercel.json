@@ -22,6 +22,18 @@
     {
       "path": "/api/cron/gsc-sync",
       "schedule": "45 6 * * *"
+    },
+    {
+      "path": "/api/cron/ga4-dims-sync",
+      "schedule": "0 2 1 * *"
+    },
+    {
+      "path": "/api/cron/perf-sync",
+      "schedule": "0 3 1 * *"
+    },
+    {
+      "path": "/api/cron/monthly-report",
+      "schedule": "0 5 1 * *"
     }
   ]
 }

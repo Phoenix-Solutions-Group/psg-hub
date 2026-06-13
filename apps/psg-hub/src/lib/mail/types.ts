@@ -13,6 +13,14 @@ export interface MailMessage {
   /** SendGrid dynamic template id (use instead of subject/html). */
   templateId?: string;
   dynamicTemplateData?: Record<string, unknown>;
+  /**
+   * Set false to disable SendGrid click tracking for this message. Transactional
+   * links (e.g. the membership-gated report download) must NOT be rewritten through
+   * the link-branding subdomain — that domain serves a *.sendgrid.net cert that does
+   * not match the branded host, so a tracked link errors COMMON_NAME_INVALID.
+   * Undefined leaves the account default untouched.
+   */
+  clickTracking?: boolean;
 }
 
 export interface MailResult {

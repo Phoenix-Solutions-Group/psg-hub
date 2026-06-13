@@ -6,6 +6,16 @@ export type AnalyticsSource = "semrush" | "google_ads" | "ga4" | "gsc";
 export type AnalyticsPeriod = "daily" | "monthly";
 
 /**
+ * Insert/storage-layer source key (Phase 12 / 12-05). SUPERSET of AnalyticsSource:
+ * the GA4 dimensional ingest and (12-05b) performance ingest write monthly rows
+ * under their own DB source values WITHOUT joining the four-source AnalyticsSource
+ * union (which drives six exhaustive maps — render/rollup/report-data/prompt/schema/
+ * SourceReportBlock; RESEARCH data-model section keeps it at four). These extra
+ * sources live ONLY on the write/read path of analytics_snapshots + the ledger.
+ */
+export type SnapshotSource = AnalyticsSource | "ga4_dimensions" | "performance";
+
+/**
  * A stored analytics snapshot row (public.analytics_snapshots).
  * Column names match the inherited table (extended in 09-01): the date column is
  * `date`; `location_id` is nullable (shop-level snapshots leave it null).
@@ -22,14 +32,58 @@ export type AnalyticsSnapshot = {
   created_at: string;
 };
 
-/** Insert/upsert shape — id/synced_at/created_at default server-side. */
+/**
+ * Insert/upsert shape — id/synced_at/created_at default server-side. `source` is the
+ * insert-layer SnapshotSource (superset of AnalyticsSource) so the monthly ga4_dimensions
+ * / performance ingests upsert under their own source value; the daily callers pass an
+ * AnalyticsSource, which is assignable (subset), so they stay type-valid unchanged.
+ */
 export type AnalyticsSnapshotInsert = {
   shop_id: string;
   location_id?: string | null;
-  source: AnalyticsSource;
+  source: SnapshotSource;
   date: string;
   period: AnalyticsPeriod;
   metrics: Record<string, unknown>;
+};
+
+/**
+ * A stored monthly snapshot whose `source` may be an extended SnapshotSource (e.g.
+ * 'ga4_dimensions'). Used by the report's monthly reader path, which never enters the
+ * four-source rollup; keeps AnalyticsSnapshot.source pinned to the AnalyticsSource union.
+ */
+export type MonthlySnapshotRow = Omit<AnalyticsSnapshot, "source"> & {
+  source: SnapshotSource;
+};
+
+/**
+ * One row of a GA4 secondary-dimension breakdown — Phase 12 / 12-05a. `users` is
+ * totalUsers for the bucket; `engagement_rate` (0..1) is captured per row where the
+ * section surfaces it (landing pages) and is ABSENT on the synthetic '(other)'
+ * remainder row (a ratio cannot be summed). `sessions` is the reconciling metric: the
+ * top-N rows plus '(other)' always sum to the dimension's month total.
+ */
+export type Ga4DimensionRow = {
+  name: string;
+  sessions: number;
+  users: number;
+  engagement_rate?: number; // 0..1 ratio — per row, omitted on '(other)'
+};
+
+/**
+ * GA4 dimensional `metrics` jsonb shape — Phase 12 / 12-05a. Stored as ONE
+ * period='monthly' analytics_snapshots row per (shop, 'ga4_dimensions', YYYY-MM-01).
+ * Each array is top-N-by-sessions + a reconciling '(other)' row. `averageSessionDuration`
+ * is the sessions-weighted month aggregate (GA4 metricAggregations TOTAL), in SECONDS —
+ * a ratio-like average, aggregate-EXCLUDED (same class as engagement_rate). bounce_rate
+ * is NOT stored: it is derived at report time as 1 - the monthly engagement_rate.
+ */
+export type Ga4DimensionsMetrics = {
+  topChannels: Ga4DimensionRow[];
+  topLandingPages: Ga4DimensionRow[];
+  devices: Ga4DimensionRow[];
+  newVsReturning: Ga4DimensionRow[];
+  averageSessionDuration: number; // seconds — aggregate-excluded
 };
 
 /**
@@ -98,6 +152,78 @@ export type GscMetrics = {
   impressions: number;
   ctr: number; // 0..1 ratio — aggregate-excluded
   position: number; // average position — aggregate-excluded
+};
+
+/**
+ * CrUX real-user FIELD metrics for a page/origin — Phase 12 / 12-05b. Parsed from the
+ * PSI response's `loadingExperience` (URL) or `originLoadingExperience` (origin) — best-effort,
+ * each field null when its CrUX key is absent (low-traffic origins miss the popularity
+ * threshold entirely). All are point-in-time STOCK / ratio-like, aggregate-EXCLUDED.
+ */
+export type PsiFieldMetrics = {
+  lcp_ms: number | null; // LARGEST_CONTENTFUL_PAINT_MS percentile (ms)
+  inp_ms: number | null; // INTERACTION_TO_NEXT_PAINT percentile (ms, no _MS suffix in the key)
+  cls: number | null; // CUMULATIVE_LAYOUT_SHIFT_SCORE percentile, integer ×100 -> real value
+  fcp_ms: number | null; // FIRST_CONTENTFUL_PAINT_MS percentile (ms)
+  ttfb_ms: number | null; // EXPERIMENTAL_TIME_TO_FIRST_BYTE percentile (ms)
+  overall_category: string | null; // 'FAST' | 'AVERAGE' | 'SLOW'
+};
+
+/**
+ * PSI (PageSpeed Insights v5) result — Phase 12 / 12-05b. `lighthouseResult` LAB is always
+ * present; `field` (CrUX, from the same PSI call's loadingExperience/originLoadingExperience)
+ * is null when CrUX has no data (the collision-shop default). `perf_score` is 0..100
+ * (categories.performance.score ×100). All point-in-time STOCK — never rolled up.
+ */
+export type PsiResult = {
+  perf_score: number | null; // 0..100
+  lab_lcp_ms: number | null;
+  lab_cls: number | null;
+  lab_tbt_ms: number | null;
+  lab_fcp_ms: number | null;
+  lab_speed_index_ms: number | null;
+  lab_ttfb_ms: number | null; // server-response-time audit
+  field: PsiFieldMetrics | null; // CrUX, render-if-present
+  origin_field: boolean; // true when field came from the origin fallback
+};
+
+/**
+ * GTMetrix report fields (API v2.0 `/reports/{id}` data.attributes) — Phase 12 / 12-05b.
+ * Optional enrichment beyond PSI (page weight, request count, backend_duration, grade). null
+ * fields where the report omits them. `gtmetrix_grade` is a letter; the rest are numeric.
+ */
+export type GtmetrixResult = {
+  fully_loaded_time: number | null;
+  onload_time: number | null;
+  time_to_first_byte: number | null;
+  backend_duration: number | null;
+  page_bytes: number | null;
+  html_bytes: number | null;
+  page_requests: number | null;
+  redirect_duration: number | null;
+  connect_duration: number | null;
+  largest_contentful_paint: number | null;
+  total_blocking_time: number | null;
+  cumulative_layout_shift: number | null;
+  speed_index: number | null;
+  time_to_interactive: number | null;
+  gtmetrix_grade: string | null;
+  gtmetrix_score: number | null;
+  performance_score: number | null;
+  structure_score: number | null;
+};
+
+/**
+ * Website-performance `metrics` jsonb shape — Phase 12 / 12-05b. Stored as ONE
+ * period='monthly' analytics_snapshots row per (shop, 'performance', YYYY-MM-01). PSI is the
+ * always-present floor; gtmetrix is null when its key is unset or the shop is out of GTMetrix
+ * scope. Point-in-time STOCK — read on a separate path, NEVER enters METRIC_REGISTRY/rollupMonth.
+ */
+export type PerformanceMetrics = {
+  psi: PsiResult;
+  gtmetrix: GtmetrixResult | null;
+  strategy: "mobile";
+  tested_url: string;
 };
 
 /** Ingest audit ledger row (public.analytics_sync_runs). */
