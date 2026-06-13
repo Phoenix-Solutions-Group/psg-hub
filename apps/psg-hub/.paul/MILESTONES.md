@@ -4,8 +4,49 @@ Completed milestone log for psg-hub.
 
 | Milestone | Completed | Duration | Stats |
 |-----------|-----------|----------|-------|
+| v0.3 Customer Analytics | 2026-06-13 | ~9 days | 4 phases, 18 plans |
 | v0.2 Customer MVP | 2026-06-04 | ~2 days | 3 phases, 14 plans |
 | v0.1 Foundation | 2026-06-02 | ~4 days | 5 phases, 18 plans |
+
+---
+
+## ✅ v0.3 Customer Analytics (v0.3.0)
+
+**Completed:** 2026-06-13 (all 4 phases loop-closed)
+**Duration:** ~9 days (2026-06-04 milestone start → 2026-06-13 close)
+
+### Stats
+
+| Metric | Value |
+|--------|-------|
+| Phases | 4 (9 Analytics foundation + SEMrush · 10 Google Ads · 11 GA4 + GSC · 12 PSG report) |
+| Plans | 18 (9:3 · 10:4 · 11:4 · 12:7) |
+| Files changed | Large — analytics surface + 4 ingest verticals + the report pipeline + an in-repo Hetzner Chromium worker |
+
+### Key Accomplishments
+
+- Built the reusable analytics surface ONCE and proved it with the lowest-friction source: source-agnostic `analytics_snapshots` data model + Recharts brand chart primitives + `/dashboard/analytics` (per-shop + MSO summable-only aggregate, switcher typeahead, LCP gate), surfaced with a contract-correct SEMrush daily ingest (Phase 9, LIVE on prod for the 4 url-shops).
+- Provisioned the missing `google_ads_*` tables, wired the already-built OAuth + GAQL metrics sync, and added MCC account-selection (callback enumerates the manager's client accounts) — Wallace pilot real paid metrics LIVE (Phase 10).
+- Shared per-shop Google OAuth (one combined `analytics.readonly` + `webmasters.readonly` consent → one AES-256-GCM-encrypted refresh token linking a GA4 property + a GSC site) + GA4 and GSC daily ingests + panels — Wallace real GA4 (sessions/users/engagement) + GSC (clicks/impressions/position) LIVE (Phase 11).
+- Shipped the CORE v0.3 output — the automated PSG monthly client report: a multi-LLM narrative (AI SDK v6 via Vercel AI Gateway) behind a 4-stage eval gate (schema → numeric-groundedness → brand-lint → judge) that grounds every numeral by token-substitution and never auto-emails an unverified report; a branded PDF rendered on a controlled Hetzner Chromium worker (Vercel Fluid can't launch headless Chromium); private Supabase bucket + membership-gated download + SendGrid link-email. LIVE since 12-04, activation-verified end-to-end on the Demo shop; first real send fires the July 1 cron (Phase 12).
+- Added the GA4-dimensional (Top Traffic Drivers / Landing Pages / Device / New-vs-Returning + bounce rate + avg session duration) and real website-performance (PSI lab + CrUX-field + GTMetrix) expansion that replaces the old report's bogus GA4 "server response 14:49"; deployed + DB-ready, closed activation-pending (auto-activates July 1; build-blind-parser section-correctness verification owed).
+- Four live ingest sources on prod with real Wallace pilot numbers; two activation-blocking prod bugs caught + fixed at the 12-04 live smoke (eval-gate google_ads mis-ground that held every report; SendGrid click-tracking cert that broke the email link).
+
+### Key Decisions
+
+- Narrative grounding by token-substitution (writer emits `{{placeholder}}` tokens, a deterministic verifier substitutes real numbers; the eval gate blocks/regenerates/holds, never a false pass) — makes "no hallucinated numerals" provable.
+- Render the report PDF on a Hetzner Chromium worker over HTTP, not on Vercel (RESEARCH refuted Vercel Fluid headless Chromium — libnss3 launch break); the app stays dependency-free (puppeteer only in the in-repo worker).
+- Google refresh-token encryption = app-key AES-256-GCM (`bytea` + `key_version`), NOT pgsodium (Phase 10 decision, inherited by Phase 11) — accepted deviation from the PII/pgsodium constraint.
+- GA4-dims + performance stay DB-only `SnapshotSource` values (CHECK migration), NOT added to the `AnalyticsSource` union; readers wired into the PDF print path ONLY, leaving the narrative/eval binding untouched (eval-safe).
+- 12-05 expansion closed ACTIVATION-PENDING rather than rotate the un-pullable CRON_SECRET for a live smoke — base report live; expansion auto-activates July 1 (section-correctness verification owed; recorded in STATE Deferred Issues).
+
+### Follow-ups carried past v0.3
+
+- ⭐ July 1 build-blind-parser section-correctness verification (the GA4-dims + perf crons' first live run is unmonitored — the scheduled agent checks send, not section correctness).
+- Rotate the chat-pasted secrets (Hetzner / AI Gateway / SendGrid + PAGESPEED + GTMETRIX).
+- Fleet-scale (842-shop) performance batching; Peec AI + Local Falcon ingestion (the remaining canon-report sources) → post-v0.3.
+
+Archive: `.paul/milestones/v0.3.0-ROADMAP.md`. Phase landed on main via merge `37359c8` (pushed); base report LIVE on hub.psgweb.me since 12-04 (CLI deploy `dpl_FEDz4AE6mWxrydVcJHQ9Gsb2h7kn`).
 
 ---
 
