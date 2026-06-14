@@ -6,21 +6,20 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 ## Current Milestone
 
-**v0.3 Customer Analytics** (v0.3.0)
-Status: ✅ COMPLETE 2026-06-13 — archived (see Completed Milestones + `.paul/milestones/v0.3.0-ROADMAP.md`). Next: v0.4 Invoicing + Payments (`/paul:milestone` or `/paul:discuss-milestone` to kick off).
-Phases: 4 of 4 complete
+**v0.3.5 Presence + Sentiment** (v0.3.5)
+Status: 🚧 In Progress — created 2026-06-13
+Phases: 0 of 2 complete
 
-Turn the empty analytics surface into a unified, story-led **SEMrush + Google Ads + GA4 + GSC** marketing view, output as the automated **PSG monthly client report** (multi-LLM narrative + branded PDF). Built from the absorbed ads-dashboard canon.
+Surface each shop's Google Business Profile presence and reviews in the hub — with reply-from-hub and LLM-driven sentiment — reusing the Phase-11 Google-OAuth ingest pattern and the Phase-12 LLM/eval + report infra. The v0.3-cut presence/sentiment items, pulled forward (operator 2026-06-13) ahead of the slated v0.4 Invoicing + Payments, to extend the just-shipped analytics/report surface while the infra is fresh.
 
-**Re-planned 2026-06-04 (grounding overturned the premise):** the ROADMAP assumed "BSM Phase 5 Google Ads data already exists, no OAuth." Verified FALSE on prod — the `google_ads_*` tables do not exist, no source has stored data, and every source needs ingest groundwork. So phases are re-ordered by ascending OAuth/ingest friction: foundation + the lowest-friction source first to prove the surface end-to-end, heavier sources next, report last. Grew 3 → 4 phases.
+**Decimal insertion (v0.3.5):** inserted between v0.3 and the slated v0.4 Invoicing + Payments (which moves to the milestone after this). Same proven build-local → operator-gate activation pattern as Phases 9-12. Pilot = Wallace (already Google-linked).
 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
-| 9 | Analytics foundation + SEMrush | 3/3 ✅ | ✅ Complete + LIVE on prod (real numbers, 4 url-shops; activated 2026-06-09) | 2026-06-05 |
-| 10 | Google Ads | 10-01 ✅ · 10-02 ✅ · 10-03 ✅ (gate batch executed live) · 10-04 ✅ (MCC account-selection) | ✅ Complete + LIVE on prod (Wallace pilot real paid numbers) | 2026-06-09 |
-| 11 | GA4 + GSC | 4/4 ✅ (11-01 foundation · 11-02 GA4 · 11-03 GSC · 11-04 gate batch executed live) | ✅ Complete + LIVE on prod (Wallace pilot real GA4 + GSC numbers on the live surface; activated 2026-06-10) | 2026-06-10 |
-| 12 | PSG report — narrative + PDF | 7/7 ✅ (12-01 data · 12-02 narrative+eval · 12-03 print+render+delivery · 12-04 cron+base-activation LIVE · 12-05a GA4 dims · 12-05b perf sources · 12-05c cron+gate ✅ closed activation-pending) | ✅ Complete + LIVE on prod (base report live since 12-04; 12-05 dims+perf expansion deployed + DB-ready, auto-activates July 1) | 2026-06-13 |
+| 13 | GBP presence foundation + insights | TBD | Not started | - |
+| 14 | Reviews + sentiment | TBD | Not started | - |
 
+v0.3 Customer Analytics (v0.3.0) ✅ COMPLETE 2026-06-13 (4/4 phases; see Completed Milestones + `.paul/milestones/v0.3.0-ROADMAP.md`).
 v0.2 Customer MVP (v0.2.0) ✅ COMPLETE 2026-06-04 (3/3 phases; see Completed Milestones).
 
 <!-- audit-added 2026-06-02: from AUDIT-2026-06-02-trajectory.md (whole-project trajectory audit) -->
@@ -45,7 +44,7 @@ Entry criteria for v0.2, folded into the phase split. Full rationale: `.paul/AUD
 
 ## Next Milestone
 
-**v0.4 Invoicing + Payments** — Invoiced.com mirror + Stripe coexistence + payment links — **v1.0 customer launch**. Picks up the v0.3-deferred Stripe INSERT→UPSERT (S3) + PII-at-rest retention.
+**v0.4 Invoicing + Payments** (follows v0.3.5) — Invoiced.com mirror + Stripe coexistence + payment links — **v1.0 customer launch**. Picks up the v0.3-deferred Stripe INSERT→UPSERT (S3) + PII-at-rest retention.
 
 
 ## Completed Milestones
@@ -375,5 +374,27 @@ Focus: multi-LLM auto-written analysis layer (with eval/quality gate); branded m
 Follow-on milestone (post-v0.3): Peec AI (AI share-of-voice) + Local Falcon (local maps/SoLV) ingestion to complete the full canon report.
 
 ---
+
+## v0.3.5 — Presence + Sentiment (🚧 In Progress — created 2026-06-13)
+
+**Milestone goal:** Surface each shop's Google Business Profile presence and reviews in the hub — with reply-from-hub and LLM-driven sentiment — reusing the Phase-11 Google-OAuth ingest pattern and the Phase-12 LLM/eval + report infra. The v0.3-cut presence/sentiment items pulled forward (operator 2026-06-13) ahead of the slated v0.4 Invoicing + Payments, to extend the just-shipped analytics/report surface while the infra is fresh. Decimal insertion (v0.3.5) between v0.3 and v0.4. Pilot = Wallace (already Google-linked). Context handoff: `.paul/MILESTONE-CONTEXT.md` (consumed at create).
+
+**2-phase shape (build-local → operator-gate, mirrors Phases 9-12):**
+
+### Phase 13: GBP presence foundation + insights
+
+Focus: extend the Phase-11 per-shop Google OAuth to add the GBP scope (`business.manage`) + link a shop's Google Business Profile location; ingest GBP profile insights (profile views, searches, calls, direction requests, website clicks) into `analytics_snapshots` under a new source + a "Presence" panel on the analytics surface. Reuses `google_oauth_accounts` + the encrypted-token + daily-cron + ledger pattern.
+**Research:** REQUIRED (hard gate) — GBP API is a new external surface: `business.manage` scope + re-consent path for already-linked accounts; the insights/performance endpoint shape. Prefer an ultracode Workflow.
+Plans: TBD (defined during /paul:plan).
+
+### Phase 14: Reviews + sentiment
+
+Focus: ingest GBP reviews; read + reply to a review from the hub (the FIRST external WRITE in the customer surface — decide direct GBP-API write vs the D52/D66 sandbox pattern + idempotency + an audit trail at plan time); run the Phase-12 LLM/eval infra over the reviews for sentiment (trend + theme extraction) → a sentiment panel + a new section in the monthly PSG report.
+**Research:** REQUIRED (hard gate) — GBP reviews API access has historically been allowlist-gated; verify the linked account can read + reply to reviews BEFORE planning the write path.
+Plans: TBD (defined during /paul:plan).
+
+**Cut from v0.3.5 (deferred):** multi-directory listings (Bing/Apple/Yelp NAP + citation sync → overlaps v1.6 Yext); post-repair survey send/capture (→ v1.1 Ops Surveys, needs repair-customer data); cross-platform (Yelp/Facebook) review sentiment.
+
+---
 *Roadmap created: 2026-05-29 (populated from SEED ideation v7)*
-*Last updated: 2026-06-13 — **milestone v0.3 Customer Analytics ✅ COMPLETE (4 of 4 phases).** Phase 12 (PSG report) closed: multi-LLM narrative + eval gate + Hetzner-rendered branded monthly PDF + membership-gated download + SendGrid link-email LIVE since 12-04; the 12-05 GA4-dimensional + website-performance expansion deployed + DB-ready, closed activation-pending (12-05c Stage C smoke skipped, auto-activates July 1; build-blind-parser section-correctness verification owed). Next: /paul:complete-milestone → v0.4 Invoicing + Payments.*
+*Last updated: 2026-06-13 — **milestone v0.3 Customer Analytics ✅ COMPLETE + CLOSED (4/4 phases; archived).** **v0.3.5 Presence + Sentiment 🚧 CREATED 2026-06-13** (decimal insertion ahead of v0.4): 2 phases — 13 GBP presence foundation + insights · 14 reviews read/reply + LLM sentiment; reuses Phase-11 OAuth + Phase-12 LLM/report infra; both phases RESEARCH-gated (GBP API: scope/insights + reviews-API access). Pilot = Wallace. Next: /paul:plan Phase 13.*
