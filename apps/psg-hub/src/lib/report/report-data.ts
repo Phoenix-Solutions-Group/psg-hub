@@ -9,6 +9,7 @@ import type {
   AnalyticsSnapshot,
   AnalyticsSource,
   Ga4DimensionsMetrics,
+  GbpPresenceMetrics,
   MonthlySnapshotRow,
   PerformanceMetrics,
 } from "../analytics/types";
@@ -20,6 +21,7 @@ import type {
   SourceReportBlock,
   Ga4DimensionsReport,
   PerformanceReport,
+  GbpPresenceReport,
 } from "./types";
 
 /** The live sources, in report display order. */
@@ -64,6 +66,16 @@ export type MonthlyPerformanceReader = (query: {
   month: string; // 'YYYY-MM'
 }) => Promise<MonthlySnapshotRow | null>;
 
+/**
+ * A pre-bound reader for the ONE monthly gbp_presence row (Phase 13 / 13-03). MIRRORS
+ * MonthlyPerformanceReader — the caller binds it to getMonthlySnapshot(client, { source:'gbp_presence',
+ * period:'monthly', ... }). OPTIONAL: absent => ReportData.gbpPresence stays undefined.
+ */
+export type MonthlyGbpPresenceReader = (query: {
+  shopId: string;
+  month: string; // 'YYYY-MM'
+}) => Promise<MonthlySnapshotRow | null>;
+
 export type AssembleDeps = {
   readSnapshots: SnapshotReader;
   /** ISO timestamp stamped onto the report (injected for purity/determinism). */
@@ -72,6 +84,8 @@ export type AssembleDeps = {
   readMonthlyDimensions?: MonthlyDimensionsReader;
   /** Optional rollup-bypassing reader for the monthly performance row (12-05b). */
   readMonthlyPerformance?: MonthlyPerformanceReader;
+  /** Optional rollup-bypassing reader for the monthly GBP presence row (13-03). */
+  readMonthlyGbpPresence?: MonthlyGbpPresenceReader;
 };
 
 /**
@@ -110,6 +124,30 @@ function buildPerformance(row: MonthlySnapshotRow): PerformanceReport | null {
     gtmetrix: m.gtmetrix ?? null,
     strategy: "mobile",
     testedUrl: typeof m.tested_url === "string" ? m.tested_url : "",
+  };
+}
+
+/**
+ * Build the additive ReportData.gbpPresence block from a monthly gbp_presence row (Phase 13 /
+ * 13-03). NEVER calls rollupMonth — presence is point-in-time STOCK. Maps the snake_case jsonb
+ * (GbpPresenceMetrics) to the camelCase report shape; the rating pair stays nullable.
+ */
+function buildGbpPresence(row: MonthlySnapshotRow): GbpPresenceReport {
+  const m = row.metrics as unknown as Partial<GbpPresenceMetrics>;
+  return {
+    openStatus: typeof m.open_status === "string" ? m.open_status : "",
+    primaryCategory: m.primary_category ?? null,
+    categories: Array.isArray(m.categories) ? m.categories : [],
+    hasHours: m.has_hours === true,
+    websiteUri: m.website_uri ?? null,
+    hasDescription: m.has_description === true,
+    phonePresent: m.phone_present === true,
+    ...(typeof m.completeness_score === "number"
+      ? { completenessScore: m.completeness_score }
+      : {}),
+    averageRating: typeof m.average_rating === "number" ? m.average_rating : null,
+    totalReviewCount:
+      typeof m.total_review_count === "number" ? m.total_review_count : null,
   };
 }
 
@@ -192,6 +230,13 @@ export async function assembleReportData(
     if (row) performance = buildPerformance(row) ?? undefined;
   }
 
+  // Additive monthly GBP presence + rating block (13-03) — same separate, rollup-bypassing path.
+  let gbpPresence: GbpPresenceReport | undefined;
+  if (deps.readMonthlyGbpPresence) {
+    const row = await deps.readMonthlyGbpPresence({ shopId, month: periodMonth });
+    if (row) gbpPresence = buildGbpPresence(row);
+  }
+
   return {
     shopId,
     periodMonth,
@@ -202,6 +247,7 @@ export async function assembleReportData(
     generatedAt: deps.generatedAt,
     ...(dimensions ? { dimensions } : {}),
     ...(performance ? { performance } : {}),
+    ...(gbpPresence ? { gbpPresence } : {}),
   };
 }
 

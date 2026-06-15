@@ -5,7 +5,11 @@ import { GoogleApiError } from "../client";
 
 // markAccountError is the only accounts import sync uses at runtime; stub it
 // (it would otherwise build a real service client).
-const markErrorMock = vi.fn(() => Promise.resolve());
+// Rest param (not zero-arg) so the wrapper's spread typechecks; the wrapper arrow keeps
+// the reference lazy so the hoisted vi.mock factory does not touch markErrorMock before init
+// (matches the shipped gsc-sync.test pattern exactly).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const markErrorMock = vi.fn((..._a: unknown[]) => Promise.resolve());
 vi.mock("../accounts", () => ({
   markAccountError: (...a: unknown[]) => markErrorMock(...a),
 }));

@@ -13,7 +13,11 @@ export type AnalyticsPeriod = "daily" | "monthly";
  * SourceReportBlock; RESEARCH data-model section keeps it at four). These extra
  * sources live ONLY on the write/read path of analytics_snapshots + the ledger.
  */
-export type SnapshotSource = AnalyticsSource | "ga4_dimensions" | "performance";
+export type SnapshotSource =
+  | AnalyticsSource
+  | "ga4_dimensions"
+  | "performance"
+  | "gbp_presence";
 
 /**
  * A stored analytics snapshot row (public.analytics_snapshots).
@@ -179,6 +183,32 @@ export type GbpMetrics = {
   call_clicks: number;
   direction_requests: number;
   conversations: number;
+};
+
+/**
+ * GBP monthly presence + star-rating `metrics` shape — Phase 13 / 13-03. Stored as ONE
+ * period='monthly' analytics_snapshots row per (shop, 'gbp_presence', YYYY-MM-01), read via
+ * getMonthlySnapshot. Point-in-time STOCK (a snapshot of the listing's current state + the
+ * location's LIFETIME review aggregate), NEVER rolled up and NEVER in the AnalyticsSource union —
+ * it is a SnapshotSource-only value (the same class as 'performance' / 'ga4_dimensions'). The
+ * presence fields come from the Business Information v1 location state (13-03b); the rating pair
+ * comes from the legacy v4 reviews aggregate (`ListReviewsResponse.averageRating` /
+ * `totalReviewCount`, 13-03-RESEARCH §Aggregate). average_rating is the LIFETIME mean (scale 1-5),
+ * NOT a month window. BOTH rating fields are nullable: a shop with no reviews has no average, and
+ * the monthly orchestrator writes the presence row even when the v4 call fails or the location is
+ * unverified (so a missing rating stays null, never a false 0).
+ */
+export type GbpPresenceMetrics = {
+  open_status: string; // openInfo.status: OPEN | CLOSED_PERMANENTLY | CLOSED_TEMPORARILY
+  primary_category: string | null;
+  categories: string[];
+  has_hours: boolean;
+  website_uri: string | null;
+  has_description: boolean;
+  phone_present: boolean;
+  completeness_score?: number; // optional derived 0-100 listing-completeness
+  average_rating: number | null; // v4 reviews lifetime mean (1-5), null when no reviews / unavailable
+  total_review_count: number | null; // v4 reviews total, null when unavailable
 };
 
 /**

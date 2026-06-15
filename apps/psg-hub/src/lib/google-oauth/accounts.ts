@@ -57,7 +57,11 @@ export async function persistLinkedAccount(input: {
 
 export type LinkedAccount = {
   accountId: string;
-  externalAccountId: string; // 'properties/<id>' | 'sc-domain:x' | 'https://.../'
+  externalAccountId: string; // 'properties/<id>' | 'sc-domain:x' | 'https://.../' | 'locations/<id>'
+  // GBP only: the parent `accounts/{id}` (external_parent_id). null for ga4/gsc. The legacy v4
+  // reviews call (13-03b) needs accounts/{aid}/locations/{lid}, so the reader must return it
+  // (the write side persisted it at 13-01; this is the read-side half).
+  externalParentId: string | null;
   refreshToken: string; // decrypted
 };
 
@@ -76,7 +80,9 @@ export async function getLinkedAccount(
   const service = createServiceClient();
   const { data: row, error } = await service
     .from("google_oauth_accounts")
-    .select("id, external_account_id, encrypted_refresh_token, key_version")
+    .select(
+      "id, external_account_id, external_parent_id, encrypted_refresh_token, key_version"
+    )
     .eq("shop_id", shopId)
     .eq("source", source)
     .eq("status", "linked")
@@ -110,6 +116,7 @@ export async function getLinkedAccount(
   return {
     accountId: row.id as string,
     externalAccountId: row.external_account_id as string,
+    externalParentId: (row.external_parent_id as string | null) ?? null,
     refreshToken,
   };
 }

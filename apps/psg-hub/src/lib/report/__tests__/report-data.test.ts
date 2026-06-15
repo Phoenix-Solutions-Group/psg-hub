@@ -4,11 +4,13 @@ import {
   type SnapshotReader,
   type MonthlyDimensionsReader,
   type MonthlyPerformanceReader,
+  type MonthlyGbpPresenceReader,
 } from "../report-data";
 import type {
   AnalyticsSnapshot,
   AnalyticsSource,
   Ga4DimensionsMetrics,
+  GbpPresenceMetrics,
   MonthlySnapshotRow,
   PerformanceMetrics,
 } from "../../analytics/types";
@@ -313,5 +315,98 @@ describe("assembleReportData", () => {
     expect(data.sources.gbp).toBeUndefined();
     expect(data.linkedSources).not.toContain("gbp");
     expect([...data.linkedSources].sort()).toEqual(["ga4", "google_ads", "gsc", "semrush"]);
+  });
+
+  it("leaves gbpPresence undefined with no reader / a null reader, and populates it (rating mapped) from a monthly row", async () => {
+    // no reader
+    const a = await assembleReportData("shop-1", "2026-06", {
+      readSnapshots: reader(fullMap()),
+      generatedAt: GENERATED_AT,
+    });
+    expect(a.gbpPresence).toBeUndefined();
+
+    // null reader
+    const b = await assembleReportData("shop-1", "2026-06", {
+      readSnapshots: reader(fullMap()),
+      generatedAt: GENERATED_AT,
+      readMonthlyGbpPresence: async () => null,
+    });
+    expect(b.gbpPresence).toBeUndefined();
+
+    // populated — STOCK presence + lifetime rating, snake_case -> camelCase
+    const metrics: GbpPresenceMetrics = {
+      open_status: "OPEN",
+      primary_category: "Auto Body Shop",
+      categories: ["Auto Body Shop", "Auto Repair Shop"],
+      has_hours: true,
+      website_uri: "https://wallacecollisionrepair.com",
+      has_description: true,
+      phone_present: true,
+      completeness_score: 92,
+      average_rating: 4.7,
+      total_review_count: 138,
+    };
+    const row: MonthlySnapshotRow = {
+      id: "gbppres-1",
+      shop_id: "shop-1",
+      location_id: null,
+      source: "gbp_presence",
+      date: "2026-06-01",
+      period: "monthly",
+      metrics,
+      synced_at: GENERATED_AT,
+      created_at: GENERATED_AT,
+    };
+    const readMonthlyGbpPresence: MonthlyGbpPresenceReader = async ({ shopId, month }) => {
+      expect(shopId).toBe("shop-1");
+      expect(month).toBe("2026-06");
+      return row;
+    };
+    const c = await assembleReportData("shop-1", "2026-06", {
+      readSnapshots: reader(fullMap()),
+      generatedAt: GENERATED_AT,
+      readMonthlyGbpPresence,
+    });
+    expect(c.gbpPresence).toBeDefined();
+    expect(c.gbpPresence!.openStatus).toBe("OPEN");
+    expect(c.gbpPresence!.primaryCategory).toBe("Auto Body Shop");
+    expect(c.gbpPresence!.averageRating).toBe(4.7);
+    expect(c.gbpPresence!.totalReviewCount).toBe(138);
+    expect(c.gbpPresence!.completenessScore).toBe(92);
+    // daily assembly untouched
+    expect([...c.linkedSources].sort()).toEqual(["ga4", "google_ads", "gsc", "semrush"]);
+  });
+
+  it("maps the rating pair to null when absent (no reviews / unverified / v4 failed)", async () => {
+    const metrics: GbpPresenceMetrics = {
+      open_status: "OPEN",
+      primary_category: null,
+      categories: [],
+      has_hours: false,
+      website_uri: null,
+      has_description: false,
+      phone_present: false,
+      average_rating: null,
+      total_review_count: null,
+    };
+    const data = await assembleReportData("shop-1", "2026-06", {
+      readSnapshots: reader(fullMap()),
+      generatedAt: GENERATED_AT,
+      readMonthlyGbpPresence: async () =>
+        ({
+          id: "gp",
+          shop_id: "shop-1",
+          location_id: null,
+          source: "gbp_presence",
+          date: "2026-06-01",
+          period: "monthly",
+          metrics,
+          synced_at: GENERATED_AT,
+          created_at: GENERATED_AT,
+        }) as MonthlySnapshotRow,
+    });
+    expect(data.gbpPresence!.averageRating).toBeNull();
+    expect(data.gbpPresence!.totalReviewCount).toBeNull();
+    expect(data.gbpPresence!.completenessScore).toBeUndefined();
   });
 });

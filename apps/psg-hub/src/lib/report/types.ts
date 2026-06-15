@@ -58,6 +58,32 @@ export type ReportData = {
    * STOCK, never rolled up, never in the AnalyticsSource union.
    */
   performance?: PerformanceReport;
+  /**
+   * GBP local-presence + star-rating block (Phase 13 / 13-03). ADDITIVE + OPTIONAL: present only
+   * when a `gbp_presence` monthly row exists for the shop+month, read off the same rollup-bypassing
+   * monthly path as `dimensions` / `performance`. Undefined => the presence render block is omitted.
+   * Point-in-time STOCK (listing state + the location's lifetime review aggregate), never rolled up,
+   * never in the AnalyticsSource union.
+   */
+  gbpPresence?: GbpPresenceReport;
+};
+
+/**
+ * The report-layer view of GBP presence + star rating — Phase 13 / 13-03. camelCase mirror of the
+ * `gbp_presence` jsonb (GbpPresenceMetrics). averageRating is the lifetime mean (1-5); both rating
+ * fields are nullable (no reviews / unverified / v4 call failed — never a fabricated 0).
+ */
+export type GbpPresenceReport = {
+  openStatus: string;
+  primaryCategory: string | null;
+  categories: string[];
+  hasHours: boolean;
+  websiteUri: string | null;
+  hasDescription: boolean;
+  phonePresent: boolean;
+  completenessScore?: number;
+  averageRating: number | null;
+  totalReviewCount: number | null;
 };
 
 /**

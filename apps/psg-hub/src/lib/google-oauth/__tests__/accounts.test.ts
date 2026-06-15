@@ -67,8 +67,38 @@ describe("getLinkedAccount", () => {
     expect(out).toEqual({
       accountId: "acct-1",
       externalAccountId: "properties/123456789",
+      externalParentId: null, // ga4 has no parent account
       refreshToken: "ga4-refresh-token-xyz",
     });
+  });
+
+  it("returns externalParentId ('accounts/{id}') for a gbp row; null for ga4/gsc (13-03a)", async () => {
+    const gbp = encHex("gbp-refresh-token");
+    makeService({
+      row: {
+        id: "acct-gbp",
+        external_account_id: "locations/987654321",
+        external_parent_id: "accounts/111222333",
+        encrypted_refresh_token: gbp.hex,
+        key_version: gbp.keyVersion,
+      },
+    });
+    const out = await getLinkedAccount("shop-1", "gbp");
+    expect(out?.externalParentId).toBe("accounts/111222333");
+    expect(out?.externalAccountId).toBe("locations/987654321");
+
+    // a row whose external_parent_id is absent (ga4/gsc) -> externalParentId null
+    const ga4 = encHex("ga4-token");
+    makeService({
+      row: {
+        id: "acct-ga4",
+        external_account_id: "properties/42",
+        encrypted_refresh_token: ga4.hex,
+        key_version: ga4.keyVersion,
+      },
+    });
+    const out2 = await getLinkedAccount("shop-1", "ga4");
+    expect(out2?.externalParentId).toBeNull();
   });
 
   it("returns null when no linked account exists", async () => {
