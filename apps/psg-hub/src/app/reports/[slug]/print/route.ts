@@ -6,6 +6,7 @@ import {
   type SnapshotReader,
   type MonthlyDimensionsReader,
   type MonthlyPerformanceReader,
+  type MonthlyGbpPresenceReader,
 } from "@/lib/report/report-data";
 import { loadReportNarrative } from "@/lib/report/storage";
 import { renderReportHtml } from "@/lib/report/render";
@@ -62,11 +63,14 @@ export const defaultLoader: PrintPayloadLoader = async (shopId, period) => {
     getMonthlySnapshot(service, { shopId: s, source: "ga4_dimensions", month });
   const readMonthlyPerformance: MonthlyPerformanceReader = ({ shopId: s, month }) =>
     getMonthlySnapshot(service, { shopId: s, source: "performance", month });
+  const readMonthlyGbpPresence: MonthlyGbpPresenceReader = ({ shopId: s, month }) =>
+    getMonthlySnapshot(service, { shopId: s, source: "gbp_presence", month });
   const reportData = await assembleReportData(shopId, period, {
     readSnapshots,
     generatedAt: new Date().toISOString(),
     readMonthlyDimensions,
     readMonthlyPerformance,
+    readMonthlyGbpPresence,
   });
   return { reportData, narrative };
 };

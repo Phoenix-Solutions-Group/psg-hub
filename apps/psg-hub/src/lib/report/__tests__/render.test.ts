@@ -356,3 +356,69 @@ describe("renderReportHtml — Website performance block", () => {
     expect(html).not.toContain('class="badge-src">PageSpeed');
   });
 });
+
+// ── GBP presence + reviews block (13-03b) ────────────────────────────────────
+
+const dataWithPresence: ReportData = {
+  ...fullData,
+  gbpPresence: {
+    openStatus: "OPEN",
+    primaryCategory: "Auto body shop",
+    categories: ["Car repair and maintenance"],
+    hasHours: true,
+    websiteUri: "https://example.com",
+    hasDescription: true,
+    phonePresent: true,
+    completenessScore: 86,
+    averageRating: 4.6,
+    totalReviewCount: 87,
+  },
+};
+
+const dataWithPresenceNoRating: ReportData = {
+  ...fullData,
+  gbpPresence: {
+    openStatus: "OPEN",
+    primaryCategory: null,
+    categories: [],
+    hasHours: false,
+    websiteUri: null,
+    hasDescription: false,
+    phonePresent: false,
+    completenessScore: 14,
+    averageRating: null,
+    totalReviewCount: null,
+  },
+};
+
+describe("renderReportHtml — GBP presence + reviews block", () => {
+  it("renders the 'Reviews and listing' panel with the rating, review count, status, and completeness", () => {
+    const html = renderReportHtml(dataWithPresence, narrative);
+    expect(html).toContain("Reviews and listing");
+    expect(html).toContain('class="badge-src">Google Business Profile');
+    expect(html).toContain("4.6");
+    expect(html).toContain("87 reviews");
+    expect(html).toContain("Status Open");
+    expect(html).toContain("Auto body shop");
+    expect(html).toContain("86%");
+    // distinct from the daily source panel's title (no collision in the same PDF).
+    expect(html).not.toContain("<h2>Local presence</h2>");
+  });
+
+  it("shows 'n/a' (never a fabricated 0.0) when the rating is null", () => {
+    const html = renderReportHtml(dataWithPresenceNoRating, narrative);
+    expect(html).toContain("Reviews and listing");
+    // the rating KPI value node is "n/a", never a fabricated "0.0" (>0.0< would be the
+    // KPI cell; the broad "0.0" substring also lives in the CSS shadow rgba, so scope it).
+    expect(html).toContain('<div class="n">n/a</div>');
+    expect(html).not.toContain(">0.0<");
+    expect(html).toContain("0 reviews");
+    expect(html).toContain("Primary category Not set");
+  });
+
+  it("does NOT render the block when gbpPresence is undefined", () => {
+    const html = renderReportHtml(fullData, narrative);
+    expect(html).not.toContain("Reviews and listing");
+    expect(html).not.toContain('class="badge-src">Google Business Profile');
+  });
+});

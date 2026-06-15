@@ -16,7 +16,7 @@ Surface each shop's Google Business Profile presence and reviews in the hub — 
 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
-| 13 | GBP presence foundation + insights | 2/4+ | 🚧 In progress (13-01 ✅; 13-02a ✅ 2026-06-14; 13-02b PLAN 2026-06-14; 13-03/13-04 TBD) | - |
+| 13 | GBP presence foundation + insights | 2/4+ | 🚧 In progress (13-01 ✅; 13-02 ✅ 2026-06-14; 13-03a ✅ 2026-06-15; 13-03b PLAN 2026-06-15; 13-04 TBD) | - |
 | 14 | Reviews + sentiment | TBD | Not started | - |
 
 v0.3 Customer Analytics (v0.3.0) ✅ COMPLETE 2026-06-13 (4/4 phases; see Completed Milestones + `.paul/milestones/v0.3.0-ROADMAP.md`).

@@ -5,6 +5,7 @@ import { getActiveShopContext } from "@/lib/shop/context";
 import {
   getSnapshots,
   getSnapshotsForShops,
+  getLatestMonthlySnapshot,
 } from "@/lib/analytics/snapshots";
 import {
   aggregateByDate,
@@ -122,6 +123,13 @@ const GBP_KPIS = [
  * that sums honestly across shops. So GBP_AGGREGATE_KPIS == GBP_KPIS by design.
  */
 const GBP_AGGREGATE_KPIS = GBP_KPIS;
+
+/** Open-status display labels for the monthly presence header (raw enum -> friendly). */
+const PRESENCE_STATUS_LABELS: Record<string, string> = {
+  OPEN: "Open",
+  CLOSED_PERMANENTLY: "Permanently closed",
+  CLOSED_TEMPORARILY: "Temporarily closed",
+};
 
 type Props = {
   searchParams: Promise<{ scope?: string }>;
@@ -311,6 +319,33 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     date: formatShortDate(p.date),
     value: p.value,
   }));
+
+  // GBP monthly presence + star rating (13-03b) — the latest period='monthly'
+  // gbp_presence row. PER-SHOP ONLY: an MSO cross-shop rating average is a lie (the
+  // same principle that aggregate-excludes ga4 engagement_rate / gsc ctr+position), so
+  // the query is skipped entirely in the all-shops scope.
+  const presenceRow = scopeAll
+    ? null
+    : await getLatestMonthlySnapshot(supabase, {
+        shopId: activeShopId,
+        source: "gbp_presence",
+      });
+  const presence = presenceRow
+    ? (() => {
+        const m = presenceRow.metrics as Record<string, unknown>;
+        const rating =
+          typeof m.average_rating === "number" ? m.average_rating : null;
+        const reviews =
+          typeof m.total_review_count === "number" ? m.total_review_count : null;
+        const openStatus =
+          typeof m.open_status === "string" ? m.open_status : "";
+        const completeness =
+          typeof m.completeness_score === "number" ? m.completeness_score : null;
+        const statusLabel =
+          PRESENCE_STATUS_LABELS[openStatus] ?? (openStatus || null);
+        return { rating, reviews, statusLabel, completeness };
+      })()
+    : null;
 
   // Header status reflects the most recent sync across ALL sources, not just
   // organic. A shop with only GA4/GSC/GBP linked is "Last synced", not "Awaiting".
@@ -686,6 +721,50 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         >
           Local presence
         </h2>
+
+        {presence ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Current profile status
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                <div>
+                  <p className="text-2xl font-bold tracking-tight">
+                    {presence.rating === null
+                      ? "Not yet rated"
+                      : presence.rating.toFixed(1)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {presence.rating === null
+                      ? "No reviews yet"
+                      : `${formatNumber(presence.reviews ?? 0)} reviews`}
+                  </p>
+                </div>
+                {presence.statusLabel ? (
+                  <div>
+                    <p className="text-base font-medium">
+                      {presence.statusLabel}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Status</p>
+                  </div>
+                ) : null}
+                {presence.completeness !== null ? (
+                  <div>
+                    <p className="text-base font-medium">
+                      {presence.completeness}%
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Listing completeness
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {gbpRows.length === 0 ? (
           <Card>

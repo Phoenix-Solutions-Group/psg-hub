@@ -258,6 +258,47 @@ async function seedGbpSnapshots(
   if (error) throw new Error(`[e2e] gbp snapshot seed failed: ${error.message}`);
 }
 
+/**
+ * 13-03b: ONE period='monthly' gbp_presence row (the dashboard presence header + the
+ * report block read this). date = first-of-current-month; getLatestMonthlySnapshot
+ * orders date desc so the exact month is immaterial. Merges the listing state with the
+ * lifetime star-rating aggregate, exactly as the orchestrator writes it.
+ */
+async function seedGbpPresence(
+  shopId: string,
+  opts: { averageRating: number; totalReviewCount: number; openStatus: string }
+): Promise<void> {
+  const rowDate = `${SNAPSHOT_END_DATE.slice(0, 7)}-01`;
+  const { error } = await admin
+    .from("analytics_snapshots")
+    .upsert(
+      [
+        {
+          shop_id: shopId,
+          source: "gbp_presence",
+          date: rowDate,
+          period: "monthly",
+          synced_at: SNAPSHOT_SYNCED_AT,
+          metrics: {
+            open_status: opts.openStatus,
+            primary_category: "Auto body shop",
+            categories: ["Car repair and maintenance"],
+            has_hours: true,
+            website_uri: "https://example.com",
+            has_description: true,
+            phone_present: true,
+            completeness_score: 86,
+            average_rating: opts.averageRating,
+            total_review_count: opts.totalReviewCount,
+          },
+        },
+      ],
+      { onConflict: "shop_id,source,date,period" }
+    );
+  if (error)
+    throw new Error(`[e2e] gbp_presence seed failed: ${error.message}`);
+}
+
 async function ensureCustomerRole(userId: string): Promise<void> {
   const { data: existing } = await admin
     .from("app_user_roles")
@@ -367,6 +408,15 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
   await seedGbpSnapshots(ownerShopId, 30, 300);
   await seedGbpSnapshots(shopAId, 14, 300);
   await seedGbpSnapshots(shopBId, 14, 500);
+
+  // 13-03b: ONE monthly gbp_presence row for OWNER (the dashboard presence header +
+  // the report block). Seeded for OWNER only — the MULTI shops + MEGA have none, so the
+  // header is absent there (per-shop scope only; the MSO aggregate omits it entirely).
+  await seedGbpPresence(ownerShopId, {
+    averageRating: 4.6,
+    totalReviewCount: 87,
+    openStatus: "OPEN",
+  });
 
   // 2. Real UI login per role -> persist @supabase/ssr cookies as storageState.
   for (const fx of [

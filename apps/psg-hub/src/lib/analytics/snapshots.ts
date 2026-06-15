@@ -142,3 +142,31 @@ export async function getMonthlySnapshot(
   }
   return (data as MonthlySnapshotRow) ?? null;
 }
+
+/**
+ * Read the LATEST period='monthly' snapshot row for a shop + extended source (Phase 13
+ * / 13-03b). Orders date desc + limit 1 so the dashboard presence header survives the
+ * cron-timing / month-boundary blank a fixed-month read would show (the row lands at
+ * {prior-month}-01, not the current month). Returns null for no row (never throws on
+ * empty); throws on a real error. Call with the REQUEST's user-session client so RLS
+ * clamps the read; per-shop only (an MSO cross-shop rating average is a lie).
+ */
+export async function getLatestMonthlySnapshot(
+  client: SupabaseClient,
+  { shopId, source }: { shopId: string; source: SnapshotSource }
+): Promise<MonthlySnapshotRow | null> {
+  const { data, error } = await client
+    .from(TABLE)
+    .select("*")
+    .eq("shop_id", shopId)
+    .eq("source", source)
+    .eq("period", "monthly")
+    .order("date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`getLatestMonthlySnapshot failed: ${error.message}`);
+  }
+  return (data as MonthlySnapshotRow) ?? null;
+}

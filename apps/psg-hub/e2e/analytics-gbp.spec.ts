@@ -20,6 +20,14 @@ test.describe("gbp panel — per-shop (OWNER)", () => {
       page.getByRole("heading", { name: "Local presence" })
     ).toBeVisible();
 
+    // 13-03b: the monthly presence header — seeded star rating 4.6 / 87 reviews / OPEN.
+    await expect(
+      page.getByText("Current profile status")
+    ).toBeVisible();
+    await expect(page.getByText("4.6", { exact: true })).toBeVisible();
+    await expect(page.getByText("87 reviews")).toBeVisible();
+    await expect(page.getByText("Open", { exact: true })).toBeVisible();
+
     // Latest seeded call_clicks = 300 + 29 = 329 (unique on the page).
     await expect(page.getByText("329", { exact: true })).toBeVisible();
 

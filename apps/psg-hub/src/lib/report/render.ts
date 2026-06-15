@@ -26,6 +26,7 @@ import type {
   SourceReportBlock,
   Ga4DimensionsReport,
   PerformanceReport,
+  GbpPresenceReport,
 } from "./types";
 import type { ReportNarrative } from "./schema";
 
@@ -527,6 +528,62 @@ function renderPerformanceBlock(perf: PerformanceReport): string {
   );
 }
 
+/** Open-status display labels for the presence block (raw enum -> friendly). */
+const PRESENCE_STATUS_LABELS: Record<string, string> = {
+  OPEN: "Open",
+  CLOSED_PERMANENTLY: "Permanently closed",
+  CLOSED_TEMPORARILY: "Temporarily closed",
+};
+
+/**
+ * The "Reviews and listing" block (13-03b) — the monthly GBP presence snapshot:
+ * the lifetime star-rating aggregate + listing-completeness + the current listing
+ * signals. Titled distinctly from the daily "Local presence" source panel
+ * (SOURCE_META.gbp) so a shop with both rows does not get two same-titled panels.
+ * averageRating null -> "n/a" (never a fabricated "0.0"); the rating is point-in-time
+ * STOCK, so there is no MoM framing.
+ */
+function renderGbpPresenceBlock(presence: GbpPresenceReport): string {
+  const ratingValue =
+    presence.averageRating === null ? "n/a" : presence.averageRating.toFixed(1);
+  const reviewsSub = `${presence.totalReviewCount ?? 0} reviews`;
+  const completenessValue =
+    typeof presence.completenessScore === "number"
+      ? `${presence.completenessScore}%`
+      : "n/a";
+
+  const cards = [
+    perfKpi(ratingValue, reviewsSub, "Average rating"),
+    perfKpi(completenessValue, "Listing signals present", "Profile completeness"),
+  ];
+
+  const statusLabel =
+    PRESENCE_STATUS_LABELS[presence.openStatus] ?? presence.openStatus;
+  const metaBits: string[] = [];
+  if (statusLabel) metaBits.push(`Status ${statusLabel}`);
+  metaBits.push(`Primary category ${presence.primaryCategory ?? "Not set"}`);
+  const metaLine = `<p class="src">${escapeHtml(metaBits.join("  ·  "))}</p>`;
+
+  const signals = [
+    `Hours ${presence.hasHours ? "listed" : "missing"}`,
+    `Description ${presence.hasDescription ? "present" : "missing"}`,
+    `Website ${presence.websiteUri ? "linked" : "missing"}`,
+    `Phone ${presence.phonePresent ? "listed" : "missing"}`,
+  ];
+  const signalsLine = `<p class="src">Listing signals: ${escapeHtml(
+    signals.join(", ")
+  )}.</p>`;
+
+  return (
+    `<section class="panel"><span class="badge-src">Google Business Profile</span>` +
+    `<h2>Reviews and listing</h2>` +
+    metaLine +
+    `<div class="kpis">${cards.join("")}</div>` +
+    signalsLine +
+    `</section>`
+  );
+}
+
 /**
  * Render the full branded report HTML for one shop+month. Pure and deterministic
  * over (reportData, narrative). Only linked sources appear; cold-start sources are
@@ -593,6 +650,11 @@ export function renderReportHtml(
   // Website performance block (12-05b): only when a performance block is present.
   const performanceBlock = reportData.performance
     ? renderPerformanceBlock(reportData.performance)
+    : "";
+
+  // GBP presence + reviews block (13-03b): only when a gbp_presence row is present.
+  const gbpPresenceBlock = reportData.gbpPresence
+    ? renderGbpPresenceBlock(reportData.gbpPresence)
     : "";
 
   // This month vs prior: one headline-KPI row per linked source.
@@ -667,6 +729,7 @@ export function renderReportHtml(
     sourceSections +
     dimensionSections +
     performanceBlock +
+    gbpPresenceBlock +
     momTable +
     drivers +
     recommendations +
