@@ -24,6 +24,7 @@ import {
 } from "@/components/analytics/charts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LinkGoogleButton } from "./link-google-button";
+import { LinkGbpButton } from "./link-gbp-button";
 
 // 09-02: the v0.3 analytics surface. Source-agnostic shell — SEMrush (09-03) is
 // the first source; Google Ads / GA4 / GSC panels plug into the same snapshot
@@ -106,6 +107,21 @@ const GSC_AGGREGATE_KPIS = [
   { key: "clicks", label: "Clicks" },
   { key: "impressions", label: "Impressions" },
 ] as const;
+
+/** GBP local-presence KPIs — Phase 13 / 13-02b. */
+const GBP_SOURCE = "gbp" as const;
+const GBP_KPIS = [
+  { key: "call_clicks", label: "Calls" },
+  { key: "website_clicks", label: "Website clicks" },
+  { key: "direction_requests", label: "Direction requests" },
+  { key: "impressions_total", label: "Profile impressions" },
+] as const;
+/**
+ * Aggregate GBP view EXCLUDES NOTHING — unlike organic (authority_score), paid (cpl),
+ * GA4 (engagement_rate), and GSC (ctr + position), every GBP metric is a FLOW count
+ * that sums honestly across shops. So GBP_AGGREGATE_KPIS == GBP_KPIS by design.
+ */
+const GBP_AGGREGATE_KPIS = GBP_KPIS;
 
 type Props = {
   searchParams: Promise<{ scope?: string }>;
@@ -265,13 +281,45 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     value: p.value,
   }));
 
+  // GBP local presence (13-02b) — same source-agnostic snapshot read, source='gbp'.
+  // Own unlinked state below; the organic + paid + GA4 + GSC blocks above are untouched.
+  const gbpSnapshots = scopeAll
+    ? await getSnapshotsForShops(supabase, {
+        shopIds: shops.map((s) => s.id),
+        source: GBP_SOURCE,
+        period: PERIOD,
+        from,
+        to,
+      })
+    : await getSnapshots(supabase, {
+        shopId: activeShopId,
+        source: GBP_SOURCE,
+        period: PERIOD,
+        from,
+        to,
+      });
+  const gbpRows: DatedMetrics[] = scopeAll
+    ? aggregateByDate(gbpSnapshots)
+    : gbpSnapshots;
+  const gbpLatest = latestSnapshot(gbpRows);
+  const gbpKpis = scopeAll ? GBP_AGGREGATE_KPIS : GBP_KPIS;
+  const callsSeries = toSeries(gbpRows, "call_clicks").map((p) => ({
+    date: formatShortDate(p.date),
+    value: p.value,
+  }));
+  const websiteClicksSeries = toSeries(gbpRows, "website_clicks").map((p) => ({
+    date: formatShortDate(p.date),
+    value: p.value,
+  }));
+
   // Header status reflects the most recent sync across ALL sources, not just
-  // organic. A shop with only GA4/GSC linked is "Last synced", not "Awaiting".
+  // organic. A shop with only GA4/GSC/GBP linked is "Last synced", not "Awaiting".
   const syncedAt = latestSyncedAt([
     ...snapshots,
     ...paidSnapshots,
     ...gaSnapshots,
     ...gscSnapshots,
+    ...gbpSnapshots,
   ]);
 
   return (
@@ -631,6 +679,86 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         )}
       </section>
 
+      <section aria-labelledby="presence-heading" className="space-y-4">
+        <h2
+          id="presence-heading"
+          className="font-heading text-lg font-semibold tracking-tight"
+        >
+          Local presence
+        </h2>
+
+        {gbpRows.length === 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>No Google Business Profile linked</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-muted-foreground">
+                Connect a Google Business Profile to see calls, direction requests,
+                website clicks, and how often your profile appears in Maps and Search.
+              </p>
+              <Link
+                href="/dashboard/analytics"
+                className="inline-block font-heading text-sm font-medium text-primary hover:underline"
+              >
+                Connect Business Profile
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {gbpKpis.map((kpi) => {
+                const raw = gbpLatest?.metrics[kpi.key];
+                const value =
+                  typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+                return (
+                  <Card key={kpi.key}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        {kpi.label}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold tracking-tight">
+                        {value === null ? "—" : formatNumber(value)}
+                      </p>
+                      <div className="mt-2">
+                        <Sparkline
+                          data={toSeries(gbpRows, kpi.key)}
+                          dataKey="value"
+                          ariaLabel={`${kpi.label}, last ${WINDOW_DAYS} days`}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <LineChartCard
+                title="Profile calls"
+                caption={`Daily calls from your Business Profile, trailing ${WINDOW_DAYS} days.`}
+                data={callsSeries}
+                dataKey="value"
+                xKey="date"
+                ariaLabel={`Profile calls over the last ${WINDOW_DAYS} days`}
+              />
+              <BarChartCard
+                title="Website clicks"
+                caption="Daily website clicks from your Business Profile."
+                data={websiteClicksSeries}
+                dataKey="value"
+                xKey="date"
+                ariaLabel={`Profile website clicks over the last ${WINDOW_DAYS} days`}
+                color="var(--chart-2)"
+              />
+            </div>
+          </>
+        )}
+      </section>
+
       {activeRole === "owner" ? (
         <section aria-labelledby="connect-google-heading" className="space-y-4">
           <h2
@@ -650,6 +778,19 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 covers both Google Analytics and Search Console.
               </p>
               <LinkGoogleButton shopId={activeShopId} userRole={activeRole} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Google Business Profile</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-muted-foreground">
+                Link this shop&rsquo;s Google Business Profile to add presence and
+                profile insights (calls, direction requests, website clicks, and
+                search visibility) to your analytics.
+              </p>
+              <LinkGbpButton shopId={activeShopId} userRole={activeRole} />
             </CardContent>
           </Card>
         </section>

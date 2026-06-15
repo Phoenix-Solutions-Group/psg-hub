@@ -22,8 +22,8 @@ import type {
   PerformanceReport,
 } from "./types";
 
-/** The four live sources, in report display order. */
-const SOURCES: AnalyticsSource[] = ["semrush", "google_ads", "ga4", "gsc"];
+/** The live sources, in report display order. */
+const SOURCES: AnalyticsSource[] = ["semrush", "google_ads", "ga4", "gsc", "gbp"];
 
 /** Headline metrics charted as a daily trend per source in the report month. */
 const TREND_KEYS: Record<AnalyticsSource, string[]> = {
@@ -31,6 +31,7 @@ const TREND_KEYS: Record<AnalyticsSource, string[]> = {
   google_ads: ["spend", "conversions"],
   ga4: ["sessions", "key_events"],
   gsc: ["clicks", "impressions"],
+  gbp: ["call_clicks", "website_clicks"],
 };
 
 /** A pre-bound snapshot reader: the caller binds the supabase client. */

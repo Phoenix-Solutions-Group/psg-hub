@@ -31,6 +31,7 @@ import type { ReportNarrative } from "./schema";
 
 /** Per-source display label + section title (per-source order: GSC, GA4, Ads, SEMrush). */
 const SOURCE_META: Record<AnalyticsSource, { badge: string; title: string }> = {
+  gbp: { badge: "Google Business Profile", title: "Local presence" },
   gsc: { badge: "Google Search Console", title: "Organic search" },
   ga4: { badge: "Google Analytics", title: "Website traffic" },
   google_ads: { badge: "Google Ads", title: "Paid marketing" },
@@ -38,7 +39,7 @@ const SOURCE_META: Record<AnalyticsSource, { badge: string; title: string }> = {
 };
 
 /** Per-source display order used by every per-source loop. */
-const SOURCE_ORDER: AnalyticsSource[] = ["gsc", "ga4", "google_ads", "semrush"];
+const SOURCE_ORDER: AnalyticsSource[] = ["gbp", "gsc", "ga4", "google_ads", "semrush"];
 
 /** The operator-locked KPI headline set (one card per linked source). */
 const KPI_SET: { source: AnalyticsSource; metric: string; label: string }[] = [
@@ -46,6 +47,7 @@ const KPI_SET: { source: AnalyticsSource; metric: string; label: string }[] = [
   { source: "gsc", metric: "clicks", label: "Search clicks" },
   { source: "google_ads", metric: "conversions", label: "Ads conversions" },
   { source: "semrush", metric: "organic_keywords", label: "Organic keywords" },
+  { source: "gbp", metric: "call_clicks", label: "Profile calls" },
 ];
 
 /** Friendly per-metric labels for the per-source + MoM tables. */
@@ -70,6 +72,15 @@ const METRIC_LABELS: Record<string, string> = {
   organic_traffic_cost: "Organic traffic value",
   backlinks: "Backlinks",
   authority_score: "Authority score",
+  impressions_desktop_maps: "Impressions (desktop Maps)",
+  impressions_desktop_search: "Impressions (desktop Search)",
+  impressions_mobile_maps: "Impressions (mobile Maps)",
+  impressions_mobile_search: "Impressions (mobile Search)",
+  impressions_total: "Profile impressions",
+  website_clicks: "Website clicks",
+  call_clicks: "Calls",
+  direction_requests: "Direction requests",
+  conversations: "Messages",
 };
 
 const RATIO_KEYS = new Set(["ctr", "engagement_rate"]);

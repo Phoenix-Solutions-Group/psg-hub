@@ -34,6 +34,11 @@ const SEED: Record<AnalyticsSource, { apr: Record<string, number>; may: Record<s
     apr: { organic_keywords: 110, organic_traffic: 820, organic_traffic_cost: 1350, backlinks: 320, authority_score: 30 },
     may: { organic_keywords: 128, organic_traffic: 940, organic_traffic_cost: 1580, backlinks: 348, authority_score: 33 },
   },
+  // GBP daily insights — all FLOW; impressions_total = sum of the four splits (kept consistent).
+  gbp: {
+    apr: { impressions_desktop_maps: 120, impressions_desktop_search: 80, impressions_mobile_maps: 300, impressions_mobile_search: 200, impressions_total: 700, website_clicks: 18, call_clicks: 12, direction_requests: 9, conversations: 3 },
+    may: { impressions_desktop_maps: 140, impressions_desktop_search: 95, impressions_mobile_maps: 330, impressions_mobile_search: 220, impressions_total: 785, website_clicks: 22, call_clicks: 15, direction_requests: 11, conversations: 4 },
+  },
 };
 
 const reader: SnapshotReader = async ({ source, from, to }) => {
@@ -50,7 +55,7 @@ const reader: SnapshotReader = async ({ source, from, to }) => {
 describe("demo diag", () => {
   it("template eval", async () => {
     const rd = await assembleReportData(SHOP, "2026-05", { readSnapshots: reader, generatedAt: "2026-06-11T00:00:00Z" });
-    expect(rd.linkedSources).toEqual(["semrush", "google_ads", "ga4", "gsc"]);
+    expect(rd.linkedSources).toEqual(["semrush", "google_ads", "ga4", "gsc", "gbp"]);
     const tpl = renderTemplateNarrative(rd);
     const res = evaluateReport(tpl, rd);
     // Regression: the deterministic template MUST pass the eval gate by construction,

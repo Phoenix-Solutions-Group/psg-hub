@@ -191,13 +191,17 @@ export async function peekState(
   return { userId: data.user_id, shopId: data.shop_id };
 }
 
-/** A selectable account offered to the user in the picker. */
-export type PendingAccount = { id: string; name: string };
+/** A selectable account offered to the user in the picker. `parent` is GBP-only
+ *  (the `accounts/{id}` owning a `locations/{id}`); GA4/GSC leave it undefined. */
+export type PendingAccount = { id: string; name: string; parent?: string };
 
-/** Both enumerated source lists carried from callback to /select. */
+/** Enumerated source lists carried from callback to /select. The GA4+GSC combined
+ *  flow stashes ga4/gsc; the SEPARATE Phase-13 GBP flow stashes gbp (own callback/
+ *  select), leaving ga4/gsc empty. */
 export type PendingAccounts = {
   ga4: PendingAccount[];
   gsc: PendingAccount[];
+  gbp?: PendingAccount[];
 };
 
 /** Transient link state carried from `callback` to `/select`. One refresh token,
@@ -287,6 +291,7 @@ export async function consumePendingSelection(stateToken: string): Promise<{
       accounts: {
         ga4: Array.isArray(rawAccounts.ga4) ? rawAccounts.ga4 : [],
         gsc: Array.isArray(rawAccounts.gsc) ? rawAccounts.gsc : [],
+        gbp: Array.isArray(rawAccounts.gbp) ? rawAccounts.gbp : [],
       },
     },
   };

@@ -44,7 +44,7 @@ const SIGNED_PCT = /[-+]\d+%/g;
 // Canonical source names, longest-first so the two-token "google_ads" is matched
 // before any single-token prefix. Placeholder keys are `${source}_${metric}`, so a
 // naive split on "_" mis-files google_ads_* under "google" (F3 false positives).
-const SOURCE_NAMES: AnalyticsSource[] = ["google_ads", "semrush", "ga4", "gsc"];
+const SOURCE_NAMES: AnalyticsSource[] = ["google_ads", "semrush", "ga4", "gsc", "gbp"];
 
 /** Resolve the source prefix of a placeholder key (`google_ads_spend` -> "google_ads"). */
 function sourceOfKey(key: string): string {

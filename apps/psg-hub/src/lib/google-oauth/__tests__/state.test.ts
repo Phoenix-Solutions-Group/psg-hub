@@ -218,7 +218,8 @@ describe("stash + consume pending selection (generic ga4/gsc)", () => {
       accounts: { ga4: [], gsc: [] },
     });
     const consumed = await consumePendingSelection(stateToken);
-    expect(consumed.pending.accounts).toEqual({ ga4: [], gsc: [] });
+    // Phase 13 / 13-01: consume now also normalizes the additive gbp slot to [].
+    expect(consumed.pending.accounts).toEqual({ ga4: [], gsc: [], gbp: [] });
   });
 });
 

@@ -92,6 +92,41 @@ describe("rollupMonth — FLOW / STOCK / DERIVED classification", () => {
     expect(out.engagement_rate).toBeNull();
   });
 
+  it("GBP: every metric is FLOW — all summed, NO derived/stock, no aggregate-exclusion", () => {
+    const rows = [
+      row("2026-05-01", {
+        impressions_desktop_maps: 100, impressions_desktop_search: 50,
+        impressions_mobile_maps: 200, impressions_mobile_search: 150, impressions_total: 500,
+        website_clicks: 10, call_clicks: 6, direction_requests: 4, conversations: 2,
+      }),
+      row("2026-05-02", {
+        impressions_desktop_maps: 40, impressions_desktop_search: 30,
+        impressions_mobile_maps: 60, impressions_mobile_search: 70, impressions_total: 200,
+        website_clicks: 8, call_clicks: 4, direction_requests: 3, conversations: 1,
+      }),
+    ];
+    const out = rollupMonth("gbp", rows)!;
+    // FLOW: every key sums across the month.
+    expect(out.call_clicks).toBe(10);
+    expect(out.website_clicks).toBe(18);
+    expect(out.direction_requests).toBe(7);
+    expect(out.conversations).toBe(3);
+    // impressions_total sums INDEPENDENTLY of its four component splits (distinct keys, no double-count):
+    // sum of totals 500+200 = 700; sum of the four splits also 700.
+    expect(out.impressions_total).toBe(700);
+    expect(
+      out.impressions_desktop_maps! + out.impressions_desktop_search! +
+        out.impressions_mobile_maps! + out.impressions_mobile_search!
+    ).toBe(700);
+    // No GBP metric is derived or stock — every key the registry lists is FLOW.
+    expect(METRIC_REGISTRY.gbp.derived).toEqual([]);
+    expect(METRIC_REGISTRY.gbp.stock).toEqual([]);
+  });
+
+  it("GBP: empty month -> null (no data, not zeros)", () => {
+    expect(rollupMonth("gbp", [])).toBeNull();
+  });
+
   it("registry partitions every documented metric key into exactly one class", () => {
     for (const src of Object.keys(METRIC_REGISTRY) as Array<keyof typeof METRIC_REGISTRY>) {
       const { flow, stock, derived } = METRIC_REGISTRY[src];

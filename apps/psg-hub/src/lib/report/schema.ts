@@ -30,6 +30,7 @@ export const reportNarrativeSchema = z.object({
       gsc: sourceSummary.optional(),
       google_ads: sourceSummary.optional(),
       semrush: sourceSummary.optional(),
+      gbp: sourceSummary.optional(),
     })
     .describe("One paragraph per LINKED source; omit sources not present in the data."),
   recommendations: z

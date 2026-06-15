@@ -5,23 +5,29 @@ import { sanitizeLastError } from "@/lib/google-ads/sanitize";
 import { GoogleApiError } from "./client";
 
 // Phase 11 / 11-01 — persist a linked GA4 property or GSC site.
+// Phase 13 / 13-01 — extended to a third source 'gbp' (Google Business Profile).
 // Mirrors google-ads/link.ts. The refresh token is supplied already encrypted, in
 // Postgres `\x<hex>` bytea TEXT form (the 10-01 finding: a raw Buffer JSON-
-// serializes wrong over PostgREST). A combined link writes TWO rows (one per
-// source) sharing the SAME encrypted token. Upsert on
-// (shop_id, source, external_account_id) allows reconnect/re-pick after revoke.
+// serializes wrong over PostgREST). A combined GA4+GSC link writes TWO rows (one
+// per source) sharing the SAME encrypted token; a GBP link writes ONE row (its own
+// separate consent + token). Upsert on (shop_id, source, external_account_id)
+// allows reconnect/re-pick after revoke.
 
-export type GoogleOAuthSource = "ga4" | "gsc";
+export type GoogleOAuthSource = "ga4" | "gsc" | "gbp";
 
 export async function persistLinkedAccount(input: {
   shopId: string;
   source: GoogleOAuthSource;
-  externalAccountId: string; // 'properties/<id>' | 'sc-domain:x' | 'https://.../'
+  externalAccountId: string; // 'properties/<id>' | 'sc-domain:x' | 'https://.../' | 'locations/<id>'
   displayName: string | null;
   encryptedTokenHex: string; // "\\x...."
   keyVersion: number;
   scope: string;
   linkedBy: string;
+  // GBP only: the parent `accounts/{id}` resource (external_parent_id). Omitted
+  // for ga4/gsc -> null. Feeds the Phase-14 v4 Reviews + 13-03 star-rating calls,
+  // which key off accounts/{aid}/locations/{lid}.
+  externalParentId?: string | null;
 }): Promise<{ error: string | null }> {
   const service = createServiceClient();
   const { error } = await service.from("google_oauth_accounts").upsert(
@@ -29,6 +35,7 @@ export async function persistLinkedAccount(input: {
       shop_id: input.shopId,
       source: input.source,
       external_account_id: input.externalAccountId,
+      external_parent_id: input.externalParentId ?? null,
       display_name: input.displayName,
       encrypted_refresh_token: input.encryptedTokenHex,
       key_version: input.keyVersion,

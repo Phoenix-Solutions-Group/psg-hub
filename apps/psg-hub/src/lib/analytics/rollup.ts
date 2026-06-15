@@ -66,6 +66,25 @@ export const METRIC_REGISTRY: Record<
     stock: [],
     derived: ["ctr", "position"], // ctr = clicks/impr; position = impression-weighted
   },
+  // GBP: every Performance API daily action/impression count is FLOW and sums honestly
+  // (impressions_total is the per-day sum of the four splits, itself summable). There is
+  // NO ratio here, so NOTHING is stock or derived — no deriveMetric branch, nothing
+  // aggregate-excluded (unlike ga4/gsc/ads).
+  gbp: {
+    flow: [
+      "impressions_desktop_maps",
+      "impressions_desktop_search",
+      "impressions_mobile_maps",
+      "impressions_mobile_search",
+      "impressions_total",
+      "website_clicks",
+      "call_clicks",
+      "direction_requests",
+      "conversations",
+    ],
+    stock: [],
+    derived: [],
+  },
 };
 
 /** Numeric metric value or null (non-number / missing -> null). */

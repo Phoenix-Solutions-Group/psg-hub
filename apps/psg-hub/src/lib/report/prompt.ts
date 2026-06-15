@@ -14,6 +14,7 @@ const SOURCE_LABELS: Record<AnalyticsSource, string> = {
   gsc: "Google Search Console (organic search)",
   google_ads: "Google Ads (paid)",
   semrush: "SEMrush (organic SEO)",
+  gbp: "Google Business Profile (local presence + actions)",
 };
 
 /** Ratio metrics rendered as percentages; everything else as a grouped number. */

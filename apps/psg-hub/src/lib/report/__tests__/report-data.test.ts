@@ -280,4 +280,38 @@ describe("assembleReportData", () => {
     // daily assembly untouched
     expect([...c.linkedSources].sort()).toEqual(["ga4", "google_ads", "gsc", "semrush"]);
   });
+
+  it("assembles a gbp block (all FLOW) with current, prior, MoM, and trend", async () => {
+    const map = fullMap();
+    map.gbp = [
+      snap("gbp", "2026-05-20", { call_clicks: 6, website_clicks: 10, direction_requests: 4, conversations: 2, impressions_total: 300, impressions_desktop_maps: 60, impressions_desktop_search: 40, impressions_mobile_maps: 120, impressions_mobile_search: 80 }),
+      snap("gbp", "2026-06-05", { call_clicks: 5, website_clicks: 8, direction_requests: 3, conversations: 1, impressions_total: 250, impressions_desktop_maps: 50, impressions_desktop_search: 30, impressions_mobile_maps: 100, impressions_mobile_search: 70 }),
+      snap("gbp", "2026-06-18", { call_clicks: 9, website_clicks: 12, direction_requests: 5, conversations: 2, impressions_total: 350, impressions_desktop_maps: 70, impressions_desktop_search: 50, impressions_mobile_maps: 130, impressions_mobile_search: 100 }),
+    ];
+    const data = await assembleReportData("shop-1", "2026-06", {
+      readSnapshots: reader(map),
+      generatedAt: GENERATED_AT,
+    });
+    const gbp = data.sources.gbp!;
+    // FLOW sums across June (06-05 + 06-18): call_clicks 5+9=14, website_clicks 8+12=20.
+    expect(gbp.current.call_clicks).toBe(14);
+    expect(gbp.current.website_clicks).toBe(20);
+    expect(gbp.current.impressions_total).toBe(600); // 250 + 350
+    expect(gbp.prior!.call_clicks).toBe(6); // May 6
+    expect(gbp.momDelta.call_clicks).toBeCloseTo((14 - 6) / 6);
+    // trend keyed by TREND_KEYS.gbp = [call_clicks, website_clicks], two June daily points each.
+    expect(Object.keys(gbp.trend).sort()).toEqual(["call_clicks", "website_clicks"]);
+    expect(gbp.trend.call_clicks).toHaveLength(2);
+    expect(data.linkedSources).toContain("gbp");
+  });
+
+  it("omits gbp when the shop has no gbp rows (existing four-source reports unchanged)", async () => {
+    const data = await assembleReportData("shop-1", "2026-06", {
+      readSnapshots: reader(fullMap()),
+      generatedAt: GENERATED_AT,
+    });
+    expect(data.sources.gbp).toBeUndefined();
+    expect(data.linkedSources).not.toContain("gbp");
+    expect([...data.linkedSources].sort()).toEqual(["ga4", "google_ads", "gsc", "semrush"]);
+  });
 });

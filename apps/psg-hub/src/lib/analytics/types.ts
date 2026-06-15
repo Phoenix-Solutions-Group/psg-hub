@@ -2,7 +2,7 @@
 // Source-agnostic snapshot model: one row per (shop, source, metric_date, period),
 // with source-specific metrics in the `metrics` jsonb. Per-source shapes documented here.
 
-export type AnalyticsSource = "semrush" | "google_ads" | "ga4" | "gsc";
+export type AnalyticsSource = "semrush" | "google_ads" | "ga4" | "gsc" | "gbp";
 export type AnalyticsPeriod = "daily" | "monthly";
 
 /**
@@ -152,6 +152,33 @@ export type GscMetrics = {
   impressions: number;
   ctr: number; // 0..1 ratio — aggregate-excluded
   position: number; // average position — aggregate-excluded
+};
+
+/**
+ * GBP local-presence `metrics` shape — Phase 13 / 13-02. One row per (shop, date)
+ * location-level daily total from a single Business Profile Performance API
+ * fetchMultiDailyMetricsTimeSeries call (RESEARCH §Presence insights). Every field is
+ * a FLOW action/impression count that sums honestly across the month and across shops —
+ * there is NO ratio/average here, so (unlike ga4 engagement_rate / gsc ctr+position /
+ * ads cpl) NOTHING is aggregate-excluded from the MSO KPIs. impressions_total is the
+ * per-day sum of the four impression splits, DERIVED at ingest by 13-02b's parser (it
+ * is NOT a Performance API DailyMetric enum value — sending it as a metric 400s). The
+ * eight enum-backed counts map from BUSINESS_IMPRESSIONS_DESKTOP_MAPS / _DESKTOP_SEARCH /
+ * _MOBILE_MAPS / _MOBILE_SEARCH, BUSINESS_CONVERSATIONS, BUSINESS_DIRECTION_REQUESTS,
+ * CALL_CLICKS, WEBSITE_CLICKS. (BOOKINGS / FOOD_ORDERS / FOOD_MENU_CLICKS are N/A for
+ * collision repair and intentionally not wired.) NOTE: impressions are de-duplicated per
+ * unique user per day, so a monthly sum is an upper bound, not unique visitors.
+ */
+export type GbpMetrics = {
+  impressions_desktop_maps: number;
+  impressions_desktop_search: number;
+  impressions_mobile_maps: number;
+  impressions_mobile_search: number;
+  impressions_total: number; // derived-at-ingest: sum of the four impression splits
+  website_clicks: number;
+  call_clicks: number;
+  direction_requests: number;
+  conversations: number;
 };
 
 /**
