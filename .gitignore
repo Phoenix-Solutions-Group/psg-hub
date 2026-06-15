@@ -33,6 +33,8 @@ __pycache__/
 .vscode/
 .idea/
 .vercel/
+# graphify knowledge-graph output (local artifact, any depth)
+graphify-out/
 supabase/.temp/
 */supabase/.temp/
 npm-debug.log*
