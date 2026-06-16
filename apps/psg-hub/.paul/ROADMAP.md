@@ -8,7 +8,7 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 **v0.3.5 Presence + Sentiment** (v0.3.5)
 Status: 🚧 In Progress — created 2026-06-13
-Phases: 0 of 2 complete
+Phases: 1 of 2 complete (Phase 13 ✅ COMPLETE 2026-06-16, activation-pending)
 
 Surface each shop's Google Business Profile presence and reviews in the hub — with reply-from-hub and LLM-driven sentiment — reusing the Phase-11 Google-OAuth ingest pattern and the Phase-12 LLM/eval + report infra. The v0.3-cut presence/sentiment items, pulled forward (operator 2026-06-13) ahead of the slated v0.4 Invoicing + Payments, to extend the just-shipped analytics/report surface while the infra is fresh.
 
@@ -16,7 +16,7 @@ Surface each shop's Google Business Profile presence and reviews in the hub — 
 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
-| 13 | GBP presence foundation + insights | 2/4+ | 🚧 In progress (13-01 ✅; 13-02 ✅ 2026-06-14; 13-03a ✅ 2026-06-15; 13-03b PLAN 2026-06-15; 13-04 TBD) | - |
+| 13 | GBP presence foundation + insights | 6/6 | ✅ Complete (activation-pending) | 2026-06-16 |
 | 14 | Reviews + sentiment | TBD | Not started | - |
 
 v0.3 Customer Analytics (v0.3.0) ✅ COMPLETE 2026-06-13 (4/4 phases; see Completed Milestones + `.paul/milestones/v0.3.0-ROADMAP.md`).
@@ -387,11 +387,11 @@ Focus: extend the Phase-11 per-shop Google OAuth to add the GBP scope (`business
 **Research:** ✅ DONE 2026-06-13 (`13-RESEARCH.md`, ultracode wf_9f94f2c1-01b, 10 agents, 2 adversarial verdicts). Key corrections: the Phase-11 token CANNOT be reused (no `business.manage` → every GBP call 403s; every shop incl. Wallace re-consents); the OAuth app is already In Production so Gate B blocks even the pilot; data model splits into TWO sources by the codebase FLOW/STOCK discriminator.
 **Plans (4-plan vertical-slice split, mirrors Phase 11; created during /paul:plan 2026-06-14):**
 - [x] 13-01: GBP OAuth link foundation — separate Option-B `business.manage` consent (own `gbp/{authorize,callback,select}` + own `google_oauth_accounts` row) + 2-API account/location enumeration (Account Mgmt + Business Info, readMask required, `googleapis` `auth:` idiom) + ONE additive migration (source CHECK +`'gbp'` + nullable `external_parent_id` holding `accounts/{id}`) + persist `source='gbp'` row (bare `locations/{id}` + parent + shared token). NO insights/panel/cron; ZERO prod. **✅ LOOP CLOSED 2026-06-14** (build-local, locally verified: `supabase db reset` + psql structural verify + e2e 11/11; tsc 0 / eslint 0 / vitest 598 / build ✓; NO new dep).
-- [ ] 13-02: Daily GBP insights ingest — Performance API `fetchMultiDailyMetricsTimeSeries` → `'gbp'` PROMOTED into the AnalyticsSource union (6 maps + TREND_KEYS + METRIC_REGISTRY); `analytics_snapshots` + `analytics_sync_runs` CHECK widen (resolve the auto-named constraint by real name); insights panel + report block + daily cron `0 7 * * *`.
-- [ ] 13-03: Monthly presence + star rating — `'gbp_presence'` SnapshotSource-only monthly row (Business-Info location state + `hasVoiceOfMerchant` + a v4 reviews star-rating/count aggregate, keyed off the captured `accounts/{aid}/locations/{lid}`); presence panel + additive `gbpPresence?` report block + monthly cron `0 4 1 * *`.
-- [ ] 13-04: Prod activation gate batch — Gate A (Business Profile API access, quota 0→300) + Gate B (`business.manage` OAuth verification) + apply the 3 migrations under PROTOCOL + `GOOGLE_GBP_OAUTH_REDIRECT_URI` secret + deploy + Wallace re-consent link + both crons + the empirical 7-day token pass-gate. Phase likely closes ACTIVATION-PENDING.
+- [x] 13-02: Daily GBP insights ingest — split 13-02a (union promotion + CHECK widen + GbpMetrics type + report block) + 13-02b (gbp-client/gbp-metrics/gbp-sync + daily cron `0 7 * * *` + "Local presence" panel + e2e). **✅ LOOP CLOSED 2026-06-14** (build-local, ZERO prod; tsc 0 / vitest 622 / e2e 38/38; API contract verified vs installed googleapis@173). `'gbp'` PROMOTED into the AnalyticsSource union (FLOW/summable).
+- [x] 13-03: Monthly presence + star rating — split 13-03a (foundation: 3rd CHECK-widen migration + SnapshotSource/GbpPresenceMetrics types + getLinkedAccount externalParentId fix + ReportData.gbpPresence? block) + 13-03b (gbp-presence/gbp-reviews + monthly gbp-presence-sync cron `0 4 1 * *` + dashboard presence header + "Reviews and listing" report block + e2e). **✅ LOOP CLOSED 2026-06-15** (build-local, ZERO prod; tsc 0 / vitest 659 / e2e 38/38). `'gbp_presence'` SnapshotSource-only (STOCK, NOT in the union); v4 reviews averageRating/totalReviewCount aggregate keyed off `accounts/{aid}/locations/{lid}`.
+- [x] 13-04: Prod activation gate batch — **✅ LOOP CLOSED 2026-06-16, closed ACTIVATION-PENDING** (`13-04-SUMMARY.md`; 4/4 ACs). Stage A applied the 3 source-CHECK migrations to prod under PROTOCOL (MCP `apply_migration`, advisor 124→124 ×3 zero-delta; 4 proof inserts accepted + bogus rejected + cleaned); Stage B confirmed the 4 Phase-11 creds (**NO new secret** — GBP reuses GOOGLE_OAUTH_CLIENT_ID/SECRET + GOOGLE_ANALYTICS_OAUTH_REDIRECT_URI + CRON_SECRET, NOT a new GBP redirect as the plan-spec had assumed); Stage C `vercel --prod` → dpl_4MbEWGjcACDN3pi7NaGh4SkJGFVm READY (9 crons, gbp-sync + gbp-presence-sync 401-live; authenticated synced:0 smoke deferred — CRON_SECRET un-pullable). Stage 0 (Gate A/B + key revoke) + Stage D (Wallace re-consent + external_parent_id backfill + live smokes + the empirical 7-day token pass-gate) = the external-gated tail. NO app-code change (activation of shipped code 916ace1).
 
-**⚠️ TWO Google lead-time gates — operator starts BOTH on day 1, parallel with 13-01/02/03 build (do NOT wait for 13-04):** Gate A = Business Profile API access request (per-GCP-project, quota 0→300 QPM, ~14-day review — CHECK the GCP Quotas page first, may already be approved); Gate B = OAuth sensitive-scope verification for `business.manage` (confirm sensitive-vs-restricted; restricted adds a CASA Tier-2 assessment, weeks/paid).
+**⚠️ TWO Google lead-time gates — STILL OWED post-13-04 (the activation-pending tail; shared with Phase 14):** Gate A = Business Profile API access request (per-GCP-project, quota 0→300 QPM, ~14-day review — CHECK the GCP Quotas page first, may already be approved); Gate B = OAuth sensitive-scope verification for `business.manage` (confirm sensitive-vs-restricted; restricted adds a CASA Tier-2 assessment, weeks/paid). Until both clear, Phase 13 is build + prod-live but the Wallace re-consent link + live smokes + the empirical 7-day token pass-gate are pending.
 
 ### Phase 14: Reviews + sentiment
 
@@ -403,4 +403,4 @@ Plans: TBD (defined during /paul:plan).
 
 ---
 *Roadmap created: 2026-05-29 (populated from SEED ideation v7)*
-*Last updated: 2026-06-13 — **milestone v0.3 Customer Analytics ✅ COMPLETE + CLOSED (4/4 phases; archived).** **v0.3.5 Presence + Sentiment 🚧 CREATED 2026-06-13** (decimal insertion ahead of v0.4): 2 phases — 13 GBP presence foundation + insights · 14 reviews read/reply + LLM sentiment; reuses Phase-11 OAuth + Phase-12 LLM/report infra; both phases RESEARCH-gated (GBP API: scope/insights + reviews-API access). Pilot = Wallace. Next: /paul:plan Phase 13.*
+*Last updated: 2026-06-16 — **v0.3.5 Presence + Sentiment 🚧 IN PROGRESS (1 of 2 phases).** Phase 13 (GBP presence foundation + insights) ✅ COMPLETE 2026-06-16 — the GBP vertical (13-01..13-03b) built + committed to main (916ace1) and activated on prod by 13-04 (3 source-CHECK migrations advisor 124→124 + gbp crons 401-live), closed ACTIVATION-PENDING on Gate A (GBP API 300 QPM) + Gate B (business.manage verification) + the empirical 7-day token pass-gate (shared with Phase 14). Next: /paul:plan Phase 14 (reviews + sentiment). ── prior 2026-06-13: milestone v0.3 ✅ COMPLETE + CLOSED; v0.3.5 created.*
