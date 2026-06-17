@@ -28,6 +28,10 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/cron/gbp-reviews-sync",
+      "schedule": "0 8 * * *"
+    },
+    {
       "path": "/api/cron/ga4-dims-sync",
       "schedule": "0 2 1 * *"
     },

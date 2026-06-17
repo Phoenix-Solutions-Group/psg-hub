@@ -8,7 +8,7 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 **v0.3.5 Presence + Sentiment** (v0.3.5)
 Status: 🚧 In Progress — created 2026-06-13
-Phases: 1 of 2 complete (Phase 13 ✅ COMPLETE 2026-06-16, activation-pending)
+Phases: 2 of 2 BUILT — milestone close pending (Phase 13 ✅ COMPLETE 2026-06-16 + Phase 14 ✅ COMPLETE 2026-06-17, both activation-pending; 14-01 ingest + 14-02 reply-publish + 14-03 LLM sentiment all LOOP CLOSED). NEXT: /paul:complete-milestone v0.3.5
 
 Surface each shop's Google Business Profile presence and reviews in the hub — with reply-from-hub and LLM-driven sentiment — reusing the Phase-11 Google-OAuth ingest pattern and the Phase-12 LLM/eval + report infra. The v0.3-cut presence/sentiment items, pulled forward (operator 2026-06-13) ahead of the slated v0.4 Invoicing + Payments, to extend the just-shipped analytics/report surface while the infra is fresh.
 
@@ -17,7 +17,7 @@ Surface each shop's Google Business Profile presence and reviews in the hub — 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
 | 13 | GBP presence foundation + insights | 6/6 | ✅ Complete (activation-pending) | 2026-06-16 |
-| 14 | Reviews + sentiment | TBD | Not started | - |
+| 14 | Reviews + sentiment | 3 planned | 🚧 Planning (14-RESEARCH ✅; 14-01 created) | - |
 
 v0.3 Customer Analytics (v0.3.0) ✅ COMPLETE 2026-06-13 (4/4 phases; see Completed Milestones + `.paul/milestones/v0.3.0-ROADMAP.md`).
 v0.2 Customer MVP (v0.2.0) ✅ COMPLETE 2026-06-04 (3/3 phases; see Completed Milestones).
@@ -393,14 +393,14 @@ Focus: extend the Phase-11 per-shop Google OAuth to add the GBP scope (`business
 
 **⚠️ TWO Google lead-time gates — STILL OWED post-13-04 (the activation-pending tail; shared with Phase 14):** Gate A = Business Profile API access request (per-GCP-project, quota 0→300 QPM, ~14-day review — CHECK the GCP Quotas page first, may already be approved); Gate B = OAuth sensitive-scope verification for `business.manage` (confirm sensitive-vs-restricted; restricted adds a CASA Tier-2 assessment, weeks/paid). Until both clear, Phase 13 is build + prod-live but the Wallace re-consent link + live smokes + the empirical 7-day token pass-gate are pending.
 
-### Phase 14: Reviews + sentiment
+### Phase 14: Reviews + sentiment — ✅ COMPLETE 2026-06-17 (activation-pending), 3/3 plans
 
 Focus: ingest GBP reviews; read + reply to a review from the hub (the FIRST external WRITE in the customer surface — decide direct GBP-API write vs the D52/D66 sandbox pattern + idempotency + an audit trail at plan time); run the Phase-12 LLM/eval infra over the reviews for sentiment (trend + theme extraction) → a sentiment panel + a new section in the monthly PSG report.
-**Research:** REQUIRED (hard gate) — GBP reviews API access has historically been allowlist-gated; verify the linked account can read + reply to reviews BEFORE planning the write path.
-Plans: TBD (defined during /paul:plan).
+**Research:** REQUIRED (hard gate) — ✅ `14-RESEARCH.md` (ultracode wf_4ac2ec22-54d, 8 agents). EXTEND-not-build: the reply-draft + human-approval pipeline + review_items/review_responses already ship; the deltas are per-review v4 ingest (501 stub), reply publish-to-Google (legal/consent gap), LLM sentiment.
+Plans (3-plan split): **14-01** per-review v4 reviews.list ingest → review_items ✅ LOOP CLOSED 2026-06-16 (build-local, ZERO prod) · **14-02** reply publish-to-Google (v4 updateReply plumbing + unscheduled cron, consent decision RECORDED, legal-sign-off-gated) ✅ LOOP CLOSED 2026-06-16 (build-local, ZERO live publish) · **14-03** LLM sentiment (review_sentiment table + Haiku structured-output classifier + classify-on-ingest) ✅ LOOP CLOSED 2026-06-17 (build-local, ZERO surface). **Phase 14 ✅ COMPLETE 2026-06-17 (activation-pending), 3/3 plans.** Prod activation of all three (live link + v4 LIST/WRITE smokes + gateway-Haiku sentiment smoke + 14-02b consent schema + sentiment surface) = the Phase-14 gate batch sharing Phase-13 Gate A/B.
 
 **Cut from v0.3.5 (deferred):** multi-directory listings (Bing/Apple/Yelp NAP + citation sync → overlaps v1.6 Yext); post-repair survey send/capture (→ v1.1 Ops Surveys, needs repair-customer data); cross-platform (Yelp/Facebook) review sentiment.
 
 ---
 *Roadmap created: 2026-05-29 (populated from SEED ideation v7)*
-*Last updated: 2026-06-16 — **v0.3.5 Presence + Sentiment 🚧 IN PROGRESS (1 of 2 phases).** Phase 13 (GBP presence foundation + insights) ✅ COMPLETE 2026-06-16 — the GBP vertical (13-01..13-03b) built + committed to main (916ace1) and activated on prod by 13-04 (3 source-CHECK migrations advisor 124→124 + gbp crons 401-live), closed ACTIVATION-PENDING on Gate A (GBP API 300 QPM) + Gate B (business.manage verification) + the empirical 7-day token pass-gate (shared with Phase 14). Next: /paul:plan Phase 14 (reviews + sentiment). ── prior 2026-06-13: milestone v0.3 ✅ COMPLETE + CLOSED; v0.3.5 created.*
+*Last updated: 2026-06-17 — **v0.3.5 Presence + Sentiment 🚧 BUILD COMPLETE (2 of 2 phases ✅), milestone close pending.** Phase 14 (reviews read/reply + LLM sentiment) ✅ COMPLETE 2026-06-17 (activation-pending) — the reviews vertical built build-local (14-01 per-review v4 ingest + 14-02 reply publish-to-Google plumbing [consent-gated] + 14-03 LLM sentiment [review_sentiment + Haiku classify-on-ingest]); prod activation = the Phase-14 gate batch sharing Phase-13 Gate A/B. Phase 13 (GBP) ✅ COMPLETE 2026-06-16. Next: /paul:complete-milestone v0.3.5. ── prior 2026-06-13: milestone v0.3 ✅ COMPLETE + CLOSED; v0.3.5 created.*

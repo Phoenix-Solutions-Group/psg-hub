@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { syncGbpReviewsForShop } from "@/lib/google-oauth/gbp-reviews-sync";
 
 type IngestBody = { shop_id?: string };
 
@@ -36,11 +38,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Review ingest (sources + reviews) is deferred to its own milestone; those backing
-  // tables are not yet provisioned. Guard the route so it returns a clear "not
-  // configured" response BEFORE any phantom-table query, instead of a 500.
-  return NextResponse.json(
-    { error: "Review sync not configured yet" },
-    { status: 501 }
+  // 14-01: ingest this shop's GBP reviews under the membership gate above. The upsert is
+  // a service-role write (review_items RLS bypass), so build a SERVICE client AFTER the
+  // user-scoped membership check — the gate decides access, the service client does the
+  // write. Shares the orchestrator's per-shop core with the cron (one code path).
+  const service = createServiceClient();
+  const { inserted, skipped, errors } = await syncGbpReviewsForShop(
+    service,
+    shop_id
   );
+  return NextResponse.json({ inserted, skipped, errors });
 }

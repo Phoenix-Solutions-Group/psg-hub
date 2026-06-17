@@ -7,8 +7,8 @@
     "status": "in_progress"
   },
   "phase": {
-    "number": 13,
-    "name": "GBP presence foundation + insights",
+    "number": 14,
+    "name": "Reviews + sentiment",
     "status": "complete"
   },
   "loop": {
@@ -17,7 +17,7 @@
   },
   "timestamps": {
     "created_at": "2026-05-29T00:00:00Z",
-    "updated_at": "2026-06-16T00:00:00Z"
+    "updated_at": "2026-06-17T18:00:00Z"
   },
   "satellite": {
     "groom": true
