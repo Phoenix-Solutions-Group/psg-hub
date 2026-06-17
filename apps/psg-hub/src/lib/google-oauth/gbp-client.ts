@@ -1,6 +1,6 @@
 import "server-only";
 import { google, type businessprofileperformance_v1 } from "googleapis";
-import { googleOAuthClientEnv, GoogleApiError } from "./client";
+import { gbpOAuthClientEnv, GoogleApiError } from "./client";
 import { getLinkedAccount, type LinkedAccount } from "./accounts";
 
 // Phase 13 / 13-02b — Business Profile Performance API client built from a shop's
@@ -40,7 +40,7 @@ export async function getGbpPerfClient(
     throw new GoogleApiError("auth_failed", "No linked Google Business Profile");
   }
 
-  const { clientId, clientSecret, redirectUri } = googleOAuthClientEnv();
+  const { clientId, clientSecret, redirectUri } = gbpOAuthClientEnv();
   // googleapis' OWN OAuth2 (google.auth.OAuth2) — its `auth` field only accepts that
   // vendored copy's OAuth2Client. The construction RESEARCH documents for GBP (the
   // documented Phase-11 trap: NOT the gax `authClient:`). Mirror gbp-enumerate.ts.

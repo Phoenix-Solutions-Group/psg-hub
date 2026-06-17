@@ -1,6 +1,6 @@
 import "server-only";
 import { google } from "googleapis";
-import { googleOAuthClientEnv, mapGoogleApiError } from "./client";
+import { gbpOAuthClientEnv, mapGoogleApiError } from "./client";
 
 // Phase 13 / 13-01 — Google Business Profile account + location enumeration for the
 // link picker. A two-API flow on the post-GMB-split v1 APIs (13-RESEARCH.md
@@ -202,7 +202,7 @@ export async function listGbpAccountsAndLocations(
 
 function defaultListAccountsPage(refreshToken: string): GbpAccountsPageFn {
   return async (pageToken) => {
-    const { clientId, clientSecret, redirectUri } = googleOAuthClientEnv();
+    const { clientId, clientSecret, redirectUri } = gbpOAuthClientEnv();
     // googleapis vendors its OWN google-auth-library copy; its `auth` field only
     // accepts that copy's OAuth2Client (the same construction as gsc-enumerate.ts).
     // The redirectUri is immaterial for refresh-token API calls.
@@ -219,7 +219,7 @@ function defaultListAccountsPage(refreshToken: string): GbpAccountsPageFn {
 
 function defaultListLocationsPage(refreshToken: string): GbpLocationsPageFn {
   return async (parent, pageToken) => {
-    const { clientId, clientSecret, redirectUri } = googleOAuthClientEnv();
+    const { clientId, clientSecret, redirectUri } = gbpOAuthClientEnv();
     const auth = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
     auth.setCredentials({ refresh_token: refreshToken });
     const bi = google.mybusinessbusinessinformation({ version: "v1", auth });

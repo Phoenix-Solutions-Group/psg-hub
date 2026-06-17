@@ -33,9 +33,12 @@ function authorized(request: Request): boolean {
 // as the daily gbp-sync + the ga4-dims/perf monthly crons.
 function googleCredsPresent(): boolean {
   return Boolean(
-    process.env.GOOGLE_OAUTH_CLIENT_ID &&
-      process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
-      process.env.GOOGLE_ANALYTICS_OAUTH_REDIRECT_URI
+    (process.env.GOOGLE_GBP_OAUTH_CLIENT_ID ??
+      process.env.GOOGLE_OAUTH_CLIENT_ID) &&
+      (process.env.GOOGLE_GBP_OAUTH_CLIENT_SECRET ??
+        process.env.GOOGLE_OAUTH_CLIENT_SECRET) &&
+      (process.env.GOOGLE_GBP_OAUTH_REDIRECT_URI ??
+        process.env.GOOGLE_ANALYTICS_OAUTH_REDIRECT_URI)
   );
 }
 

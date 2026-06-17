@@ -1,6 +1,6 @@
 import "server-only";
 import { google } from "googleapis";
-import { googleOAuthClientEnv, GoogleApiError, mapGoogleApiError } from "./client";
+import { gbpOAuthClientEnv, GoogleApiError, mapGoogleApiError } from "./client";
 import { getLinkedAccount, type LinkedAccount } from "./accounts";
 import type { GbpPresenceMetrics } from "@/lib/analytics/types";
 
@@ -134,7 +134,7 @@ export async function fetchGbpPresence(
 
 function defaultLocationGet(refreshToken: string): GbpLocationGetFn {
   return async (name, readMask) => {
-    const { clientId, clientSecret, redirectUri } = googleOAuthClientEnv();
+    const { clientId, clientSecret, redirectUri } = gbpOAuthClientEnv();
     // googleapis vendors its OWN google-auth-library copy; its `auth` field only
     // accepts that copy's OAuth2Client (same construction as gbp-enumerate.ts).
     const auth = new google.auth.OAuth2(clientId, clientSecret, redirectUri);

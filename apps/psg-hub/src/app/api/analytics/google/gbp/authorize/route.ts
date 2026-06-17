@@ -66,11 +66,24 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+  // GBP runs on its OWN OAuth client (n8n-workspace-apis), separate from the
+  // psg-google-ads client GA4/GSC/Ads share. Falls back to the shared client when the
+  // GBP-specific var is unset. The client_id MUST match the one whose redirect URI is
+  // registered, or Google returns redirect_uri_mismatch. 14-04 gate-batch deviation.
+  const clientId =
+    process.env.GOOGLE_GBP_OAUTH_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID;
+  if (!clientId) {
+    return NextResponse.json(
+      { error: "Server missing GBP OAuth client id" },
+      { status: 500 }
+    );
+  }
 
   try {
     const { url } = await buildAuthorizeUrl({
       scope: GBP_SCOPE,
       redirectUri,
+      clientId,
       userId: user.id,
       shopId,
     });

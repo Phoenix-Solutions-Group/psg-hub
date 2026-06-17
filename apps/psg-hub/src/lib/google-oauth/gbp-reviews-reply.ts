@@ -1,6 +1,6 @@
 import "server-only";
 import {
-  googleOAuthClientEnv,
+  gbpOAuthClientEnv,
   buildOAuth2Client,
   mapGoogleApiError,
   GoogleApiError,
@@ -53,7 +53,7 @@ async function resolveRequest(
   if (!account) {
     throw new GoogleApiError("bad_request", "no linked gbp account");
   }
-  const { clientId, clientSecret } = googleOAuthClientEnv();
+  const { clientId, clientSecret } = gbpOAuthClientEnv();
   const oauth2 = buildOAuth2Client({
     clientId,
     clientSecret,

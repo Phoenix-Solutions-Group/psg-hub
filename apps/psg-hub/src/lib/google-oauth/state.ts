@@ -91,6 +91,9 @@ export async function buildAuthorizeUrl(input: {
   redirectUri: string;
   userId: string;
   shopId: string;
+  /** OAuth client id for the consent URL. Defaults to the shared GOOGLE_OAUTH_CLIENT_ID
+   *  (GA4/GSC/Ads); the GBP flow passes its own (n8n-workspace-apis) client — 14-04 deviation. */
+  clientId?: string;
 }): Promise<{ url: string; stateToken: string }> {
   const nonce = randomBytes(16).toString("base64url");
   const payload: StatePayload = {
@@ -113,7 +116,7 @@ export async function buildAuthorizeUrl(input: {
     throw new Error(`state insert failed: ${error.message}`);
   }
 
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientId = input.clientId ?? process.env.GOOGLE_OAUTH_CLIENT_ID;
   if (!clientId) {
     throw new Error("GOOGLE_OAUTH_CLIENT_ID missing");
   }
@@ -299,15 +302,20 @@ export async function consumePendingSelection(stateToken: string): Promise<{
 
 export async function exchangeCodeForTokens(
   code: string,
-  redirectUri: string
+  redirectUri: string,
+  clientIdArg?: string,
+  clientSecretArg?: string
 ): Promise<{
   access_token: string;
   refresh_token: string;
   scope: string;
   expires_in: number;
 }> {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  // clientId/clientSecret default to the shared client env (GA4/GSC/Ads); the GBP flow
+  // passes its own (n8n-workspace-apis) client. They MUST match the client used at
+  // authorize time or Google rejects the exchange. 14-04 gate-batch deviation.
+  const clientId = clientIdArg ?? process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = clientSecretArg ?? process.env.GOOGLE_OAUTH_CLIENT_SECRET;
   // redirectUri is a REQUIRED arg (NOT read from an env fallback) — it must be
   // byte-identical to the one used at authorize time or Google 400s the exchange.
   if (!clientId || !clientSecret || !redirectUri) {

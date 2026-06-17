@@ -53,6 +53,33 @@ export function googleOAuthClientEnv(): {
 }
 
 /**
+ * Read the GBP OAuth client env. GBP runs on a SEPARATE OAuth client/project from
+ * GA4/GSC/Ads (operator infra: the Business Profile API + its OAuth client live in
+ * `n8n-workspace-apis`, distinct from the `psg-google-ads` client the others share).
+ * Falls back to the shared client env when the GOOGLE_GBP_OAUTH_* vars are unset, so
+ * non-prod + existing tests keep working; prod sets the three GBP vars. Recorded as a
+ * 14-04 gate-batch deviation (13-01 had assumed one shared client).
+ */
+export function gbpOAuthClientEnv(): {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+} {
+  const clientId =
+    process.env.GOOGLE_GBP_OAUTH_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret =
+    process.env.GOOGLE_GBP_OAUTH_CLIENT_SECRET ??
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const redirectUri =
+    process.env.GOOGLE_GBP_OAUTH_REDIRECT_URI ??
+    process.env.GOOGLE_ANALYTICS_OAUTH_REDIRECT_URI;
+  if (!clientId || !clientSecret || !redirectUri) {
+    throw new GoogleApiError("upstream", "Server missing GBP OAuth credentials");
+  }
+  return { clientId, clientSecret, redirectUri };
+}
+
+/**
  * Build a google-auth-library OAuth2Client primed with a refresh token. The
  * library auto-mints/refreshes the access token on each API call; the access
  * token is never persisted. Scopes are fixed at consent time, so the injected

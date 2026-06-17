@@ -100,11 +100,23 @@ export async function GET(request: Request) {
   if (!redirectUri) {
     return errorHtml("Server missing GOOGLE_GBP_OAUTH_REDIRECT_URI", 500);
   }
+  // GBP's OWN OAuth client (n8n-workspace-apis); falls back to the shared client when
+  // unset. The id/secret MUST match the client used at authorize time. 14-04 deviation.
+  const gbpClientId =
+    process.env.GOOGLE_GBP_OAUTH_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const gbpClientSecret =
+    process.env.GOOGLE_GBP_OAUTH_CLIENT_SECRET ??
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET;
 
   // Exchange code -> tokens. redirectUri MUST match the authorize-time value.
   let tokens;
   try {
-    tokens = await exchangeCodeForTokens(code, redirectUri);
+    tokens = await exchangeCodeForTokens(
+      code,
+      redirectUri,
+      gbpClientId,
+      gbpClientSecret
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return errorHtml(`Token exchange failed: ${msg.slice(0, 120)}`);

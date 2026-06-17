@@ -1,6 +1,6 @@
 import "server-only";
 import {
-  googleOAuthClientEnv,
+  gbpOAuthClientEnv,
   buildOAuth2Client,
   mapGoogleApiError,
 } from "./client";
@@ -75,7 +75,7 @@ export async function fetchGbpReviewsAggregate(
 
   let request = deps.request;
   if (!request) {
-    const { clientId, clientSecret } = googleOAuthClientEnv();
+    const { clientId, clientSecret } = gbpOAuthClientEnv();
     const oauth2 = buildOAuth2Client({
       clientId,
       clientSecret,
