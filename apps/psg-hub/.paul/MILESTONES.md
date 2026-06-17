@@ -4,9 +4,52 @@ Completed milestone log for psg-hub.
 
 | Milestone | Completed | Duration | Stats |
 |-----------|-----------|----------|-------|
+| v0.3.5 Presence + Sentiment | 2026-06-17 | ~4 days | 2 phases, 10 plans |
 | v0.3 Customer Analytics | 2026-06-13 | ~9 days | 4 phases, 18 plans |
 | v0.2 Customer MVP | 2026-06-04 | ~2 days | 3 phases, 14 plans |
 | v0.1 Foundation | 2026-06-02 | ~4 days | 5 phases, 18 plans |
+
+---
+
+## ✅ v0.3.5 Presence + Sentiment (v0.3.5)
+
+**Completed:** 2026-06-17 (both phases loop-closed; Phase 14 LIVE on prod, Phase 13 activation-pending tail)
+**Duration:** ~4 days (2026-06-13 milestone start → 2026-06-17 close)
+
+### Stats
+
+| Metric | Value |
+|--------|-------|
+| Phases | 2 (13 GBP presence · 14 Reviews + sentiment) |
+| Plans | 10 (13: six · 14: four) |
+| Migrations | 6 to prod under PROTOCOL (3 source-CHECK @ 13-04 + 3 Phase-14 @ 14-04), advisor-clean |
+| Crons | +3 (gbp-sync, gbp-presence-sync, gbp-reviews-sync → 10 total) |
+| New runtime deps | 0 (EXTEND-not-build held milestone-wide) |
+| Pilot data | 385 real Wallace reviews (ratings 1-5 clean, dedup 1:1) |
+
+### Key Accomplishments
+
+- **GBP presence vertical LIVE on prod** — shared-OAuth GBP link (separate `business.manage` consent), daily insights ingest (`'gbp'` promoted into the AnalyticsSource union), monthly presence + star-rating (`'gbp_presence'` SnapshotSource), "Local presence" + "Reviews and listing" report blocks + a dashboard presence header.
+- **Reviews vertical LIVE on prod** — per-review GBP v4 `reviews.list` ingest → `review_items` (385 real Wallace reviews); reply publish-to-Google plumbing (v4 `updateReply`, build-local, consent/legal-gated); LLM sentiment (`review_sentiment` + a Haiku `Output.object` classifier mirroring the Phase-12 seam, classify-on-ingest).
+- **Two prod activations under PROTOCOL** — 13-04 (3 source-CHECK migrations + gbp-sync/gbp-presence-sync crons, advisor 124→124 clean, closed activation-pending) and 14-04 (3 Phase-14 migrations + gbp-reviews-sync cron, Wallace re-consented under business.manage, closed LIVE).
+- **EXTEND-not-build throughout** — reused the Phase-11 Google-OAuth ingest pattern + the Phase-12 LLM/eval/report infra; zero new runtime dependency across both phases.
+- **Real Wallace pilot** — 385 reviews (5★×338 / 4★×11 / 3★×4 / 2★×5 / 1★×27), GBP insights + presence flowing; the proven build-local → operator-gate activation pattern (Phases 9-13) extended cleanly.
+
+### Key Decisions
+
+- **GBP OAuth = a SEPARATE `business.manage` client on the operator's `n8n-workspace-apis` app**, not the shared GA4/GSC/Ads client (14-04 fix-forward; 13-01's assumption was wrong — redirect_uri_mismatch). `gbpOAuthClientEnv()` with shared-client fallback.
+- **`review_items` needs a `public.locations` row per shop (NOT-NULL FK) onboarding never creates** — Wallace backfilled; a fleet backfill is a prerequisite before rollout (systemic).
+- **Phase 13 closed activation-pending; Phase 14 closed LIVE** (Gate A GBP-API 300 QPM + Gate B business.manage had cleared by 14-04).
+- **Reply-publish consent model = operator-click-under-recorded-per-shop-authorization, legal-sign-off-gated** (14-02 RECORDED; live activation deferred to 14-02b).
+
+### Open Follow-ups (carried forward)
+
+- 🔐 Rotate the chat-exposed `GOOGLE_GBP_OAUTH_CLIENT_SECRET`.
+- Sentiment prod backfill PENDING (`review_sentiment`=0 at close) — runs on the gbp-reviews-sync cron (08:00 UTC, 385 over ~2 runs); verify it populates.
+- D3 empirical 7-day GBP token pass-gate (~2026-06-24).
+- Systemic `public.locations` fleet backfill before review ingest works beyond Wallace + Demo.
+- 14-02b (reply-publish live activation + consent/authorization schema, legal sign-off) + 14-03b (sentiment surface: report block + dashboard panel + human-review queue + CI golden-set).
+- Fleet-scale (842-shop) rollout batching.
 
 ---
 
