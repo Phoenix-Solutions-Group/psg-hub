@@ -37,6 +37,7 @@ export type GbpLocationStateLike = {
   profile?: { description?: string | null } | null;
   phoneNumbers?: { primaryPhone?: string | null } | null;
   websiteUri?: string | null;
+  metadata?: { mapsUri?: string | null } | null;
 };
 
 /** Test seam: fetch one location's state by resource name + readMask (returns the
@@ -79,6 +80,7 @@ export function mapLocationToPresence(
   const website_uri = loc.websiteUri ?? null;
   const has_description = (loc.profile?.description ?? "").trim().length > 0;
   const phone_present = (loc.phoneNumbers?.primaryPhone ?? "").trim().length > 0;
+  const maps_uri = loc.metadata?.mapsUri ?? null;
 
   const signals = [
     open_status === "OPEN",
@@ -100,6 +102,7 @@ export function mapLocationToPresence(
     has_description,
     phone_present,
     completeness_score,
+    maps_uri,
   };
 }
 

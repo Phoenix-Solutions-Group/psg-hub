@@ -221,7 +221,7 @@ export function ReviewsTable({
                         rel="noreferrer"
                         className="text-sm text-primary hover:underline"
                       >
-                        View
+                        View on Google
                       </a>
                     ) : (
                       <span className="text-sm text-muted-foreground">—</span>

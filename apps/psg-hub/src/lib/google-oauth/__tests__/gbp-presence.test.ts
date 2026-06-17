@@ -31,6 +31,7 @@ const FULL_LOCATION: GbpLocationStateLike = {
   profile: { description: "  We fix cars.  " },
   phoneNumbers: { primaryPhone: "+1 555 0100" },
   websiteUri: "https://example.com",
+  metadata: { mapsUri: "https://maps.google.com/?cid=123" },
 };
 
 describe("mapLocationToPresence", () => {
@@ -45,6 +46,7 @@ describe("mapLocationToPresence", () => {
       has_description: true,
       phone_present: true,
       completeness_score: 100,
+      maps_uri: "https://maps.google.com/?cid=123",
     });
   });
 
@@ -71,6 +73,7 @@ describe("mapLocationToPresence", () => {
       has_description: false,
       phone_present: false,
       completeness_score: 0,
+      maps_uri: null,
     });
   });
 

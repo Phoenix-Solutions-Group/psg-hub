@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveShopContext, type UserShop } from "@/lib/shop/context";
+import { getLatestMonthlySnapshot } from "@/lib/analytics/snapshots";
 import { ReviewsTable } from "@/components/dashboard/reviews-table";
 import type { ExistingResponse } from "@/components/dashboard/response-modal";
 
@@ -29,10 +30,25 @@ export default async function ReviewsPage() {
         .limit(100)
     : { data: [] };
 
-  // review_items has no `url` column; reviews-table renders a Source link, so default to null.
+  // review_items has no per-review URL (Google's v4 API returns none), so the Source
+  // link is the shop's Google Maps listing — metadata.mapsUri, captured on the monthly
+  // gbp_presence snapshot (13-03b). Same link for every row of a shop; null until the
+  // first gbp-presence-sync run populates it.
+  const presenceRow = activeShopId
+    ? await getLatestMonthlySnapshot(supabase, {
+        shopId: activeShopId,
+        source: "gbp_presence",
+      })
+    : null;
+  const mapsUri =
+    presenceRow &&
+    typeof (presenceRow.metrics as Record<string, unknown>).maps_uri === "string"
+      ? ((presenceRow.metrics as Record<string, unknown>).maps_uri as string)
+      : null;
+
   const reviews = (reviewItems ?? []).map((r) => ({
     ...r,
-    url: null as string | null,
+    url: mapsUri,
   }));
 
   const reviewIds = reviews.map((r) => r.id);

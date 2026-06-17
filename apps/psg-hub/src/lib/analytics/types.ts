@@ -207,6 +207,7 @@ export type GbpPresenceMetrics = {
   has_description: boolean;
   phone_present: boolean;
   completeness_score?: number; // optional derived 0-100 listing-completeness
+  maps_uri?: string | null; // metadata.mapsUri — the public Google Maps listing link (per-location)
   average_rating: number | null; // v4 reviews lifetime mean (1-5), null when no reviews / unavailable
   total_review_count: number | null; // v4 reviews total, null when unavailable
 };
