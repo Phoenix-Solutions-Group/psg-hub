@@ -42,7 +42,9 @@ export async function SysConfigVertical({ slug }: { slug: string }) {
   let query = service.from(entity.table).select(recordSelect(entity)).limit(500);
   for (const col of entity.orderBy) query = query.order(col, { ascending: true });
   const { data: rowData } = await query;
-  const rows = (rowData ?? []) as Row[];
+  // Dynamic select() strings defeat Supabase's literal-type inference, so the
+  // client widens to an error type — cast through unknown.
+  const rows = (rowData ?? []) as unknown as Row[];
 
   // Resolve options for multiselect fields (e.g. agents → insurance companies).
   const options: Record<string, OptionItem[]> = {};
@@ -56,7 +58,7 @@ export async function SysConfigVertical({ slug }: { slug: string }) {
       .select(`id, ${labelCol}`)
       .order(labelCol, { ascending: true })
       .limit(1000);
-    options[f.optionsFrom] = (optRows ?? []).map((o) => {
+    options[f.optionsFrom] = ((optRows ?? []) as unknown[]).map((o) => {
       const rec = o as Record<string, unknown>;
       return { id: String(rec.id), label: String(rec[labelCol] ?? "") };
     });
