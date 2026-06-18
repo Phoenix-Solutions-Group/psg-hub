@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderMailPdf, type RenderHttpResponse } from "@/lib/production/render-pdf";
+import {
+  renderMailPdf,
+  type RenderHttpResponse,
+  type RenderHttpPost,
+} from "@/lib/production/render-pdf";
 import { CircuitBreaker } from "@/lib/resilience";
 
 const fastRetry = { retries: 2, baseDelayMs: 0, sleep: async () => {}, jitter: () => 0 };
@@ -24,7 +28,7 @@ afterEach(() => {
 
 describe("renderMailPdf", () => {
   it("POSTs the html to the worker with a bearer token and returns the bytes", async () => {
-    const httpPost = vi.fn(async () => pdfResponse(200));
+    const httpPost = vi.fn<RenderHttpPost>(async () => pdfResponse(200));
     const out = await renderMailPdf("<html>hi</html>", { httpPost, retry: fastRetry });
 
     expect(out).toBeInstanceOf(Uint8Array);

@@ -2,11 +2,16 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
+import {
+  ProductionDocumentsTable,
+  ProductionQueueTable,
+} from "@/components/ops/production-actions";
 
 // v1.3 / PSG-27 (PSG-41) — Production print queue + historical view. Server-
-// rendered surface over the v1.3 data model; gated by manage_production. Print
-// and reprint are POST actions on /api/production/documents/[id]/{print,reprint}
-// — interactive buttons land in the follow-up client component.
+// rendered data over the v1.3 data model; gated by manage_production. The print
+// queue and recent-documents surfaces are interactive client components that
+// call the gated POST routes (batch print → printing→historical; single-doc
+// print; reprint with audited reason). Historical is read-only.
 
 type BatchRow = {
   id: string;
@@ -82,7 +87,16 @@ export default async function ProductionPage() {
         <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Print queue
         </h2>
-        <BatchTable rows={queue} emptyLabel="No active batches." />
+        <ProductionQueueTable
+          rows={queue.map((b) => ({
+            id: b.id,
+            name: b.name,
+            status: b.status,
+            vendor: b.vendor,
+            document_count: b.document_count,
+            printed_at: b.printed_at,
+          }))}
+        />
       </section>
 
       <section className="space-y-3">
@@ -96,40 +110,7 @@ export default async function ProductionPage() {
         <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Recent documents
         </h2>
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left font-heading text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3">Print ID</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Vendor</th>
-                <th className="px-4 py-3">Expected</th>
-              </tr>
-            </thead>
-            <tbody>
-              {docs.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                    No documents yet.
-                  </td>
-                </tr>
-              ) : (
-                docs.map((d) => (
-                  <tr key={d.id} className="border-t border-border">
-                    <td className="px-4 py-3 font-mono text-xs">{d.external_id ?? "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{d.piece_type}</td>
-                    <td className="px-4 py-3">{d.status}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{d.vendor ?? "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {d.expected_delivery_date ?? "—"}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ProductionDocumentsTable rows={docs} />
       </section>
     </div>
   );
