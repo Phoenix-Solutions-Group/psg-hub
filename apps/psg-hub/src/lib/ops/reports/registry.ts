@@ -4,13 +4,17 @@
 // Program, in the 5 milestone-v1.4 batches. Each is declared once with its
 // metadata, parameter spec, columns and deterministic sample rows.
 //
-// dataStatus is "pending-data" for every report today: the backing ops tables
-// (companies / repair_orders / surveys — B1 in PSG-25 v1.1 Ops Foundation) are
-// not built yet. When a report's table lands, flip it to "available" and add a
-// `run()` — the rest of the framework (params, runner, export, routes, UI) is
-// already wired and needs no change. Slugs are frozen by PLANNING.md and are
-// the public report ids; do not rename them.
+// B1 (PSG-25 v1.1 Ops Foundation) has landed: companies / repair_orders /
+// estimates / survey_responses are live. Wiring each report's real data is the
+// mechanical fast-follow — flip its `dataStatus` to "available" and add a
+// `run()` (see ./live/*); the rest of the framework (params, runner, export,
+// routes, UI) is already wired and needs no change. A report stays
+// "pending-data" only while a column it needs has no real source yet (e.g.
+// invoiced $ line items, estimator/tech attribution, survey response-rate /
+// recommend fields) — those land with the invoicing + attribution work. Slugs
+// are frozen by PLANNING.md and are the public report ids; do not rename them.
 
+import { monthlyCsiDisplayRun } from "./live/survey";
 import {
   category,
   customerName,
@@ -250,7 +254,9 @@ const definitions: ReportDefinition[] = [
       col("csi", "CSI", "number"),
       col("surveys", "Surveys", "number"),
     ],
-    dataStatus: "pending-data",
+    // B1 landed: survey_responses is live. CSI = avg(scale_emi_pct) × 100.
+    dataStatus: "available",
+    run: monthlyCsiDisplayRun,
     sampleRows: () =>
       build(6, (i) => ({
         month: pick(
