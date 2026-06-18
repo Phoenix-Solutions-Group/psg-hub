@@ -8,6 +8,8 @@ import {
   printBatch,
   reprintDocument,
   createBatchSchema,
+  buildBatchDocuments,
+  generateBatchSchema,
   type DocumentRow,
   type ProductionClient,
 } from "@/lib/ops/production";
@@ -251,5 +253,84 @@ describe("createBatchSchema", () => {
   it("requires a name and a uuid company", () => {
     expect(createBatchSchema.safeParse({ name: "July TY", company_id: crypto.randomUUID() }).success).toBe(true);
     expect(createBatchSchema.safeParse({ name: "", company_id: "x" }).success).toBe(false);
+  });
+});
+
+describe("generateBatchSchema", () => {
+  it("defaults the product to the warranty letter and accepts a customer subset", () => {
+    const parsed = generateBatchSchema.safeParse({
+      name: "July Warranty",
+      company_id: crypto.randomUUID(),
+      repair_customer_ids: [crypto.randomUUID()],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.product).toBe("warranty");
+  });
+
+  it("rejects an unknown product and a non-uuid company", () => {
+    expect(
+      generateBatchSchema.safeParse({ name: "X", company_id: crypto.randomUUID(), product: "flyer" }).success
+    ).toBe(false);
+    expect(generateBatchSchema.safeParse({ name: "X", company_id: "nope" }).success).toBe(false);
+  });
+});
+
+describe("buildBatchDocuments", () => {
+  const company = {
+    id: "co-1",
+    name: "Apex Collision",
+    phone: "555-0100",
+    address: { line1: "1 Shop Way", city: "Austin", state: "TX", postal_code: "73301" },
+  };
+  const customers = [
+    {
+      id: "cust-1",
+      first_name: "Alex",
+      last_name: "Driver",
+      address: { line1: "9 Elm St", city: "Austin", state: "TX", postal_code: "78701" },
+      vehicle: "Honda Civic",
+    },
+    {
+      id: "cust-2",
+      first_name: "Robin",
+      last_name: "Payne",
+      address: { line1: "12 Oak Ave", city: "Dallas", state: "TX", postal_code: "75201" },
+    },
+  ];
+
+  it("renders one letter document per customer with snapshotted to/from addresses", () => {
+    const built = buildBatchDocuments(company, customers, { product: "warranty", productId: "prod-9" });
+
+    expect(built.documentCount).toBe(2);
+    expect(built.vendor).toBe("lob"); // default vendor (no override)
+    expect(built.documents).toHaveLength(2);
+
+    const [doc] = built.documents;
+    expect(doc.piece_type).toBe("letter");
+    expect(doc.product_id).toBe("prod-9");
+    expect(doc.status).toBe("rendered");
+    expect(doc.repair_customer_id).toBe("cust-1");
+    // to = the customer, from = the shop — both snapshotted as the stored jsonb shape.
+    expect(doc.to_address).toMatchObject({ name: "Alex Driver", line1: "9 Elm St", city: "Austin", state: "TX", postal_code: "78701" });
+    expect(doc.from_address).toMatchObject({ name: "Apex Collision", line1: "1 Shop Way", postal_code: "73301" });
+    // The rendered asset is the merged, Lob-submittable letter HTML.
+    expect(doc.rendered_url).toContain("Dear Alex");
+    expect(doc.rendered_url).toContain("Apex Collision");
+  });
+
+  it("honours an explicit in-house vendor override and reports unresolved tokens", () => {
+    const built = buildBatchDocuments(company, [customers[1]], { product: "warranty", vendor: "inhouse" });
+
+    expect(built.vendor).toBe("inhouse");
+    expect(built.documents[0].vendor).toBe("inhouse");
+    // cust-2 has no vehicle/serviceDate — the warranty template flags them missing.
+    const missing = built.missingByCustomer.find((m) => m.repairCustomerId === "cust-2");
+    expect(missing?.tokens).toEqual(expect.arrayContaining(["customer.vehicle"]));
+  });
+
+  it("returns an empty plan when there are no customers", () => {
+    const built = buildBatchDocuments(company, [], { product: "warranty" });
+    expect(built.documentCount).toBe(0);
+    expect(built.documents).toEqual([]);
   });
 });

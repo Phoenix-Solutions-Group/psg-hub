@@ -16,6 +16,13 @@ import type {
   MailVendor,
 } from "@/lib/production/types";
 import { selectVendor } from "@/lib/production/select-vendor";
+import {
+  defaultTemplate,
+  renderMailContent,
+  type MailMergeData,
+  type MailProduct,
+  type ProgramCustomizations,
+} from "@/lib/production/templates";
 
 // ---------------------------------------------------------------------------
 // Batch status machine.
@@ -284,4 +291,147 @@ export async function reprintDocument(
   if (error) throw new Error(`reprintDocument audit write failed: ${error.message}`);
 
   return outcome;
+}
+
+// ---------------------------------------------------------------------------
+// Batch generation — the v1.3 "pick product → pick company → generate" step
+// (PLANNING.md /api/production/generate). Pure + DB-free so it is unit-testable;
+// the route handler does the DB I/O (load company + customers, insert the batch
+// + documents). One mail piece per repair customer, rendered through the shared
+// mail-merge engine (src/lib/production/templates.ts) into the print-ready HTML
+// the Lob adapter accepts directly (letter `file` / postcard `front`).
+// ---------------------------------------------------------------------------
+
+/** Mail product (template) a batch is generated for. Mirrors MailProduct. */
+export const MAIL_PRODUCTS = ["thank_you", "warranty", "envelope"] as const;
+
+export const generateBatchSchema = z.object({
+  name: z.string().trim().min(1, "name is required").max(200),
+  company_id: z.string().uuid(),
+  /** Catalog product row (products.id) the batch + documents are stamped with. */
+  product_id: z.string().uuid().nullish(),
+  /** Mail-merge template to render. Defaults to the warranty letter (single asset). */
+  product: z.enum(MAIL_PRODUCTS).default("warranty"),
+  /** Subset of the company's repair customers; blank/empty = every customer. */
+  repair_customer_ids: z.array(z.string().uuid()).nullish(),
+  /** Per-batch vendor override; falls back to the default (lob) via selectVendor. */
+  vendor: z.enum(["lob", "inhouse"]).nullish(),
+});
+export type GenerateBatchInput = z.infer<typeof generateBatchSchema>;
+
+/** The jsonb address shape stored on companies/repair_customers (all optional). */
+export type StoredAddressInput =
+  | (Partial<Pick<ProductionAddress, "line1" | "city" | "state" | "postal_code">> & {
+      line2?: string | null;
+    })
+  | null
+  | undefined;
+
+export interface GenerateCompany {
+  id: string;
+  name: string;
+  phone?: string | null;
+  address?: StoredAddressInput;
+  /** Per-shop customizations from company_programs.customizations_jsonb. */
+  program?: ProgramCustomizations | null;
+}
+
+export interface GenerateCustomer {
+  id: string;
+  first_name: string;
+  last_name: string;
+  address?: StoredAddressInput;
+  vehicle?: string | null;
+  service_date?: string | null;
+}
+
+/** A production_documents insert payload (batch_id is added by the route). */
+export interface GeneratedDocument {
+  company_id: string;
+  repair_customer_id: string;
+  product_id: string | null;
+  piece_type: MailPieceType;
+  to_address: ProductionAddress;
+  from_address: ProductionAddress;
+  vendor: MailVendor;
+  rendered_url: string | null;
+  status: "rendered";
+}
+
+export interface BuildBatchDocumentsResult {
+  vendor: MailVendor;
+  documentCount: number;
+  documents: GeneratedDocument[];
+  /** Per-customer unresolved merge tokens, so the route can flag thin templates. */
+  missingByCustomer: { repairCustomerId: string; tokens: string[] }[];
+}
+
+/** Map a stored jsonb address (+ a display name) onto the snapshot we persist. */
+function toStoredAddress(name: string, address: StoredAddressInput): ProductionAddress {
+  return {
+    name,
+    line1: address?.line1 ?? "",
+    line2: address?.line2 ?? null,
+    city: address?.city ?? "",
+    state: address?.state ?? "",
+    postal_code: address?.postal_code ?? "",
+  };
+}
+
+/**
+ * Build the batch's document rows from the company + its selected repair
+ * customers. One document per customer: the to/from addresses are snapshotted
+ * (customer rows can change later) and the template is rendered to the HTML the
+ * Lob adapter submits directly. Pure: same inputs → same rows, no DB / clock.
+ */
+export function buildBatchDocuments(
+  company: GenerateCompany,
+  customers: GenerateCustomer[],
+  opts: { product: MailProduct; productId?: string | null; vendor?: MailVendor | null }
+): BuildBatchDocumentsResult {
+  const template = defaultTemplate(opts.product);
+  const vendor = selectVendor({ batchVendor: opts.vendor ?? null });
+  const from = toStoredAddress(company.name, company.address);
+
+  const documents: GeneratedDocument[] = [];
+  const missingByCustomer: { repairCustomerId: string; tokens: string[] }[] = [];
+
+  for (const c of customers) {
+    const data: MailMergeData = {
+      customer: {
+        firstName: c.first_name,
+        lastName: c.last_name,
+        vehicle: c.vehicle ?? undefined,
+        serviceDate: c.service_date ?? undefined,
+      },
+      company: {
+        name: company.name,
+        phone: company.phone ?? undefined,
+        city: company.address?.city,
+        state: company.address?.state,
+      },
+      program: company.program ?? {},
+    };
+    const rendered = renderMailContent(template, data);
+    // Letters carry a single `file`; postcards a `front` (the schema stores one
+    // rendered asset, so the Lob round-trip is the single-asset letter path).
+    const asset = template.pieceType === "postcard" ? rendered.front : rendered.file;
+
+    documents.push({
+      company_id: company.id,
+      repair_customer_id: c.id,
+      product_id: opts.productId ?? null,
+      piece_type: template.pieceType,
+      to_address: toStoredAddress(`${c.first_name} ${c.last_name}`.trim(), c.address),
+      from_address: from,
+      vendor,
+      rendered_url: asset ?? null,
+      status: "rendered",
+    });
+    if (rendered.missing.length) {
+      missingByCustomer.push({ repairCustomerId: c.id, tokens: rendered.missing });
+    }
+  }
+
+  return { vendor, documentCount: documents.length, documents, missingByCustomer };
 }

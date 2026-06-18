@@ -46,6 +46,18 @@ export const OPS_STAFF = {
   companyName: "E2E Ops Happy Path Co",
 };
 
+// PSG-52: v1.3 Production happy path (batch → print → reprint → historical).
+// Reuses the OPS_STAFF (psg_superadmin) storageState — superadmin passes
+// manage_production. The spec creates its own company / product / repair
+// customer / batch at runtime; the names are pinned here so the idempotent
+// cleanup can remove the prior run's production ladder before re-seeding.
+export const PROD_OPS = {
+  statePath: OPS_STAFF.statePath,
+  companyName: "E2E Production Happy Path Co",
+  productName: "E2E Warranty Letter Program",
+  batchName: "E2E Warranty Batch",
+};
+
 // 09-02 analytics snapshot seed. End date = "today" at module load (NOT a hard
 // constant — the page reads a trailing-30-day runtime window, so a frozen date
 // would rot out of range). Metric VALUES are formula-derived from the day

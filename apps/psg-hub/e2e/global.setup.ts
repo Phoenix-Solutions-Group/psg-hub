@@ -8,6 +8,7 @@ import {
   MULTI,
   MEGA,
   OPS_STAFF,
+  PROD_OPS,
   SNAPSHOT_END_DATE,
   SNAPSHOT_SYNCED_AT,
   FIXTURE_SHOP_NAMES,
@@ -329,6 +330,23 @@ async function cleanup(): Promise<void> {
   // repair_orders all FK -> companies(id) ON DELETE CASCADE, so this one delete
   // removes the whole RO ladder the spec creates.
   await admin.from("companies").delete().eq("name", OPS_STAFF.companyName);
+
+  // PSG-52: drop the production happy-path ladder. production_batches /
+  // production_documents FK -> companies(id) ON DELETE RESTRICT, so the company
+  // delete is blocked while they exist — remove the batches first (documents +
+  // reprint_log + mail_vendor_jobs cascade off batch_id). Then the company
+  // delete cascades its repair_customers, and the program product is dropped.
+  const { data: prodCo } = await admin
+    .from("companies")
+    .select("id")
+    .eq("name", PROD_OPS.companyName)
+    .maybeSingle();
+  if (prodCo) {
+    await admin.from("production_batches").delete().eq("company_id", prodCo.id);
+    await admin.from("company_programs").delete().eq("company_id", prodCo.id);
+    await admin.from("companies").delete().eq("id", prodCo.id);
+  }
+  await admin.from("products").delete().eq("name", PROD_OPS.productName);
 
   const { data: shops } = await admin
     .from("shops")
