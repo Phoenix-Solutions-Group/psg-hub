@@ -162,7 +162,20 @@ const defaultHttpGet: PsiHttpGet = async (requestUrl) => {
   try {
     const res = await fetch(requestUrl, { signal: controller.signal });
     if (!res.ok) {
-      throw new PerfHttpError(res.status, `PSI HTTP ${res.status}`);
+      // Capture the PSI error body so the reason (e.g. a 400's lighthouseError /
+      // ERRORED_DOCUMENT_REQUEST when Google's crawler can't load the page) reaches the
+      // logs — the status alone is undiagnosable. The body is Google's error JSON, which
+      // does NOT echo the api key; collapse whitespace + truncate to keep logs bounded.
+      let detail = "";
+      try {
+        detail = (await res.text()).replace(/\s+/g, " ").trim().slice(0, 500);
+      } catch {
+        // body unreadable (already consumed / network) — fall back to status-only
+      }
+      throw new PerfHttpError(
+        res.status,
+        detail ? `PSI HTTP ${res.status}: ${detail}` : `PSI HTTP ${res.status}`
+      );
     }
     return (await res.json()) as PsiApiResponse;
   } finally {

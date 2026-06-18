@@ -145,4 +145,32 @@ describe("fetchPsi", () => {
       else process.env.PAGESPEED_API_KEY = prior;
     }
   });
+
+  it("defaultHttpGet surfaces the PSI error body in the thrown message (diagnosability)", async () => {
+    // The real fetch path (no httpGet seam) must carry the PSI error reason, not just the status.
+    const body =
+      '{"error":{"code":400,"message":"Lighthouse returned error: ERRORED_DOCUMENT_REQUEST. Status code: 403"}}';
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 400,
+        text: async () => body,
+      })) as unknown as typeof fetch
+    );
+    try {
+      const err = await fetchPsi(URL, {
+        breaker: freshBreaker(),
+        retry: { retries: 3, baseDelayMs: 1 },
+        apiKey: "K",
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(PerfHttpError);
+      const perr = err as PerfHttpError;
+      expect(perr.status).toBe(400);
+      expect(perr.message).toContain("PSI HTTP 400:");
+      expect(perr.message).toContain("ERRORED_DOCUMENT_REQUEST");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
