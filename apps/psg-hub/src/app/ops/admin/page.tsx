@@ -16,13 +16,19 @@ const SECTIONS = [
     href: "/ops/admin/modules",
     label: "Module Access Matrix",
     note: "Toggle module visibility per role / shop / user. (v1.5 — PSG-29)",
-    available: false,
+    available: true,
   },
   {
     href: "/ops/admin/audit",
     label: "Access Audit",
     note: "Append-only history of privileged changes. (v1.5 — PSG-29)",
-    available: false,
+    available: true,
+  },
+  {
+    href: "/ops/admin/pii",
+    label: "PII Checklist",
+    note: "Inventory of PII surfaces and the controls protecting them. (v1.5 — PSG-29)",
+    available: true,
   },
 ];
 
