@@ -21,6 +21,7 @@ import {
   monthlyCsiDisplayRun,
   painterPerformanceRun,
   performanceDashboardRun,
+  rentalCarAnalysisRun,
   surveyAlertRecapRun,
 } from "./live/survey";
 import {
@@ -404,10 +405,12 @@ const definitions: ReportDefinition[] = [
       col("cycleTime", "Cycle Time (days)", "number"),
       col("cost", "Rental Cost", "currency"),
     ],
-    // Still sample-only: rental days/cost + cycle time are RO/insurer-side and
-    // have no data source yet (PSG-89 added survey attribution, not rental/cycle).
-    // Tracked by PSG-96. The other 7 survey-CSI reports are live.
-    dataStatus: "pending-data",
+    // Live (PSG-96): rental days/cost from public.rental_assignments, cycle time
+    // derived from repair_orders.dates_json (date_out - date_in), shop/insurer
+    // from the spine. See 20260618210000_rental_cycle_time_v1_5. All 8 survey-CSI
+    // reports are now live.
+    dataStatus: "available",
+    run: rentalCarAnalysisRun,
     sampleRows: () =>
       build(N, (i) => {
         const days = seeded(i + 3, 3, 18);
