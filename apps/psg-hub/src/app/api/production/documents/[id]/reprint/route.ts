@@ -1,13 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireOpsFn } from "@/lib/auth/ops-access";
-import { createLobAdapter } from "@/lib/production/lob";
+import { createMailAdapter } from "@/lib/production/adapters";
 import { reprintDocument, reprintSchema, type ProductionClient } from "@/lib/ops/production";
 import { MailProductionError } from "@/lib/production/types";
 
-// v1.3 / PSG-27 (PSG-41) — reprint a production document. Re-submits via the
-// vendor AND writes the dedicated production_reprint_log audit row (who/why) —
-// the v1.3 production-audit gate. Gated by manage_production.
+// v1.3 / PSG-43 (PSG-27/PSG-41) — reprint a production document. Re-submits via
+// the per-template/per-shop selected vendor (lob | inhouse) AND writes the
+// dedicated production_reprint_log audit row (who/why) — the v1.3 production-audit
+// gate. Gated by manage_production.
 
 export async function POST(
   request: NextRequest,
@@ -33,10 +34,9 @@ export async function POST(
   }
 
   const client = createServiceClient() as unknown as ProductionClient;
-  const adapter = createLobAdapter();
 
   try {
-    const outcome = await reprintDocument(client, adapter, id, gate.userId, parsed.data.reason);
+    const outcome = await reprintDocument(client, createMailAdapter, id, gate.userId, parsed.data.reason);
     return NextResponse.json({ outcome }, { status: 200 });
   } catch (error) {
     if (error instanceof MailProductionError) {

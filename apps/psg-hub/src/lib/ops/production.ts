@@ -13,7 +13,9 @@ import type {
   MailAddress,
   MailDocument,
   MailPieceType,
+  MailVendor,
 } from "@/lib/production/types";
+import { selectVendor } from "@/lib/production/select-vendor";
 
 // ---------------------------------------------------------------------------
 // Batch status machine.
@@ -135,6 +137,30 @@ export interface DocumentRow {
   from_address: ProductionAddress;
   rendered_url: string | null;
   product_id: string | null;
+  /**
+   * Vendor selected for this piece (mirrors the per-template/per-shop choice
+   * persisted on the parent batch at queue time). Drives adapter selection at
+   * print time via {@link selectVendor}; null falls back to the default vendor.
+   */
+  vendor?: MailVendor | null;
+}
+
+/**
+ * Resolve the concrete adapter for a print. Callers may pass either a fixed
+ * `MailAdapter` (vendor already decided) or a resolver that maps the selected
+ * vendor → adapter, in which case the document's persisted per-template/per-shop
+ * vendor choice (via {@link selectVendor}) decides which adapter handles the piece.
+ */
+export type MailAdapterResolver = (vendor: MailVendor) => MailAdapter;
+
+function resolvePrintAdapter(
+  adapter: MailAdapter | MailAdapterResolver,
+  doc: DocumentRow
+): MailAdapter {
+  if (typeof adapter === "function") {
+    return adapter(selectVendor({ documentVendor: doc.vendor ?? null }));
+  }
+  return adapter;
 }
 
 export interface PrintOutcome {
@@ -166,18 +192,18 @@ export function buildMailDocument(doc: DocumentRow): MailDocument {
  */
 export async function printDocument(
   client: ProductionClient,
-  adapter: MailAdapter,
+  adapter: MailAdapter | MailAdapterResolver,
   documentId: string
 ): Promise<PrintOutcome> {
   const { data: doc, error } = await client
     .from("production_documents")
-    .select("id, batch_id, piece_type, to_address, from_address, rendered_url, product_id")
+    .select("id, batch_id, piece_type, to_address, from_address, rendered_url, product_id, vendor")
     .eq("id", documentId)
     .single();
   if (error) throw new Error(`printDocument load failed: ${error.message}`);
   if (!doc) throw new Error("printDocument: document not found");
 
-  const result = await adapter.submit(buildMailDocument(doc));
+  const result = await resolvePrintAdapter(adapter, doc).submit(buildMailDocument(doc));
 
   const { error: updateError } = await client
     .from("production_documents")
@@ -199,6 +225,42 @@ export async function printDocument(
   };
 }
 
+export interface BatchPrintOutcome {
+  batchId: string;
+  status: BatchStatus;
+  printed: PrintOutcome[];
+}
+
+/**
+ * Print a whole batch: submit each not-yet-printed document via the vendor, then
+ * move the batch printing→historical and stamp printed_at — the v1.3 happy path
+ * ("move batch printing→historical on success"). The finalize only runs after
+ * every submit succeeds; if any document fails the error propagates and the
+ * batch stays where it was, so a partially-failed batch is never marked done.
+ * `documentIds` is the set to submit (the caller filters out already-printed
+ * docs to avoid double-mailing); an empty set just finalizes the batch.
+ */
+export async function printBatch(
+  client: ProductionClient,
+  adapter: MailAdapter | MailAdapterResolver,
+  batchId: string,
+  documentIds: string[],
+  printedAt: string
+): Promise<BatchPrintOutcome> {
+  const printed: PrintOutcome[] = [];
+  for (const id of documentIds) {
+    printed.push(await printDocument(client, adapter, id));
+  }
+
+  const { error } = await client
+    .from("production_batches")
+    .update({ status: "historical", printed_at: printedAt })
+    .eq("id", batchId);
+  if (error) throw new Error(`printBatch finalize failed: ${error.message}`);
+
+  return { batchId, status: "historical", printed };
+}
+
 /**
  * Reprint a document: re-submit to the vendor AND write the dedicated audit row
  * (production_reprint_log) — the v1.3 production-audit gate. The audit row is
@@ -207,7 +269,7 @@ export async function printDocument(
  */
 export async function reprintDocument(
   client: ProductionClient,
-  adapter: MailAdapter,
+  adapter: MailAdapter | MailAdapterResolver,
   documentId: string,
   actorProfileId: string,
   reason?: string | null

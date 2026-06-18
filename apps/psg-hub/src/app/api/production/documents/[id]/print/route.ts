@@ -1,14 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireOpsFn } from "@/lib/auth/ops-access";
-import { createLobAdapter } from "@/lib/production/lob";
+import { createMailAdapter } from "@/lib/production/adapters";
 import { printDocument, type ProductionClient } from "@/lib/ops/production";
 import { MailProductionError } from "@/lib/production/types";
 
-// v1.3 / PSG-27 (PSG-41) — print a single production document via the selected
-// vendor (Lob now). Submits through the MailAdapter, persists external_id +
+// v1.3 / PSG-43 (PSG-27/PSG-41) — print a single production document via the
+// per-template/per-shop selected vendor (lob | inhouse). Passing the
+// createMailAdapter resolver lets printDocument pick the adapter from the
+// document's persisted vendor choice (selectVendor). Persists external_id +
 // status. Gated by manage_production. Live Lob spend is gated by board gate G4;
-// a test_* LOB_API_KEY exercises this path with no spend.
+// a test_* LOB_API_KEY exercises the Lob path with no spend, and the in-house
+// adapter incurs no Lob spend at all.
 
 export async function POST(
   _request: NextRequest,
@@ -19,10 +22,9 @@ export async function POST(
   const { id } = await params;
 
   const client = createServiceClient() as unknown as ProductionClient;
-  const adapter = createLobAdapter();
 
   try {
-    const outcome = await printDocument(client, adapter, id);
+    const outcome = await printDocument(client, createMailAdapter, id);
     return NextResponse.json({ outcome }, { status: 200 });
   } catch (error) {
     if (error instanceof MailProductionError) {

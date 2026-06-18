@@ -5,6 +5,7 @@ import {
   buildMailDocument,
   resolveDocumentSort,
   printDocument,
+  printBatch,
   reprintDocument,
   createBatchSchema,
   type DocumentRow,
@@ -131,6 +132,36 @@ describe("printDocument", () => {
     const { client } = makeClient(null);
     await expect(printDocument(client, stubAdapter(), "missing")).rejects.toThrow(/not found/);
   });
+
+  it("resolves the adapter from the document's vendor when passed a resolver", async () => {
+    // Document carries an in-house vendor choice (mirrors the per-template/per-shop
+    // selection persisted at queue time); the resolver must build the inhouse adapter.
+    const { client } = makeClient({ ...DOC, vendor: "inhouse" });
+    const lob = stubAdapter();
+    const inhouse = stubAdapter();
+    const requested: string[] = [];
+    const resolver = (vendor: "lob" | "inhouse") => {
+      requested.push(vendor);
+      return vendor === "inhouse" ? inhouse : lob;
+    };
+
+    await printDocument(client, resolver, "doc-1");
+
+    expect(requested).toEqual(["inhouse"]);
+    expect(inhouse.submit).toHaveBeenCalledOnce();
+    expect(lob.submit).not.toHaveBeenCalled();
+  });
+
+  it("defaults the resolver to lob when the document has no vendor", async () => {
+    const { client } = makeClient(DOC); // DOC has no vendor field
+    const requested: string[] = [];
+    const resolver = (vendor: "lob" | "inhouse") => {
+      requested.push(vendor);
+      return stubAdapter();
+    };
+    await printDocument(client, resolver, "doc-1");
+    expect(requested).toEqual(["lob"]);
+  });
 });
 
 describe("reprintDocument", () => {
@@ -155,6 +186,64 @@ describe("reprintDocument", () => {
     adapter.submit.mockRejectedValueOnce(new Error("vendor down"));
     await expect(reprintDocument(client, adapter, "doc-1", "actor-9")).rejects.toThrow(/vendor down/);
     expect(insert).not.toHaveBeenCalled();
+  });
+});
+
+/** Fake that records per-table update() values so the batch finalize is observable. */
+function makeBatchClient(doc: DocumentRow) {
+  const updates: Record<string, Record<string, unknown>[]> = {};
+  const inserts: Record<string, unknown>[] = [];
+  const from = vi.fn((table: string) => ({
+    select: () => ({ eq: () => ({ single: async () => ({ data: doc, error: null }) }) }),
+    update: (values: Record<string, unknown>) => {
+      (updates[table] ??= []).push(values);
+      return { eq: async () => ({ error: null }) };
+    },
+    insert: async (row: Record<string, unknown>) => {
+      inserts.push(row);
+      return { error: null };
+    },
+  }));
+  return { client: { from } as unknown as ProductionClient, updates, inserts };
+}
+
+describe("printBatch", () => {
+  it("prints each document then moves the batch printing→historical with printed_at", async () => {
+    const { client, updates } = makeBatchClient(DOC);
+    const adapter = stubAdapter();
+    const printedAt = "2026-06-18T18:00:00.000Z";
+
+    const outcome = await printBatch(client, adapter, "batch-1", ["doc-1", "doc-2"], printedAt);
+
+    expect(adapter.submit).toHaveBeenCalledTimes(2);
+    expect(outcome.status).toBe("historical");
+    expect(outcome.printed).toHaveLength(2);
+    expect(updates.production_batches).toEqual([
+      { status: "historical", printed_at: printedAt },
+    ]);
+  });
+
+  it("does not finalize the batch when a document submit fails", async () => {
+    const { client, updates } = makeBatchClient(DOC);
+    const adapter = stubAdapter();
+    adapter.submit.mockRejectedValueOnce(new Error("vendor down"));
+
+    await expect(
+      printBatch(client, adapter, "batch-1", ["doc-1"], "2026-06-18T18:00:00.000Z")
+    ).rejects.toThrow(/vendor down/);
+    // The batch must stay where it was — never marked historical on a partial failure.
+    expect(updates.production_batches).toBeUndefined();
+  });
+
+  it("finalizes a batch with no documents to submit (all already printed)", async () => {
+    const { client, updates } = makeBatchClient(DOC);
+    const adapter = stubAdapter();
+
+    const outcome = await printBatch(client, adapter, "batch-1", [], "2026-06-18T18:00:00.000Z");
+
+    expect(adapter.submit).not.toHaveBeenCalled();
+    expect(outcome.status).toBe("historical");
+    expect(updates.production_batches).toHaveLength(1);
   });
 });
 
