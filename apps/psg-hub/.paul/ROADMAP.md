@@ -6,19 +6,24 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 
 ## Current Milestone
 
-**v0.3.5 Presence + Sentiment** (v0.3.5)
-Status: ✅ COMPLETE + CLOSED 2026-06-17 (created 2026-06-13; archived `.paul/milestones/v0.3.5-ROADMAP.md`; tag `v0.3.5`)
-Phases: 2 of 2 ✅ (10 plans). Both verticals LIVE on prod (Phase 14 LIVE on real Wallace data — 385 reviews; Phase 13 activation-pending tail). **NO active milestone** — run /paul:discuss-milestone (v0.4 Invoicing + Payments queued). See Completed Milestones below.
+**v0.4 Invoicing + Payments** (v0.4.0)
+Status: 🚧 IN PROGRESS (created 2026-06-18; 0 of 4 phases)
+Theme: Let a collision-repair shop see and pay everything it owes PSG — one-off invoices and the recurring platform subscription — then clear the gates to launch v1.0.
 
-Surface each shop's Google Business Profile presence and reviews in the hub — with reply-from-hub and LLM-driven sentiment — reusing the Phase-11 Google-OAuth ingest pattern and the Phase-12 LLM/eval + report infra. The v0.3-cut presence/sentiment items, pulled forward (operator 2026-06-13) ahead of the slated v0.4 Invoicing + Payments, to extend the just-shipped analytics/report surface while the infra is fresh.
+The v1.0 customer launch milestone. A shop sees + pays its PSG invoices (Invoiced.com READ-ONLY mirror + Stripe payment links) and self-serve manages its platform subscription/tier (Stripe Checkout + Billing Portal, wired to `src/lib/tier/gate.ts`), then the launch-readiness gates close (M3 reproducible deploy, S6 Gotham/Typekit license, S2 pilot onboarding). Picks up the v0.3-deferred Stripe INSERT→UPSERT (S3) + PII-at-rest retention. Same build-local → operator-gated activation pattern as Phases 9-14; EXTEND-not-build.
 
-**Decimal insertion (v0.3.5):** inserted between v0.3 and the slated v0.4 Invoicing + Payments (which moves to the milestone after this). Same proven build-local → operator-gate activation pattern as Phases 9-12. Pilot = Wallace (already Google-linked).
+**Money-before-M3 invariant:** billing BUILDS in Phases 15-17; live charge acceptance activates ONLY at the Phase-18 launch gate (after M3). No real customer money before reproducible deploy.
 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
-| 13 | GBP presence foundation + insights | 6/6 | ✅ Complete (activation-pending) | 2026-06-16 |
-| 14 | Reviews + sentiment | 4/4 (3 build + 14-04 activation) | ✅ Complete + LIVE on prod (14-04 LOOP CLOSED; 385 Wallace reviews) | 2026-06-17 |
+| 15 | Billing foundation + Stripe spine | TBD | Not started | - |
+| 16 | Subscription self-serve | TBD | Not started | - |
+| 17 | Invoice mirror + payment links | TBD | Not started | - |
+| 18 | Launch readiness (v1.0) | TBD | Not started | - |
 
+Dependencies: 16 and 17 both depend on 15 and are independent of each other (parallel-eligible); 18 depends on all of 15-17. Research: Likely for 15-17 (Stripe webhook/Checkout/Billing Portal + Invoiced.com read API) — research-gated per SPECIAL-FLOWS. Verify-at-plan assumptions: (a) Invoiced.com is the PSG→shop invoice system-of-record with a sufficient read API; (b) what BSM left wired in Stripe.
+
+v0.3.5 Presence + Sentiment (v0.3.5) ✅ COMPLETE + CLOSED 2026-06-17 (2 phases / 10 plans; tag `v0.3.5`; see Completed Milestones).
 v0.3 Customer Analytics (v0.3.0) ✅ COMPLETE 2026-06-13 (4/4 phases; see Completed Milestones + `.paul/milestones/v0.3.0-ROADMAP.md`).
 v0.2 Customer MVP (v0.2.0) ✅ COMPLETE 2026-06-04 (3/3 phases; see Completed Milestones).
 
@@ -44,7 +49,7 @@ Entry criteria for v0.2, folded into the phase split. Full rationale: `.paul/AUD
 
 ## Next Milestone
 
-**v0.4 Invoicing + Payments** (follows v0.3.5) — Invoiced.com mirror + Stripe coexistence + payment links — **v1.0 customer launch**. Picks up the v0.3-deferred Stripe INSERT→UPSERT (S3) + PII-at-rest retention.
+**v1.1 Ops Foundation** (follows v0.4) — Companies, Employees, Repair Customers, ROs, Estimates, Surveys, SysConfig, RO/Estimate Import (psg-import absorb), Security Profiles. First Ops-track milestone; driven by the FileMaker Advantage spec (`docs/specs/001-filemaker-advantage-integration/`).
 
 
 ## Completed Milestones
