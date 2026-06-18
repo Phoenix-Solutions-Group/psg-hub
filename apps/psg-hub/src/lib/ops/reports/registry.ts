@@ -14,7 +14,11 @@
 // recommend fields) — those land with the invoicing + attribution work. Slugs
 // are frozen by PLANNING.md and are the public report ids; do not rename them.
 
-import { monthlyCsiDisplayRun } from "./live/survey";
+import {
+  marketDashboardRun,
+  monthlyCsiDisplayRun,
+  surveyAlertRecapRun,
+} from "./live/survey";
 import {
   category,
   customerName,
@@ -232,7 +236,11 @@ const definitions: ReportDefinition[] = [
       col("market", "Market Avg", "number"),
       col("delta", "Delta", "number"),
     ],
-    dataStatus: "pending-data",
+    // B1 landed: per-metric shop avg vs. network ("market") avg over the same
+    // range, derived from survey_responses. Overall CSI is EMI×100; the q05
+    // sub-scores are native scale (matches public.shop_detail).
+    dataStatus: "available",
+    run: marketDashboardRun,
     sampleRows: () =>
       ["Overall CSI", "Quality", "Timeliness", "Communication", "Cleanliness"].map(
         (metric, i) => {
@@ -342,13 +350,18 @@ const definitions: ReportDefinition[] = [
       "Surveys that tripped an alert threshold in the period (low score / negative flag), pending follow-up.",
     params: { dateRange: true, filters: [SHOP_FILTER] },
     columns: [
-      col("ro", "RO #", "string"),
+      // Survey rows are not yet linked to a repair order, so this column shows
+      // the survey response_id, not an RO# (see PSG-80). Relabel when the join lands.
+      col("ro", "Survey #", "string"),
       col("shop", "Shop", "string"),
       col("score", "Score", "number"),
       col("alert", "Alert", "string"),
       col("date", "Received", "date"),
     ],
-    dataStatus: "pending-data",
+    // B1 landed: surveys below the 88% CSI alert threshold, newest first. Score/
+    // shop/date/alert derive from live survey_responses; identifier = response_id.
+    dataStatus: "available",
+    run: surveyAlertRecapRun,
     sampleRows: (p) =>
       build(N, (i) => ({
         ro: roNumber(i + 30),
