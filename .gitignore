@@ -54,5 +54,9 @@ yarn-error.log*
 /psg-data-lake/
 # local agent state (any depth)
 .claude/
+# per-issue git worktrees (PSG-87). Default root is a SIBLING dir (../psg-worktrees,
+# outside this tree); these patterns are defensive in case PSG_WT_ROOT is set in-tree.
+/psg-worktrees/
+.worktrees/
 # deferred classification (Phase 1 close)
 /psg-agentic-os-dev-packet.docx
