@@ -19,7 +19,13 @@ import type {
 export * from "./types";
 export { fieldsFor, requiredFields } from "./fields";
 export { suggestMapping, applyMapping, missingRequiredMappings } from "./template";
-export { parseFile, detectFormat, UnsupportedSpreadsheetError } from "./parse";
+export {
+  parseFile,
+  detectFormat,
+  detectCiecaInterchange,
+  UnsupportedSpreadsheetError,
+  CiecaInterchangeError,
+} from "./parse";
 export { validateRecords } from "./validate";
 export {
   resolveAddress,

@@ -8,9 +8,12 @@ import {
 } from "@/lib/ops/import/address";
 import {
   detectFormat,
+  detectCiecaInterchange,
   detectDelimiter,
   parseDelimitedLine,
   parseDelimited,
+  parseFile,
+  CiecaInterchangeError,
 } from "@/lib/ops/import/parse";
 import { suggestMapping, applyMapping, missingRequiredMappings } from "@/lib/ops/import/template";
 import { validateRecords } from "@/lib/ops/import/validate";
@@ -91,6 +94,39 @@ describe("file parsing", () => {
     const t = parseDelimited(csv, "csv");
     expect(t.rows).toHaveLength(1);
     expect(t.rows[0].a).toContain("line1");
+  });
+});
+
+describe("CIECA EMS/BMS interchange guard (PSG-51 pilot hardening)", () => {
+  it("recognizes EMS/BMS extensions, ignores tabular ones", () => {
+    expect(detectCiecaInterchange("EST.EMS")).toBe("ems");
+    expect(detectCiecaInterchange("pointer.env")).toBe("ems");
+    expect(detectCiecaInterchange("estimate.bms")).toBe("bms");
+    expect(detectCiecaInterchange("ros.csv")).toBeNull();
+    expect(detectCiecaInterchange("estimates.xlsx")).toBeNull();
+  });
+
+  it("rejects an EMS upload with actionable re-export guidance", async () => {
+    await expect(parseFile("VEH.EMS", Buffer.from("1|HONDA|CIVIC"))).rejects.toBeInstanceOf(
+      CiecaInterchangeError,
+    );
+    await expect(parseFile("VEH.EMS", Buffer.from("x"))).rejects.toThrow(/list\/report/i);
+  });
+
+  it("rejects an XML/BMS document even without a .bms extension", async () => {
+    const bms = '<?xml version="1.0"?>\n<BMS><Estimate><RONumber>1001</RONumber></Estimate></BMS>';
+    await expect(parseFile("export.bms", Buffer.from(bms))).rejects.toBeInstanceOf(
+      CiecaInterchangeError,
+    );
+    await expect(parseFile("unknown.xml", Buffer.from(bms))).rejects.toBeInstanceOf(
+      CiecaInterchangeError,
+    );
+  });
+
+  it("still rejects a truly unknown type with the generic error", async () => {
+    await expect(parseFile("scan.pdf", Buffer.from("%PDF-1.7"))).rejects.toThrow(
+      /Unsupported file type/i,
+    );
   });
 });
 

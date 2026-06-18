@@ -20,12 +20,47 @@ export class UnsupportedSpreadsheetError extends Error {
   }
 }
 
+/**
+ * Raised when the upload is a CIECA estimate-interchange artifact (EMS flat
+ * files or a BMS XML document) rather than a tabular RO/Estimate report. CCC
+ * ONE, Mitchell, and Audatex can all emit these, and a shop operator may grab
+ * one by mistake — it is NOT a single spreadsheet/CSV, so our tabular parser
+ * cannot ingest it. Fail with concrete re-export guidance instead of a generic
+ * "unsupported file" error or a silent mis-parse. (PSG-51 pilot hardening.)
+ */
+export class CiecaInterchangeError extends Error {
+  constructor(kind: "ems" | "bms") {
+    const label = kind === "ems" ? "CIECA EMS (Estimate Management Standard)" : "CIECA BMS (XML)";
+    super(
+      `This looks like a ${label} export, which is an estimate-interchange ` +
+        `bundle — not a tabular RO/Estimate list our import wizard reads. In ` +
+        `CCC ONE / Mitchell / Audatex, export the RO or Estimate *list/report* ` +
+        `view and save it as CSV (or XLSX), then upload that instead.`,
+    );
+    this.name = "CiecaInterchangeError";
+  }
+}
+
+/** First non-whitespace bytes look like an XML/BMS document. */
+function looksLikeXml(text: string): boolean {
+  const head = text.replace(/^﻿/, "").trimStart().slice(0, 256).toLowerCase();
+  return head.startsWith("<?xml") || head.startsWith("<bms") || /<\s*[a-z][\w:-]*[\s>]/.test(head.slice(0, 64));
+}
+
 export function detectFormat(filename: string): ImportFileFormat | null {
   const ext = filename.toLowerCase().split(".").pop() ?? "";
   if (ext === "csv") return "csv";
   if (ext === "txt" || ext === "tsv") return "txt";
   if (ext === "xlsx" || ext === "xlsm") return "xlsx";
   if (ext === "xlsb") return "xlsb";
+  return null;
+}
+
+/** Recognize a CIECA interchange artifact by extension; null if not one. */
+export function detectCiecaInterchange(filename: string): "ems" | "bms" | null {
+  const ext = filename.toLowerCase().split(".").pop() ?? "";
+  if (ext === "ems" || ext === "env") return "ems";
+  if (ext === "bms") return "bms";
   return null;
 }
 
@@ -174,8 +209,21 @@ async function parseSpreadsheet(buffer: Buffer, format: ImportFileFormat): Promi
 
 /** Top-level parse: route by detected format. */
 export async function parseFile(filename: string, buffer: Buffer): Promise<RawTable> {
+  // Reject CIECA interchange bundles up front with actionable guidance — these
+  // share extensions/shape with nothing we parse and would otherwise produce a
+  // confusing generic error mid-pilot.
+  const cieca = detectCiecaInterchange(filename);
+  if (cieca) throw new CiecaInterchangeError(cieca);
+
   const format = detectFormat(filename);
+  const ext = filename.toLowerCase().split(".").pop() ?? "";
   if (!format) {
+    // A `.xml` (or extensionless) upload whose contents are XML is almost
+    // certainly a BMS document — guide the operator rather than dead-ending.
+    if (ext === "xml" || ext === "") {
+      const head = buffer.toString("utf8", 0, 512);
+      if (looksLikeXml(head)) throw new CiecaInterchangeError("bms");
+    }
     throw new Error(`Unsupported file type: ${filename}. Use csv, txt, xlsx, or xlsb.`);
   }
   if (format === "csv" || format === "txt") {

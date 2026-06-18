@@ -1,0 +1,11 @@
+# Real pilot exports contain customer PII — never commit them (PSG-51).
+# Keep this dir + the README/runbook + dir placeholders tracked; ignore the rest.
+*
+!.gitignore
+!README.md
+!ro/
+!estimate/
+ro/*
+estimate/*
+!ro/.gitkeep
+!estimate/.gitkeep
