@@ -67,4 +67,92 @@ const researchBrief = {
   ],
 }
 
-export const schemaTypes = [shop, contentItem, auditReport, researchBrief]
+// Production mail-merge template (v1.3 / PSG-42). One document per product, per
+// shop (omit `shop` for the brand-aligned global default). The psg-hub render
+// pipeline (apps/psg-hub/src/lib/production/templates.ts) maps these fields onto
+// its `MailTemplate` shape, substitutes `{{ merge.field }}` tokens against the
+// customer / company / company_programs.customizations_jsonb data, and emits the
+// HTML that feeds MailDocument.front/back/file. Visual/brand design is Nick-owned
+// (board Decision D63) — these fields hold the markup he designs against.
+const productionMailTemplate = {
+  name: 'productionMailTemplate',
+  type: 'document',
+  title: 'Production Mail Template',
+  fields: [
+    {name: 'name', type: 'string', title: 'Template Name', validation: (Rule) => Rule.required()},
+    {name: 'slug', type: 'slug', title: 'Slug', options: {source: 'name'}},
+    {
+      name: 'product',
+      type: 'string',
+      title: 'Product',
+      description: 'Which PSG production piece this template renders.',
+      options: {list: ['thank_you', 'warranty', 'envelope']},
+      validation: (Rule) => Rule.required(),
+    },
+    {
+      name: 'pieceType',
+      type: 'string',
+      title: 'Piece Type',
+      description: 'Postcard (front + back HTML) or letter (body HTML). Drives which fields render.',
+      options: {list: ['postcard', 'letter']},
+      validation: (Rule) => Rule.required(),
+    },
+    {
+      name: 'shop',
+      type: 'reference',
+      title: 'Shop',
+      description: 'Per-shop override. Leave empty for the global brand-aligned default.',
+      to: [{type: 'shop'}],
+    },
+    {
+      name: 'frontHtml',
+      type: 'text',
+      title: 'Postcard Front (HTML)',
+      description: 'Self-contained HTML with {{ merge.field }} tokens. Postcards only.',
+      rows: 12,
+    },
+    {
+      name: 'backHtml',
+      type: 'text',
+      title: 'Postcard Back (HTML)',
+      description: 'Self-contained HTML with {{ merge.field }} tokens. Postcards only.',
+      rows: 12,
+    },
+    {
+      name: 'bodyHtml',
+      type: 'text',
+      title: 'Letter Body (HTML)',
+      description: 'Self-contained HTML with {{ merge.field }} tokens. Letters only.',
+      rows: 16,
+    },
+    {
+      name: 'size',
+      type: 'string',
+      title: 'Postcard Size',
+      description: 'Lob postcard size. Postcards only.',
+      options: {list: ['4x6', '6x9', '6x11']},
+      initialValue: '4x6',
+    },
+    {name: 'color', type: 'boolean', title: 'Color Print (letters)', initialValue: true},
+    {name: 'active', type: 'boolean', title: 'Active', initialValue: true},
+    {
+      name: 'mergeFieldNotes',
+      type: 'text',
+      title: 'Available Merge Fields',
+      description:
+        'Reference for authors. Supported tokens: ' +
+        '{{customer.firstName}} {{customer.lastName}} {{customer.fullName}} {{customer.vehicle}} {{customer.serviceDate}} ' +
+        '{{company.name}} {{company.phone}} {{company.email}} {{company.websiteUrl}} {{company.city}} {{company.state}} ' +
+        '{{program.greeting}} {{program.header}} {{program.footer}} {{program.logo}}.',
+      readOnly: true,
+    },
+  ],
+  preview: {
+    select: {title: 'name', subtitle: 'product', shop: 'shop.name'},
+    prepare({title, subtitle, shop}) {
+      return {title, subtitle: shop ? `${subtitle} · ${shop}` : `${subtitle} · default`}
+    },
+  },
+}
+
+export const schemaTypes = [shop, contentItem, auditReport, researchBrief, productionMailTemplate]
