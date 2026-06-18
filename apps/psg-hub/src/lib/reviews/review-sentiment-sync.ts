@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logLLMCall } from "@/lib/logging/llm-call";
+import { CircuitOpenError } from "../resilience";
 import {
   classifyReviewSentiment,
   gatewayClassify,
@@ -35,9 +36,15 @@ export type ClassifyPendingOptions = {
   /** 14-03b: scope to ONE shop (the on-demand "Classify now" trigger). Absent = the cron's
    *  fleet-wide newest-first sweep, unchanged. */
   shopId?: string;
+  /** Test seam: delay between gateway calls; default real setTimeout(PACE_MS). Tests pass a no-op. */
+  sleep?: (ms: number) => Promise<void>;
 };
 
 const DEFAULT_BATCH = 200;
+// ponytail: space gateway calls so a backfill batch doesn't burst into rate-limits (the
+// trigger of the 14-03b "195 failed" cascade). 150ms => a full 200-row run ~30s; if the
+// interactive trigger feels slow, drop the per-call limit rather than removing the pacing.
+const PACE_MS = 150;
 // ponytail: coarse fetch window — col<col dirty-key can't be a PostgREST filter, so we
 // fetch the newest review_items and filter in JS. At fleet scale (842 shops, deep history)
 // the precise "where stale or unclassified" query is a DB view/rpc upgrade; build-local +
@@ -91,6 +98,8 @@ export async function classifyPendingSentiment(
   const generate = options.generate ?? gatewayClassify;
   const model = options.model ?? SENTIMENT_MODEL;
   const limit = options.limit ?? DEFAULT_BATCH;
+  const sleep =
+    options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const result: SentimentSyncResult = { classified: 0, skipped: 0, failed: 0 };
 
   let pendingQuery = service
@@ -116,7 +125,10 @@ export async function classifyPendingSentiment(
     else result.skipped += 1;
   }
 
-  for (const { row, existing } of pending.slice(0, limit)) {
+  const batch = pending.slice(0, limit);
+  for (let i = 0; i < batch.length; i++) {
+    const { row, existing } = batch[i];
+    if (i > 0) await sleep(PACE_MS); // space calls; first row is immediate
     try {
       const sentiment = await classifyReviewSentiment(
         { text: row.text as string, rating: row.rating },
@@ -161,7 +173,18 @@ export async function classifyPendingSentiment(
       }
       result.classified += 1;
     } catch (rowError) {
-      // Contained: one row's failure never aborts the batch (classifyReviewSentiment
+      // Breaker opened after repeated failures -> STOP the batch rather than fast-failing
+      // every remaining row (the 14-03b "195 failed" cascade). Unprocessed rows stay
+      // unclassified and resume on the next run via the dirty-key.
+      if (rowError instanceof CircuitOpenError) {
+        console.warn(
+          `[review-sentiment-sync] circuit open after ${result.failed} failure(s) — stopping early; ${
+            batch.length - i
+          } row(s) deferred to next run`
+        );
+        break;
+      }
+      // Contained: one genuine row failure never aborts the batch (classifyReviewSentiment
       // already logged result='error' via the injected logCall before rethrowing).
       result.failed += 1;
       console.error(

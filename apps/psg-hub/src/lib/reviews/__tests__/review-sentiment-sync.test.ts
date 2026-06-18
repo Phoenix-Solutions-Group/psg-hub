@@ -178,6 +178,23 @@ describe("classifyPendingSentiment", () => {
     );
   });
 
+  it("stops the batch early when the breaker opens (remaining deferred, not counted failed)", async () => {
+    // every row fails -> 3 consecutive failures open the threshold-3 breaker; the next row
+    // throws CircuitOpenError, which must STOP the batch (not fast-fail all remaining rows).
+    const alwaysFail: ClassifyFn = vi.fn(async () => {
+      throw new Error("gateway 429");
+    });
+    const items = Array.from({ length: 10 }, (_, i) => item({ id: `r${i}` }));
+    const { client, calls } = makeService({ items });
+    const res = await classifyPendingSentiment(client, {
+      generate: alwaysFail,
+      sleep: () => Promise.resolve(),
+    });
+    expect(res.classified).toBe(0);
+    expect(res.failed).toBe(3); // only the 3 real failures, NOT all 10
+    expect(calls.upserts).toHaveLength(0);
+  });
+
   it("caps the batch at the limit (drains over runs)", async () => {
     const { client, calls } = makeService({
       items: [item({ id: "a" }), item({ id: "b" }), item({ id: "c" })],
