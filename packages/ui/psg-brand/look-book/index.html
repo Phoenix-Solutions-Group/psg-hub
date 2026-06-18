@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Phoenix Solutions Group — First Look Book</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="description" content="The PSG brand, in one look. Heritage, voice, and the design system applied to collision-repair marketing."/>
+<link rel="icon" href="../assets/psg-mark.svg"/>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  /* ───────────────────────────────────────────────────────────
+     PSG First Look Book — built on the v3 design system.
+     Layout-only styles here; all color/type/space/shadow comes
+     from colors_and_type.css tokens. Editorial, not a spec sheet.
+     ─────────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+  body { background: var(--color-bg); }
+  img { display: block; max-width: 100%; }
+
+  .wrap { max-width: var(--container-base); margin: 0 auto; padding: 0 var(--space-6); }
+  .wrap-wide { max-width: var(--container-wide); margin: 0 auto; padding: 0 var(--space-6); }
+  .section { padding: var(--space-12) 0; }
+  .section--tight { padding: var(--space-10) 0; }
+
+  .eyebrow .num { font-family: var(--font-mono); color: var(--color-fg-2); letter-spacing: 0.04em; margin-right: var(--space-2); }
+  .lede { font-size: var(--fs-24); line-height: var(--lh-snug); color: var(--color-fg-1); max-width: 26ch; font-family: var(--font-display); font-weight: var(--fw-light); letter-spacing: var(--tr-heading); }
+  .colhead { margin-top: var(--space-4); margin-bottom: var(--space-6); }
+
+  /* ─── COVER ─── */
+  .cover { background: var(--color-bg-inverse); color: var(--color-fg-inverse); position: relative; overflow: hidden; min-height: 100vh; display: flex; flex-direction: column; }
+  .cover::after { content:""; position:absolute; inset:0; background:
+      repeating-linear-gradient(45deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 14px); pointer-events:none; }
+  .cover-top { display:flex; justify-content:space-between; align-items:center; padding: var(--space-7) 0; position: relative; z-index:1; }
+  .cover-top img { height: 34px; }
+  .cover-top .stamp { font-family: var(--font-mono); font-size: var(--fs-12); letter-spacing: 0.08em; color: var(--psg-midnight-70); text-transform: uppercase; }
+  .cover-mid { flex:1; display:flex; align-items:center; position:relative; z-index:1; }
+  .cover-mid .eyebrow { color: var(--psg-ember-65); }
+  .cover h1 { font-size: clamp(3rem, 9vw, var(--fs-112)); color:#fff; line-height:0.95; margin: var(--space-5) 0; letter-spacing: var(--tr-display); }
+  .cover h1 em { font-style: normal; color: var(--psg-ember); }
+  .cover .sub { font-family: var(--font-body); font-size: var(--fs-20); color: var(--psg-midnight-90); max-width: 52ch; line-height: var(--lh-relaxed); }
+  .cover-foot { display:flex; gap: var(--space-9); padding: var(--space-8) 0; border-top: 1px solid rgba(255,255,255,0.12); position:relative; z-index:1; flex-wrap: wrap; }
+  .cover-foot .stat .n { font-family: var(--font-display); font-weight: var(--fw-bold); font-size: var(--fs-36); color:#fff; line-height:1; }
+  .cover-foot .stat .l { font-size: var(--fs-13); color: var(--psg-midnight-70); margin-top: var(--space-2); letter-spacing:0.02em; }
+
+  /* ─── PILLARS ─── */
+  .pillars { display:grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); margin-top: var(--space-7); }
+  .pillar { background: var(--color-surface); border:1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-6); transition: box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+  .pillar:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+  .pillar .ico { color: var(--color-accent); margin-bottom: var(--space-4); }
+  .pillar h4 { margin-bottom: var(--space-2); }
+  .pillar p { font-size: var(--fs-14); color: var(--color-fg-2); }
+
+  /* ─── LOGO ─── */
+  .logo-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin-top: var(--space-6); }
+  .logo-tile { border:1px solid var(--color-border); border-radius: var(--radius-md); min-height: 180px; display:flex; align-items:center; justify-content:center; padding: var(--space-7); background: var(--color-surface); }
+  .logo-tile.dark { background: var(--color-bg-inverse); border-color: transparent; }
+  .logo-tile img { max-height: 84px; max-width: 78%; }
+  .logo-cap { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--color-fg-2); text-transform: uppercase; letter-spacing: 0.04em; margin-top: var(--space-3); }
+  .logo-cell { display:flex; flex-direction:column; }
+  .marks { display:grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin-top: var(--space-4); }
+  .mark-tile { border:1px solid var(--color-border); border-radius: var(--radius-md); min-height:130px; display:flex; align-items:center; justify-content:center; padding: var(--space-6); background: var(--color-surface); }
+  .mark-tile.dark { background: var(--color-bg-inverse); border-color: transparent; }
+  .mark-tile.fill { padding:0; overflow:hidden; }
+  .mark-tile img { max-height: 72px; }
+  .mark-tile.fill img { width:100%; height:100%; max-height:130px; }
+
+  /* ─── COLOR ─── */
+  .sig { display:grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin-top: var(--space-6); }
+  .sig .swatch { border:1px solid var(--color-border); border-radius: var(--radius-md); overflow:hidden; background: var(--color-surface); }
+  .sig .chip { height: 156px; display:flex; align-items:flex-end; padding: var(--space-4); }
+  .sig .chip .tag { font-family: var(--font-mono); font-size: var(--fs-12); letter-spacing:0.06em; }
+  .sig .meta { padding: var(--space-4) var(--space-5) var(--space-5); }
+  .sig .meta .name { font-family: var(--font-display); font-weight: var(--fw-medium); font-size: var(--fs-18); }
+  .sig .meta .role { font-size: var(--fs-13); color: var(--color-fg-2); margin-top: var(--space-1); }
+  .sig .meta .hex { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--color-fg-1); margin-top: var(--space-3); letter-spacing:0.04em; }
+  .neutrals { display:grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-2); margin-top: var(--space-5); }
+  .neutral { border:1px solid var(--color-border); border-radius: var(--radius-sm); overflow:hidden; }
+  .neutral .chip { height: 64px; }
+  .neutral .meta { padding: var(--space-2) var(--space-3); background: var(--color-surface); }
+  .neutral .name { font-family: var(--font-display); font-size: var(--fs-12); font-weight: var(--fw-medium); }
+  .neutral .hex { font-family: var(--font-mono); font-size: 10px; color: var(--color-fg-2); margin-top:1px; }
+
+  /* ─── TYPE ─── */
+  .type-stack { margin-top: var(--space-6); border-top:1px solid var(--color-border); }
+  .type-row { display:grid; grid-template-columns: 110px 1fr; gap: var(--space-6); align-items:baseline; padding: var(--space-4) 0; border-bottom:1px solid var(--color-border); }
+  .type-row .spec { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--color-fg-2); letter-spacing:0.03em; }
+  .type-row .sample { font-family: var(--font-display); color: var(--color-primary); line-height:1; letter-spacing: var(--tr-display); }
+  .type-row .sample.body { font-family: var(--font-body); color: var(--color-fg-1); letter-spacing:0; line-height: var(--lh-relaxed); }
+
+  /* ─── VOICE ─── */
+  .voice-grid { display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-6); }
+  .dodont { border:1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-6); background: var(--color-surface); }
+  .dodont h5 { display:flex; align-items:center; gap: var(--space-2); margin-bottom: var(--space-4); }
+  .dodont.do h5 { color: var(--color-success); }
+  .dodont.dont h5 { color: var(--color-accent); }
+  .dodont ul { list-style:none; padding:0; margin:0; }
+  .dodont li { font-size: var(--fs-14); color: var(--color-fg-1); padding: var(--space-2) 0; border-bottom:1px dashed var(--color-border); }
+  .dodont li:last-child { border-bottom:none; }
+  .pullquote { margin-top: var(--space-7); padding: var(--space-8); background: var(--color-bg-inverse); border-radius: var(--radius-lg); color:#fff; }
+  .pullquote .q { font-family: var(--font-display); font-weight: var(--fw-light); font-size: var(--fs-36); line-height: var(--lh-snug); letter-spacing: var(--tr-heading); }
+  .pullquote .q em { font-style:normal; color: var(--psg-ember-65); }
+  .pullquote .a { font-size: var(--fs-13); color: var(--psg-midnight-70); margin-top: var(--space-5); font-family: var(--font-mono); letter-spacing:0.04em; }
+
+  /* ─── APPLIED: collision-repair mockup ─── */
+  .browser { border:1px solid var(--color-border); border-radius: var(--radius-lg); overflow:hidden; box-shadow: var(--shadow-lg); margin-top: var(--space-6); background: var(--color-surface); }
+  .browser-bar { display:flex; align-items:center; gap: var(--space-2); padding: var(--space-3) var(--space-4); background: var(--color-bg-alt); border-bottom:1px solid var(--color-border); }
+  .browser-bar .dot { width:10px; height:10px; border-radius:50%; background: var(--psg-fog); }
+  .browser-bar .url { margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--fs-12); color: var(--color-fg-2); }
+  .shop-hero { background: var(--color-bg-inverse); color:#fff; padding: var(--space-9) var(--space-8); display:grid; grid-template-columns: 7fr 5fr; gap: var(--space-8); align-items:center; }
+  .shop-hero .eyebrow { color: var(--psg-ember-65); }
+  .shop-hero h2 { color:#fff; font-size: var(--fs-48); margin: var(--space-4) 0; line-height:1.02; }
+  .shop-hero p { color: var(--psg-midnight-90); font-size: var(--fs-18); max-width: 42ch; }
+  .shop-actions { display:flex; gap: var(--space-3); margin-top: var(--space-6); flex-wrap:wrap; }
+  .shop-card { background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); border-radius: var(--radius-md); padding: var(--space-6); }
+  .shop-card .row { display:flex; align-items:center; gap: var(--space-3); padding: var(--space-3) 0; border-bottom:1px solid rgba(255,255,255,0.10); color: var(--psg-midnight-90); font-size: var(--fs-14); }
+  .shop-card .row:last-child { border-bottom:none; }
+  .shop-card .row .lucide { color: var(--psg-ember-65); flex:none; }
+  .proof-bar { display:grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); padding: var(--space-7) var(--space-8); background: var(--color-surface); }
+  .proof .n { font-family: var(--font-display); font-weight: var(--fw-bold); font-size: var(--fs-30); color: var(--color-primary); line-height:1; }
+  .proof .l { font-size: var(--fs-13); color: var(--color-fg-2); margin-top: var(--space-2); }
+  .applied-note { display:grid; grid-template-columns: repeat(4,1fr); gap: var(--space-4); margin-top: var(--space-5); }
+  .applied-note .item { font-size: var(--fs-13); color: var(--color-fg-2); padding-left: var(--space-4); border-left: 2px solid var(--color-accent); }
+  .applied-note .item b { color: var(--color-fg); font-family: var(--font-display); font-weight: var(--fw-medium); display:block; font-size: var(--fs-14); margin-bottom: var(--space-1); }
+
+  /* ─── COMPONENTS ─── */
+  .btn { font-family: var(--font-display); font-weight: var(--fw-medium); font-size: var(--fs-14); letter-spacing: var(--tr-caps); padding: var(--space-3) var(--space-6); border-radius: var(--radius-md); border:1px solid transparent; cursor:pointer; display:inline-flex; align-items:center; gap: var(--space-2); transition: all var(--dur-fast) var(--ease-out); }
+  .btn .lucide { width:18px; height:18px; }
+  .btn-primary { background: var(--color-primary); color:#fff; }
+  .btn-primary:hover { background: var(--color-primary-hover); }
+  .btn-accent { background: var(--color-accent); color:#fff; }
+  .btn-accent:hover { background: var(--color-accent-hover); }
+  .btn-ghost { background: transparent; color:#fff; border-color: rgba(255,255,255,0.3); }
+  .btn-ghost:hover { border-color:#fff; }
+  .btn-secondary { background: transparent; color: var(--color-primary); border-color: var(--color-border-strong); }
+  .btn-secondary:hover { border-color: var(--color-primary); }
+  .comp-grid { display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-6); }
+  .comp-card { border:1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-6); background: var(--color-surface); }
+  .comp-card h6 { margin-bottom: var(--space-5); }
+  .row-demo { display:flex; gap: var(--space-3); align-items:center; flex-wrap:wrap; }
+  .badge { font-family: var(--font-display); font-weight: var(--fw-medium); font-size: var(--fs-12); letter-spacing: var(--tr-caps); text-transform:uppercase; padding: 4px 12px; border-radius: var(--radius-pill); }
+  .badge-success { background: #E7EDE6; color: var(--color-success); }
+  .badge-warning { background: #F6EBD7; color: var(--color-warning); }
+  .badge-danger { background: var(--color-accent-soft); color: var(--psg-ember-25); }
+  .badge-neutral { background: var(--color-bg-alt); color: var(--color-fg-1); }
+  .field { display:flex; flex-direction:column; gap: var(--space-2); }
+  .field label { font-family: var(--font-display); font-size: var(--fs-13); font-weight: var(--fw-medium); color: var(--color-fg-1); }
+  .field input { font-family: var(--font-body); font-size: var(--fs-16); padding: var(--space-3) var(--space-4); border:1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-fg); box-shadow: var(--shadow-inset); }
+  .field input:focus { outline: none; border-color: var(--color-border-focus); box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent); }
+  .field .help { font-size: var(--fs-13); color: var(--color-fg-2); }
+
+  /* ─── CLOSE ─── */
+  .close { background: var(--color-bg-inverse); color:#fff; text-align:center; }
+  .close img { height: 40px; margin: 0 auto var(--space-6); }
+  .close .tagline { font-family: var(--font-display); font-weight: var(--fw-light); font-size: var(--fs-36); letter-spacing: var(--tr-heading); }
+  .close .meta { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--psg-midnight-70); margin-top: var(--space-6); letter-spacing:0.06em; }
+
+  hr.rule { border:none; border-top:1px solid var(--color-border); margin:0; }
+
+  @media (max-width: 900px) {
+    .pillars, .proof-bar, .applied-note, .neutrals { grid-template-columns: repeat(2, 1fr); }
+    .logo-grid, .marks, .sig { grid-template-columns: 1fr; }
+    .voice-grid, .comp-grid, .shop-hero { grid-template-columns: 1fr; }
+    .type-row { grid-template-columns: 1fr; gap: var(--space-2); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════ COVER ════════════════ -->
+<section class="cover">
+  <div class="wrap-wide" style="display:flex; flex-direction:column; flex:1;">
+    <div class="cover-top">
+      <img src="../assets/psg-logo-reverse.svg" alt="Phoenix Solutions Group"/>
+      <span class="stamp">Look Book · v3.0 · 2026</span>
+    </div>
+    <div class="cover-mid">
+      <div>
+        <div class="eyebrow"><span class="num">00</span> Phoenix Solutions Group · Est. 1989</div>
+        <h1>A first look at<br/>the work of <em>transformation.</em></h1>
+        <p class="sub">One pass through the PSG brand — heritage, voice, and the design system worn the way it will be seen: in the field, marketing collision-repair shops that need to win the next customer.</p>
+      </div>
+    </div>
+    <div class="cover-foot">
+      <div class="stat"><div class="n">35</div><div class="l">Years of transformation</div></div>
+      <div class="stat"><div class="n">3</div><div class="l">Signature hues</div></div>
+      <div class="stat"><div class="n">1</div><div class="l">Specialty — collision repair</div></div>
+      <div class="stat"><div class="n">v3.0</div><div class="l">Design system release</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ 01 ESSENCE ════════════════ -->
+<section class="section">
+  <div class="wrap">
+    <div class="eyebrow"><span class="num">01</span> The brand, in one line</div>
+    <h2 class="colhead">Understated luxury.<br/>Precision craft.</h2>
+    <p class="lead" style="max-width:54ch;">PSG operates at the intersection of strategic insight and operational execution. The brand reflects that duality — authoritative yet approachable, refined yet practical. Every decision should feel deliberate, measured, and earned. We write like a senior consultant in a tailored sport coat: warm, precise, quietly confident. Editorial, never salesy.</p>
+
+    <div class="pillars">
+      <div class="pillar"><i data-lucide="handshake" class="ico"></i><h4>Trust</h4><p>Earned through consistency and follow-through — not claimed in a slogan.</p></div>
+      <div class="pillar"><i data-lucide="lightbulb" class="ico"></i><h4>Innovation</h4><p>Driven by practical solutions, not hype. Results over buzzwords.</p></div>
+      <div class="pillar"><i data-lucide="landmark" class="ico"></i><h4>Heritage</h4><p>35 years of transformation expertise. Established 1989.</p></div>
+      <div class="pillar"><i data-lucide="gem" class="ico"></i><h4>Refinement</h4><p>Attention to detail in every touchpoint, down to the hairline.</p></div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule"/>
+
+<!-- ════════════════ 02 LOGO ════════════════ -->
+<section class="section">
+  <div class="wrap">
+    <div class="eyebrow"><span class="num">02</span> The mark</div>
+    <h3 class="colhead">A phoenix, and a wordmark that earns the space.</h3>
+    <div class="logo-grid">
+      <div class="logo-cell"><div class="logo-tile"><img src="../assets/psg-logo-primary.svg" alt="PSG primary lockup"/></div><span class="logo-cap">Primary · on paper</span></div>
+      <div class="logo-cell"><div class="logo-tile dark"><img src="../assets/psg-logo-reverse.svg" alt="PSG reverse lockup"/></div><span class="logo-cap">Reverse · on midnight</span></div>
+      <div class="logo-cell"><div class="logo-tile"><img src="../assets/psg-logo-stacked.svg" alt="PSG stacked lockup"/></div><span class="logo-cap">Stacked · compact</span></div>
+    </div>
+    <div class="marks">
+      <div class="logo-cell"><div class="mark-tile"><img src="../assets/psg-mark.svg" alt="PSG mark"/></div><span class="logo-cap">Mark</span></div>
+      <div class="logo-cell"><div class="mark-tile dark"><img src="../assets/psg-mark-white.svg" alt="PSG mark white"/></div><span class="logo-cap">Mark · knockout</span></div>
+      <div class="logo-cell"><div class="mark-tile fill"><img src="../assets/psg-mark-square.svg" alt="PSG square mark"/></div><span class="logo-cap">App tile · avatar</span></div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule"/>
+
+<!-- ════════════════ 03 COLOR ════════════════ -->
+<section class="section">
+  <div class="wrap">
+    <div class="eyebrow"><span class="num">03</span> Color</div>
+    <h3 class="colhead">Three signature hues over a true-neutral system.</h3>
+    <p class="lead" style="max-width:50ch;">Backgrounds are paper or midnight. Ember is precious — most views earn it exactly once.</p>
+    <div class="sig">
+      <div class="swatch"><div class="chip" style="background:var(--psg-midnight)"><span class="tag" style="color:#fff">PRIMARY</span></div><div class="meta"><div class="name">Midnight</div><div class="role">Headers, dark surfaces, deep CTA. Trust and heritage.</div><div class="hex">#1E3A52</div></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--psg-ember)"><span class="tag" style="color:#fff">ACCENT</span></div><div class="meta"><div class="name">Ember</div><div class="role">The phoenix. Single focal moment per view.</div><div class="hex">#B8483E</div></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--psg-dark-ash)"><span class="tag" style="color:#fff">SECONDARY</span></div><div class="meta"><div class="name">Dark Ash</div><div class="role">Muted headings, secondary buttons, supporting copy.</div><div class="hex">#4B5058</div></div></div>
+    </div>
+    <div class="neutrals">
+      <div class="neutral"><div class="chip" style="background:var(--psg-paper)"></div><div class="meta"><div class="name">Paper</div><div class="hex">#FAFAFA</div></div></div>
+      <div class="neutral"><div class="chip" style="background:var(--psg-bone)"></div><div class="meta"><div class="name">Bone</div><div class="hex">#F0F0F0</div></div></div>
+      <div class="neutral"><div class="chip" style="background:var(--psg-stone)"></div><div class="meta"><div class="name">Stone</div><div class="hex">#E0E0E0</div></div></div>
+      <div class="neutral"><div class="chip" style="background:var(--psg-fog)"></div><div class="meta"><div class="name">Fog</div><div class="hex">#C4C4C4</div></div></div>
+      <div class="neutral"><div class="chip" style="background:var(--psg-mist)"></div><div class="meta"><div class="name">Mist</div><div class="hex">#949494</div></div></div>
+      <div class="neutral"><div class="chip" style="background:var(--psg-graphite)"></div><div class="meta"><div class="name">Graphite</div><div class="hex">#2A2A2A</div></div></div>
+      <div class="neutral"><div class="chip" style="background:var(--psg-ink)"></div><div class="meta"><div class="name">Ink</div><div class="hex">#161616</div></div></div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule"/>
+
+<!-- ════════════════ 04 TYPE ════════════════ -->
+<section class="section">
+  <div class="wrap">
+    <div class="eyebrow"><span class="num">04</span> Typography</div>
+    <h3 class="colhead">Gotham for confidence. Didact Gothic for the read.</h3>
+    <div class="type-stack">
+      <div class="type-row"><span class="spec">Display · 80<br/>Gotham Bold</span><span class="sample" style="font-size:var(--fs-80); font-weight:var(--fw-bold);">Transformation</span></div>
+      <div class="type-row"><span class="spec">H1 · 64<br/>Gotham Bold</span><span class="sample" style="font-size:var(--fs-48); font-weight:var(--fw-bold);">From estimate to five-star review.</span></div>
+      <div class="type-row"><span class="spec">H3 · 36<br/>Gotham Bold</span><span class="sample" style="font-size:var(--fs-30); font-weight:var(--fw-bold);">DRP performance, measured in cycle time.</span></div>
+      <div class="type-row"><span class="spec">Eyebrow · 12<br/>Gotham Medium</span><span class="eyebrow" style="margin:0;">35 Years of Transformation</span></div>
+      <div class="type-row"><span class="spec">Body · 16<br/>Didact Gothic</span><span class="sample body" style="font-size:var(--fs-16); max-width:54ch;">Marketing built around your bay schedule — not the other way around. We handle the insurance conversation, surface the reviews that convert, and keep your phone ringing with the work you actually want.</span></div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule"/>
+
+<!-- ════════════════ 05 VOICE ════════════════ -->
+<section class="section">
+  <div class="wrap">
+    <div class="eyebrow"><span class="num">05</span> Voice</div>
+    <h3 class="colhead">Proof, not adjectives.</h3>
+    <div class="voice-grid">
+      <div class="dodont do">
+        <h5><i data-lucide="check-circle-2"></i> Lean into</h5>
+        <ul>
+          <li>“35 years of transformation.” — a number and a craft noun.</li>
+          <li>“Marketing built around your bay schedule.” — fact, then implication.</li>
+          <li>“We’ll respond within one business day.” — a promise you can keep.</li>
+          <li>Transformation · refinement · precision · partnership · follow-through.</li>
+        </ul>
+      </div>
+      <div class="dodont dont">
+        <h5><i data-lucide="x-circle"></i> Never</h5>
+        <ul>
+          <li>“Get started now!” — exclamation points, urgency theater.</li>
+          <li>“World-class, cutting-edge, game-changing service.” — empty superlatives.</li>
+          <li>“Supercharge · unlock · disrupt · crush it · rockstar.”</li>
+          <li>Emoji. Anywhere. Ever.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="pullquote">
+      <div class="q">“Marketing built around your bay schedule. <em>Not the other way around.</em>”</div>
+      <div class="a">Headline pattern — statement of fact, then implication.</div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule"/>
+
+<!-- ════════════════ 06 APPLIED ════════════════ -->
+<section class="section" style="background:var(--color-bg-alt);">
+  <div class="wrap-wide">
+    <div class="eyebrow"><span class="num">06</span> The system, applied</div>
+    <h3 class="colhead">What it looks like wearing real clothes.</h3>
+    <p class="lead" style="max-width:56ch;">A collision-repair shop landing moment, built entirely from the tokens above. One conversion job: book the estimate. Trust leads; the accent is spent once.</p>
+
+    <div class="browser">
+      <div class="browser-bar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="url">summitcollision.com</span>
+      </div>
+      <div class="shop-hero">
+        <div>
+          <div class="eyebrow">I-CAR Gold Class · Family-owned since 1992</div>
+          <h2>Your car, back to factory spec. Insurance handled.</h2>
+          <p>Summit Collision works directly with every major carrier in the Valley. Drop the keys, keep your week — we manage the claim, the parts, and the paint.</p>
+          <div class="shop-actions">
+            <button class="btn btn-accent"><i data-lucide="calendar-check"></i> Schedule an estimate</button>
+            <button class="btn btn-ghost"><i data-lucide="phone"></i> (480) 555-0142</button>
+          </div>
+        </div>
+        <div class="shop-card">
+          <div class="row"><i data-lucide="shield-check" class="lucide"></i> Lifetime warranty on all repairs</div>
+          <div class="row"><i data-lucide="car" class="lucide"></i> OEM-certified for Honda, Toyota, Subaru</div>
+          <div class="row"><i data-lucide="clock" class="lucide"></i> Most repairs back in 3–5 business days</div>
+          <div class="row"><i data-lucide="star" class="lucide"></i> 4.9 across 600+ Google reviews</div>
+        </div>
+      </div>
+      <div class="proof-bar">
+        <div class="proof"><div class="n">32</div><div class="l">Years in the same bay</div></div>
+        <div class="proof"><div class="n">18k+</div><div class="l">Vehicles restored</div></div>
+        <div class="proof"><div class="n">4.9★</div><div class="l">Google rating</div></div>
+        <div class="proof"><div class="n">All</div><div class="l">Major carriers, direct</div></div>
+      </div>
+    </div>
+
+    <div class="applied-note">
+      <div class="item"><b>Local intent first</b>Answers the stressed-driver question — fixed fast, insurance handled — before anything clever.</div>
+      <div class="item"><b>Trust over flash</b>I-CAR, OEM certs, warranty, and real review counts lead. No slogans up top.</div>
+      <div class="item"><b>One job per asset</b>Everything points to one CTA: schedule the estimate. The phone is the fallback.</div>
+      <div class="item"><b>Proof, not adjectives</b>“32 years,” “18k+ vehicles,” “4.9★” — numbers a shop can stand behind.</div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule"/>
+
+<!-- ════════════════ 07 COMPONENTS ════════════════ -->
+<section class="section">
+  <div class="wrap">
+    <div class="eyebrow"><span class="num">07</span> Components</div>
+    <h3 class="colhead">The kit, at rest.</h3>
+    <div class="comp-grid">
+      <div class="comp-card">
+        <h6>Buttons</h6>
+        <div class="row-demo">
+          <button class="btn btn-primary"><i data-lucide="calendar"></i> Schedule a consultation</button>
+          <button class="btn btn-accent"><i data-lucide="arrow-up-right"></i> Get an estimate</button>
+          <button class="btn btn-secondary">Learn more</button>
+        </div>
+      </div>
+      <div class="comp-card">
+        <h6>Badges</h6>
+        <div class="row-demo">
+          <span class="badge badge-success">Active</span>
+          <span class="badge badge-warning">In review</span>
+          <span class="badge badge-danger">Action needed</span>
+          <span class="badge badge-neutral">Draft</span>
+        </div>
+      </div>
+      <div class="comp-card">
+        <h6>Input</h6>
+        <div class="field">
+          <label for="email">Work email</label>
+          <input id="email" type="email" placeholder="you@yourshop.com"/>
+          <span class="help">We’ll respond within one business day.</span>
+        </div>
+      </div>
+      <div class="comp-card">
+        <h6>Card</h6>
+        <div style="border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-5);">
+          <div class="eyebrow" style="margin-bottom:var(--space-3);">Capability</div>
+          <h4 style="margin-bottom:var(--space-2);">Reputation management</h4>
+          <p style="font-size:var(--fs-14); color:var(--color-fg-2);">Turn every completed repair into a five-star review, automatically — and surface the ones that convert.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ CLOSE ════════════════ -->
+<section class="section close">
+  <div class="wrap">
+    <img src="../assets/psg-mark-white.svg" alt="PSG"/>
+    <div class="tagline">Strategic insight. Operational execution.<br/><em style="font-style:normal; color:var(--psg-ember-65);">Since 1989.</em></div>
+    <div class="meta">Phoenix Solutions Group · First Look Book · Design System v3.0 · 2026</div>
+  </div>
+</section>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>
