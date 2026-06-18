@@ -11,6 +11,13 @@
 
 This is the single biggest convention gap for consolidation.
 
+## Git workflow — shared checkout (REQUIRED)
+
+Multiple agents share one working tree. **Never `git checkout`/`git switch` or `git stash` in the
+shared checkout** (they move HEAD / sweep up other agents' files), and **always commit with explicit
+pathspecs** (no `git add -A`/`.`). Do branch work in a per-issue worktree off `origin/main` via
+`scripts/psg-worktree.sh`. Full rules + tooling: [`docs/runbooks/git-worktree-workflow.md`](../../docs/runbooks/git-worktree-workflow.md). (PSG-85 → PSG-87.)
+
 ## Per-Project Tooling
 
 | Project | Lint | Format | TS Strict | Test Framework | Test Count | Notes |

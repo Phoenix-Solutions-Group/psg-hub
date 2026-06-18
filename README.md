@@ -16,6 +16,22 @@ Monorepo root for Phoenix Solutions Group's unified platform work. Active develo
 | `api-psghub/` | Reference patterns for Google Ads UI |
 | `.paul/codebase/` | Workspace-wide codebase map (STACK, ARCHITECTURE, STRUCTURE, CONVENTIONS, TESTING, INTEGRATIONS, CONCERNS) |
 
+## ⚠️ Working in this repo (read before any branch work)
+
+Multiple agents share **one** working tree. **Do not `git checkout`/`git switch` or `git stash` in
+the shared checkout** — both collide with other agents' in-flight work and have already caused a
+near-miss data loss. Do branch work in an isolated worktree, and always commit with **explicit
+pathspecs** (never `git add -A`/`.`):
+
+```bash
+scripts/psg-worktree.sh create PSG-123        # isolated worktree off origin/main
+cd "$(scripts/psg-worktree.sh path PSG-123)"
+git add <changed files> && git commit && git push -u origin feat/psg-123
+scripts/psg-worktree.sh cleanup PSG-123       # after merge
+```
+
+Full rules + script reference: **[docs/runbooks/git-worktree-workflow.md](docs/runbooks/git-worktree-workflow.md)**.
+
 ## Active development
 
 `apps/psg-hub/` is the unified PSG platform target — customer portal + internal ops backbone + agentic market intelligence. See `apps/psg-hub/.paul/` for current PAUL state and `projects/psg-hub/PLANNING.md` for the SEED ideation v7 (71 design decisions, 10 milestones).
