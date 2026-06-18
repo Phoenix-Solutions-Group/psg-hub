@@ -25,3 +25,6 @@ export type {
   NarrativeGenerator,
   AssembleCompetitorReportDeps,
 } from "./report/report-data";
+// 16-03 report renderer: pure branded HTML. PDF synthesis (render-pdf.ts) is the
+// Chromium-worker seam and imports @/lib/resilience, so it stays out of this barrel.
+export { renderCompetitorReportHtml } from "./report/render";
