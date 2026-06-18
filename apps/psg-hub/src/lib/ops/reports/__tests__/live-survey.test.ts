@@ -6,6 +6,7 @@ import {
   monthlyCsiDisplayRun,
   painterPerformanceRun,
   performanceDashboardRun,
+  rentalCarAnalysisRun,
   surveyAlertRecapRun,
 } from "../live/survey";
 import type { ReportContext, ReportParams } from "../types";
@@ -433,6 +434,163 @@ describe("performanceDashboardRun", () => {
 
   it("throws without a db context", async () => {
     await expect(performanceDashboardRun(params(), ctx(null))).rejects.toThrow(
+      /requires a db context/,
+    );
+  });
+});
+
+// A rental_assignments row with its RO + shop + insurer embedded (PostgREST
+// embedded-select shape: repair_orders is the to-one parent of the assignment).
+const rental = (
+  shop: string | null,
+  insurer: string | null,
+  rentalDays: number | string | null,
+  rentalCost: number | string | null,
+  dateIn: string | null,
+  dateOut: string | null,
+) => ({
+  rental_days: rentalDays,
+  rental_cost: rentalCost,
+  start_date: dateIn,
+  repair_orders: {
+    dates_json:
+      dateIn === null && dateOut === null
+        ? {}
+        : { date_in: dateIn ?? undefined, date_out: dateOut ?? undefined },
+    companies: shop === null ? null : { name: shop },
+    insurance_companies: insurer === null ? null : { name: insurer },
+  },
+});
+
+/** Single-table stub recording start_date gte/lte filters for rental queries. */
+function rentalDb(rows: unknown[], error: { message: string } | null = null) {
+  const calls = {
+    table: "",
+    gte: undefined as string | undefined,
+    lte: undefined as string | undefined,
+  };
+  const builder: Record<string, unknown> = {
+    from(table: string) {
+      calls.table = table;
+      return builder;
+    },
+    select: () => builder,
+    gte(_col: string, v: string) {
+      calls.gte = v;
+      return builder;
+    },
+    lte(_col: string, v: string) {
+      calls.lte = v;
+      return builder;
+    },
+    then(resolve: (r: { data: unknown[] | null; error: unknown }) => unknown) {
+      return Promise.resolve(resolve({ data: error ? null : rows, error }));
+    },
+  };
+  return { db: builder as unknown as ReportContext["db"], calls };
+}
+
+describe("rentalCarAnalysisRun", () => {
+  it("aggregates per shop×insurer as per-RO averages (days/cycle/cost)", async () => {
+    const { db } = rentalDb([
+      // PSG Pilot / Gecko: 3 ROs — days avg(10,14,6)=10.0; cost avg=426.67;
+      // cycle avg(8,12,5)=8.333->8.3
+      rental("PSG Pilot Body Shop", "Gecko Mutual", 10, 420, "2026-04-20", "2026-04-28"),
+      rental("PSG Pilot Body Shop", "Gecko Mutual", 14, 602, "2026-04-22", "2026-05-04"),
+      rental("PSG Pilot Body Shop", "Gecko Mutual", 6, 258, "2026-05-01", "2026-05-06"),
+    ]);
+    const out = await rentalCarAnalysisRun(params(), ctx(db));
+    expect(out).toEqual([
+      {
+        shop: "PSG Pilot Body Shop",
+        insurer: "Gecko Mutual",
+        rentalDays: 10,
+        cycleTime: 8.3,
+        cost: 426.67,
+      },
+    ]);
+  });
+
+  it("splits rows by insurer within a shop, sorted by shop then insurer", async () => {
+    const { db } = rentalDb([
+      rental("Anaheim", "Statewide", 12, 500, "2026-03-01", "2026-03-09"),
+      rental("Anaheim", "Gecko", 8, 300, "2026-03-02", "2026-03-08"),
+    ]);
+    const out = await rentalCarAnalysisRun(params(), ctx(db));
+    expect(out.map((r) => [r.shop, r.insurer])).toEqual([
+      ["Anaheim", "Gecko"],
+      ["Anaheim", "Statewide"],
+    ]);
+  });
+
+  it("keeps rental days/cost when cycle time is missing/partial (cycle null)", async () => {
+    const { db } = rentalDb([
+      // no dates → cycle null; one-sided date → cycle null; both still count days/cost
+      rental("Solo", "Gecko", 5, 200, null, null),
+      rental("Solo", "Gecko", 7, 280, "2026-03-01", null),
+    ]);
+    const out = await rentalCarAnalysisRun(params(), ctx(db));
+    expect(out).toEqual([
+      { shop: "Solo", insurer: "Gecko", rentalDays: 6, cycleTime: null, cost: 240 },
+    ]);
+  });
+
+  it("drops a row whose date_out precedes date_in from the cycle sample", async () => {
+    const { db } = rentalDb([
+      rental("Solo", "Gecko", 4, 100, "2026-03-10", "2026-03-02"), // negative → skipped
+      rental("Solo", "Gecko", 4, 100, "2026-03-01", "2026-03-06"), // cycle 5
+    ]);
+    const out = await rentalCarAnalysisRun(params(), ctx(db));
+    expect(out[0].cycleTime).toBe(5);
+  });
+
+  it("falls back to '—' for missing shop/insurer names", async () => {
+    const { db } = rentalDb([rental(null, null, 9, 360, "2026-03-01", "2026-03-05")]);
+    const out = await rentalCarAnalysisRun(params(), ctx(db));
+    expect(out[0]).toEqual({
+      shop: "—",
+      insurer: "—",
+      rentalDays: 9,
+      cycleTime: 4,
+      cost: 360,
+    });
+  });
+
+  it("filters by shop in JS (case-insensitive) without an ilike on the query", async () => {
+    const { db, calls } = rentalDb([
+      rental("Anaheim Collision", "Gecko", 10, 400, "2026-03-01", "2026-03-09"),
+      rental("Riverside Auto", "Gecko", 20, 900, "2026-03-01", "2026-03-09"),
+    ]);
+    const out = await rentalCarAnalysisRun(params({ shopId: "anaheim" }), ctx(db));
+    expect(calls.table).toBe("rental_assignments");
+    expect(out.map((r) => r.shop)).toEqual(["Anaheim Collision"]);
+  });
+
+  it("applies the date range to start_date", async () => {
+    const { db, calls } = rentalDb([]);
+    await rentalCarAnalysisRun(
+      params({ start: "2026-03-01", end: "2026-03-31" }),
+      ctx(db),
+    );
+    expect(calls.gte).toBe("2026-03-01");
+    expect(calls.lte).toBe("2026-03-31");
+  });
+
+  it("coerces numeric-string days/cost", async () => {
+    const { db } = rentalDb([
+      rental("S", "I", "10", "420.50", "2026-03-01", "2026-03-05"),
+    ]);
+    const out = await rentalCarAnalysisRun(params(), ctx(db));
+    expect(out[0]).toMatchObject({ rentalDays: 10, cost: 420.5 });
+  });
+
+  it("throws on a db error (runner degrades to sample)", async () => {
+    const { db } = rentalDb([], { message: "boom" });
+    await expect(rentalCarAnalysisRun(params(), ctx(db))).rejects.toThrow("boom");
+  });
+
+  it("throws without a db context", async () => {
+    await expect(rentalCarAnalysisRun(params(), ctx(null))).rejects.toThrow(
       /requires a db context/,
     );
   });
