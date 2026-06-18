@@ -4,7 +4,7 @@ Completed milestone log for psg-hub.
 
 | Milestone | Completed | Duration | Stats |
 |-----------|-----------|----------|-------|
-| v0.3.5 Presence + Sentiment | 2026-06-17 | ~4 days | 2 phases, 10 plans |
+| v0.3.5 Presence + Sentiment | 2026-06-18 | ~5 days | 2 phases, 9 plans |
 | v0.3 Customer Analytics | 2026-06-13 | ~9 days | 4 phases, 18 plans |
 | v0.2 Customer MVP | 2026-06-04 | ~2 days | 3 phases, 14 plans |
 | v0.1 Foundation | 2026-06-02 | ~4 days | 5 phases, 18 plans |
@@ -13,43 +13,44 @@ Completed milestone log for psg-hub.
 
 ## ✅ v0.3.5 Presence + Sentiment (v0.3.5)
 
-**Completed:** 2026-06-17 (both phases loop-closed; Phase 14 LIVE on prod, Phase 13 activation-pending tail)
-**Duration:** ~4 days (2026-06-13 milestone start → 2026-06-17 close)
+**Completed (build):** 2026-06-18 (both phases loop-closed) — **ACTIVATION-PENDING** on prod (see Activation tail).
+**Duration:** ~5 days (2026-06-13 milestone created → 2026-06-18 build-close)
 
 ### Stats
 
 | Metric | Value |
 |--------|-------|
-| Phases | 2 (13 GBP presence · 14 Reviews + sentiment) |
-| Plans | 10 (13: six · 14: four) |
-| Migrations | 6 to prod under PROTOCOL (3 source-CHECK @ 13-04 + 3 Phase-14 @ 14-04), advisor-clean |
-| Crons | +3 (gbp-sync, gbp-presence-sync, gbp-reviews-sync → 10 total) |
-| New runtime deps | 0 (EXTEND-not-build held milestone-wide) |
-| Pilot data | 385 real Wallace reviews (ratings 1-5 clean, dedup 1:1) |
+| Phases | 2 (13 GBP presence foundation + insights · 14 reviews read/reply + LLM sentiment) |
+| Plans | 9 (13: 6 — 13-01/02a/02b/03a/03b/04 · 14: 3 — 14-01/02/03) |
+| Migrations | 6 (gbp_oauth_source · gbp_insights_source · gbp_presence_source · review_items_gbp_reviews · review_responses_publish_state · review_sentiment) |
+| Tests | 739 unit (Vitest) at Phase-14 close (+23 sentiment in 14-03) |
+| Crons | 10 total in `vercel.json` (added gbp-sync `0 7`, gbp-reviews-sync `0 8`, gbp-presence-sync `0 4 1`; reply-publish cron deliberately UNSCHEDULED) |
 
 ### Key Accomplishments
 
-- **GBP presence vertical LIVE on prod** — shared-OAuth GBP link (separate `business.manage` consent), daily insights ingest (`'gbp'` promoted into the AnalyticsSource union), monthly presence + star-rating (`'gbp_presence'` SnapshotSource), "Local presence" + "Reviews and listing" report blocks + a dashboard presence header.
-- **Reviews vertical LIVE on prod** — per-review GBP v4 `reviews.list` ingest → `review_items` (385 real Wallace reviews); reply publish-to-Google plumbing (v4 `updateReply`, build-local, consent/legal-gated); LLM sentiment (`review_sentiment` + a Haiku `Output.object` classifier mirroring the Phase-12 seam, classify-on-ingest).
-- **Two prod activations under PROTOCOL** — 13-04 (3 source-CHECK migrations + gbp-sync/gbp-presence-sync crons, advisor 124→124 clean, closed activation-pending) and 14-04 (3 Phase-14 migrations + gbp-reviews-sync cron, Wallace re-consented under business.manage, closed LIVE).
-- **EXTEND-not-build throughout** — reused the Phase-11 Google-OAuth ingest pattern + the Phase-12 LLM/eval/report infra; zero new runtime dependency across both phases.
-- **Real Wallace pilot** — 385 reviews (5★×338 / 4★×11 / 3★×4 / 2★×5 / 1★×27), GBP insights + presence flowing; the proven build-local → operator-gate activation pattern (Phases 9-13) extended cleanly.
+- **GBP presence vertical (Phase 13)** — a SEPARATE `business.manage` OAuth consent (own `google_oauth_accounts` row, `source='gbp'`, small token blast radius; NOT a widen of the GA4/GSC token) + account/location enumeration; two `analytics_snapshots` sources: `'gbp'` daily insights (FLOW, promoted into the `AnalyticsSource` union → free panel/report/rollup) and `'gbp_presence'` monthly (STOCK, SnapshotSource-only like `performance`/`ga4_dimensions`) carrying the live profile state + the v4 lifetime star-rating aggregate. Daily + monthly cron orchestrators cloned from `ga4-dims-sync`/`perf-sync`; dashboard "Local presence" section + report "Reviews and listing" PDF block. **Prod build LIVE** — 3 source-CHECK migrations applied (advisor 124→124 zero-delta), gbp crons deployed + 401-gated (`dpl_4MbEWGjcACDN3pi7NaGh4SkJGFVm`). Closed activation-pending behind the two external Google gates.
+- **Reviews read / reply / sentiment (Phase 14)** — per-review GBP v4 ingest into `review_items` (idempotent `shop_id+external_review_id`, paginated) on a new `gbp-reviews-sync` cron; a reply-publish lifecycle on `review_responses` (`publish_status`/`error`/`attempts`/`published_version`) with a byte-safe v4 `updateReply`/`deleteReply` adapter behind an UNSCHEDULED, CRON_SECRET-only cron (zero user-reachable live-publish trigger ships); and an AI-SDK-v6 Haiku structured-output **sentiment classifier** (injection-hardened, zod-enum eval gate, classify-on-ingest riding the reviews cron, first run = one-shot backfill) into a `review_sentiment` sibling table. **Build-local** — migrations NOT yet applied to prod; code NOT yet deployed.
 
 ### Key Decisions
 
-- **GBP OAuth = a SEPARATE `business.manage` client on the operator's `n8n-workspace-apis` app**, not the shared GA4/GSC/Ads client (14-04 fix-forward; 13-01's assumption was wrong — redirect_uri_mismatch). `gbpOAuthClientEnv()` with shared-client fallback.
-- **`review_items` needs a `public.locations` row per shop (NOT-NULL FK) onboarding never creates** — Wallace backfilled; a fleet backfill is a prerequisite before rollout (systemic).
-- **Phase 13 closed activation-pending; Phase 14 closed LIVE** (Gate A GBP-API 300 QPM + Gate B business.manage had cleared by 14-04).
-- **Reply-publish consent model = operator-click-under-recorded-per-shop-authorization, legal-sign-off-gated** (14-02 RECORDED; live activation deferred to 14-02b).
+- **Separate per-source GBP consent (Option B)**, not a widen of the combined GA4/GSC consent — keeps the GA4/GSC refresh-token blast radius small; own `gbp/{authorize,callback,select}` routes + own row, same OAuth client.
+- **The "reuse the Phase-11 token" premise was dead** (verified in research): the existing consent grants only `analytics.readonly` + `webmasters.readonly` — no `business.manage` — so every linked shop (incl. Wallace) must RE-CONSENT, and the already-In-Production OAuth app re-triggers sensitive-scope verification.
+- **Reply-publish ships consent-NEUTRAL** — no user-reachable publish trigger; live publish requires an explicit recorded operator-under-shop-authorization consent model with LEGAL sign-off (recorded to STATE Decisions, NOT built).
+- **Sentiment eval gate = zod enum schema ONLY** (no numeric-groundedness cascade — a mislabel is recoverable); a SEPARATE reviews-domain module mirroring the Phase-12 structured-output seam on Haiku, not an extension of `narrative.ts`/`responder.ts`.
+- **Closed BUILD-complete, ACTIVATION-PENDING** (same build-local → operator-gate pattern as Phases 9-12) — milestone tracks the build; prod activation is a separately-gated step (G1).
 
-### Open Follow-ups (carried forward)
+### Activation tail (carried into PSG-23 / G1)
 
-- 🔐 Rotate the chat-exposed `GOOGLE_GBP_OAUTH_CLIENT_SECRET`.
-- Sentiment prod backfill PENDING (`review_sentiment`=0 at close) — runs on the gbp-reviews-sync cron (08:00 UTC, 385 over ~2 runs); verify it populates.
-- D3 empirical 7-day GBP token pass-gate (~2026-06-24).
-- Systemic `public.locations` fleet backfill before review ingest works beyond Wallace + Demo.
-- 14-02b (reply-publish live activation + consent/authorization schema, legal sign-off) + 14-03b (sentiment surface: report block + dashboard panel + human-review queue + CI golden-set).
-- Fleet-scale (842-shop) rollout batching.
+- **Phase 14 prod deploy owed:** apply the 3 Phase-14 migrations to prod `gylkkzmcmbdftxieyabw` (review_items_gbp_reviews · review_responses_publish_state · review_sentiment) + `vercel --prod` to ship Phase-14 code. **Also folds in the standing report-pipeline deploy gap** (operator commit `1249a21`: `20260613000000_monthly_reports_claim.sql` + renderer SSRF guard — migrate-then-deploy, before the July 1 send). **Gated on G1 board prod-deploy approval.**
+- **GBP activation (Phase 13 + 14, external):** Gate A — Business Profile API access request (project quota 0→300 QPM, ~14-day Google review). Gate B — `business.manage` sensitive-scope verification (app already In Production); plus the empirical 7-day-token revocation pass-gate on the Wallace pilot re-consent. Revoke the chat-pasted GCP key committed in `26cd29f` (history-compromised; value already redacted in `4ee6ca5`).
+
+### Follow-ups carried past v0.3.5
+
+- **⭐ July 1** build-blind-parser section-correctness verification (the GA4-dims + perf crons' first live run is unmonitored — the scheduled agent verifies SEND, not section correctness). Now tracked under PSG-23.
+- **Rotate the chat-pasted secrets** — Hetzner / AI Gateway (`vck_`) / SendGrid (`SG.`) / `PAGESPEED_API_KEY` / `GTMETRIX_API_KEY` (G6, autonomous). Now tracked under PSG-23.
+- Fleet-scale (842-shop) performance + presence batching; Peec AI + Local Falcon ingestion → post-v0.3.
+
+Archive: `.paul/milestones/v0.3.5-ROADMAP.md`. Build closed on `main` at the milestone-close commit; Phase 14 tagged `v0.3.5` (local). Phase 13 prod build LIVE since 2026-06-16 (`dpl_4MbEWG`); Phase 14 + GBP activation = the G1 tail.
 
 ---
 
