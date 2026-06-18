@@ -108,19 +108,71 @@ export function ProductionQueueTable({ rows }: { rows: QueueBatchRow[] }) {
   );
 }
 
-export function ProductionDocumentsTable({ rows }: { rows: ActionDocRow[] }) {
-  const router = useRouter();
+// Historical search filters (mirror the allow-listed /api/production/documents
+// query params: print ID / company / product / repair customer / batch / status).
+type DocFilters = {
+  external_id: string;
+  company_id: string;
+  product_id: string;
+  repair_customer_id: string;
+  batch_id: string;
+  status: string;
+};
+
+const EMPTY_FILTERS: DocFilters = {
+  external_id: "",
+  company_id: "",
+  product_id: "",
+  repair_customer_id: "",
+  batch_id: "",
+  status: "",
+};
+
+export function ProductionDocumentsTable({ rows: initialRows }: { rows: ActionDocRow[] }) {
+  const [rows, setRows] = useState<ActionDocRow[]>(initialRows);
+  const [filters, setFilters] = useState<DocFilters>(EMPTY_FILTERS);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reprintFor, setReprintFor] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+
+  const hasFilters = Object.values(filters).some((v) => v.trim() !== "");
+
+  // Re-fetch the document list from the gated search API. With no filters this
+  // returns the latest documents (mirrors the server-rendered "recent" list),
+  // so it doubles as the post-action refresh.
+  async function runSearch(active: DocFilters) {
+    setError(null);
+    setSearching(true);
+    try {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(active)) {
+        const v = value.trim();
+        if (v) params.set(key, v);
+      }
+      const res = await fetch(`/api/production/documents?${params.toString()}`);
+      if (!res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(d.error ?? `Request failed (${res.status})`);
+      }
+      const data = (await res.json()) as { documents: ActionDocRow[] };
+      setRows(data.documents ?? []);
+      setSearched(Object.values(active).some((v) => v.trim() !== ""));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setSearching(false);
+    }
+  }
 
   async function printDoc(id: string) {
     setError(null);
     setBusyId(id);
     try {
       await postJson(`/api/production/documents/${id}/print`);
-      router.refresh();
+      await runSearch(filters);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to print document");
     } finally {
@@ -137,7 +189,7 @@ export function ProductionDocumentsTable({ rows }: { rows: ActionDocRow[] }) {
       });
       setReprintFor(null);
       setReason("");
-      router.refresh();
+      await runSearch(filters);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reprint document");
     } finally {
@@ -145,8 +197,84 @@ export function ProductionDocumentsTable({ rows }: { rows: ActionDocRow[] }) {
     }
   }
 
+  function setField(key: keyof DocFilters, value: string) {
+    setFilters((f) => ({ ...f, [key]: value }));
+  }
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      <form
+        className="space-y-2 rounded-lg border border-border p-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          runSearch(filters);
+        }}
+      >
+        <div className="grid gap-2 sm:grid-cols-3">
+          <Input
+            placeholder="Print ID (external_id)"
+            value={filters.external_id}
+            onChange={(e) => setField("external_id", e.target.value)}
+          />
+          <Input
+            placeholder="Company ID"
+            value={filters.company_id}
+            onChange={(e) => setField("company_id", e.target.value)}
+          />
+          <Input
+            placeholder="Repair customer ID"
+            value={filters.repair_customer_id}
+            onChange={(e) => setField("repair_customer_id", e.target.value)}
+          />
+          <Input
+            placeholder="Product ID"
+            value={filters.product_id}
+            onChange={(e) => setField("product_id", e.target.value)}
+          />
+          <Input
+            placeholder="Batch ID"
+            value={filters.batch_id}
+            onChange={(e) => setField("batch_id", e.target.value)}
+          />
+          <select
+            value={filters.status}
+            onChange={(e) => setField("status", e.target.value)}
+            className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+          >
+            <option value="">Any status</option>
+            <option value="created">created</option>
+            <option value="rendered">rendered</option>
+            <option value="mailed">mailed</option>
+            <option value="in_transit">in_transit</option>
+            <option value="delivered">delivered</option>
+            <option value="returned">returned</option>
+            <option value="failed">failed</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button type="submit" size="sm" disabled={searching}>
+            {searching ? "Searching…" : "Search"}
+          </Button>
+          {(hasFilters || searched) && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={searching}
+              onClick={() => {
+                setFilters(EMPTY_FILTERS);
+                runSearch(EMPTY_FILTERS);
+              }}
+            >
+              Clear
+            </Button>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {searched ? `${rows.length} match${rows.length === 1 ? "" : "es"}` : "Latest documents"}
+          </span>
+        </div>
+      </form>
+
       {error && <p className="text-sm text-ember">{error}</p>}
       <div className="overflow-hidden rounded-lg border border-border">
         <table className="w-full text-sm">
