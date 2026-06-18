@@ -14,6 +14,7 @@ const OPS_NAV = [
   { href: "/ops/data-import/ros", label: "Import ROs" },
   { href: "/ops/data-import/estimates", label: "Import Estimates" },
   { href: "/ops/surveys", label: "Surveys" },
+  { href: "/ops/ads-mutations", label: "Ads Mutations" },
   { href: "/ops/sys-config", label: "System Config" },
 ];
 
