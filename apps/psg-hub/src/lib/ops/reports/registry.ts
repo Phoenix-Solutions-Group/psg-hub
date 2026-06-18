@@ -15,8 +15,12 @@
 // are frozen by PLANNING.md and are the public report ids; do not rename them.
 
 import {
+  bodyTechPerformanceRun,
+  estimatorCsiRun,
   marketDashboardRun,
   monthlyCsiDisplayRun,
+  painterPerformanceRun,
+  performanceDashboardRun,
   surveyAlertRecapRun,
 } from "./live/survey";
 import {
@@ -217,7 +221,10 @@ const definitions: ReportDefinition[] = [
       col("responseRate", "Response Rate", "percent"),
       col("recommend", "Would Recommend", "percent"),
     ],
-    dataStatus: "pending-data",
+    // B1 + PSG-89 landed: returned/CSI from survey_responses, response rate from
+    // survey_dispatches (sent), recommend from survey_responses.would_recommend.
+    dataStatus: "available",
+    run: performanceDashboardRun,
     sampleRows: () =>
       build(6, (i) => ({
         shop: shopName(i),
@@ -293,7 +300,10 @@ const definitions: ReportDefinition[] = [
       col("csi", "CSI", "number"),
       col("recommend", "Would Recommend", "percent"),
     ],
-    dataStatus: "pending-data",
+    // PSG-89 landed: surveys attributed to the estimator via repair_order_employees
+    // (role=estimator). CSI = avg EMI ×100; recommend from would_recommend.
+    dataStatus: "available",
+    run: estimatorCsiRun,
     sampleRows: () =>
       build(5, (i) => ({
         estimator: estimator(i),
@@ -315,7 +325,10 @@ const definitions: ReportDefinition[] = [
       col("comebackRate", "Comeback Rate", "percent"),
       col("quality", "Quality CSI", "number"),
     ],
-    dataStatus: "pending-data",
+    // PSG-89 landed: jobs + comeback(rework) from repair_order_employees
+    // (role=body_tech); Quality CSI = avg q05_01 (native) from attributed surveys.
+    dataStatus: "available",
+    run: bodyTechPerformanceRun,
     sampleRows: () =>
       build(5, (i) => ({
         tech: tech(i),
@@ -337,7 +350,10 @@ const definitions: ReportDefinition[] = [
       col("redoRate", "Redo Rate", "percent"),
       col("finish", "Finish CSI", "number"),
     ],
-    dataStatus: "pending-data",
+    // PSG-89 landed: jobs + redo(rework) from repair_order_employees
+    // (role=painter); Finish CSI = avg q05_01 (native) from attributed surveys.
+    dataStatus: "available",
+    run: painterPerformanceRun,
     sampleRows: () =>
       build(5, (i) => ({
         painter: tech(i + 2),
@@ -392,6 +408,9 @@ const definitions: ReportDefinition[] = [
       col("cycleTime", "Cycle Time (days)", "number"),
       col("cost", "Rental Cost", "currency"),
     ],
+    // Still sample-only: rental days/cost + cycle time are RO/insurer-side and
+    // have no data source yet (PSG-89 added survey attribution, not rental/cycle).
+    // Tracked by PSG-94. The other 7 survey-CSI reports are live.
     dataStatus: "pending-data",
     sampleRows: () =>
       build(N, (i) => {

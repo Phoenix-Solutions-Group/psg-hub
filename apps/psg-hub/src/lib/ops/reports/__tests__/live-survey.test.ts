@@ -1,10 +1,54 @@
 import { describe, it, expect } from "vitest";
 import {
+  bodyTechPerformanceRun,
+  estimatorCsiRun,
   marketDashboardRun,
   monthlyCsiDisplayRun,
+  painterPerformanceRun,
+  performanceDashboardRun,
   surveyAlertRecapRun,
 } from "../live/survey";
 import type { ReportContext, ReportParams } from "../types";
+
+/**
+ * Per-table stub for the attribution reports, which query >1 table (and run two
+ * in parallel). `.from(table)` returns a fresh thenable builder bound to that
+ * table's rows; chained filters are no-ops except `.eq`, which is recorded.
+ */
+function multiDb(
+  tables: Record<string, unknown[]>,
+  errors: Record<string, { message: string }> = {},
+) {
+  const calls = { tables: [] as string[], eq: {} as Record<string, string> };
+  const builder = (table: string) => {
+    const b: Record<string, unknown> = {
+      select: () => b,
+      gte: () => b,
+      lte: () => b,
+      ilike: () => b,
+      eq: (col: string, v: string) => {
+        calls.eq[col] = v;
+        return b;
+      },
+      then: (
+        resolve: (r: { data: unknown[] | null; error: unknown }) => unknown,
+      ) => {
+        const error = errors[table] ?? null;
+        return Promise.resolve(
+          resolve({ data: error ? null : (tables[table] ?? []), error }),
+        );
+      },
+    };
+    return b;
+  };
+  const db = {
+    from(table: string) {
+      calls.tables.push(table);
+      return builder(table);
+    },
+  };
+  return { db: db as unknown as ReportContext["db"], calls };
+}
 
 type StubRow = {
   shop_name: string | null;
@@ -259,6 +303,136 @@ describe("surveyAlertRecapRun", () => {
 
   it("throws without a db context", async () => {
     await expect(surveyAlertRecapRun(params(), ctx(null))).rejects.toThrow(
+      /requires a db context/,
+    );
+  });
+});
+
+// Nested survey→RO→employee row, matching PostgREST embedded-select shape.
+const attrSurvey = (
+  emi: number | null,
+  q05_01: number | null,
+  recommend: boolean | null,
+  role: string | null,
+  name: string | null,
+) => ({
+  scale_emi_pct: emi,
+  q05_01,
+  would_recommend: recommend,
+  survey_date: "2026-03-01",
+  shop_name: "Anaheim",
+  repair_orders:
+    role === null
+      ? null
+      : { repair_order_employees: [{ role, employees: { name } }] },
+});
+
+describe("estimatorCsiRun", () => {
+  it("groups surveys by estimator: count, CSI (avg EMI×100), recommend rate", async () => {
+    const { db } = multiDb({
+      survey_responses: [
+        attrSurvey(0.9, 8, true, "estimator", "Pat E"),
+        attrSurvey(0.8, 7, false, "estimator", "Pat E"),
+        attrSurvey(0.95, 9, true, "estimator", "Sam X"),
+        attrSurvey(0.5, 5, null, null, null), // unattributed → dropped
+      ],
+    });
+    const out = await estimatorCsiRun(params(), ctx(db));
+    expect(out).toEqual([
+      { estimator: "Pat E", surveys: 2, csi: 85, recommend: 50 },
+      { estimator: "Sam X", surveys: 1, csi: 95, recommend: 100 },
+    ]);
+  });
+
+  it("throws without a db context", async () => {
+    await expect(estimatorCsiRun(params(), ctx(null))).rejects.toThrow(
+      /requires a db context/,
+    );
+  });
+});
+
+describe("bodyTechPerformanceRun / painterPerformanceRun", () => {
+  it("jobs+comeback from the bridge, Quality CSI (native q05_01) from surveys", async () => {
+    const { db, calls } = multiDb({
+      repair_order_employees: [
+        { rework: false, employees: { name: "Tech A" } },
+        { rework: true, employees: { name: "Tech A" } },
+        { rework: false, employees: { name: "Tech B" } },
+      ],
+      survey_responses: [attrSurvey(0.9, 8, null, "body_tech", "Tech A")],
+    });
+    const out = await bodyTechPerformanceRun(params(), ctx(db));
+    expect(calls.eq.role).toBe("body_tech"); // role filtered at the query
+    expect(out).toEqual([
+      // Tech A: 2 jobs, 1 rework → 50% comeback, quality avg(8)=8 (native, no ×100)
+      { tech: "Tech A", jobs: 2, comebackRate: 50, quality: 8 },
+      // Tech B: 1 job, no rework, no survey → quality null
+      { tech: "Tech B", jobs: 1, comebackRate: 0, quality: null },
+    ]);
+  });
+
+  it("painter view maps the same shape to redoRate / finish", async () => {
+    const { db, calls } = multiDb({
+      repair_order_employees: [{ rework: true, employees: { name: "Paint P" } }],
+      survey_responses: [attrSurvey(0.9, 9, null, "painter", "Paint P")],
+    });
+    const out = await painterPerformanceRun(params(), ctx(db));
+    expect(calls.eq.role).toBe("painter");
+    expect(out).toEqual([
+      { painter: "Paint P", jobs: 1, redoRate: 100, finish: 9 },
+    ]);
+  });
+
+  it("throws without a db context", async () => {
+    await expect(painterPerformanceRun(params(), ctx(null))).rejects.toThrow(
+      /requires a db context/,
+    );
+  });
+});
+
+describe("performanceDashboardRun", () => {
+  it("per-shop returned/CSI/response-rate/recommend, union of surveyed + sent shops", async () => {
+    const { db } = multiDb({
+      survey_responses: [
+        { shop_name: "Anaheim", survey_date: "2026-03-01", scale_emi_pct: 0.9, would_recommend: true },
+        { shop_name: "Anaheim", survey_date: "2026-03-02", scale_emi_pct: 0.8, would_recommend: false },
+        { shop_name: "Riverside", survey_date: "2026-03-03", scale_emi_pct: 0.7, would_recommend: null },
+      ],
+      survey_dispatches: [
+        { shop_name: "Anaheim" }, { shop_name: "Anaheim" },
+        { shop_name: "Anaheim" }, { shop_name: "Anaheim" }, // 4 sent
+        { shop_name: "Riverside" }, { shop_name: "Riverside" }, // 2 sent
+        { shop_name: "Brea" }, { shop_name: "Brea" }, // sent, zero returned
+      ],
+    });
+    const out = await performanceDashboardRun(params(), ctx(db));
+    expect(out).toEqual([
+      { shop: "Anaheim", returned: 2, csi: 85, responseRate: 50, recommend: 50 },
+      { shop: "Brea", returned: 0, csi: null, responseRate: 0, recommend: null },
+      { shop: "Riverside", returned: 1, csi: 70, responseRate: 50, recommend: null },
+    ]);
+  });
+
+  it("response rate is null when a shop has returns but no dispatch denominator", async () => {
+    const { db } = multiDb({
+      survey_responses: [
+        { shop_name: "Solo", survey_date: "2026-03-01", scale_emi_pct: 0.9, would_recommend: true },
+      ],
+      survey_dispatches: [],
+    });
+    const out = await performanceDashboardRun(params(), ctx(db));
+    expect(out[0]).toEqual({
+      shop: "Solo", returned: 1, csi: 90, responseRate: null, recommend: 100,
+    });
+  });
+
+  it("throws on a db error (runner degrades to sample)", async () => {
+    const { db } = multiDb({}, { survey_responses: { message: "boom" } });
+    await expect(performanceDashboardRun(params(), ctx(db))).rejects.toThrow("boom");
+  });
+
+  it("throws without a db context", async () => {
+    await expect(performanceDashboardRun(params(), ctx(null))).rejects.toThrow(
       /requires a db context/,
     );
   });
