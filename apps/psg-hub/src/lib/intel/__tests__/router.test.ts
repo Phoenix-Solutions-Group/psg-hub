@@ -143,4 +143,33 @@ describe("route", () => {
     ).rejects.toBeInstanceOf(AllCandidatesFailedError);
     expect(logCall.mock.calls[0][0].result).toBe("rate_limited");
   });
+
+  it("G5 cost cap: over the cap, auto-degrades a live call to the in-budget Anthropic path", async () => {
+    const generate = vi.fn().mockResolvedValue(ok());
+    // G5 cleared (google enabled) but month-to-date spend has hit the $200 ceiling.
+    const res = await route("reasoning", { system: "s", prompt: "p" }, {
+      generate,
+      enabledProviders: ["anthropic", "google"],
+      spendCapUsd: 200,
+      monthToDateSpendUsd: () => 200,
+    });
+    expect(res.provider).toBe("anthropic");
+    expect(generate.mock.calls[0][0].model).toBe("anthropic/claude-opus-4.8");
+  });
+
+  it("G5 cost cap: under the cap, the full enabled candidate chain is honoured", async () => {
+    const generate = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("boom")) // opus fails
+      .mockResolvedValueOnce(ok({ via: "gpt" })); // openai succeeds — proves it wasn't capped out
+    const res = await route("reasoning", { system: "s", prompt: "p" }, {
+      generate,
+      enabledProviders: ["anthropic", "openai"],
+      spendCapUsd: 200,
+      monthToDateSpendUsd: () => 12.5,
+      retries: 0,
+    });
+    expect(res.provider).toBe("openai");
+    expect(res.output).toEqual({ via: "gpt" });
+  });
 });
