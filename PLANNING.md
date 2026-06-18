@@ -55,7 +55,7 @@ PSG today runs across fragmented systems and tooling:
 | DB | Supabase Postgres | shared across BSM, psg-advantage-portal, psg-data-lake, psg-import | Single schema target |
 | Direct DB | `pg` connection pool | psg-advantage-portal | Inherited for heavy reads, reports |
 | Cache | Redis via `ioredis` | psg-advantage-portal | Rate limit + sync caching |
-| Billing | Stripe (PSG MOR, single account) | BSM (shipped) | Customer portal shipped |
+| Billing | Stripe (PSG MOR, single account) — subscriptions **and** invoices/payments, **Stripe-native** (Invoiced.com dropped; operator decision 2026-06-18, [PSG-56](/PSG/issues/PSG-56)) | BSM (shipped) | Customer portal shipped; Stripe Invoices surfaced in v0.4 |
 | Tier gating | Postgres `billing_tier` enum (`essentials`, `growth`, `performance`) + `TierGateCard` UI | BSM | Honored as-is, no migration |
 | Content store | Sanity Studio (agent output + mail-merge templates) | BSM `studio/` | Schema extended in v1.2 for Production templates |
 | Email (transactional + auth + customer) | **SendGrid** with PSG-branded sender on `psgweb.me` | existing PSG account | Replaces Supabase default and prior Resend pick (Q4 resolved) |
@@ -88,7 +88,7 @@ PSG today runs across fragmented systems and tooling:
 - Yext API rate limits + incremental sync
 - NotebookLM API stability (Master Plan flagged — resilience fallback mandatory)
 - SendGrid + Twilio domain setup (SPF, DKIM, DMARC, return-path on `psgweb.me`; sender authentication)
-- Invoiced.com API capability for invoice mirroring
+- ~~Invoiced.com API capability for invoice mirroring~~ — **DROPPED (2026-06-18).** Invoicing is Stripe-native; research done (`apps/psg-hub/.paul/research/phase-15-billing-foundation-stripe-spine.md`). Open item: Stripe Invoices API + payment-links surface (Phase 17) + Basil field relocations (`current_period_end`, `invoice.parent.subscription_details`, `invoice.payments`)
 - Sanity new project provisioning (Q6 resolved — provision in v0.1) + preview-mode integration with market-intel pages
 - Lob.com account setup + address verification quota + webhook config (v1.3)
 - In-house print queue design (PDF generator → print partner handoff or local printer pool)
@@ -120,7 +120,7 @@ Three-layer model:
 - `customer_geography_*` tables + ZIP rollups
 - `market_dashboard_rollups`, `market_viewport_intelligence`
 - `shop_competitor_overlay`, `shop_list_directory_matches`
-- `invoiced_customer_*` shop matching tables
+- ~~`invoiced_customer_*` shop matching tables~~ — **not needed** under Stripe-native (no Invoiced customer→shop reconciliation). Shop↔Stripe linkage is `shops.stripe_customer_id` (set by the checkout webhook). Drop from the v0.4 data model.
 - `psg_sensitive_pii_*` migrations + redaction policies (load-bearing; carry forward)
 
 ### Layer 3: New for psg-hub
@@ -146,7 +146,9 @@ Three-layer model:
 | `modules` | id, slug, display_name, audience, min_tier_slug, default_visibility | seed registry |
 | `module_access_grants` | role_id (nullable), shop_id (nullable), profile_id (nullable), module_id, allow|deny, granted_by, granted_at | overrides; precedence profile > shop > role > tier default |
 | `access_audit` | actor_profile_id, target_profile_id/shop_id, action, payload_jsonb, ts | append-only |
-| `invoices` | id, shop_id, external_id (Invoiced), amount_cents, status, due_date, pdf_url | Invoiced mirror (v0.4) |
+| `invoices` | stripe_invoice_id (PK), shop_id, stripe_subscription_id (nullable), status, amount_due, amount_paid, currency, number, hosted_invoice_url, period_start/end | **Stripe-native** invoice mirror (v0.4); upsert by `stripe_invoice_id` from the Stripe webhook |
+| `payments` | stripe_payment_intent_id (PK), shop_id, stripe_invoice_id (nullable), status, amount, currency, created_at | **Stripe-native** payment record (v0.4); cleartext financial record (no PAN — Stripe-hosted) |
+| `stripe_webhook_events` | event_id (PK), type, api_version, created, payload, received_at, processed_at | inbound webhook idempotency/audit ledger (service-role-only; **already shipped on `origin/main` @ `3a9c113`**, Phase 15-01) |
 | `survey_responses` | id, shop_id, repair_customer_id, submitted_at, scores_jsonb, raw_payload (redacted) | promoted from xlsx (v0.3) |
 | `sentiment_scores` | shop_id, period_start, period_end, nps, csat, themes_json | derived (v0.3) |
 
@@ -238,7 +240,7 @@ Three-layer model:
 
 ### Customer-facing additions (v0.2–v0.4)
 
-- `/api/shops/[shopId]/{invoices,invoices/[id],invoices/[id]/pay}` — v0.4
+- `/api/shops/[shopId]/{invoices,invoices/[id]}` — v0.4 (read from the Stripe-native `invoices` mirror; "pay" is a Stripe hosted-invoice / payment-link redirect, not an in-app charge route)
 - `/api/shops/[shopId]/{surveys,sentiment}` — v0.3
 - `/api/shops/[shopId]/{ga4,gsc}/{summary,daily,top-queries,top-pages,indexing,cwv}` — v0.3 (new GA4 + GSC)
 - `/api/shops/[shopId]/marketing/{summary,ads,ga4,gsc,combined}` — v0.3 (unified marketing surface)
@@ -248,7 +250,7 @@ Three-layer model:
 - `/api/shops/[shopId]/report/[month]/export` — v0.3 (PDF export)
 - `/api/integrations/ga4/oauth/{init,callback}` — v0.3
 - `/api/integrations/gsc/oauth/{init,callback}` — v0.3
-- `/api/webhooks/invoiced` — v0.4
+- ~~`/api/webhooks/invoiced` — v0.4~~ — **DROPPED.** Single billing webhook is `/api/webhooks/stripe` (BSM-shipped; hardened in Phase 15-01, extended for `invoice.*` + `payment_intent.*` in v0.4)
 - `/api/webhooks/sendgrid` — v0.1 (bounce/spam/delivery events)
 - `/api/webhooks/twilio` — v0.1 (SMS delivery + inbound)
 - `/api/webhooks/lob` — v1.3 (Lob mail status)
@@ -353,7 +355,7 @@ Workspace root: `apps/psg/`. Hub at `apps/psg/apps/psg-hub/`. `pnpm dev --filter
 - **OWASP:** IDOR (RLS + tier + security profile check), Broken Access Control (defense in depth), Sensitive Data Exposure (PII redaction), SSRF (allowlisted adapters)
 - **Secrets:** `vercel env` only. OAuth refresh tokens + insurance/mail vendor keys encrypted (pgsodium). Strip `.env.local` from git history at consolidation.
 - **Rate limit:** Redis token bucket per shop_id (customer) and per profile_id (admin/ops)
-- **Webhooks:** Stripe + Invoiced + mail vendor — signature-verified, idempotent via event_id
+- **Webhooks:** Stripe (subscriptions + invoices + payments) + mail vendor — signature-verified, idempotent via `stripe_webhook_events.event_id` (ON CONFLICT DO NOTHING; reprocess-safe on mid-processing failure). Invoiced webhook dropped.
 - **Audit log:** `access_audit` append-only; production reprints logged separately
 - **PII compliance:** carry forward `psg_sensitive_pii_*` migrations; PII review before customer launch; end-consumer PII (repair_customers) treated as high-sensitivity
 - **Vercel BotID:** on auth + payment endpoints
@@ -452,7 +454,7 @@ Top-bar selector for users with multiple authorized shops. URL pattern `/dashboa
 | Postgres direct (`pg`) | DB | heavy reads + reports | shipped in advantage-portal | port in v0.3 |
 | Redis | cache + rate limit | perf | shipped in advantage-portal | port in v0.1 |
 | PSG design system | git submodule | brand | new | v0.1 |
-| Stripe (PSG MOR — single account) | API + webhook | billing | **shipped in BSM** | v0.4 extends webhook coexistence with Invoiced |
+| Stripe (PSG MOR — single account) | API + webhook | billing — subscriptions **+ invoices/payments** | **shipped in BSM** | v0.4 extends the webhook to `invoice.*` + `payment_intent.*` and surfaces Stripe Invoices/payment-links (Stripe-native; Invoiced.com dropped) |
 | Google Ads API v17+ (read-side) | API + per-shop OAuth | ads metrics | **shipped in BSM** | extend in v0.2 |
 | **Google Ads API (write/mutations)** | Python SDK via `apps/ads/googleads_psg/` | conversion actions, neg keywords, bidding, ad group restructures, sitelinks, callouts, etc. | **shipped at `~/apps/ads/`** | surface in v1.2 (Ads Mutation Studio) |
 | **Google Tag Manager API (mutations)** | Python SDK via `apps/ads/gtm_psg/` | GTM container mutations | **shipped at `~/apps/ads/`** | surface in v1.2 |
@@ -466,7 +468,7 @@ Top-bar selector for users with multiple authorized shops. URL pattern `/dashboa
 | SendGrid | transactional email | branded auth + customer emails + receipts | existing PSG account | v0.1 (Q4 resolved — replaces prior Resend pick) |
 | Twilio | SMS | survey reminders + production status + auth fallback | existing PSG account | v0.1 |
 | Google Business Profile | API + per-shop OAuth | rank + reviews | new | v0.3 |
-| Invoiced | API + webhook | invoice mirror | new | v0.4 |
+| ~~Invoiced~~ | ~~API + webhook~~ | ~~invoice mirror~~ | **DROPPED 2026-06-18** | invoicing is Stripe-native (see Stripe row) |
 | Survey data (xlsx) | data promotion | post-repair follow-up | new | v0.3 |
 | **Vercel Sandbox (Python worker)** | runtime | invoke apps/ads + apps/gtm mutations from hub; Paperclip agentic runs | new | v1.2 (ads), v1.6 (Paperclip) — Q3 + Q7 resolved |
 | **GA4 Data API** | API + per-shop OAuth | sessions, users, conversions, traffic | new | v0.3 |
@@ -566,16 +568,21 @@ Customer track and internal-ops track run **sequentially** (single delivery team
 
 ---
 
-### Milestone v0.4 — Invoicing + Payments
-**Goal:** Customers view and pay invoices in-hub; Stripe + Invoiced coexist cleanly.
+### Milestone v0.4 — Invoicing + Payments  *(Stripe-native — reworked 2026-06-18, [PSG-56](/PSG/issues/PSG-56))*
+**Goal:** A collision-repair shop sees and pays everything it owes PSG — one-off invoices **and** the recurring platform subscription — all **Stripe-native**, then the v1.0 launch-readiness gates close. Invoiced.com is dropped (operator decision 2026-06-18): Stripe is already wired here, so Stripe-native invoicing is cheaper and removes a whole external integration + reconciliation surface.
 
-**Phases:**
-1. **Invoiced.com mirror** — `invoices` table; Invoiced webhook handler (signature-verified, idempotent); link invoices to existing BSM Stripe subscription where applicable
-2. **Stripe coexistence** — extend existing BSM Stripe webhook handler to handle one-off invoice payments alongside subscriptions; payment-link generation per invoice
-3. **Invoice UI** — list + detail + payment-link CTA + PDF viewer
+**Money-before-M3 invariant:** billing *builds* in Phases 15-17; live charge acceptance *activates* only at the Phase-18 launch gate (after M3 reproducible deploy). No real customer money before reproducible deploy.
 
-**Testable:** test invoice flows through Invoiced → table → UI → Stripe → payment recorded; webhooks idempotent; BSM subscription flow unbroken
+**Phases** (mapped to the PAUL Phase 15-18 plan map on `apps/psg-hub/.paul/`):
+1. **Phase 15 — Billing foundation + Stripe spine** — harden the inherited Stripe webhook: inbound `stripe_webhook_events` idempotency table, S3 `.insert()`→`.upsert()` fix, Basil `current_period_end` fix, resilience-wrapped outbound calls, vestigial `shops.subscription_tier` reconcile. **15-01 webhook spine SHIPPED on `origin/main` @ `3a9c113`** (build-local, zero prod contact). Plus the Stripe-native `invoices` + `payments` data model + PII-at-rest (reuse AES-256-GCM util; 7-yr IRS retention, redact-don't-delete).
+2. **Phase 16 — Subscription self-serve** — *harden + reconcile + prod-validate* the BSM-shipped Stripe Checkout + Billing Portal (NOT greenfield, NOT "done"); wire to `src/lib/tier/gate.ts`.
+3. **Phase 17 — Stripe-native invoices + payment links** — surface/mirror **Stripe Invoices** (no Invoiced.com); extend the webhook for `invoice.{created,finalized,paid,payment_failed}` + `payment_intent.{succeeded,payment_failed}`; invoice list + detail UI + Stripe hosted-invoice / payment-link CTA.
+4. **Phase 18 — Launch readiness (v1.0)** — M3 reproducible deploy, S6 Gotham/Typekit license, S2 pilot onboarding; flip live charge acceptance on.
+
+**Testable:** Stripe webhook is idempotent (redelivery = zero net rows; mid-processing failure reprocesses); a shop sees its Stripe invoices + subscription and can pay via Stripe-hosted flows; subscription tier-gate reflects the live Stripe state; no PAN ever touches the DB; BSM subscription flow unbroken.
 **Ships to:** **v1.0 customer launch** — public-facing
+
+> **Reconciliation note (PSG-56):** the earlier Invoiced.com invoicing vertical built on the ops track (`src/lib/invoiced/`, `/api/webhooks/invoiced`, `/dashboard/invoices`, `/api/shops/[shopId]/invoices/[id]/pay`, migration `20260618120000_invoices_and_payment_events.sql`) is **superseded** by this Stripe-native direction and the pushed Phase 15 spine. It must be reworked, not extended. The two git histories (local ops track ↔ `origin/main` billing track) have **diverged** and conflict on `webhooks/stripe/route.ts`, the billing migrations, and `.paul/` tracking — reconciliation is gated on the push-credential blocker [PSG-25](/PSG/issues/PSG-25). See child issues spun from PSG-56.
 
 ---
 
