@@ -15,10 +15,15 @@ import { PII_CHECKLIST, PII_STATUS_LABELS, piiStatusCounts, type PiiStatus } fro
 // PII checklist surface (v1.5 / PSG-29). Superadmin-only documented control
 // inventory — where PII lives in BSM, what protects it, and current status.
 
-const STATUS_VARIANT: Record<PiiStatus, "default" | "secondary" | "outline"> = {
-  in_place: "default",
-  partial: "secondary",
-  todo: "outline",
+// Status hierarchy follows urgency, not completion (PSG-88 P3): open items
+// (todo/partial) get the amber `warning` treatment so the controls that still
+// need attention are the most prominent, while settled controls read as a calm
+// green `success`. Previously this was inverted — done items were loud, open
+// items were the quietest outline/secondary badges.
+const STATUS_VARIANT: Record<PiiStatus, "success" | "warning"> = {
+  in_place: "success",
+  partial: "warning",
+  todo: "warning",
 };
 
 export default async function PiiChecklistPage() {
@@ -54,9 +59,9 @@ export default async function PiiChecklistPage() {
           them. Review before any access or schema change touching customer or staff data.
         </p>
         <div className="mt-3 flex gap-2 text-xs">
-          <Badge variant="default">{counts.in_place} in place</Badge>
-          <Badge variant="secondary">{counts.partial} partial</Badge>
-          <Badge variant="outline">{counts.todo} to do</Badge>
+          <Badge variant="success">{counts.in_place} in place</Badge>
+          <Badge variant="warning">{counts.partial} partial</Badge>
+          <Badge variant="warning">{counts.todo} to do</Badge>
         </div>
       </div>
 

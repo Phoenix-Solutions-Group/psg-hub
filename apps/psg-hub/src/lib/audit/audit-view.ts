@@ -87,3 +87,48 @@ export function summarizePayload(payload: unknown): string {
   if (parts.length === 0 && typeof p.action === "string") parts.push(String(p.action));
   return parts.join(" · ");
 }
+
+/** Keys that `summarizePayload` surfaces in the one-line summary. */
+const SUMMARIZED_KEYS = new Set([
+  "name",
+  "slug",
+  "role",
+  "effect",
+  "tier",
+  "toTier",
+  "visibility",
+  "action",
+]);
+
+/**
+ * Does this payload carry forensic detail that the one-line summary drops?
+ * `summarizePayload` deliberately omits nested before/after blobs and any keys
+ * it does not specifically pick; this returns true when there is more to show,
+ * so the viewer offers an expandable drill-down (PSG-88 P2) only where useful.
+ */
+export function hasPayloadDetail(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  const p = payload as Record<string, unknown>;
+  return Object.entries(p).some(([key, value]) => {
+    if (value === undefined || value === null) return false;
+    // A nested before/after blob, or any key the summary did not surface.
+    return typeof value === "object" || !SUMMARIZED_KEYS.has(key);
+  });
+}
+
+/**
+ * Pretty-print the full payload for the drill-down panel. Stable key order and
+ * 2-space indent so before/after blobs are diff-readable. Returns "" for an
+ * empty / non-object payload.
+ */
+export function formatPayloadDetail(payload: unknown): string {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "";
+  const p = payload as Record<string, unknown>;
+  const ordered: Record<string, unknown> = {};
+  for (const key of Object.keys(p).sort()) ordered[key] = p[key];
+  try {
+    return JSON.stringify(ordered, null, 2);
+  } catch {
+    return "";
+  }
+}

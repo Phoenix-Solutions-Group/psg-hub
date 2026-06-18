@@ -150,3 +150,38 @@ export function targetedOverrideCount(moduleId: string, grants: GrantRow[]): num
     (g) => g.module_id === moduleId && (g.profile_id !== null || g.shop_id !== null)
   ).length;
 }
+
+/** The two staff roles — tier floors do not apply to them (mirrors resolver `isStaff`). */
+const STAFF_ROLES: readonly GrantRole[] = ["psg_internal", "psg_superadmin"];
+
+/**
+ * Short human hint describing what a role actually RESOLVES to under the
+ * precedence chain (profile/shop > role > tier floor > default), given only the
+ * role-grant cell value. The grid edits role grants but never showed the
+ * effective outcome — especially for "inherit", where the tier floor + default
+ * silently decide (PSG-88 P2). Mirrors `resolveModuleAccess` for the role layer:
+ *
+ *   - allow / deny grant  → decisive at the role level.
+ *   - inherit, staff role → tier floor is skipped, so the module default wins.
+ *   - inherit, customer   → default decides, but a tier floor can gate a
+ *                           default-visible module to shops at/above the floor.
+ *
+ * Per-profile / per-shop overrides sit ABOVE this and resolve per user at read
+ * time, so the hint is the role-level outcome, not a guarantee for every user.
+ */
+export function roleResolutionHint(
+  module: Pick<ModuleRow, "min_tier_slug" | "default_visibility">,
+  role: GrantRole,
+  effect: RoleEffect
+): string {
+  if (effect === "allow") return "→ visible (role grant)";
+  if (effect === "deny") return "→ hidden (role grant)";
+
+  // inherit — the module's tier floor + default decide.
+  const isStaff = STAFF_ROLES.includes(role);
+  if (module.default_visibility === "hidden") return "→ hidden (default)";
+  if (!isStaff && module.min_tier_slug) {
+    return `→ visible at tier ≥ ${module.min_tier_slug}, else hidden`;
+  }
+  return "→ visible (default)";
+}

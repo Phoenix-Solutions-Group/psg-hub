@@ -3,6 +3,8 @@ import { AUDIT_ACTIONS } from "@/lib/audit/access-audit";
 import {
   auditActionLabel,
   auditCategory,
+  formatPayloadDetail,
+  hasPayloadDetail,
   knownAuditActions,
   summarizePayload,
 } from "@/lib/audit/audit-view";
@@ -51,5 +53,38 @@ describe("summarizePayload", () => {
     expect(summarizePayload(null)).toBe("");
     expect(summarizePayload("x")).toBe("");
     expect(summarizePayload([1, 2])).toBe("");
+  });
+});
+
+describe("hasPayloadDetail", () => {
+  it("is true when a nested before/after blob is present", () => {
+    expect(hasPayloadDetail({ slug: "ads", before: { v: 1 }, after: { v: 2 } })).toBe(true);
+  });
+  it("is true when a key the summary does not surface is present", () => {
+    expect(hasPayloadDetail({ name: "Ads", grantedBy: "u1" })).toBe(true);
+  });
+  it("is false when every key is already in the one-line summary", () => {
+    expect(hasPayloadDetail({ name: "Ads", role: "customer", effect: "deny" })).toBe(false);
+  });
+  it("ignores null/undefined values and rejects non-objects", () => {
+    expect(hasPayloadDetail({ name: "Ads", extra: null })).toBe(false);
+    expect(hasPayloadDetail(null)).toBe(false);
+    expect(hasPayloadDetail([1, 2])).toBe(false);
+  });
+});
+
+describe("formatPayloadDetail", () => {
+  it("pretty-prints with sorted keys and 2-space indent", () => {
+    expect(formatPayloadDetail({ b: 2, a: 1 })).toBe('{\n  "a": 1,\n  "b": 2\n}');
+  });
+  it("renders nested before/after blobs in full", () => {
+    const out = formatPayloadDetail({ after: { v: 2 }, before: { v: 1 } });
+    expect(out).toContain('"before"');
+    expect(out).toContain('"after"');
+    expect(out.indexOf('"after"')).toBeLessThan(out.indexOf('"before"')); // sorted
+  });
+  it("returns empty string for non-objects", () => {
+    expect(formatPayloadDetail(null)).toBe("");
+    expect(formatPayloadDetail([1])).toBe("");
   });
 });
