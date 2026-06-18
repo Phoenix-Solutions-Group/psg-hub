@@ -131,3 +131,29 @@ export async function requireOpsFn(fn: OpsFunction): Promise<RequireOpsResult> {
 
   return { ok: true, userId: user.id, access };
 }
+
+/**
+ * Route guard for superadmin-only handlers (e.g. the security-profile catalog /
+ * assignment surface, PSG-39). Managing capability bundles is a
+ * privilege-escalation surface, so it is gated at psg_superadmin to match the
+ * RLS on security_profile_defs / user_security_profile_assignments — a
+ * manage_users-capable psg_internal must NOT reach it (service-role writes would
+ * otherwise bypass RLS). Returns the authenticated superadmin's id on success.
+ */
+export async function requireSuperadmin(): Promise<RequireOpsResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
+
+  const access = await getOpsAccess(user.id);
+  if (access.role !== "psg_superadmin") {
+    return { ok: false, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  }
+
+  return { ok: true, userId: user.id, access };
+}

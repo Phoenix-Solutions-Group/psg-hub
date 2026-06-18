@@ -2,12 +2,20 @@ import { createClient } from "@/lib/supabase/server";
 import { getOpsAccess, OPS_FUNCTIONS, hasOpsFn } from "@/lib/auth/ops-access";
 
 // Ops landing — surfaces which modules the current user's security profile grants.
-const MODULES: { fn: (typeof OPS_FUNCTIONS)[number]; label: string; href: string; note: string }[] = [
+const MODULES: {
+  fn: (typeof OPS_FUNCTIONS)[number];
+  label: string;
+  href: string;
+  note: string;
+  // Admin / security-profile management gates on superadmin, not a capability
+  // flag — its RLS is psg_superadmin-only (PSG-39).
+  superadminOnly?: boolean;
+}[] = [
   { fn: "manage_companies", label: "Companies & ROs", href: "/ops/companies", note: "Companies, employees, repair customers, ROs, estimates" },
   { fn: "manage_sysconfig", label: "System Configuration", href: "/ops/sys-config", note: "Products, items, vehicles, insurance master data" },
   { fn: "manage_reports", label: "Operational Reports", href: "/ops/reports", note: "Coming in v1.4" },
   { fn: "manage_production", label: "Production", href: "/ops/production", note: "Coming in v1.2" },
-  { fn: "manage_users", label: "Superadmin Matrix", href: "/ops/admin", note: "Coming in v1.5" },
+  { fn: "manage_users", label: "Superadmin", href: "/ops/admin", note: "Security profiles & access matrix", superadminOnly: true },
 ];
 
 export default async function OpsHomePage() {
@@ -28,7 +36,11 @@ export default async function OpsHomePage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         {MODULES.map((m) => {
-          const enabled = access ? hasOpsFn(access, m.fn) : false;
+          const enabled = access
+            ? m.superadminOnly
+              ? access.role === "psg_superadmin"
+              : hasOpsFn(access, m.fn)
+            : false;
           return (
             <a
               key={m.fn}

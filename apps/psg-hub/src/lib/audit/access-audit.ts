@@ -35,6 +35,10 @@ export const AUDIT_ACTIONS = [
   // user_security_profile_assignments)
   "security_profile.assign",
   "security_profile.unassign",
+  // named security-profile catalog CRUD (v1.1 / PSG-39: security_profile_defs)
+  "security_profile_def.create",
+  "security_profile_def.update",
+  "security_profile_def.delete",
   // superadmin allowlist
   "superadmin.add",
   "superadmin.remove",
