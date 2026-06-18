@@ -16,3 +16,12 @@ export {
   NoEnabledProviderError,
   AllCandidatesFailedError,
 } from "./router";
+// 16-03 competitor report: pure assembler + types only. The G5-gated narrate factory
+// (report/server.ts) is server-only and stays out of this barrel by design.
+export * from "./report/types";
+export { assembleCompetitorReport, threatTier } from "./report/report-data";
+export type {
+  NarrativeInput,
+  NarrativeGenerator,
+  AssembleCompetitorReportDeps,
+} from "./report/report-data";
