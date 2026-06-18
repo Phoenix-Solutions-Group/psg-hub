@@ -3,7 +3,7 @@
 Single running list of work consciously deferred (not lost). Near-term items first;
 milestone-roadmapped items at the bottom. Update as items land or move.
 
-_Last updated: 2026-06-18 (after the 12-05c live parser validation: GA4-dims + PSI-lab VALIDATED on prod; Wallace PSI 400 surfaced)._
+_Last updated: 2026-06-18 (12-05c live parser validation: GA4-dims + PSI-lab VALIDATED on prod; Wallace PSI 400 was transient + resolved; PSI error-body diagnosability fix shipped `c104227`)._
 
 ## 🔐 Security — do not let rot
 
@@ -22,8 +22,9 @@ _Last updated: 2026-06-18 (after the 12-05c live parser validation: GA4-dims + P
 | D3 — empirical 7-day GBP token pass-gate | 13-04 | Time-based; the Phase-10 revocation failure mode | Watch the gbp crons over a 7-day window |
 | 14-02b — reply-publish live activation | 14-02 | Google bars automated/triggered replies without the end-client's prior express consent | Consent + per-shop authorization schema + approve-gate + UI publish button + add `/api/cron/gbp-reviews-reply` to `vercel.json`; **gated on legal sign-off** |
 | 14-03c — low-confidence sentiment correction queue | 14-03b | The read surface shipped first; correction is a separate write concern | Queue UI + a correction write path + RLS write policy on `review_sentiment` + audit |
-| ⭐ Wallace perf section empty — PSI HTTP 400 | 12-05c live validation 2026-06-18 | The perf-sync run wrote 4 shops but Wallace (the live-report shop) threw `PSI HTTP 400` → NO `performance` row. Site is up to curl (200, 0.34s); 4 peer shops succeeded on the same API key. **Cause is a HYPOTHESIS, not confirmed** (most likely Google's Lighthouse crawler is bot-blocked by Wallace's WAF → PSI surfaces it as a 400). The 2026-07-01 cron will fail Wallace identically until fixed | Confirm the cause (see diagnosability row), then fix Wallace's site/WAF to allow the PSI crawler, or accept a degraded (no-perf) report block |
-| PSI fetcher drops the error body (diagnosability) | 12-05c | `defaultHttpGet` throws `PSI HTTP ${status}` without the PSI JSON `error` body, so the 400 reason isn't in the logs | Small fix: include the response body text in `PerfHttpError`'s message so the next run is self-diagnosing |
+| Make a transient PSI 400 retryable | 12-05c live validation 2026-06-18 | Wallace's PSI 400 was **TRANSIENT, not a block** — it failed run 1 (synced:4/failed:1) then SUCCEEDED on a re-run ~30min later (synced:5/failed:0, perf_score 84). Wallace now has its 2026-05 `performance` row; the WAF/crawler-block hypothesis is DISPROVEN. GAP: `isRetryablePerfError` treats ALL 4xx (incl. 400) as non-retryable, so a transient Lighthouse 400 (`ERRORED_DOCUMENT_REQUEST`) fails a shop for the whole month with no retry | Once the deployed diagnosability fix captures a real 400 body, branch `isRetryablePerfError` to retry a 400 whose body is a Lighthouse/document-request error while keeping a genuine bad-request 400 (e.g. invalid key) non-retryable |
+| ✅ PSI fetcher error-body capture (diagnosability) — **DONE 2026-06-18** | 12-05c | Was: `defaultHttpGet` threw `PSI HTTP ${status}` without the PSI `error` body | DONE: now throws `PSI HTTP ${status}: ${body}` (whitespace-collapsed, 500-cap; no api key in body). Commit `c104227`, deployed `dpl psg-dw0h14jb2`, vitest 748 (+1 real-fetch-path test). Unblocks the retryability branch above |
+| GTMetrix parser unexercised on prod | 12-05c | `GTMETRIX_API_KEY` + `GTMETRIX_SHOP_IDS` ARE configured, but every inspected `performance` row (2× Flower Hill + Wallace) has `gtmetrix:null` → none of those is the scoped pilot shop. The GTMetrix parse path has no live prod coverage yet | Identify the `GTMETRIX_SHOP_IDS` shop and inspect its row's `gtmetrix` (a `select sh.name, s.metrics->'gtmetrix' ... where source='performance'` settles it), else it rides the 2026-07-01 cron |
 
 ## Quality / scale ceilings (named, non-blocking)
 
@@ -38,7 +39,7 @@ _Last updated: 2026-06-18 (after the 12-05c live parser validation: GA4-dims + P
 
 | Item | Origin | When |
 |------|--------|------|
-| 12-05 parser section-correctness | 12-05c | **PARTLY RESOLVED 2026-06-18 (live prod run, manual cron-POST, month=2026-05):** GA4-dims parser ✅ VALIDATED (Wallace row — all 4 dimension arrays + `(other)` reconciliation + `averageSessionDuration`, shape matches `Ga4DimensionsMetrics`); PSI-lab parser ✅ VALIDATED (Flower Hill rows — full `PsiResult` shape). STILL UNEXERCISED on prod: the **GTMetrix** parser (`GTMETRIX_API_KEY` + `GTMETRIX_SHOP_IDS` ARE configured on prod; the `null` is scope + the scoped shop's upstream PSI fail, NOT missing config — so if Wallace is the scoped pilot, fixing its PSI 400 also exercises GTMetrix) and the **CrUX `psi.field`** non-null branch (`field:null` everywhere — low-traffic origins). Live confirm of those + the Wallace **PDF** render still rides the **2026-07-01** monthly cron — and Wallace's perf block will be empty until the PSI-400 above is fixed |
+| 12-05 parser section-correctness | 12-05c | **PARTLY RESOLVED 2026-06-18 (live prod run, manual cron-POST, month=2026-05):** GA4-dims parser ✅ VALIDATED (Wallace row — all 4 dimension arrays + `(other)` reconciliation + `averageSessionDuration`, shape matches `Ga4DimensionsMetrics`); PSI-lab parser ✅ VALIDATED on 3 shops incl. Wallace (full `PsiResult`; Wallace perf_score 84). STILL UNEXERCISED on prod: the **GTMetrix** parser (no inspected row carries it — see the GTMetrix row above) and the **CrUX `psi.field`** non-null branch — `field:null` even for Wallace (745 sessions), confirming collision-shop origins sit below the CrUX popularity threshold, so this branch is expected-null fleet-wide (covered only by unit tests). What still rides the **2026-07-01** cron: the Wallace **PDF** render + GTMetrix. Wallace's perf block now populates (the 400 was transient) |
 
 ## Already roadmapped (tracked in ROADMAP.md / PROJECT.md)
 
