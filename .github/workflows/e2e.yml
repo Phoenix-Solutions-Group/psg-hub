@@ -1,0 +1,127 @@
+# Production happy-path E2E (PSG-54).
+#
+# Runs the v1.3 Quality-Gate E2E suite — including e2e/production-happy-path.spec.ts
+# (PSG-52) — against a throwaway LOCAL Supabase stack on the runner. This is the hard
+# go-condition for the PSG-44 FileMaker cutover: the batch -> print -> historical ->
+# reprint path must be green in CI before we flip.
+#
+# Zero live spend: the print legs call the Lob TEST API only. The `LOB_API_KEY` repo
+# secret MUST be a `test_*` key — the "Verify Lob test key" step refuses anything else.
+#
+# First-green operator setup (one-time) is documented in docs/ci/e2e.md.
+
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# One run per ref; a newer push cancels the in-flight run.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: production happy-path E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Lob TEST key (no live spend). Set as a repo Actions secret — see docs/ci/e2e.md.
+      LOB_API_KEY: ${{ secrets.LOB_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pnpm before setup-node so `cache: pnpm` can find the binary. Version is
+      # auto-detected from the root package.json `packageManager` field.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fail fast with an actionable message if the operator has not set the secret
+      # yet, and hard-refuse any non-test key so CI can never incur live Lob spend.
+      - name: Verify Lob test key
+        run: |
+          if [ -z "${LOB_API_KEY}" ]; then
+            echo "::error::LOB_API_KEY secret is not set. Add a Lob test_* key as the repo Actions secret LOB_API_KEY (Settings -> Secrets and variables -> Actions). See docs/ci/e2e.md."
+            exit 1
+          fi
+          case "${LOB_API_KEY}" in
+            test_*) echo "Lob test key detected — Lob TEST mode, no per-piece spend." ;;
+            *) echo "::error::LOB_API_KEY must be a test_* key in CI (no live spend). Refusing to run."; exit 1 ;;
+          esac
+
+      - name: Install Playwright browser (chromium)
+        run: pnpm --filter psg-hub exec playwright install --with-deps chromium
+
+      # Spins up the local Supabase stack (Docker) on the ports in
+      # apps/psg-hub/supabase/config.toml and applies supabase/migrations/*.
+      - name: Start local Supabase
+        working-directory: apps/psg-hub
+        run: pnpm exec supabase start
+
+      # Write the LOCAL stack credentials into .env.test.local exactly where
+      # playwright.config.ts loads them (and Object.assigns into process.env for
+      # global.setup.ts). We remap the CLI's `-o env` keys (API_URL / ANON_KEY /
+      # SERVICE_ROLE_KEY) to the app's env names. The local-only guard in
+      # global.setup.ts then verifies the URL is 127.0.0.1/localhost — the zero-PII
+      # guarantee. LOB_API_KEY is appended so the `next build`/`next start` webServer
+      # env (and the service-role seed) both see it.
+      - name: Write .env.test.local (local Supabase + Lob test key)
+        working-directory: apps/psg-hub
+        run: |
+          pnpm exec supabase status -o env > supabase-status.env
+          get() { grep -E "^$1=" supabase-status.env | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }
+          API_URL="$(get API_URL)"
+          ANON_KEY="$(get ANON_KEY)"
+          SERVICE_ROLE_KEY="$(get SERVICE_ROLE_KEY)"
+          if [ -z "$API_URL" ] || [ -z "$ANON_KEY" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
+            echo "::error::Could not parse local Supabase status env. Keys found:"
+            cut -d= -f1 supabase-status.env
+            exit 1
+          fi
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "LOB_API_KEY=$LOB_API_KEY"
+          } > .env.test.local
+          rm -f supabase-status.env
+          echo "----- .env.test.local (keys only) -----"
+          cut -d= -f1 .env.test.local
+
+      # Builds + starts the app against the LOCAL stack (webServer in the config),
+      # seeds fixtures via the service-role client, then runs the full E2E suite
+      # including the production happy path.
+      - name: Run E2E suite
+        run: pnpm --filter psg-hub test:e2e
+
+      # Brand screenshots + any failure traces, for triage.
+      - name: Upload Playwright artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            apps/psg-hub/test-results/
+            apps/psg-hub/e2e/screenshots/
+            apps/psg-hub/playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Stop local Supabase
+        if: ${{ always() }}
+        working-directory: apps/psg-hub
+        run: pnpm exec supabase stop --no-backup || true
