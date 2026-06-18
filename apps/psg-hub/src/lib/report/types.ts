@@ -66,6 +66,26 @@ export type ReportData = {
    * never in the AnalyticsSource union.
    */
   gbpPresence?: GbpPresenceReport;
+  /**
+   * Review-sentiment summary block (Phase 14 / 14-03b). ADDITIVE + OPTIONAL: present only when the
+   * shop has classified reviews in the report month, read off review_sentiment (NOT analytics_snapshots),
+   * so a SEPARATE reader, not the rollup path. Undefined => the sentiment render block is omitted.
+   */
+  sentiment?: SentimentReport;
+};
+
+/**
+ * The report-layer view of review sentiment — Phase 14 / 14-03b. Structurally identical to the
+ * SentimentSummary the dashboard reads, so getReviewSentimentSummary's result is directly assignable.
+ */
+export type SentimentReport = {
+  total: number;
+  positive: number;
+  neutral: number;
+  negative: number;
+  actionableOpen: number;
+  avgConfidence: number | null;
+  topThemes: { theme: string; count: number }[];
 };
 
 /**

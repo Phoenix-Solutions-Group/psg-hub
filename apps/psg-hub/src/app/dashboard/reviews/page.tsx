@@ -6,6 +6,13 @@ import type { ExistingResponse } from "@/components/dashboard/response-modal";
 
 type ShopRole = "owner" | "manager" | "viewer";
 
+type ReviewSentimentEmbed = {
+  polarity: string | null;
+  confidence: number | null;
+  themes: string[] | null;
+  actionable_complaint: boolean | null;
+};
+
 export default async function ReviewsPage() {
   const supabase = await createClient();
 
@@ -24,7 +31,9 @@ export default async function ReviewsPage() {
   const { data: reviewItems } = activeShopId
     ? await supabase
         .from("review_items")
-        .select("id, shop_id, platform, author, rating, body:text, posted_at:reviewed_at")
+        .select(
+          "id, shop_id, platform, author, rating, body:text, posted_at:reviewed_at, review_sentiment(polarity, confidence, themes, actionable_complaint)"
+        )
         .eq("shop_id", activeShopId)
         .order("reviewed_at", { ascending: false, nullsFirst: false })
         .limit(100)
@@ -46,10 +55,29 @@ export default async function ReviewsPage() {
       ? ((presenceRow.metrics as Record<string, unknown>).maps_uri as string)
       : null;
 
-  const reviews = (reviewItems ?? []).map((r) => ({
-    ...r,
-    url: mapsUri,
-  }));
+  // PostgREST returns a to-one embed (UNIQUE(review_item_id)) as an object or a 1-elem array.
+  const reviews = (reviewItems ?? []).map((r) => {
+    const raw = (r as { review_sentiment?: unknown }).review_sentiment;
+    const s = (Array.isArray(raw) ? raw[0] : raw) as ReviewSentimentEmbed | null | undefined;
+    return {
+      id: r.id,
+      shop_id: r.shop_id,
+      platform: r.platform,
+      author: r.author,
+      rating: r.rating,
+      body: r.body,
+      posted_at: r.posted_at,
+      url: mapsUri,
+      sentiment: s
+        ? {
+            polarity: s.polarity ?? null,
+            confidence: s.confidence ?? null,
+            themes: s.themes ?? [],
+            actionable_complaint: s.actionable_complaint ?? false,
+          }
+        : null,
+    };
+  });
 
   const reviewIds = reviews.map((r) => r.id);
 

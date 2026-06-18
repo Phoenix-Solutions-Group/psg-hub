@@ -27,6 +27,7 @@ import type {
   Ga4DimensionsReport,
   PerformanceReport,
   GbpPresenceReport,
+  SentimentReport,
 } from "./types";
 import type { ReportNarrative } from "./schema";
 
@@ -585,6 +586,36 @@ function renderGbpPresenceBlock(presence: GbpPresenceReport): string {
 }
 
 /**
+ * Render the review-sentiment block (14-03b). Tabular summary over the month's classified
+ * reviews — polarity split, actionable-complaint count, and top themes. Print-path only; the
+ * narrative never cites these figures (12-05c precedent). Omitted upstream when sentiment is absent.
+ */
+function renderSentimentBlock(s: SentimentReport): string {
+  const pct = (n: number) => (s.total > 0 ? Math.round((n / s.total) * 100) : 0);
+  const cards = [
+    perfKpi(`${pct(s.positive)}%`, `${s.positive} of ${s.total}`, "Positive"),
+    perfKpi(`${pct(s.negative)}%`, `${s.negative} of ${s.total}`, "Negative"),
+    perfKpi(String(s.actionableOpen), "Flagged for follow-up", "Actionable complaints"),
+  ];
+  const summaryLine = `<p class="src">${escapeHtml(
+    `${s.total} classified reviews — ${s.positive} positive, ${s.neutral} neutral, ${s.negative} negative.`
+  )}</p>`;
+  const themesLine = s.topThemes.length
+    ? `<p class="src">Top themes: ${escapeHtml(
+        s.topThemes.map((t) => `${t.theme} (${t.count})`).join(", ")
+      )}.</p>`
+    : "";
+  return (
+    `<section class="panel"><span class="badge-src">Customer sentiment</span>` +
+    `<h2>Review sentiment</h2>` +
+    summaryLine +
+    `<div class="kpis">${cards.join("")}</div>` +
+    themesLine +
+    `</section>`
+  );
+}
+
+/**
  * Render the full branded report HTML for one shop+month. Pure and deterministic
  * over (reportData, narrative). Only linked sources appear; cold-start sources are
  * framed within-period. Every visible numeral traces to reportData/narrative.
@@ -655,6 +686,11 @@ export function renderReportHtml(
   // GBP presence + reviews block (13-03b): only when a gbp_presence row is present.
   const gbpPresenceBlock = reportData.gbpPresence
     ? renderGbpPresenceBlock(reportData.gbpPresence)
+    : "";
+
+  // Review sentiment block (14-03b): only when a sentiment summary is present.
+  const sentimentBlock = reportData.sentiment
+    ? renderSentimentBlock(reportData.sentiment)
     : "";
 
   // This month vs prior: one headline-KPI row per linked source.
@@ -730,6 +766,7 @@ export function renderReportHtml(
     dimensionSections +
     performanceBlock +
     gbpPresenceBlock +
+    sentimentBlock +
     momTable +
     drivers +
     recommendations +

@@ -7,6 +7,7 @@ import {
   getSnapshotsForShops,
   getLatestMonthlySnapshot,
 } from "@/lib/analytics/snapshots";
+import { getReviewSentimentSummary } from "@/lib/reviews/sentiment-summary";
 import {
   aggregateByDate,
   latestSnapshot,
@@ -346,6 +347,14 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         return { rating, reviews, statusLabel, completeness };
       })()
     : null;
+
+  // Review sentiment summary (14-03b) — per-shop only (same MSO rule as presence). Reads
+  // review_sentiment (the shop's full classified history), not a snapshot. null in all-shops
+  // scope or with no active shop; total=0 renders a scoped empty state.
+  const sentiment =
+    scopeAll || !activeShopId
+      ? null
+      : await getReviewSentimentSummary(supabase, { shopId: activeShopId });
 
   // Header status reflects the most recent sync across ALL sources, not just
   // organic. A shop with only GA4/GSC/GBP linked is "Last synced", not "Awaiting".
@@ -837,6 +846,77 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </>
         )}
       </section>
+
+      {!scopeAll ? (
+        <section aria-labelledby="sentiment-heading" className="space-y-4">
+          <h2
+            id="sentiment-heading"
+            className="font-heading text-lg font-semibold tracking-tight"
+          >
+            Review sentiment
+          </h2>
+          {sentiment && sentiment.total > 0 ? (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Across {formatNumber(sentiment.total)} classified reviews
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                  <div>
+                    <p className="text-2xl font-bold tracking-tight">
+                      {Math.round((sentiment.positive / sentiment.total) * 100)}%
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatNumber(sentiment.positive)} positive
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold tracking-tight">
+                      {Math.round((sentiment.negative / sentiment.total) * 100)}%
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatNumber(sentiment.negative)} negative
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold tracking-tight">
+                      {formatNumber(sentiment.actionableOpen)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Actionable complaints
+                    </p>
+                  </div>
+                </div>
+                {sentiment.topThemes.length > 0 ? (
+                  <div>
+                    <p className="text-sm font-medium">Top themes</p>
+                    <p className="text-sm text-muted-foreground">
+                      {sentiment.topThemes
+                        .map((t) => `${t.theme} (${t.count})`)
+                        .join(", ")}
+                    </p>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>No sentiment yet</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Sentiment is generated from your Google reviews. Once reviews are
+                  ingested and classified, polarity, themes, and actionable
+                  complaints appear here.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </section>
+      ) : null}
 
       {activeRole === "owner" ? (
         <section aria-labelledby="connect-google-heading" className="space-y-4">

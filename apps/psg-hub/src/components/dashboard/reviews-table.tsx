@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,12 @@ type Review = {
   body: string | null;
   posted_at: string | null;
   url: string | null;
+  sentiment: {
+    polarity: string | null;
+    confidence: number | null;
+    themes: string[];
+    actionable_complaint: boolean;
+  } | null;
 };
 
 type Shop = { id: string; name: string };
@@ -75,6 +82,43 @@ function responseLabel(r: ExistingResponse | undefined) {
   return `Draft v${r.version}`;
 }
 
+const POLARITY_VARIANT: Record<
+  string,
+  "default" | "secondary" | "destructive" | "outline"
+> = {
+  positive: "default",
+  neutral: "secondary",
+  negative: "destructive",
+};
+
+function SentimentCell({ s }: { s: Review["sentiment"] }) {
+  if (!s || !s.polarity) {
+    return <span className="text-sm text-muted-foreground">—</span>;
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge
+          variant={POLARITY_VARIANT[s.polarity] ?? "outline"}
+          className="capitalize"
+        >
+          {s.polarity}
+        </Badge>
+        {s.actionable_complaint && (
+          <Badge variant="outline" className="border-destructive text-destructive">
+            Action needed
+          </Badge>
+        )}
+      </div>
+      {s.themes.length > 0 && (
+        <span className="text-xs text-muted-foreground">
+          {s.themes.slice(0, 3).join(", ")}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function ReviewsTable({
   reviews,
   shops,
@@ -88,6 +132,7 @@ export function ReviewsTable({
   const [responses, setResponses] =
     useState<Record<string, ExistingResponse>>(initialResponses);
   const [activeReview, setActiveReview] = useState<Review | null>(null);
+  const router = useRouter();
 
   const filtered = reviews.filter((r) => {
     if (shopId && r.shop_id !== shopId) return false;
@@ -117,6 +162,33 @@ export function ReviewsTable({
         `Synced: ${data.inserted} new, ${data.skipped} unchanged` +
           (data.errors?.length ? ` (${data.errors.length} platform errors)` : "")
       );
+    });
+  }
+
+  async function handleClassify() {
+    const target = shopId || shops[0]?.id;
+    if (!target) {
+      setSyncMessage("Select a shop first");
+      return;
+    }
+    setSyncMessage(null);
+    startTransition(async () => {
+      const res = await fetch("/api/reviews/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shop_id: target }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncMessage(data.error || "Classify failed");
+        return;
+      }
+      setSyncMessage(
+        `Classified: ${data.classified} new, ${data.skipped} current` +
+          (data.failed ? `, ${data.failed} failed` : "")
+      );
+      // server-component data is the source of the badges — refetch so new sentiment shows.
+      router.refresh();
     });
   }
 
@@ -159,6 +231,14 @@ export function ReviewsTable({
         >
           {pending ? "Syncing…" : "Sync now"}
         </button>
+        <button
+          type="button"
+          onClick={handleClassify}
+          disabled={pending}
+          className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+        >
+          {pending ? "Working…" : "Classify now"}
+        </button>
         {syncMessage && (
           <span className="text-sm text-muted-foreground">{syncMessage}</span>
         )}
@@ -176,30 +256,47 @@ export function ReviewsTable({
               <TableHead>Author</TableHead>
               <TableHead>Rating</TableHead>
               <TableHead>Review</TableHead>
+              <TableHead>Sentiment</TableHead>
               <TableHead>Platform</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Response</TableHead>
-              <TableHead>Source</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.map((r) => {
               const existing = responses[r.id];
               return (
-                <TableRow key={r.id}>
+                <TableRow key={r.id} className="[&>td]:align-top">
                   <TableCell className="font-medium">
                     {r.author || "—"}
                   </TableCell>
                   <TableCell>
                     <Stars value={r.rating} />
                   </TableCell>
-                  <TableCell className="max-w-md text-sm text-muted-foreground">
-                    {truncate(r.body)}
+                  <TableCell className="max-w-sm whitespace-normal break-words text-sm text-muted-foreground">
+                    {truncate(r.body, 220)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">
-                      {platformLabels[r.platform] ?? r.platform}
-                    </Badge>
+                    <SentimentCell s={r.sentiment} />
+                  </TableCell>
+                  <TableCell>
+                    {r.url ? (
+                      <a
+                        href={r.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="View on Google"
+                        className="hover:underline"
+                      >
+                        <Badge variant="secondary">
+                          {platformLabels[r.platform] ?? r.platform}
+                        </Badge>
+                      </a>
+                    ) : (
+                      <Badge variant="secondary">
+                        {platformLabels[r.platform] ?? r.platform}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {formatDate(r.posted_at)}
@@ -212,20 +309,6 @@ export function ReviewsTable({
                     >
                       {responseLabel(existing)}
                     </Button>
-                  </TableCell>
-                  <TableCell>
-                    {r.url ? (
-                      <a
-                        href={r.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm text-primary hover:underline"
-                      >
-                        View on Google
-                      </a>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
-                    )}
                   </TableCell>
                 </TableRow>
               );

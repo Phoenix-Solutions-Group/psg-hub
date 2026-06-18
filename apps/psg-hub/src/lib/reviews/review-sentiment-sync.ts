@@ -32,6 +32,9 @@ export type ClassifyPendingOptions = {
   generate?: ClassifyFn;
   /** Model override (defaults to SENTIMENT_MODEL). */
   model?: string;
+  /** 14-03b: scope to ONE shop (the on-demand "Classify now" trigger). Absent = the cron's
+   *  fleet-wide newest-first sweep, unchanged. */
+  shopId?: string;
 };
 
 const DEFAULT_BATCH = 200;
@@ -90,12 +93,14 @@ export async function classifyPendingSentiment(
   const limit = options.limit ?? DEFAULT_BATCH;
   const result: SentimentSyncResult = { classified: 0, skipped: 0, failed: 0 };
 
-  const { data, error } = await service
+  let pendingQuery = service
     .from("review_items")
     .select(
       "id, shop_id, text, rating, updated_at, review_sentiment(prompt_version, classified_updated_at, version)"
     )
-    .not("text", "is", null)
+    .not("text", "is", null);
+  if (options.shopId) pendingQuery = pendingQuery.eq("shop_id", options.shopId);
+  const { data, error } = await pendingQuery
     .order("updated_at", { ascending: false })
     .limit(FETCH_CAP);
   if (error) {

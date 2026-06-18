@@ -9,6 +9,7 @@ import {
   type MonthlyGbpPresenceReader,
 } from "@/lib/report/report-data";
 import { loadReportNarrative } from "@/lib/report/storage";
+import { getReviewSentimentSummary } from "@/lib/reviews/sentiment-summary";
 import { renderReportHtml } from "@/lib/report/render";
 import type { ReportData } from "@/lib/report/types";
 import type { ReportNarrative } from "@/lib/report/schema";
@@ -65,12 +66,25 @@ export const defaultLoader: PrintPayloadLoader = async (shopId, period) => {
     getMonthlySnapshot(service, { shopId: s, source: "performance", month });
   const readMonthlyGbpPresence: MonthlyGbpPresenceReader = ({ shopId: s, month }) =>
     getMonthlySnapshot(service, { shopId: s, source: "gbp_presence", month });
+  // 14-03b: review-sentiment summary (review_sentiment, NOT snapshots) scoped to the report
+  // month; null when the shop has no classified reviews that month -> the block omits.
+  const readReviewSentiment = async ({
+    shopId: s,
+    month,
+  }: {
+    shopId: string;
+    month: string;
+  }) => {
+    const summary = await getReviewSentimentSummary(service, { shopId: s, month });
+    return summary.total > 0 ? summary : null;
+  };
   const reportData = await assembleReportData(shopId, period, {
     readSnapshots,
     generatedAt: new Date().toISOString(),
     readMonthlyDimensions,
     readMonthlyPerformance,
     readMonthlyGbpPresence,
+    readReviewSentiment,
   });
   return { reportData, narrative };
 };

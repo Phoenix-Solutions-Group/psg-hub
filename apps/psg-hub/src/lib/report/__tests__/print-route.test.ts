@@ -6,6 +6,7 @@ import {
 } from "@/app/reports/[slug]/print/route";
 import { getMonthlySnapshot, getSnapshots } from "@/lib/analytics/snapshots";
 import { loadReportNarrative } from "@/lib/report/storage";
+import { getReviewSentimentSummary } from "@/lib/reviews/sentiment-summary";
 
 // 12-05c wiring guard — the print (PDF) path must bind BOTH monthly readers so the
 // GA4 dimensional sections + the Website-performance block reach the report. These
@@ -20,6 +21,19 @@ vi.mock("@/lib/analytics/snapshots", () => ({
 }));
 vi.mock("@/lib/report/storage", () => ({
   loadReportNarrative: vi.fn(async () => ({ headline: "h" })),
+}));
+// 14-03b: the print path also binds the review-sentiment reader; stub it (zeroed -> no block)
+// so defaultLoader runs without a DB, and guard the binding the same way as the monthly readers.
+vi.mock("@/lib/reviews/sentiment-summary", () => ({
+  getReviewSentimentSummary: vi.fn(async () => ({
+    total: 0,
+    positive: 0,
+    neutral: 0,
+    negative: 0,
+    actionableOpen: 0,
+    avgConfidence: null,
+    topThemes: [],
+  })),
 }));
 
 // AC-1 auth + slug clauses for the INTERNAL print route. The route renders ANY
@@ -81,6 +95,11 @@ describe("print defaultLoader wires the monthly readers (12-05c)", () => {
       .mock.calls.map((c) => c[1].source);
     expect(sources).toContain("ga4_dimensions");
     expect(sources).toContain("performance");
+    // 14-03b reader is wired too (silent un-wiring guard)
+    expect(getReviewSentimentSummary).toHaveBeenCalledWith(expect.anything(), {
+      shopId,
+      month: "2026-05",
+    });
     // and for the correct month (date = {month}-01 happens inside the reader)
     for (const call of vi.mocked(getMonthlySnapshot).mock.calls) {
       expect(call[1]).toMatchObject({ shopId, month: "2026-05" });

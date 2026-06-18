@@ -22,6 +22,7 @@ import type {
   Ga4DimensionsReport,
   PerformanceReport,
   GbpPresenceReport,
+  SentimentReport,
 } from "./types";
 
 /** The live sources, in report display order. */
@@ -86,6 +87,11 @@ export type AssembleDeps = {
   readMonthlyPerformance?: MonthlyPerformanceReader;
   /** Optional rollup-bypassing reader for the monthly GBP presence row (13-03). */
   readMonthlyGbpPresence?: MonthlyGbpPresenceReader;
+  /** Optional reader for the monthly review-sentiment summary (14-03b); null => block omitted. */
+  readReviewSentiment?: (query: {
+    shopId: string;
+    month: string;
+  }) => Promise<SentimentReport | null>;
 };
 
 /**
@@ -237,6 +243,14 @@ export async function assembleReportData(
     if (row) gbpPresence = buildGbpPresence(row);
   }
 
+  // Additive review-sentiment block (14-03b) — read off review_sentiment (NOT snapshots); the
+  // reader returns null when the shop has no classified reviews in the month -> block omitted.
+  let sentiment: SentimentReport | undefined;
+  if (deps.readReviewSentiment) {
+    const s = await deps.readReviewSentiment({ shopId, month: periodMonth });
+    if (s) sentiment = s;
+  }
+
   return {
     shopId,
     periodMonth,
@@ -248,6 +262,7 @@ export async function assembleReportData(
     ...(dimensions ? { dimensions } : {}),
     ...(performance ? { performance } : {}),
     ...(gbpPresence ? { gbpPresence } : {}),
+    ...(sentiment ? { sentiment } : {}),
   };
 }
 
