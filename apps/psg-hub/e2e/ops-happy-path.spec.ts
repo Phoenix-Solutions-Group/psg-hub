@@ -7,22 +7,24 @@ import { checkA11y, shoot } from "./_helpers";
  *
  *   create company -> add employees -> import RO
  *
- * Driven as internal ops staff (psg_superadmin storageState). The Companies
- * vertical (PSG-33) ships a real /ops UI today, so the create-company step is
- * exercised through the browser. The add-employees + import-RO steps run against
- * the real manage_companies-gated API via the authenticated request context: the
- * Employees (PSG-33), Repair Orders (PSG-34) and RO/Estimate Import (PSG-38)
- * UI surfaces are still landing, but their API contracts + RLS are stable. The
- * test therefore covers the full stack TODAY — auth -> ops RBAC gate -> the
- * company/employee/repair-customer/RO data ladder (all FK'd, RO unique per
- * company) -> readback. As PSG-33/34/38 land their UIs, each API leg below can
- * be swapped for the corresponding UI interaction without changing the shape of
- * the happy path.
+ * Driven as internal ops staff (psg_superadmin storageState):
+ *   1. create company  — through the real /ops Companies UI (PSG-33).
+ *   2. add employees   — manage_companies-gated employees API (PSG-33).
+ *   3. import RO        — PSG-38's real import pipeline: upload a CSV to
+ *                         /api/ops/import/validate (preview) then
+ *                         /api/ops/import/commit, which parses + auto-maps +
+ *                         validates server-side and writes the repair_customer
+ *                         + repair_order. Read back via the Repair Orders API
+ *                         (PSG-34).
+ *
+ * This covers the full stack — auth -> ops RBAC gate -> company/employee data
+ * ladder -> the CSV import pipeline (parse -> map -> validate -> commit, FK'd,
+ * RO unique per company, idempotent) -> readback. The API legs share the
+ * browser's authenticated context; as the Employees/Import wizard UIs settle
+ * they can be swapped for UI interactions without changing the happy path.
  */
 
 test.use({ storageState: OPS_STAFF.statePath });
-
-type CreatedRow = { id: string };
 
 test("ops happy path: create company -> add employees -> import RO", async ({ page }) => {
   // --- /ops landing: staff sees the Companies & ROs module enabled ----------
@@ -82,31 +84,49 @@ test("ops happy path: create company -> add employees -> import RO", async ({ pa
     "Sam Manager",
   ]);
 
-  // --- Step 3: import RO -----------------------------------------------------
-  // An RO requires a repair customer (FK). The import vertical (PSG-38) batches
-  // exactly this ladder; here we drive one customer + one RO through the API.
-  const customerRes = await page.request.post("/api/repair-customers", {
-    data: {
-      company_id: companyId,
-      first_name: "Alex",
-      last_name: "Driver",
-      phone: "555-0188",
-    },
-  });
-  expect(customerRes.status(), "create repair customer").toBe(201);
-  const { customer } = (await customerRes.json()) as { customer: CreatedRow };
+  // --- Step 3: import RO via the PSG-38 import pipeline -----------------------
+  // Upload a CSV whose headers hit the canonical aliases, so the server
+  // auto-suggests the mapping (no template needed) and creates the repair
+  // customer + RO from the row. Two rows -> two ROs imported.
+  const roNumber = "RO-2001";
+  const csv =
+    "First Name,Last Name,RO #,Phone,Make,Model\n" +
+    `Alex,Driver,${roNumber},555-0188,Honda,Civic\n` +
+    "Robin,Payne,RO-2002,555-0190,Toyota,Camry\n";
+  const csvFile = {
+    name: "ros.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(csv, "utf8"),
+  };
 
-  const roNumber = "RO-1001";
-  const roRes = await page.request.post("/api/repair-orders", {
-    data: {
-      company_id: companyId,
-      repair_customer_id: customer.id,
-      ro_number: roNumber,
-    },
+  // 3a. Validate/preview — no DB writes; both rows map cleanly, none unmapped.
+  const validateRes = await page.request.post("/api/ops/import/validate", {
+    multipart: { file: csvFile, kind: "ro", company_id: companyId },
   });
-  expect(roRes.status(), "import (create) RO").toBe(201);
+  expect(validateRes.ok(), "import validate").toBeTruthy();
+  const preview = (await validateRes.json()) as {
+    mapping: Record<string, string>;
+    validation: { total: number; invalid: number; unmappedRequired: string[] };
+  };
+  expect(preview.mapping.ro_number).toBe("RO #");
+  expect(preview.validation.unmappedRequired).toEqual([]);
+  expect(preview.validation.invalid).toBe(0);
+  expect(preview.validation.total).toBe(2);
 
-  // Readback: the RO is on file for this company.
+  // 3b. Commit — server re-parses + re-validates, then writes customers + ROs.
+  const commitRes = await page.request.post("/api/ops/import/commit", {
+    multipart: { file: csvFile, kind: "ro", company_id: companyId },
+  });
+  expect(commitRes.ok(), "import commit").toBeTruthy();
+  const committed = (await commitRes.json()) as {
+    inserted: number;
+    skipped: number;
+    failedRows: { index: number; error: string }[];
+  };
+  expect(committed.failedRows).toEqual([]);
+  expect(committed.inserted).toBe(2);
+
+  // Readback: the imported ROs are on file for this company.
   const roListRes = await page.request.get(
     `/api/repair-orders?company_id=${companyId}`
   );
@@ -114,7 +134,9 @@ test("ops happy path: create company -> add employees -> import RO", async ({ pa
   const { repair_orders } = (await roListRes.json()) as {
     repair_orders: { ro_number: string }[];
   };
-  expect(repair_orders.map((r) => r.ro_number)).toContain(roNumber);
+  const importedRoNumbers = repair_orders.map((r) => r.ro_number);
+  expect(importedRoNumbers).toContain(roNumber);
+  expect(importedRoNumbers).toContain("RO-2002");
 
   // --- House style: a11y + brand screenshots of the Companies surface --------
   await page.goto("/ops/companies");
