@@ -10,7 +10,7 @@ Ten milestones across two tracks. Customer track ships v1.0 first (v0.1 → v0.4
 Status: 🚧 IN PROGRESS (created 2026-06-18; 0 of 4 phases)
 Theme: Let a collision-repair shop see and pay everything it owes PSG — one-off invoices and the recurring platform subscription — then clear the gates to launch v1.0.
 
-The v1.0 customer launch milestone. A shop sees + pays its PSG invoices (Invoiced.com READ-ONLY mirror + Stripe payment links) and self-serve manages its platform subscription/tier (Stripe Checkout + Billing Portal, wired to `src/lib/tier/gate.ts`), then the launch-readiness gates close (M3 reproducible deploy, S6 Gotham/Typekit license, S2 pilot onboarding). Picks up the v0.3-deferred Stripe INSERT→UPSERT (S3) + PII-at-rest retention. Same build-local → operator-gated activation pattern as Phases 9-14; EXTEND-not-build.
+The v1.0 customer launch milestone. A shop sees + pays its PSG invoices (Stripe-native invoices + Stripe payment links) and self-serve manages its platform subscription/tier (Stripe Checkout + Billing Portal, wired to `src/lib/tier/gate.ts`), then the launch-readiness gates close (M3 reproducible deploy, S6 Gotham/Typekit license, S2 pilot onboarding). Picks up the v0.3-deferred Stripe INSERT→UPSERT (S3) + PII-at-rest retention. Same build-local → operator-gated activation pattern as Phases 9-14; EXTEND-not-build.
 
 **Money-before-M3 invariant:** billing BUILDS in Phases 15-17; live charge acceptance activates ONLY at the Phase-18 launch gate (after M3). No real customer money before reproducible deploy.
 
@@ -18,10 +18,10 @@ The v1.0 customer launch milestone. A shop sees + pays its PSG invoices (Invoice
 |-------|------|-------|--------|-----------|
 | 15 | Billing foundation + Stripe spine | TBD | Not started | - |
 | 16 | Subscription self-serve | TBD | Not started | - |
-| 17 | Invoice mirror + payment links | TBD | Not started | - |
+| 17 | Stripe-native invoices + payment links | TBD | Not started | - |
 | 18 | Launch readiness (v1.0) | TBD | Not started | - |
 
-Dependencies: 16 and 17 both depend on 15 and are independent of each other (parallel-eligible); 18 depends on all of 15-17. Research: Likely for 15-17 (Stripe webhook/Checkout/Billing Portal + Invoiced.com read API) — research-gated per SPECIAL-FLOWS. Verify-at-plan assumptions: (a) Invoiced.com is the PSG→shop invoice system-of-record with a sufficient read API; (b) what BSM left wired in Stripe.
+Dependencies: 16 and 17 both depend on 15 and are independent of each other (parallel-eligible); 18 depends on all of 15-17. Research: Likely for 15-17 (Stripe webhook/Checkout/Billing Portal + Stripe Invoices API) — research-gated per SPECIAL-FLOWS; **Phase-15 research DONE 2026-06-18** (`.paul/research/phase-15-billing-foundation-stripe-spine.md`). **DECISION 2026-06-18: invoicing is Stripe-native (Invoiced.com dropped).** Verified at-plan: BSM already wired Stripe checkout/portal/webhook/`subscriptions` on this repo — UNVERIFIED on prod + 3 known defects (S3 `.insert()`, Basil `current_period_end`, vestigial `shops.subscription_tier`).
 
 v0.3.5 Presence + Sentiment (v0.3.5) ✅ COMPLETE + CLOSED 2026-06-17 (2 phases / 10 plans; tag `v0.3.5`; see Completed Milestones).
 v0.3 Customer Analytics (v0.3.0) ✅ COMPLETE 2026-06-13 (4/4 phases; see Completed Milestones + `.paul/milestones/v0.3.0-ROADMAP.md`).
