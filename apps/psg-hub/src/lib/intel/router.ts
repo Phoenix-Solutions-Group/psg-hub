@@ -9,6 +9,7 @@
 
 import { CircuitBreaker, CircuitOpenError, withRetry } from "@/lib/resilience";
 import type { LLMCallResult } from "@/lib/logging/llm-call";
+import { applySpendCap } from "./budget";
 import { DEFAULT_ENABLED_PROVIDERS, MODEL_CATALOG } from "./catalog";
 import type {
   ModelSpec,
@@ -114,7 +115,14 @@ export async function route<T = unknown>(
 ): Promise<RouteResult<T>> {
   const enabled = deps.enabledProviders ?? DEFAULT_ENABLED_PROVIDERS;
   const now = deps.now ?? Date.now;
-  const candidates = usableCandidates(profile, enabled, deps.preferCheapest);
+  let candidates = usableCandidates(profile, enabled, deps.preferCheapest);
+
+  // G5 cost cap: once month-to-date spend hits the ceiling, refuse to start a new metered
+  // call — narrow to the in-budget Anthropic path (or throw if the profile has none).
+  if (deps.spendCapUsd != null && deps.monthToDateSpendUsd) {
+    const spent = await deps.monthToDateSpendUsd();
+    candidates = applySpendCap(candidates, spent, deps.spendCapUsd, profile);
+  }
 
   const attempts: RouteAttempt[] = [];
   let lastError: unknown;

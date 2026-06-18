@@ -95,6 +95,17 @@ export type RouteDeps = {
   retries?: number;
   /** Injectable clock for latency + tests. Default Date.now. */
   now?: () => number;
+  /**
+   * Hard month-to-date spend ceiling in USD (the G5 cost cap). When set together with
+   * `monthToDateSpendUsd`, the router refuses to start a new metered call once spend
+   * reaches the cap and auto-degrades to the in-budget Anthropic path. Omit for no cap.
+   */
+  spendCapUsd?: number;
+  /**
+   * Reads current month-to-date intel spend in USD (production wiring sums llm_call_log
+   * via budget.ts `totalSpendUsd`). Only consulted when `spendCapUsd` is also set.
+   */
+  monthToDateSpendUsd?: () => Promise<number> | number;
 };
 
 export type RouteAttempt = {
