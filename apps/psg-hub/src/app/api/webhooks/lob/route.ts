@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyLobSignature, normalizeLobEvent } from "@/lib/production/webhook";
+import { recordMailVendorEvent } from "@/lib/production/jobs";
 
 /**
  * Lob webhook — production-mail status callbacks (v1.3, ROADMAP `/api/webhooks/lob`).
@@ -8,15 +9,9 @@ import { verifyLobSignature, normalizeLobEvent } from "@/lib/production/webhook"
  * normalize → persist → ack only after persist). Lob signs with
  * `Lob-Signature` (hex HMAC-SHA256 of `${timestamp}.${rawBody}`) +
  * `Lob-Signature-Timestamp`; verification + replay defense live in
- * `src/lib/production/webhook.ts`.
- *
- * PERSISTENCE SEAM: the `mail_vendor_jobs` lifecycle table is part of the v1.1
- * Ops Foundation data model (B1 / PSG-25) and does not exist yet. Until it
- * lands, this handler fully verifies + normalizes the event and acks; the
- * marked TODO is the exact one-call insertion point for the idempotent
- * upsert (UNIQUE(external_id, status), matching the Twilio pattern). The route
- * is intentionally shipped now so the Lob endpoint URL + secret can be
- * configured and live signature verification exercised independently of B1.
+ * `src/lib/production/webhook.ts`. Persistence (idempotent upsert into
+ * mail_vendor_jobs keyed UNIQUE(external_id, status) + document status advance)
+ * lives in `src/lib/production/jobs.ts` against the v1.3 data model.
  */
 export async function POST(request: Request) {
   const secret = process.env.LOB_WEBHOOK_SECRET;
@@ -56,13 +51,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
-  // TODO(B1 / PSG-25): idempotent upsert into mail_vendor_jobs
-  //   { vendor: 'lob', external_id: event.externalId, status: event.status,
-  //     event_type: event.eventType, occurred_at: event.occurredAt }
-  //   keyed UNIQUE(external_id, status) — then update production_documents status.
-  console.info(
-    `[lob-webhook] ${event.eventType} → ${event.status} for ${event.externalId}`
-  );
+  try {
+    await recordMailVendorEvent(event);
+  } catch (error) {
+    // Persistence failure → 500 so Lob retries; the UNIQUE(external_id, status)
+    // key keeps the retry idempotent. Ack only after a successful persist.
+    console.error(
+      "[lob-webhook] persist failed:",
+      error instanceof Error ? error.message : error
+    );
+    return NextResponse.json({ error: "Persist failed" }, { status: 500 });
+  }
 
   return NextResponse.json({ received: true });
 }
