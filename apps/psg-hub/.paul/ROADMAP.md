@@ -114,6 +114,19 @@ Gates: gitleaks ✅ clean (1 vetted FP) · AEGIS → v2.0 · v0.1→main merge o
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with [INSERTED])
 
+**Canonical phase sequence vs build-local labels (deconfliction — [PSG-64](/PSG/issues/PSG-64), 2026-06-18).** The canonical integer phase sequence is global and milestone-sequential (D62). Customer track through v1.0 = Phases **1–18**: v0.4 billing = **Phase 15** (`15-billing-foundation`), 16 subscription, 17 invoices, 18 launch readiness. Post-v1.0 ops/internal work was committed build-local under **ad-hoc, non-canonical** phase labels that collide with this sequence; canonical numbers are assigned here and applied at each milestone's kickoff:
+
+| Milestone | Canonical phase | Build-local commit label (non-canonical) |
+|-----------|-----------------|------------------------------------------|
+| v1.1 Ops Foundation | **Phase 19** | `feat(15-ops-foundation)` → dir renamed `15-ops-foundation/` ⟶ `19-ops-foundation/` to clear the Phase-15 billing collision |
+| v1.2 Ads Mutation Studio | **Phase 20** | `feat(26-ads-mutation-studio)` (code-only, no `.paul/phases/` dir) |
+| v1.3 Production Module | **Phase 21** | `feat(27-production*)` (code-only) |
+| v1.4 Operational Reports | **Phase 22** | `feat(v1.4-ops-reports)` (code-only) |
+| v1.5 Superadmin Matrix + Audit | **Phase 23** | `feat(15-superadmin-audit)` (code-only) |
+| v1.6 Internal Agentic | **Phase 24** | `feat(16-agentic)` (code-only) |
+
+Only the in-tree `.paul/phases/` collision (ops-foundation vs billing) is physically renamed (→ `19-ops-foundation/`). The code-only labels persist verbatim in immutable git history but are **non-canonical** — the roadmap numbers in this table are authoritative for all future PAUL phase work.
+
 ### v0.1 — Foundation
 
 | Phase | Name | Plans | Status | Completed |
@@ -132,20 +145,22 @@ Gates: gitleaks ✅ clean (1 vetted FP) · AEGIS → v2.0 · v0.1→main merge o
 | 7 | Tier gating + shop switcher | 3/3 | ✅ Complete | 2026-06-03 |
 | 8 | Launch hardening | 6/6 | ✅ Complete (08-01 carry-in; 08-02 RLS; 08-02b gitleaks+S4; 08-03 AEGIS; 08-04 coverage+brand; 08-04b E2E+WCAG AA+visual brand) | 2026-06-04 |
 
-### Future milestones (defined in PLANNING.md, plans TBD at milestone kickoff)
+### Future milestones (defined in PLANNING.md; several carry build-local foundations landed ahead of activation)
 
-| Milestone | Goal | Track |
-|-----------|------|-------|
-| v0.3 — Customer Analytics | ads-dashboard plans/concepts absorbed; unified Ads + GA4 + GSC marketing surface; story-led narrative; monthly PDF; presence; sentiment | Customer |
-| v0.4 — Invoicing + Payments | Invoiced.com mirror + Stripe coexistence + payment links — **v1.0 customer launch** | Customer |
-| v1.1 — Ops Foundation | Companies, Employees, Repair Customers, ROs, Estimates, Surveys, SysConfig, RO/Estimate Import (psg-import absorb), Security Profiles | Ops |
-| v1.2 — Ads Mutation Studio | apps/ads/ + GTM mutations via web UI; dry-run → execute → audit on Vercel Sandbox | Ops |
-| v1.3 — Production Module | Lob.com + in-house print queue dual adapter; FileMaker retired as daily driver | Ops |
-| v1.3.5 — FM Historical Migration | Optional add-on if business requires historical continuity | Ops |
-| v1.4 — Operational Reports | 26 named reports across 5 batches | Ops |
-| v1.5 — Superadmin Matrix + Audit | Admin users/roles/shops UI; modules + security profiles + access matrix; audit log | Ops |
-| v1.6 — Internal Agentic Intelligence | Multi-LLM router; NotebookLM grounding; Yext (Growth+); weather correlation; competitor engine; agentic PDF reports | Internal |
-| v2.0 — Convergence + Hardening | E2E across customer + ops + internal; AEGIS final; PII review; perf pass; launch readiness | Convergence |
+Build-local status reconciled to git history 2026-06-18 ([PSG-64](/PSG/issues/PSG-64)). 🔨 = code on `origin/main` (HEAD `791c027`) but **not activated** — D62 keeps post-v1.0 ops/internal milestones strictly sequential, and billing carries the money-before-M3 invariant; build-local commits land ahead of their milestone but do not go live until that milestone's activation gate.
+
+| Milestone | Goal | Track | Build-local status |
+|-----------|------|-------|--------------------|
+| v0.3 — Customer Analytics | ads-dashboard plans/concepts absorbed; unified Ads + GA4 + GSC marketing surface; story-led narrative; monthly PDF; presence; sentiment | Customer | ✅ COMPLETE + LIVE (see Completed Milestones) |
+| v0.4 — Invoicing + Payments | Stripe-native invoicing + payment links — **v1.0 customer launch** | Customer | 🚧 CURRENT (Phases 15–18; see Current Milestone) |
+| v1.1 — Ops Foundation | Companies, Employees, Repair Customers, ROs, Estimates, Surveys, SysConfig, RO/Estimate Import (psg-import absorb), Security Profiles | Ops | 🔨 Build-local: spine `e7bf139` + PSG-25 stack (PSG-37 SysConfig / PSG-38 import / PSG-39 security profiles; ops E2E `535a609`); activation-gated post-v1.0 |
+| v1.2 — Ads Mutation Studio | apps/ads/ + GTM mutations via web UI; dry-run → execute → audit on Vercel Sandbox | Ops | 🔨 Build-local: registry + bridge seam + observability/audit schema `53be6a3` (gate-independent foundation) |
+| v1.3 — Production Module | Lob.com + in-house print queue dual adapter; FileMaker retired as daily driver | Ops | 🔨 Build-local: production-lob chain (data model `d4a8a4d`, dual adapter `65e11cd`, print/reprint/historical `bbd2ae1`; PSG-41/42/43) + cutover runbook `85e80e4`; live flip operator-gated |
+| v1.3.5 — FM Historical Migration | Optional add-on if business requires historical continuity | Ops | ○ Not started (optional) |
+| v1.4 — Operational Reports | 26 named reports across 5 batches | Ops | 🔨 Build-local: reports framework `1665791` (PSG-28 Phase 1) |
+| v1.5 — Superadmin Matrix + Audit | Admin users/roles/shops UI; modules + security profiles + access matrix; audit log | Ops | 🔨 Build-local: audit spine `6dedadd` + module registry / access-matrix resolver `e090fcb` (PSG-29) |
+| v1.6 — Internal Agentic Intelligence | Multi-LLM router; NotebookLM grounding; Yext (Growth+); weather correlation; competitor engine; agentic PDF reports | Internal | 🔨 Build-local: multi-LLM router `e0c71bb` + competitor engine `0c4249b` (G5-gated) |
+| v2.0 — Convergence + Hardening | E2E across customer + ops + internal; AEGIS final; PII review; perf pass; launch readiness | Convergence | ○ Not started |
 
 ## Phase Details
 

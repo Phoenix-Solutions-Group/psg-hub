@@ -1,4 +1,6 @@
-# Phase 15 / 15-00 — v1.1 Ops Foundation (spine)
+# Phase 19 / 19-00 — v1.1 Ops Foundation (spine)
+
+> **Phase renumbered 15 → 19** ([PSG-64](/PSG/issues/PSG-64), 2026-06-18): the `15-ops-foundation` label collided with the canonical Phase 15 (v0.4 billing foundation). v1.1 Ops Foundation is the first post-v1.0 milestone, so its canonical phase is 19 (v0.4 = Phases 15–18). See `ROADMAP.md` § Phases → "Canonical phase sequence vs build-local labels". The commit label `feat(15-ops-foundation)` in git history is non-canonical.
 
 **Milestone:** v1.1 Ops Foundation · **Issue:** [PSG-25](/PSG/issues/PSG-25) · **Parent plan:** [PSG-22](/PSG/issues/PSG-22#document-plan) · **Target:** 2026-06-30
 
