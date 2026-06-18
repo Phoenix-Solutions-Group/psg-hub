@@ -1,5 +1,9 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
+// The action vocabulary lives in a pure, server-only-free module so client code
+// (the audit viewer) can import it without dragging this file's service client
+// into the client bundle. Re-exported here for back-compat with existing importers.
+import { AUDIT_ACTIONS, type AuditAction } from "@/lib/audit/actions";
 
 /**
  * Append-only audit trail for superadmin / admin actions (v1.5, PSG-29).
@@ -11,40 +15,7 @@ import { createServiceClient } from "@/lib/supabase/service";
  * INSERT policy; superadmins read it back through the RLS SELECT policy.
  */
 
-/**
- * Closed vocabulary of auditable admin actions. Keep in sync with the admin
- * server actions that emit them — one constant per mutating operation so the
- * audit UI can filter/label without parsing free text.
- */
-export const AUDIT_ACTIONS = [
-  // users / roles / shops
-  "role.grant",
-  "role.revoke",
-  "shop.assign",
-  "shop.unassign",
-  "tier.change",
-  // modules + access matrix
-  "module.visibility.set",
-  "module_access.grant",
-  "module_access.deny",
-  "module_access.clear",
-  // security profiles — legacy per-user functions_jsonb (security_profiles)
-  "security_profile.fn.grant",
-  "security_profile.fn.revoke",
-  // security profiles — named-profile model (v1.1: security_profile_defs +
-  // user_security_profile_assignments)
-  "security_profile.assign",
-  "security_profile.unassign",
-  // named security-profile catalog CRUD (v1.1 / PSG-39: security_profile_defs)
-  "security_profile_def.create",
-  "security_profile_def.update",
-  "security_profile_def.delete",
-  // superadmin allowlist
-  "superadmin.add",
-  "superadmin.remove",
-] as const;
-
-export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+export { AUDIT_ACTIONS, type AuditAction };
 
 export type AuditEvent = {
   /** Acting superadmin's profile id (auth.uid()). Required. */
