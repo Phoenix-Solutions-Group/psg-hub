@@ -1,4 +1,6 @@
-import { AUDIT_ACTIONS, type AuditAction } from "@/lib/audit/access-audit";
+// Import from the pure action module (NOT access-audit.ts) — access-audit.ts is
+// `server-only` and this file feeds a "use client" component. See actions.ts.
+import { AUDIT_ACTIONS, type AuditAction } from "@/lib/audit/actions";
 
 /**
  * Presentation helpers for the access_audit viewer (v1.5 / PSG-29 phase 3).
