@@ -1,21 +1,12 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { getStripe, retrieveSubscription } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getStripe } from "@/lib/stripe";
 
-/**
- * Stripe webhook — subscriptions (BSM, shipped) + one-off invoice payments (v0.4).
- *
- * Idempotency (PLANNING.md "idempotent via event_id"): every event is first claimed in
- * public.stripe_events via an ignoreDuplicates upsert. A replayed event id inserts nothing,
- * so we short-circuit before touching subscriptions/invoices — Stripe retries are safe no-ops.
- *
- * v0.4 additions:
- *  - One-off invoice payments coexist with subscriptions: a Checkout Session in `payment` mode
- *    (or a PaymentIntent) carrying metadata.invoice_id marks that invoice paid.
- *  - S3 (v0.2-deferred): the subscription write is INSERT -> UPSERT(onConflict stripe_subscription_id)
- *    so a replayed/duplicated checkout.session.completed no longer creates duplicate subscription rows.
- */
+// Webhook is signature-verified, not session-authed; it must read the raw body.
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   const stripe = getStripe();
   const supabase = createServiceClient();
@@ -38,148 +29,144 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  // Idempotency claim. ignoreDuplicates => a replay inserts no row; .select() then returns
-  // an empty array and we stop before reprocessing.
+  // ── Idempotency gate (research §1.1, §3). Stripe delivers at-least-once.
+  // Record the event with ON CONFLICT (event_id) DO NOTHING. An empty result means
+  // a prior delivery already recorded it. We then skip side effects ONLY if that
+  // prior delivery also FINISHED (processed_at set); if it recorded but failed
+  // mid-processing, processed_at is null and we fall through to reprocess so a
+  // transient failure is not silently deduped away (no dropped subscription state).
   const { data: claimed, error: claimError } = await supabase
-    .from("stripe_events")
+    .from("stripe_webhook_events")
     .upsert(
-      { event_id: event.id, event_type: event.type, payload: event as unknown },
+      {
+        event_id: event.id,
+        type: event.type,
+        api_version: event.api_version ?? null,
+        created: new Date(event.created * 1000).toISOString(),
+        payload: event as unknown as Record<string, unknown>,
+      },
       { onConflict: "event_id", ignoreDuplicates: true }
     )
     .select("event_id");
 
   if (claimError) {
-    // Couldn't record the event — 500 so Stripe retries (the unique key keeps retries safe).
-    console.error("[stripe-webhook] ledger write failed:", claimError.message);
-    return NextResponse.json({ error: "Persist failed" }, { status: 500 });
-  }
-  if (!claimed || claimed.length === 0) {
-    // Already processed this event id — idempotent no-op.
-    return NextResponse.json({ received: true, duplicate: true });
+    // Could not record the event — return 5xx so Stripe retries.
+    return NextResponse.json({ error: "event log failed" }, { status: 500 });
   }
 
+  if (!claimed || claimed.length === 0) {
+    const { data: prior } = await supabase
+      .from("stripe_webhook_events")
+      .select("processed_at")
+      .eq("event_id", event.id)
+      .single();
+    if (prior?.processed_at) {
+      // Already fully processed — duplicate redelivery, zero side effects.
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+    // Recorded but unprocessed (prior attempt failed) — fall through and reprocess.
+  }
+
+  try {
+    await handleEvent(event, supabase);
+  } catch {
+    // Side-effect failure — leave processed_at null so Stripe's retry reprocesses.
+    return NextResponse.json({ error: "processing failed" }, { status: 500 });
+  }
+
+  await supabase
+    .from("stripe_webhook_events")
+    .update({ processed_at: new Date().toISOString() })
+    .eq("event_id", event.id);
+
+  return NextResponse.json({ received: true });
+}
+
+type ServiceClient = ReturnType<typeof createServiceClient>;
+
+async function handleEvent(
+  event: Stripe.Event,
+  supabase: ServiceClient
+): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      const metadata = session.metadata || {};
-
-      // One-off invoice payment (v0.4) — distinguished by metadata.invoice_id / payment mode.
-      if (metadata.invoice_id || session.mode === "payment") {
-        if (metadata.invoice_id) {
-          await markInvoicePaid(supabase, metadata.invoice_id, {
-            paymentIntentId:
-              typeof session.payment_intent === "string"
-                ? session.payment_intent
-                : null,
-            checkoutSessionId: session.id,
-          });
-        }
-        break;
-      }
-
-      // Subscription checkout (BSM, shipped).
-      const { user_id, tier } = metadata;
+      const { user_id, tier } = session.metadata || {};
       const customerId = session.customer as string;
       const subscriptionId = session.subscription as string;
 
-      if (user_id && tier) {
-        const { data: membership } = await supabase
-          .from("shop_users")
-          .select("shop_id")
-          .eq("user_id", user_id)
-          .limit(1)
-          .single();
+      if (!user_id || !tier) break;
 
-        if (membership) {
-          await supabase
-            .from("shops")
-            .update({ stripe_customer_id: customerId })
-            .eq("id", membership.shop_id);
+      const { data: membership } = await supabase
+        .from("shop_users")
+        .select("shop_id")
+        .eq("user_id", user_id)
+        .limit(1)
+        .single();
 
-          // S3 fix: UPSERT (was INSERT) keyed on stripe_subscription_id — replay-safe.
-          await supabase.from("subscriptions").upsert(
-            {
-              shop_id: membership.shop_id,
-              stripe_customer_id: customerId,
-              stripe_subscription_id: subscriptionId,
-              tier,
-              status: "active",
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "stripe_subscription_id" }
-          );
-        }
-      }
-      break;
-    }
+      if (!membership) break;
 
-    // PaymentIntent path covers payment links / PIs not driven through Checkout.
-    case "payment_intent.succeeded": {
-      const pi = event.data.object as Stripe.PaymentIntent;
-      const invoiceId = pi.metadata?.invoice_id;
-      if (invoiceId) {
-        await markInvoicePaid(supabase, invoiceId, {
-          paymentIntentId: pi.id,
-          checkoutSessionId: null,
-        });
-      }
+      // Link the Stripe customer to the shop.
+      const { error: shopError } = await supabase
+        .from("shops")
+        .update({ stripe_customer_id: customerId })
+        .eq("id", membership.shop_id);
+      if (shopError) throw shopError;
+
+      // S3 fix: UPSERT, not bare INSERT. shop_id is UNIQUE and the MoR model is
+      // one shop ↔ one subscription, so a re-subscribe or tier change updates the
+      // shop's single row in place rather than raising a silently-swallowed
+      // duplicate-key. (Refines research §1.2's onConflict=stripe_subscription_id:
+      // shop_id is the row's real uniqueness for this 1:1 model.) Error is checked.
+      const { error: subError } = await supabase.from("subscriptions").upsert(
+        {
+          shop_id: membership.shop_id,
+          stripe_customer_id: customerId,
+          stripe_subscription_id: subscriptionId,
+          tier,
+          status: "active",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "shop_id" }
+      );
+      if (subError) throw subError;
       break;
     }
 
     case "customer.subscription.updated": {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const subscription = event.data.object as any;
-      const periodEnd = subscription.current_period_end
-        ? new Date(subscription.current_period_end * 1000).toISOString()
+      const sub = event.data.object as Stripe.Subscription;
+      // Basil fix (research §2): current_period_end moved to the item level.
+      // Re-fetch the canonical subscription (out-of-order safe, §3) under the
+      // shared retry + breaker, then read items.data[0].current_period_end.
+      const fresh = await retrieveSubscription(sub.id);
+      const itemPeriodEnd = fresh.items?.data?.[0]?.current_period_end;
+      const periodEnd = itemPeriodEnd
+        ? new Date(itemPeriodEnd * 1000).toISOString()
         : null;
-      await supabase
+
+      const { error } = await supabase
         .from("subscriptions")
         .update({
-          status: String(subscription.status),
+          status: String(fresh.status),
           current_period_end: periodEnd,
           updated_at: new Date().toISOString(),
         })
-        .eq("stripe_subscription_id", subscription.id);
+        .eq("stripe_subscription_id", sub.id);
+      if (error) throw error;
       break;
     }
 
     case "customer.subscription.deleted": {
       const subscription = event.data.object as Stripe.Subscription;
-      await supabase
+      const { error } = await supabase
         .from("subscriptions")
         .update({
           status: "canceled",
           updated_at: new Date().toISOString(),
         })
         .eq("stripe_subscription_id", subscription.id);
+      if (error) throw error;
       break;
     }
-  }
-
-  return NextResponse.json({ received: true });
-}
-
-/** Mark a mirrored invoice paid + record the Stripe linkage. Service-role write (RLS-bypassing). */
-async function markInvoicePaid(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
-  invoiceId: string,
-  links: { paymentIntentId: string | null; checkoutSessionId: string | null }
-) {
-  const update: Record<string, unknown> = {
-    status: "paid",
-    paid_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-  if (links.paymentIntentId) update.stripe_payment_intent_id = links.paymentIntentId;
-  if (links.checkoutSessionId)
-    update.stripe_checkout_session_id = links.checkoutSessionId;
-
-  const { error } = await supabase
-    .from("invoices")
-    .update(update)
-    .eq("id", invoiceId);
-  if (error) {
-    console.error("[stripe-webhook] invoice paid update failed:", error.message);
   }
 }
