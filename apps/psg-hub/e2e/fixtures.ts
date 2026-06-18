@@ -33,6 +33,19 @@ export const MEGA = {
   shopNames: Array.from({ length: 9 }, (_, i) => `E2E Mega Shop ${i + 1}`),
 };
 
+// Internal ops staff (psg_superadmin) — drives the v1.1 Ops happy path
+// (PSG-40): the /ops surface + manage_companies-gated Companies/Employees/RO
+// verticals. psg_superadmin passes every ops capability, so the fixture needs
+// no per-user security_profile rows. No shop membership — staff is
+// shop-independent (see getDashboardAccess()).
+export const OPS_STAFF = {
+  email: "ops-staff@e2e.test",
+  statePath: path.join(AUTH_DIR, "ops-staff.json"),
+  // Unique-per-run company name so the happy path stays idempotent without a
+  // dedicated cleanup pass over the (test-created) companies table.
+  companyName: "E2E Ops Happy Path Co",
+};
+
 // 09-02 analytics snapshot seed. End date = "today" at module load (NOT a hard
 // constant — the page reads a trailing-30-day runtime window, so a frozen date
 // would rot out of range). Metric VALUES are formula-derived from the day
@@ -47,4 +60,9 @@ export const FIXTURE_SHOP_NAMES = [
   MULTI.shopB,
   ...MEGA.shopNames,
 ];
-export const FIXTURE_EMAILS = [OWNER.email, MULTI.email, MEGA.email];
+export const FIXTURE_EMAILS = [
+  OWNER.email,
+  MULTI.email,
+  MEGA.email,
+  OPS_STAFF.email,
+];

@@ -7,6 +7,7 @@ import {
   OWNER,
   MULTI,
   MEGA,
+  OPS_STAFF,
   SNAPSHOT_END_DATE,
   SNAPSHOT_SYNCED_AT,
   FIXTURE_SHOP_NAMES,
@@ -310,8 +311,25 @@ async function ensureCustomerRole(userId: string): Promise<void> {
   }
 }
 
+/**
+ * PSG-40: grant a user the psg_superadmin app role. Superadmin passes every ops
+ * capability in hasOpsFn(), so the ops happy path needs no per-user
+ * security_profiles rows. Upsert keeps re-seeds idempotent.
+ */
+async function setSuperadminRole(userId: string): Promise<void> {
+  const { error } = await admin
+    .from("app_user_roles")
+    .upsert({ profile_id: userId, role: "psg_superadmin" }, { onConflict: "profile_id" });
+  if (error) throw new Error(`[e2e] superadmin role seed failed: ${error.message}`);
+}
+
 /** Idempotent: remove any prior fixture data so re-runs (without db reset) are clean. */
 async function cleanup(): Promise<void> {
+  // PSG-40: drop the ops happy-path company. employees / repair_customers /
+  // repair_orders all FK -> companies(id) ON DELETE CASCADE, so this one delete
+  // removes the whole RO ladder the spec creates.
+  await admin.from("companies").delete().eq("name", OPS_STAFF.companyName);
+
   const { data: shops } = await admin
     .from("shops")
     .select("id, client_id")
@@ -372,6 +390,14 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
     await seedShop(megaId, name, "owner");
   }
 
+  // PSG-40: internal ops staff (psg_superadmin, no shop membership) — drives the
+  // v1.1 Ops happy path (create company -> add employees -> import RO). The spec
+  // creates its own company at runtime through the /ops UI + manage_companies
+  // API, so nothing else is seeded for this role.
+  const opsStaffId = await createUser(OPS_STAFF.email);
+  await seedProfile(opsStaffId, "E2E Ops Staff");
+  await setSuperadminRole(opsStaffId);
+
   // 09-02: deterministic analytics snapshots (charts + MSO aggregate data).
   await seedSnapshots(ownerShopId, 30);
   await seedSnapshots(shopAId, 14);
@@ -423,6 +449,9 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
     { email: OWNER.email, statePath: OWNER.statePath },
     { email: MULTI.email, statePath: MULTI.statePath },
     { email: MEGA.email, statePath: MEGA.statePath },
+    // PSG-40 ops staff. Staff bypass the customer-id gate, so login lands on
+    // /dashboard with the same shell (Sign out) as customers.
+    { email: OPS_STAFF.email, statePath: OPS_STAFF.statePath },
   ]) {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
