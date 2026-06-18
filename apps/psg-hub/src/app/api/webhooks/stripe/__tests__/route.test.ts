@@ -20,10 +20,16 @@ let membership: { shop_id: string } | null = { shop_id: "shop_1" };
 let shopUpdateError: unknown = null;
 let subUpsertError: unknown = null;
 let subUpdateError: unknown = null;
+// PSG-59 — invoice/payment mirroring state.
+let shopByCustomer: { id: string } | null = { id: "shop_1" };
+let invoiceUpsertError: unknown = null;
+let paymentUpsertError: unknown = null;
 
 const subUpsert = vi.fn();
 const subUpdate = vi.fn();
 const eventProcessedUpdate = vi.fn();
+const invoiceUpsert = vi.fn();
+const paymentUpsert = vi.fn();
 
 function webhookEventsBuilder() {
   return {
@@ -58,6 +64,36 @@ function shopsBuilder() {
     update: vi.fn().mockReturnValue({
       eq: vi.fn().mockResolvedValue({ error: shopUpdateError }),
     }),
+    // PSG-59: resolveShopIdByCustomer — .select("id").eq(...).maybeSingle()
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        maybeSingle: vi
+          .fn()
+          .mockResolvedValue({ data: shopByCustomer, error: null }),
+      }),
+    }),
+  };
+}
+
+function invoicesBuilder() {
+  return {
+    upsert: vi
+      .fn()
+      .mockImplementation((vals: Record<string, unknown>, opts: unknown) => {
+        invoiceUpsert(vals, opts);
+        return Promise.resolve({ error: invoiceUpsertError });
+      }),
+  };
+}
+
+function paymentsBuilder() {
+  return {
+    upsert: vi
+      .fn()
+      .mockImplementation((vals: Record<string, unknown>, opts: unknown) => {
+        paymentUpsert(vals, opts);
+        return Promise.resolve({ error: paymentUpsertError });
+      }),
   };
 }
 
@@ -81,6 +117,8 @@ vi.mock("@/lib/supabase/service", () => ({
       if (table === "shop_users") return shopUsersBuilder();
       if (table === "shops") return shopsBuilder();
       if (table === "subscriptions") return subscriptionsBuilder();
+      if (table === "invoices") return invoicesBuilder();
+      if (table === "payments") return paymentsBuilder();
       throw new Error(`unexpected table: ${table}`);
     },
   }),
@@ -118,6 +156,9 @@ beforeEach(() => {
   shopUpdateError = null;
   subUpsertError = null;
   subUpdateError = null;
+  shopByCustomer = { id: "shop_1" };
+  invoiceUpsertError = null;
+  paymentUpsertError = null;
 });
 
 describe("stripe webhook route", () => {
@@ -212,5 +253,102 @@ describe("stripe webhook route", () => {
     const [vals] = subUpdate.mock.calls[0];
     expect(vals.current_period_end).toBe(new Date(periodEndUnix * 1000).toISOString());
     expect(vals.status).toBe("active");
+  });
+
+  // ── PSG-59: invoice mirroring ──────────────────────────────────────────────
+  const invoicePaidEvent = {
+    id: "evt_inv",
+    type: "invoice.paid",
+    api_version: "2026-05-27.dahlia",
+    created: 1_700_000_100,
+    data: {
+      object: {
+        id: "in_1",
+        customer: "cus_1",
+        number: "ABCD-0001",
+        status: "paid",
+        amount_due: 19900,
+        amount_paid: 19900,
+        currency: "usd",
+        hosted_invoice_url: "https://pay.stripe.com/i/in_1",
+        parent: { subscription_details: { subscription: "sub_1" } },
+      },
+    },
+  };
+
+  it("upserts an invoice (by stripe_invoice_id) on invoice.paid, resolving shop via customer", async () => {
+    constructEvent.mockReturnValue(invoicePaidEvent);
+
+    const res = await POST(makeReq("sig"));
+
+    expect(res.status).toBe(200);
+    expect(invoiceUpsert).toHaveBeenCalledTimes(1);
+    const [vals, opts] = invoiceUpsert.mock.calls[0];
+    expect(vals).toMatchObject({
+      stripe_invoice_id: "in_1",
+      shop_id: "shop_1",
+      status: "paid",
+      amount_paid: 19900,
+      stripe_subscription_id: "sub_1", // Basil relocation resolved
+    });
+    expect(opts).toEqual({ onConflict: "stripe_invoice_id" });
+    expect(eventProcessedUpdate).toHaveBeenCalled();
+  });
+
+  it("no-ops (no error) when the invoice customer maps to no shop", async () => {
+    constructEvent.mockReturnValue(invoicePaidEvent);
+    shopByCustomer = null; // unmapped Stripe customer
+
+    const res = await POST(makeReq("sig"));
+
+    expect(res.status).toBe(200);
+    expect(invoiceUpsert).not.toHaveBeenCalled();
+    expect(eventProcessedUpdate).toHaveBeenCalled(); // processed, just nothing to mirror
+  });
+
+  it("surfaces an invoice upsert error as 500 and leaves the event unprocessed", async () => {
+    constructEvent.mockReturnValue(invoicePaidEvent);
+    invoiceUpsertError = new Error("db down");
+
+    const res = await POST(makeReq("sig"));
+
+    expect(res.status).toBe(500);
+    expect(eventProcessedUpdate).not.toHaveBeenCalled();
+  });
+
+  // ── PSG-59: payment mirroring ──────────────────────────────────────────────
+  it("upserts a payment (by stripe_payment_intent_id) on payment_intent.succeeded", async () => {
+    constructEvent.mockReturnValue({
+      id: "evt_pi",
+      type: "payment_intent.succeeded",
+      api_version: "2026-05-27.dahlia",
+      created: 1_700_000_200,
+      data: {
+        object: {
+          id: "pi_1",
+          customer: "cus_1",
+          amount: 19900,
+          amount_received: 19900,
+          currency: "usd",
+          status: "succeeded",
+          latest_charge: "ch_1",
+          metadata: { invoice_id: "in_1" },
+        },
+      },
+    });
+
+    const res = await POST(makeReq("sig"));
+
+    expect(res.status).toBe(200);
+    expect(paymentUpsert).toHaveBeenCalledTimes(1);
+    const [vals, opts] = paymentUpsert.mock.calls[0];
+    expect(vals).toMatchObject({
+      stripe_payment_intent_id: "pi_1",
+      shop_id: "shop_1",
+      stripe_invoice_id: "in_1",
+      status: "succeeded",
+      amount_received: 19900,
+    });
+    expect(opts).toEqual({ onConflict: "stripe_payment_intent_id" });
   });
 });

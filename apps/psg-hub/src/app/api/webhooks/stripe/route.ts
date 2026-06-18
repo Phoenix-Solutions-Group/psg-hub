@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getStripe, retrieveSubscription } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/service";
+import { idOf, mapInvoiceRow, mapPaymentRow } from "@/lib/billing/stripe-mirror";
 
 // Webhook is signature-verified, not session-authed; it must read the raw body.
 export const runtime = "nodejs";
@@ -168,5 +169,66 @@ async function handleEvent(
       if (error) throw error;
       break;
     }
+
+    // ── PSG-59: Stripe-native invoice mirroring. created→finalized→paid (or
+    // payment_failed) all carry the full Invoice; we upsert by stripe_invoice_id so
+    // any order / redelivery converges to the latest state. Customer is resolved to
+    // a shop via shops.stripe_customer_id; an unmapped customer (e.g. a non-shop
+    // Stripe customer) is a no-op, not an error. ──
+    case "invoice.created":
+    case "invoice.finalized":
+    case "invoice.paid":
+    case "invoice.payment_failed": {
+      const invoice = event.data.object as Stripe.Invoice;
+      if (!invoice.id) break;
+      const shopId = await resolveShopIdByCustomer(
+        supabase,
+        idOf(invoice.customer as string | { id?: string | null } | null)
+      );
+      if (!shopId) break;
+
+      const { error } = await supabase
+        .from("invoices")
+        .upsert(mapInvoiceRow(invoice, shopId), {
+          onConflict: "stripe_invoice_id",
+        });
+      if (error) throw error;
+      break;
+    }
+
+    // ── PSG-59: Stripe-native payment mirroring. Upsert by stripe_payment_intent_id;
+    // the invoice linkage (when present) is set on the row so a shop's invoice detail
+    // can show its settlement attempts. ──
+    case "payment_intent.succeeded":
+    case "payment_intent.payment_failed": {
+      const pi = event.data.object as Stripe.PaymentIntent;
+      const shopId = await resolveShopIdByCustomer(
+        supabase,
+        idOf(pi.customer as string | { id?: string | null } | null)
+      );
+      if (!shopId) break;
+
+      const { error } = await supabase
+        .from("payments")
+        .upsert(mapPaymentRow(pi, shopId), {
+          onConflict: "stripe_payment_intent_id",
+        });
+      if (error) throw error;
+      break;
+    }
   }
+}
+
+/** Resolve the shop that owns a Stripe customer, via shops.stripe_customer_id. */
+async function resolveShopIdByCustomer(
+  supabase: ServiceClient,
+  customerId: string | null
+): Promise<string | null> {
+  if (!customerId) return null;
+  const { data } = await supabase
+    .from("shops")
+    .select("id")
+    .eq("stripe_customer_id", customerId)
+    .maybeSingle();
+  return (data?.id as string | undefined) ?? null;
 }
