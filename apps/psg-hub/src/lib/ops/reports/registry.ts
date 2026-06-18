@@ -406,7 +406,7 @@ const definitions: ReportDefinition[] = [
     ],
     // Still sample-only: rental days/cost + cycle time are RO/insurer-side and
     // have no data source yet (PSG-89 added survey attribution, not rental/cycle).
-    // Tracked by PSG-94. The other 7 survey-CSI reports are live.
+    // Tracked by PSG-96. The other 7 survey-CSI reports are live.
     dataStatus: "pending-data",
     sampleRows: () =>
       build(N, (i) => {
