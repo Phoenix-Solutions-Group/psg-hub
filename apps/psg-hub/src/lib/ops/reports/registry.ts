@@ -84,6 +84,10 @@ const definitions: ReportDefinition[] = [
       })),
   },
   {
+    // PSG-58: "Invoiced" here = repair dollars billed to insurer/customer per RO, NOT the
+    // dropped Invoiced.com billing vendor. This report is decoupled from the Stripe/Invoiced
+    // billing surface; it stays pending-data on the B1 ops tables (repair_orders) — deferred,
+    // no re-point needed.
     slug: "invoicing-recap",
     title: "Monthly Processing Invoicing Recap",
     batch: "volume-invoicing",
