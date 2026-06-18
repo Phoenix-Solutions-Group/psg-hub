@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -14,6 +16,8 @@ import {
   AUDIT_CATEGORY_LABELS,
   auditActionLabel,
   auditCategory,
+  formatPayloadDetail,
+  hasPayloadDetail,
   summarizePayload,
   type AuditCategory,
 } from "@/lib/audit/audit-view";
@@ -43,6 +47,7 @@ const CATEGORIES: (AuditCategory | "all")[] = [
 export function AccessAuditViewer({ entries }: { entries: AuditEntry[] }) {
   const [category, setCategory] = useState<AuditCategory | "all">("all");
   const [query, setQuery] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -56,32 +61,38 @@ export function AccessAuditViewer({ entries }: { entries: AuditEntry[] }) {
     });
   }, [entries, category, query]);
 
+  function toggle(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-1">
           {CATEGORIES.map((c) => (
-            <button
+            <Button
               key={c}
               type="button"
+              size="xs"
+              variant={category === c ? "accent" : "outline"}
+              className="rounded-full"
               onClick={() => setCategory(c)}
-              className={
-                "rounded-full border px-3 py-1 text-xs font-medium transition-colors " +
-                (category === c
-                  ? "border-ember bg-ember/10 text-ember"
-                  : "border-border text-muted-foreground hover:border-ember/50")
-              }
             >
               {c === "all" ? "All" : AUDIT_CATEGORY_LABELS[c]}
-            </button>
+            </Button>
           ))}
         </div>
-        <input
+        <Input
           type="search"
           placeholder="Filter…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="ml-auto w-48 rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+          className="ml-auto w-48"
         />
       </div>
 
@@ -104,25 +115,54 @@ export function AccessAuditViewer({ entries }: { entries: AuditEntry[] }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((e) => (
-                <TableRow key={e.id}>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    {new Date(e.ts).toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{auditActionLabel(e.action)}</Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm">{e.actorName}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {e.targetName ?? "—"}
-                  </TableCell>
-                  <TableCell className="max-w-xs truncate text-xs text-muted-foreground">
-                    {summarizePayload(e.payload) || "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {filtered.map((e) => {
+                const summary = summarizePayload(e.payload) || "—";
+                const drillable = hasPayloadDetail(e.payload);
+                const isOpen = expanded.has(e.id);
+                return [
+                  <TableRow key={e.id}>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {new Date(e.ts).toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{auditActionLabel(e.action)}</Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm">{e.actorName}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {e.targetName ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <span className="max-w-xs truncate" title={summary}>
+                          {summary}
+                        </span>
+                        {drillable && (
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="ghost"
+                            aria-expanded={isOpen}
+                            onClick={() => toggle(e.id)}
+                          >
+                            {isOpen ? "Hide" : "Details"}
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>,
+                  drillable && isOpen ? (
+                    <TableRow key={`${e.id}-detail`}>
+                      <TableCell colSpan={5} className="bg-muted/30">
+                        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-3 text-xs text-foreground">
+                          {formatPayloadDetail(e.payload)}
+                        </pre>
+                      </TableCell>
+                    </TableRow>
+                  ) : null,
+                ];
+              })}
             </TableBody>
           </Table>
         </div>

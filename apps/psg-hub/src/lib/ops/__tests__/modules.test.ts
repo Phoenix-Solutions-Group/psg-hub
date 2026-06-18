@@ -8,6 +8,7 @@ import {
   normalizeDisplayName,
   normalizeModuleSlug,
   roleMatrixFor,
+  roleResolutionHint,
   targetedOverrideCount,
   type GrantRow,
 } from "@/lib/ops/modules";
@@ -81,5 +82,40 @@ describe("roleMatrixFor", () => {
   it("counts only profile/shop overrides for the module", () => {
     expect(targetedOverrideCount("m1", grants)).toBe(1);
     expect(targetedOverrideCount("m2", grants)).toBe(0);
+  });
+});
+
+describe("roleResolutionHint", () => {
+  const visibleNoFloor = { min_tier_slug: null, default_visibility: "visible" as const };
+  const visibleGrowthFloor = { min_tier_slug: "growth" as const, default_visibility: "visible" as const };
+  const hiddenDefault = { min_tier_slug: null, default_visibility: "hidden" as const };
+
+  it("reports explicit allow/deny grants as decisive", () => {
+    expect(roleResolutionHint(visibleNoFloor, "customer", "allow")).toBe("→ visible (role grant)");
+    expect(roleResolutionHint(visibleNoFloor, "customer", "deny")).toBe("→ hidden (role grant)");
+  });
+
+  it("inherit on a customer surfaces the tier floor gate", () => {
+    expect(roleResolutionHint(visibleGrowthFloor, "customer", "inherit")).toBe(
+      "→ visible at tier ≥ growth, else hidden"
+    );
+  });
+
+  it("inherit on staff roles skips the tier floor (default decides)", () => {
+    expect(roleResolutionHint(visibleGrowthFloor, "psg_internal", "inherit")).toBe(
+      "→ visible (default)"
+    );
+    expect(roleResolutionHint(visibleGrowthFloor, "psg_superadmin", "inherit")).toBe(
+      "→ visible (default)"
+    );
+  });
+
+  it("inherit with a hidden default resolves hidden regardless of floor/role", () => {
+    expect(roleResolutionHint(hiddenDefault, "customer", "inherit")).toBe("→ hidden (default)");
+    expect(roleResolutionHint(hiddenDefault, "psg_internal", "inherit")).toBe("→ hidden (default)");
+  });
+
+  it("inherit, customer, no floor, visible default → plain default", () => {
+    expect(roleResolutionHint(visibleNoFloor, "customer", "inherit")).toBe("→ visible (default)");
   });
 });

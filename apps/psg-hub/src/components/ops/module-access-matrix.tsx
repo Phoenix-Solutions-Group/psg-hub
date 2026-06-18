@@ -12,6 +12,7 @@ import {
   MODULE_AUDIENCE_LABELS,
   MODULE_TIERS,
   roleMatrixFor,
+  roleResolutionHint,
   targetedOverrideCount,
   type GrantRole,
   type GrantRow,
@@ -29,6 +30,17 @@ const TRI: { value: RoleEffect; label: string }[] = [
   { value: "allow", label: "Allow" },
   { value: "deny", label: "Deny" },
 ];
+
+// Per-effect Button variant so allow/deny are readable at a glance, not just by
+// the word (PSG-88 P1). Deny gets the destructive (red) treatment, Allow the
+// accent (ember) treatment, and Inherit a quiet neutral — inactive cells are
+// plain outlines. Previously every active cell was `default`, making the two
+// opposite semantics visually identical.
+const ACTIVE_VARIANT: Record<RoleEffect, "secondary" | "accent" | "destructive"> = {
+  inherit: "secondary",
+  allow: "accent",
+  deny: "destructive",
+};
 
 export function ModuleAccessMatrix({
   modules,
@@ -252,28 +264,43 @@ function ModuleCard({ module, grants }: { module: ModuleRow; grants: GrantRow[] 
       </div>
 
       <div className="mt-3 space-y-2">
-        {GRANT_ROLES.map((role) => (
-          <div key={role} className="flex items-center justify-between gap-3">
-            <span className="text-sm">{GRANT_ROLE_LABELS[role]}</span>
-            <div className="flex gap-1">
-              {TRI.map((opt) => {
-                const active = matrix[role] === opt.value;
-                return (
-                  <Button
-                    key={opt.value}
-                    type="button"
-                    size="sm"
-                    variant={active ? "default" : "outline"}
-                    disabled={busyRole === role}
-                    onClick={() => !active && setRole(role, opt.value)}
-                  >
-                    {opt.label}
-                  </Button>
-                );
-              })}
+        {GRANT_ROLES.map((role) => {
+          const effect = matrix[role];
+          const busy = busyRole === role;
+          return (
+            <div key={role} className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-sm">{GRANT_ROLE_LABELS[role]}</span>
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {roleResolutionHint(module, role, effect)}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                {busy && (
+                  <span
+                    className="mr-1 size-3 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"
+                    aria-hidden
+                  />
+                )}
+                {TRI.map((opt) => {
+                  const active = effect === opt.value;
+                  return (
+                    <Button
+                      key={opt.value}
+                      type="button"
+                      size="sm"
+                      variant={active ? ACTIVE_VARIANT[opt.value] : "outline"}
+                      disabled={busy}
+                      onClick={() => !active && setRole(role, opt.value)}
+                    >
+                      {opt.label}
+                    </Button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {overrides > 0 && (
