@@ -202,6 +202,11 @@ export function AdsMutationStudio({ previews, sandboxEnabled }: Props) {
   const targetMissing = targetRef.trim() === "";
   const highRisk = selected?.governance.requiresApproval ?? false;
   const approvalMissing = highRisk && approvalId.trim() === "";
+  // PSG-126: a real board confirmation is a UUID; warn before the server rejects free text.
+  const approvalShapeInvalid =
+    highRisk &&
+    approvalId.trim() !== "" &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(approvalId.trim());
 
   return (
     <div className="grid gap-6 lg:grid-cols-[18rem_1fr]">
@@ -283,15 +288,20 @@ export function AdsMutationStudio({ previews, sandboxEnabled }: Props) {
                 This is a high-risk mutation (direct spend / bidding / measurement or live-publishing
                 impact). A superadmin/board approval ref is required before it can be executed.
               </p>
-              <Label htmlFor="approval-id">Approval ref</Label>
+              <Label htmlFor="approval-id">Board confirmation ID (UUID)</Label>
               <Input
                 id="approval-id"
                 value={approvalId}
                 onChange={(e) => setApprovalId(e.target.value)}
-                placeholder="approval-id"
-                aria-invalid={approvalMissing}
+                placeholder="00000000-0000-0000-0000-000000000000"
+                aria-invalid={approvalMissing || approvalShapeInvalid}
                 className="max-w-xs font-mono"
               />
+              {approvalShapeInvalid && (
+                <p className="text-xs text-destructive">
+                  Must be the accepted board-confirmation UUID — free-text refs are rejected.
+                </p>
+              )}
             </div>
           )}
 
@@ -319,7 +329,13 @@ export function AdsMutationStudio({ previews, sandboxEnabled }: Props) {
                 type="button"
                 variant="accent"
                 size="sm"
-                disabled={!sandboxEnabled || targetMissing || approvalMissing || liveBusy !== null}
+                disabled={
+                  !sandboxEnabled ||
+                  targetMissing ||
+                  approvalMissing ||
+                  approvalShapeInvalid ||
+                  liveBusy !== null
+                }
                 onClick={() => runLive("execute")}
               >
                 {liveBusy === "execute" ? "Executing…" : "Execute"}
