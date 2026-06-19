@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
 import { MUTATION_REGISTRY } from "@/lib/ads-mutations/registry";
 import { buildAllPreviews } from "@/lib/ads-mutations/preview";
-import { isSandboxEnabled } from "@/lib/ads-mutations/bridge";
+import { getSmokeTargetOverrides, isSandboxEnabled } from "@/lib/ads-mutations/bridge";
 import { AdsMutationStudio } from "@/components/ops/ads-mutation-studio";
 
 // v1.2 / PSG-26a + PSG-26d — Ads Mutation Studio.
@@ -24,7 +24,12 @@ export default async function AdsMutationsPage() {
     notFound();
   }
 
-  const previews = buildAllPreviews(MUTATION_REGISTRY.map((m) => m.key));
+  // Seed the live-run default target from the operator-configured smoke CID/container when
+  // set (PSG-120 Residual A), so a dry-run isn't stuck on the demo id Google Ads rejects.
+  const previews = buildAllPreviews(
+    MUTATION_REGISTRY.map((m) => m.key),
+    getSmokeTargetOverrides()
+  );
 
   return (
     <div className="space-y-6">

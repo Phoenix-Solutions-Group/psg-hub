@@ -123,11 +123,23 @@ export interface DryRunPreview {
 }
 
 /**
+ * Per-platform live-run smoke target override, keyed by TargetKind. When set (by the
+ * operator via env, see bridge.getSmokeTargetOverrides), the preview's `targetRef` — which
+ * seeds the studio's live-run target field — uses the override instead of the fixture's
+ * DEMO id, so a live dry-run can hit a real Google Ads test account (PSG-120 Residual A).
+ * The locally-computed "expected diff" is unaffected (it never reads the target value).
+ */
+export type SmokeTargetOverrides = Partial<Record<MutationDef["target"]["kind"], string>>;
+
+/**
  * Build the build-local dry-run preview for one mutation from its fixture.
  * Throws if the key is unknown or has no fixture (a registry/fixture drift bug —
  * the tests assert full coverage so this never fires in practice).
  */
-export function buildDryRunPreview(mutationKey: string): DryRunPreview {
+export function buildDryRunPreview(
+  mutationKey: string,
+  overrides?: SmokeTargetOverrides
+): DryRunPreview {
   const def = getMutation(mutationKey);
   if (!def) throw new Error(`Unknown mutation key: ${mutationKey}`);
   const fixture = getFixture(mutationKey);
@@ -137,23 +149,29 @@ export function buildDryRunPreview(mutationKey: string): DryRunPreview {
   const after = fixture.apply(before, fixture.params);
   const changes = diffJson(before, after);
 
+  const override = overrides?.[def.target.kind]?.trim();
+  const targetRef = override && override !== "" ? override : fixture.targetRef;
+
   return {
     mutationKey,
     def,
-    targetRef: fixture.targetRef,
+    targetRef,
     params: fixture.params,
     diff: { before, requestedChanges: fixture.params, after },
     changes,
     governance: {
       targetRequired: true,
       targetKind: def.target.kind,
-      targetProvided: Boolean(fixture.targetRef && fixture.targetRef.trim() !== ""),
+      targetProvided: Boolean(targetRef && targetRef.trim() !== ""),
       requiresApproval: requiresSuperadminApproval(def),
     },
   };
 }
 
 /** Preview every registered mutation (server-side; plain data is safe to pass to the client). */
-export function buildAllPreviews(keys: readonly string[]): DryRunPreview[] {
-  return keys.map(buildDryRunPreview);
+export function buildAllPreviews(
+  keys: readonly string[],
+  overrides?: SmokeTargetOverrides
+): DryRunPreview[] {
+  return keys.map((key) => buildDryRunPreview(key, overrides));
 }

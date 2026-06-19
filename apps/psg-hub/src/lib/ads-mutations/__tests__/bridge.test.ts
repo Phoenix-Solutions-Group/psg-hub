@@ -6,6 +6,7 @@ import {
   VercelSandboxBridge,
   extractRunnerJson,
   getBridge,
+  getSmokeTargetOverrides,
   isSandboxEnabled,
   RESULT_BEGIN,
   RESULT_END,
@@ -90,6 +91,33 @@ describe("isSandboxEnabled / getBridge gating", () => {
     process.env.ADS_MUTATIONS_SANDBOX_ENABLED = "1";
     expect(isSandboxEnabled()).toBe(false);
     expect(getBridge()).toBeInstanceOf(DisabledBridge);
+  });
+});
+
+describe("getSmokeTargetOverrides", () => {
+  it("returns an empty object when neither smoke env is set", () => {
+    expect(getSmokeTargetOverrides({})).toEqual({});
+  });
+
+  it("maps the configured Google Ads + GTM smoke targets to their TargetKind", () => {
+    expect(
+      getSmokeTargetOverrides({
+        ADS_MUTATIONS_SMOKE_CUSTOMER_ID: "788-123-4567",
+        ADS_MUTATIONS_SMOKE_GTM_CONTAINER_ID: "GTM-TEST99",
+      })
+    ).toEqual({
+      google_ads_customer_id: "788-123-4567",
+      gtm_container_id: "GTM-TEST99",
+    });
+  });
+
+  it("ignores blank/whitespace-only values and trims real ones", () => {
+    expect(
+      getSmokeTargetOverrides({
+        ADS_MUTATIONS_SMOKE_CUSTOMER_ID: "  ",
+        ADS_MUTATIONS_SMOKE_GTM_CONTAINER_ID: "  GTM-X1 ",
+      })
+    ).toEqual({ gtm_container_id: "GTM-X1" });
   });
 });
 
@@ -250,13 +278,61 @@ describe("VercelSandboxBridge error paths", () => {
     }
   });
 
-  it("never mirrors a log when the runner failed", async () => {
-    const stdout = frame({ ok: false, error: "x" });
+  // PSG-120 Residual B: the sandbox ran (it produced the parsed error), so the failure must
+  // carry sandboxId + a mirrored logs path so jobs.ts persists both columns (they were null).
+  // This supersedes PSG-121's "logs stay success-only" stance — the issue explicitly asks
+  // for a durable failure log whenever the sandbox produced output.
+  it("mirrors the error payload and attaches sandboxId + logsStoragePath on the runner-error path", async () => {
+    const stdout = frame({
+      ok: false,
+      errorType: "GoogleAdsException",
+      error: "Invalid customer ID '412-555-0142'",
+    });
     const { transport } = makeTransport({ stdout, stderr: "", exitCode: 1, sandboxId: "sbx-n" });
-    const { mirror, calls } = recordingMirror("p");
+    const { mirror, calls } = recordingMirror("412-555-0142/sbx-n-dry_run-x.json");
     const bridge = new VercelSandboxBridge({ transport, mirror });
-    await expect(bridge.dryRun(baseReq)).rejects.toBeInstanceOf(RunnerError);
-    expect(calls).toHaveLength(0);
+
+    const err = (await bridge.dryRun(baseReq).catch((e) => e)) as RunnerError;
+    expect(err).toBeInstanceOf(RunnerError);
+    expect(err.sandboxId).toBe("sbx-n");
+    expect(err.logsStoragePath).toBe("412-555-0142/sbx-n-dry_run-x.json");
+
+    // The error payload itself was mirrored (the runner emits no audit `log` on failure).
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ sandboxId: "sbx-n", mode: "dry_run" });
+    expect((calls[0] as { log: { errorType?: string } }).log).toMatchObject({
+      kind: "runner_error",
+      errorType: "GoogleAdsException",
+    });
+  });
+
+  it("attaches sandboxId + logsStoragePath on the unparseable-output path too", async () => {
+    const { transport } = makeTransport({
+      stdout: "Traceback (most recent call last): kaboom",
+      stderr: "fatal",
+      exitCode: 1,
+      sandboxId: "sbx-u2",
+    });
+    const { mirror, calls } = recordingMirror("unknown/sbx-u2.json");
+    const bridge = new VercelSandboxBridge({ transport, mirror });
+
+    const err = (await bridge.dryRun(baseReq).catch((e) => e)) as RunnerError;
+    expect(err).toBeInstanceOf(RunnerError);
+    expect(err.sandboxId).toBe("sbx-u2");
+    expect(err.logsStoragePath).toBe("unknown/sbx-u2.json");
+    expect((calls[0] as { log: { kind?: string } }).log).toMatchObject({
+      kind: "unparseable_runner_output",
+    });
+  });
+
+  it("still throws (with null logs path) when the failure-path mirror itself fails", async () => {
+    const stdout = frame({ ok: false, error: "x" });
+    const { transport } = makeTransport({ stdout, stderr: "", exitCode: 1, sandboxId: "sbx-mf" });
+    const bridge = new VercelSandboxBridge({ transport, mirror: recordingMirror(undefined).mirror });
+    const err = (await bridge.dryRun(baseReq).catch((e) => e)) as RunnerError;
+    expect(err).toBeInstanceOf(RunnerError);
+    expect(err.sandboxId).toBe("sbx-mf");
+    expect(err.logsStoragePath).toBeUndefined();
   });
 
   it("tolerates a log-mirror failure (undefined path) without failing the mutation", async () => {

@@ -20,6 +20,10 @@
 #     ADS_MUTATIONS_APP_DIR=apps/psg-ads-mutations # optional (default)
 #     ADS_MUTATIONS_SANDBOX_TIMEOUT_MS=600000      # optional (default)
 #     GOOGLE_ADS_USE_PROTO_PLUS=true               # recommended config, not a secret
+#     ADS_MUTATIONS_SMOKE_CUSTOMER_ID=<test CID>   # optional (PSG-120) — live-run default
+#     ADS_MUTATIONS_SMOKE_GTM_CONTAINER_ID=GTM-... # optional (PSG-120) — live-run default
+#       via --smoke-customer-id / --smoke-gtm-container; point at a Google Ads TEST account
+#       so the dry-run smoke is valid (the demo fixture CID 412-555-0142 is INVALID_CUSTOMER_ID).
 #   Secret (operator-minted, read from --secrets-file, NEVER echoed or committed):
 #     GOOGLE_ADS_DEVELOPER_TOKEN
 #     GOOGLE_ADS_CLIENT_ID
@@ -74,6 +78,13 @@ declare -A NONSECRET_VALUES=(
   ["ADS_MUTATIONS_SANDBOX_TIMEOUT_MS"]="600000"
   ["GOOGLE_ADS_USE_PROTO_PLUS"]="true"
 )
+# Optional live-run smoke targets (PSG-120 Residual A). When provided via
+# --smoke-customer-id / --smoke-gtm-container, the studio seeds its default live-run target
+# from these instead of the demo fixture CID Google Ads rejects (bridge.getSmokeTargetOverrides).
+# Set them to a Google Ads TEST-account CID + a test GTM container so the dry-run smoke is
+# valid, repeatable, and side-effect-free.
+SMOKE_CUSTOMER_ID=""
+SMOKE_GTM_CONTAINER=""
 SECRET_KEYS=(
   "GOOGLE_ADS_DEVELOPER_TOKEN"
   "GOOGLE_ADS_CLIENT_ID"
@@ -89,6 +100,8 @@ while [[ $# -gt 0 ]]; do
     --secrets-file) SECRETS_FILE="$2"; shift 2 ;;
     --targets)      TARGETS="$2"; shift 2 ;;
     --repo-url)     NONSECRET_VALUES["ADS_MUTATIONS_REPO_URL"]="$2"; shift 2 ;;
+    --smoke-customer-id)  SMOKE_CUSTOMER_ID="$2"; shift 2 ;;
+    --smoke-gtm-container) SMOKE_GTM_CONTAINER="$2"; shift 2 ;;
     --dry-run)      DRY_RUN=1; shift ;;
     --link)         DO_LINK=1; shift ;;
     -h|--help)      grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -97,6 +110,17 @@ while [[ $# -gt 0 ]]; do
 done
 
 die() { echo "ERROR: $*" >&2; exit 1; }
+
+# Register the optional smoke targets only when supplied, so an absent flag leaves the
+# studio on its fixture fallback rather than writing an empty env var.
+if [[ -n "$SMOKE_CUSTOMER_ID" ]]; then
+  NONSECRET_KEYS+=("ADS_MUTATIONS_SMOKE_CUSTOMER_ID")
+  NONSECRET_VALUES["ADS_MUTATIONS_SMOKE_CUSTOMER_ID"]="$SMOKE_CUSTOMER_ID"
+fi
+if [[ -n "$SMOKE_GTM_CONTAINER" ]]; then
+  NONSECRET_KEYS+=("ADS_MUTATIONS_SMOKE_GTM_CONTAINER_ID")
+  NONSECRET_VALUES["ADS_MUTATIONS_SMOKE_GTM_CONTAINER_ID"]="$SMOKE_GTM_CONTAINER"
+fi
 
 # ----- preflight --------------------------------------------------------------
 [[ -n "${VERCEL_TOKEN:-}" ]] || die "VERCEL_TOKEN not set — operator must drop a scoped token first (PSG-102 prereq)."

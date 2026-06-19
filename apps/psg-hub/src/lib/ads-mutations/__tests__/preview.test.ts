@@ -114,3 +114,37 @@ describe("buildDryRunPreview", () => {
     expect(() => buildDryRunPreview("nope.nope")).toThrow(/Unknown mutation key/);
   });
 });
+
+// PSG-120 Residual A: the smoke target override re-seeds targetRef per platform so the
+// live-run default isn't stuck on the demo CID Google Ads rejects.
+describe("smoke target override", () => {
+  it("uses the override targetRef for the matching platform, leaving the diff untouched", () => {
+    const overrides = {
+      google_ads_customer_id: "788-123-4567",
+      gtm_container_id: "GTM-TEST99",
+    };
+    const ga = buildDryRunPreview("google_ads.negative_keywords", overrides);
+    expect(ga.targetRef).toBe("788-123-4567");
+    expect(ga.governance.targetProvided).toBe(true);
+    // The locally-computed diff never reads the target value, so it is unchanged.
+    expect(ga.diff).toEqual(buildDryRunPreview("google_ads.negative_keywords").diff);
+
+    const gtm = buildDryRunPreview("gtm.tag_paused", overrides);
+    expect(gtm.targetRef).toBe("GTM-TEST99");
+  });
+
+  it("falls back to the fixture target when no override is set for that platform", () => {
+    const onlyGtm = { gtm_container_id: "GTM-TEST99" };
+    const ga = buildDryRunPreview("google_ads.negative_keywords", onlyGtm);
+    expect(ga.targetRef).toBe(getFixture("google_ads.negative_keywords")!.targetRef);
+  });
+
+  it("applies overrides across every preview via buildAllPreviews", () => {
+    const previews = buildAllPreviews(ALL_KEYS, { google_ads_customer_id: "999-000-1111" });
+    for (const p of previews) {
+      if (p.def.target.kind === "google_ads_customer_id") {
+        expect(p.targetRef).toBe("999-000-1111");
+      }
+    }
+  });
+});

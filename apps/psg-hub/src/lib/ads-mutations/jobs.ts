@@ -98,15 +98,18 @@ export async function recordAndRun(
     return { ...result, jobId };
   } catch (err) {
     const gated = err instanceof SandboxGatedError;
-    // The transport attaches sandboxId to errors thrown after Sandbox.create succeeds, so
-    // a failed job still points at the sandbox whose logs explain it (PSG-119).
+    // The transport/bridge attach sandboxId (and the mirrored logs path) to errors thrown
+    // after the sandbox ran, so a failed job still points at the sandbox + logs that explain
+    // it (PSG-119 sandbox_id; PSG-120 Residual B logs_storage_path — both were null before).
     const sandboxId = (err as { sandboxId?: string } | null)?.sandboxId;
+    const logsStoragePath = (err as { logsStoragePath?: string } | null)?.logsStoragePath;
     await service
       .from("python_worker_jobs")
       .update({
         status: gated ? "cancelled" : "failed",
         error: err instanceof Error ? err.message : String(err),
         sandbox_id: sandboxId ?? null,
+        logs_storage_path: logsStoragePath ?? null,
         finished_at: new Date().toISOString(),
       })
       .eq("id", jobId);

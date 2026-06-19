@@ -49,9 +49,15 @@ export class RunnerError extends Error {
    * The sandbox that produced this failure, when the runner actually ran (i.e. the
    * failure is a runner non-zero exit / GoogleAdsException, not a provisioning 400).
    * Surfaced at the top level so `jobs.ts` persists `sandbox_id` on the failed row and
-   * the run stays traceable to its sandbox logs (PSG-121, extends PSG-119).
+   * the run stays traceable to its sandbox logs (PSG-119/PSG-121).
    */
   readonly sandboxId?: string;
+  /**
+   * Storage path of the mirrored failure log, surfaced so `jobs.ts` persists
+   * `python_worker_jobs.logs_storage_path` on the failure path too (PSG-120 Residual B):
+   * a sandbox that produced output should leave an inspectable log regardless of outcome.
+   */
+  readonly logsStoragePath?: string;
   constructor(
     message: string,
     readonly detail?: {
@@ -59,11 +65,13 @@ export class RunnerError extends Error {
       stderr?: string;
       exitCode?: number;
       sandboxId?: string;
+      logsStoragePath?: string;
     }
   ) {
     super(message);
     this.name = "RunnerError";
     this.sandboxId = detail?.sandboxId;
+    this.logsStoragePath = detail?.logsStoragePath;
   }
 }
 
@@ -80,6 +88,33 @@ export class DisabledBridge implements PythonWorkerBridge {
 /** Feature flag: the Vercel Sandbox bridge is only live once the board enables it. */
 export function isSandboxEnabled(): boolean {
   return process.env.ADS_MUTATIONS_SANDBOX_ENABLED === "true";
+}
+
+/** Default live-run smoke target per platform, keyed by the registry's TargetKind. */
+export type SmokeTargetOverrides = {
+  google_ads_customer_id?: string;
+  gtm_container_id?: string;
+};
+
+/**
+ * Resolve the operator-configured smoke target(s) for the studio's live-run default.
+ *
+ * The fixtures bake a DEMO customer id (`412-555-0142`) that Google Ads rejects as
+ * `INVALID_CUSTOMER_ID`, so a dry-run seeded from the fixture can never reach
+ * `status=succeeded` (PSG-120 Residual A). These env vars let the operator point the
+ * studio's default target at a real Google Ads **test account** CID (and GTM container)
+ * WITHOUT a code change, so the smoke is valid, repeatable, and side-effect-free. When
+ * unset, the studio falls back to the fixture target (today's behaviour).
+ */
+export function getSmokeTargetOverrides(
+  env: Record<string, string | undefined> = process.env
+): SmokeTargetOverrides {
+  const overrides: SmokeTargetOverrides = {};
+  const cid = env.ADS_MUTATIONS_SMOKE_CUSTOMER_ID?.trim();
+  const gtm = env.ADS_MUTATIONS_SMOKE_GTM_CONTAINER_ID?.trim();
+  if (cid) overrides.google_ads_customer_id = cid;
+  if (gtm) overrides.gtm_container_id = gtm;
+  return overrides;
 }
 
 // ── Sandbox transport seam ────────────────────────────────────────────────────
@@ -196,6 +231,26 @@ export class VercelSandboxBridge implements PythonWorkerBridge {
     return this.mirror;
   }
 
+  /**
+   * Mirror a runner log/error payload to durable storage and return its path. Best-effort:
+   * a mirror failure (or a missing mirror module) must never mask the real run outcome, so
+   * any error degrades to `undefined` (a null logs path) rather than throwing. Used on both
+   * the success path and the failure paths (PSG-120 Residual B).
+   */
+  private async mirrorLog(
+    targetRef: string,
+    sandboxId: string,
+    mode: MutationMode,
+    log: unknown
+  ): Promise<string | undefined> {
+    try {
+      const mirror = await this.getMirror();
+      return await mirror.store({ targetRef, sandboxId, mode, log });
+    } catch {
+      return undefined;
+    }
+  }
+
   private async run(
     req: MutationRequest,
     mode: MutationMode
@@ -215,18 +270,45 @@ export class VercelSandboxBridge implements PythonWorkerBridge {
     const transport = await this.getTransport();
     const res = await transport.run(spec);
 
+    // The transport only returns (vs. throws) once a sandbox was provisioned AND the runner
+    // ran end-to-end, so `res.sandboxId` is populated and the stdout/stderr are worth
+    // persisting on EVERY branch below — including the failure ones. Mirror a log and carry
+    // `sandboxId` + `logsStoragePath` onto any thrown RunnerError so the failed job row is
+    // self-diagnosing (PSG-120 Residual B: failures were saved with both columns null).
     let parsed: RunnerOutput;
     try {
       parsed = JSON.parse(extractRunnerJson(res.stdout)) as RunnerOutput;
     } catch {
+      const logsStoragePath = await this.mirrorLog(req.targetRef, res.sandboxId, mode, {
+        kind: "unparseable_runner_output",
+        exitCode: res.exitCode,
+        stdoutTail: res.stdout.slice(-2000),
+        stderrTail: res.stderr.slice(-2000),
+      });
       const tail = (res.stderr || res.stdout || "").slice(-600);
       throw new RunnerError(
         `Ads mutation runner produced unparseable output (exit ${res.exitCode}). Tail: ${tail}`,
-        { exitCode: res.exitCode, stderr: res.stderr, sandboxId: res.sandboxId }
+        { exitCode: res.exitCode, stderr: res.stderr, sandboxId: res.sandboxId, logsStoragePath }
       );
     }
 
     if (res.exitCode !== 0 || !parsed.ok) {
+      // On the runner-structured-error path (e.g. a GoogleAdsException) the runner emits no
+      // audit `log`, so mirror the error payload itself — operators still get a durable,
+      // inspectable record of the failed sandbox run.
+      const logsStoragePath = await this.mirrorLog(
+        req.targetRef,
+        res.sandboxId,
+        mode,
+        parsed.log ?? {
+          kind: "runner_error",
+          ok: parsed.ok,
+          errorType: parsed.errorType,
+          error: parsed.error,
+          exitCode: res.exitCode,
+          stderrTail: res.stderr.slice(-2000),
+        }
+      );
       throw new RunnerError(
         `Ads mutation runner failed [${parsed.errorType ?? "error"}]: ${
           parsed.error ?? res.stderr ?? "unknown error"
@@ -236,19 +318,14 @@ export class VercelSandboxBridge implements PythonWorkerBridge {
           stderr: res.stderr,
           exitCode: res.exitCode,
           sandboxId: res.sandboxId,
+          logsStoragePath,
         }
       );
     }
 
     let logsStoragePath: string | undefined;
     if (parsed.log !== undefined && parsed.log !== null) {
-      const mirror = await this.getMirror();
-      logsStoragePath = await mirror.store({
-        targetRef: req.targetRef,
-        sandboxId: res.sandboxId,
-        mode,
-        log: parsed.log,
-      });
+      logsStoragePath = await this.mirrorLog(req.targetRef, res.sandboxId, mode, parsed.log);
     }
 
     // jobId is overwritten by jobs.ts with the python_worker_jobs row id; sandboxId is
