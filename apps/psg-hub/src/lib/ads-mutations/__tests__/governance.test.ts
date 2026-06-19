@@ -3,16 +3,21 @@ import {
   validateMutationRequest,
   assertMutationAllowed,
   GovernanceError,
+  isUuid,
+  parseApprovalAllowlist,
 } from "@/lib/ads-mutations/governance";
 import { DisabledBridge, SandboxGatedError, isSandboxEnabled } from "@/lib/ads-mutations/bridge";
 import type { MutationRequest } from "@/lib/ads-mutations/types";
+
+// A real board-confirmation UUID shape (PSG-126: free-text refs are no longer accepted).
+const APPROVAL_UUID = "8b576490-f30a-48d8-b360-2a443bf2713e";
 
 const validHighRisk: MutationRequest = {
   mutationKey: "google_ads.campaign_bidding",
   mode: "execute",
   targetRef: "6048611995",
   params: { changes: [{ campaign_id: 1, strategy: "TARGET_CPA" }] },
-  approvalId: "appr_123",
+  approvalId: APPROVAL_UUID,
 };
 
 describe("validateMutationRequest", () => {
@@ -63,6 +68,75 @@ describe("validateMutationRequest", () => {
     expect(() => assertMutationAllowed({ ...validHighRisk, targetRef: "" })).toThrow(
       GovernanceError
     );
+  });
+
+  // ── PSG-126: execute approvalId must be a real board-confirmation UUID ──────────
+  it("rejects a fabricated free-text approvalId for high-risk execute", () => {
+    const r = validateMutationRequest({ ...validHighRisk, approvalId: "board-card-8b576490" });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/must be a board-confirmation UUID/);
+  });
+
+  it("rejects a non-UUID approvalId even if non-empty (old behavior was to pass)", () => {
+    const r = validateMutationRequest({ ...validHighRisk, approvalId: "appr_123" });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/must be a board-confirmation UUID/);
+  });
+
+  it("accepts a UUID approvalId when no allowlist is configured (shape gate only)", () => {
+    expect(validateMutationRequest({ ...validHighRisk }).ok).toBe(true);
+  });
+
+  it("accepts a UUID approvalId that is on the accepted-approval allowlist", () => {
+    const r = validateMutationRequest(validHighRisk, { approvalAllowlist: [APPROVAL_UUID] });
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects a UUID approvalId that is NOT on a configured allowlist (fail-closed)", () => {
+    const other = "11111111-2222-3333-4444-555555555555";
+    const r = validateMutationRequest(
+      { ...validHighRisk, approvalId: other },
+      { approvalAllowlist: [APPROVAL_UUID] }
+    );
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/does not match an accepted board confirmation/);
+  });
+
+  it("allowlist match is case-insensitive", () => {
+    const r = validateMutationRequest(
+      { ...validHighRisk, approvalId: APPROVAL_UUID.toUpperCase() },
+      { approvalAllowlist: [APPROVAL_UUID] }
+    );
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe("isUuid", () => {
+  it("accepts a well-formed UUID", () => {
+    expect(isUuid("8b576490-f30a-48d8-b360-2a443bf2713e")).toBe(true);
+  });
+  it("rejects free text and malformed UUIDs", () => {
+    expect(isUuid("board-card-8b576490")).toBe(false);
+    expect(isUuid("appr_123")).toBe(false);
+    expect(isUuid("")).toBe(false);
+    expect(isUuid("8b576490-f30a-48d8-b360")).toBe(false);
+  });
+});
+
+describe("parseApprovalAllowlist", () => {
+  it("returns [] for empty/undefined", () => {
+    expect(parseApprovalAllowlist(undefined)).toEqual([]);
+    expect(parseApprovalAllowlist("")).toEqual([]);
+  });
+  it("parses comma/space/newline separated UUIDs and lowercases them", () => {
+    const raw = "8B576490-F30A-48D8-B360-2A443BF2713E, 11111111-2222-3333-4444-555555555555";
+    expect(parseApprovalAllowlist(raw)).toEqual([
+      "8b576490-f30a-48d8-b360-2a443bf2713e",
+      "11111111-2222-3333-4444-555555555555",
+    ]);
+  });
+  it("drops non-UUID entries so malformed env can never authorize", () => {
+    expect(parseApprovalAllowlist("board-card-1, , appr_2")).toEqual([]);
   });
 });
 

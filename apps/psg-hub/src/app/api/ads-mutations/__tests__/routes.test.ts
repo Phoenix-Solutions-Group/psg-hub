@@ -49,7 +49,10 @@ beforeEach(() => {
   opsGate = { ok: true, userId: "user-1", access: {} };
   serviceMock = makeServiceMock();
   delete process.env.ADS_MUTATIONS_SANDBOX_ENABLED;
+  delete process.env.ADS_MUTATIONS_APPROVAL_ALLOWLIST;
 });
+
+const APPROVAL_UUID = "8b576490-f30a-48d8-b360-2a443bf2713e";
 
 describe("GET /api/ads-mutations/registry", () => {
   it("returns the full catalog with sandbox disabled by default", async () => {
@@ -120,6 +123,52 @@ describe("POST /api/ads-mutations/execute", () => {
     expect(res.status).toBe(422);
     const json = await res.json();
     expect(JSON.stringify(json.errors)).toContain("high-risk");
+  });
+
+  // ── PSG-126: high-risk execute approvalId must be a real board confirmation ──────
+  it("422s a high-risk execute with a fabricated free-text approvalId", async () => {
+    const res = await execute(
+      postReq("/api/ads-mutations/execute", {
+        mutationKey: "google_ads.campaign_bidding", // high-risk
+        targetRef: "123-456-7890",
+        params: { changes: [{ campaign_id: 1, strategy: "MAXIMIZE_CONVERSIONS" }] },
+        approvalId: "board-card-8b576490", // not a UUID
+      })
+    );
+    expect(res.status).toBe(422);
+    const json = await res.json();
+    expect(JSON.stringify(json.errors)).toContain("board-confirmation UUID");
+  });
+
+  it("422s a high-risk execute when approvalId is not on a configured allowlist", async () => {
+    process.env.ADS_MUTATIONS_APPROVAL_ALLOWLIST = APPROVAL_UUID;
+    const res = await execute(
+      postReq("/api/ads-mutations/execute", {
+        mutationKey: "google_ads.campaign_bidding",
+        targetRef: "123-456-7890",
+        params: { changes: [{ campaign_id: 1, strategy: "MAXIMIZE_CONVERSIONS" }] },
+        approvalId: "11111111-2222-3333-4444-555555555555", // valid shape, not allowlisted
+      })
+    );
+    expect(res.status).toBe(422);
+    const json = await res.json();
+    expect(JSON.stringify(json.errors)).toContain("accepted board confirmation");
+  });
+
+  it("lets an allowlisted approvalId past governance (503 gated at the Sandbox boundary)", async () => {
+    process.env.ADS_MUTATIONS_APPROVAL_ALLOWLIST = APPROVAL_UUID;
+    const res = await execute(
+      postReq("/api/ads-mutations/execute", {
+        mutationKey: "google_ads.campaign_bidding",
+        targetRef: "123-456-7890",
+        params: { changes: [{ campaign_id: 1, strategy: "MAXIMIZE_CONVERSIONS" }] },
+        approvalId: APPROVAL_UUID,
+      })
+    );
+    // Passes governance + rate-limit, then fails closed at the disabled Sandbox.
+    expect(res.status).toBe(503);
+    const json = await res.json();
+    expect(json.gated).toBe(true);
   });
 
   it("503 `gated` for a permitted low-risk execute while the Sandbox is disabled", async () => {

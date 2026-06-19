@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireOpsFn } from "@/lib/auth/ops-access";
 import { mutationBodySchema } from "@/lib/ads-mutations/validation";
-import { validateMutationRequest } from "@/lib/ads-mutations/governance";
+import { validateMutationRequest, parseApprovalAllowlist } from "@/lib/ads-mutations/governance";
 import { recordAndRun } from "@/lib/ads-mutations/jobs";
 import { SandboxGatedError } from "@/lib/ads-mutations/bridge";
 import { assertWithinMutationLimits, MutationRateLimitError } from "@/lib/ads-mutations/rate-limit";
@@ -45,7 +45,11 @@ export async function POST(request: NextRequest) {
     approvalId: parsed.data.approvalId,
   };
 
-  const governance = validateMutationRequest(req);
+  // PSG-126: resolve the execute approvalId against the operator/board-controlled
+  // accepted-approval allowlist (Vercel env). The in-UI superadmin cannot edit this,
+  // so a genuine board confirmation is required — not arbitrary free text.
+  const approvalAllowlist = parseApprovalAllowlist(process.env.ADS_MUTATIONS_APPROVAL_ALLOWLIST);
+  const governance = validateMutationRequest(req, { approvalAllowlist });
   if (!governance.ok) {
     return NextResponse.json(
       { error: "Governance failed", errors: governance.errors },
