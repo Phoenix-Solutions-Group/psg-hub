@@ -57,6 +57,32 @@ function forwardedEnv(): Record<string, string> {
   return env;
 }
 
+/**
+ * @vercel/sandbox clones the git source into the sandbox's working directory, which is
+ * `/vercel/sandbox` by default. A command's default cwd is that clone root — which is why
+ * `pip install -e apps/psg-ads-mutations` (a relative *positional arg* resolved against the
+ * process cwd) succeeds. But `runCommand({ cwd })` is NOT resolved against the clone root:
+ * a bare relative `cwd` makes the SDK `chdir` from `/`, so it 400s with
+ * `chdir apps/psg-ads-mutations: no such file or directory` (PSG-118/PSG-119). Resolve the
+ * app dir to an ABSOLUTE path under the clone root so the runner's cwd is valid.
+ */
+const SANDBOX_CLONE_ROOT = "/vercel/sandbox";
+
+/**
+ * Absolute working directory for the runner. An already-absolute `appDir` is used as-is;
+ * a relative one is joined onto the (overridable) sandbox clone root. The root override
+ * exists so a future SDK/runtime change to the clone location degrades to config, not a
+ * swallowed 400.
+ */
+export function resolveAppCwd(
+  appDir: string,
+  cloneRoot: string | undefined = process.env.ADS_MUTATIONS_SANDBOX_ROOT
+): string {
+  if (appDir.startsWith("/")) return appDir;
+  const root = (cloneRoot && cloneRoot.trim()) || SANDBOX_CLONE_ROOT;
+  return `${root.replace(/\/+$/, "")}/${appDir.replace(/^\/+/, "")}`;
+}
+
 /** Clamp the configured sandbox timeout to the SDK-accepted window. */
 export function resolveSandboxTimeoutMs(
   raw: string | undefined,
@@ -244,7 +270,8 @@ export class VercelSandboxTransport implements SandboxTransport {
 
     try {
       // 1. Install the Python package (editable) so googleads_psg / gtm_psg import.
-      const install = await sandbox.runCommand({
+      //    The relative positional arg resolves against the process cwd (= clone root).
+      const install = await runSandboxCommand(sandbox, {
         cmd: "pip",
         args: ["install", "-e", appDir],
       });
@@ -254,10 +281,14 @@ export class VercelSandboxTransport implements SandboxTransport {
       }
 
       // 2. Invoke the runner harness with the JobSpec (creds via env, not argv).
-      const cmd = await sandbox.runCommand({
+      //    cwd MUST be absolute: a bare relative cwd makes the SDK `chdir` from `/` and
+      //    400s with "chdir apps/psg-ads-mutations: no such file or directory"
+      //    (PSG-118/PSG-119). runner.py imports the package via the editable install
+      //    (not cwd-relative) and reads the job from argv, so cwd just needs to be valid.
+      const cmd = await runSandboxCommand(sandbox, {
         cmd: "python",
         args: ["runner.py", "--job", JSON.stringify(spec)],
-        cwd: appDir,
+        cwd: resolveAppCwd(appDir),
         env: forwardedEnv(),
       });
 
@@ -272,9 +303,52 @@ export class VercelSandboxTransport implements SandboxTransport {
         exitCode: cmd.exitCode,
         sandboxId: sandbox.sandboxId,
       };
+    } catch (err) {
+      // The sandbox was created, so record its id on the thrown error: jobs.ts persists it
+      // onto python_worker_jobs.sandbox_id even on the failure path (PSG-119 — failures
+      // were saved with sandbox_id = null, hiding the sandbox whose logs explain them).
+      throw attachSandboxId(err, sandbox.sandboxId);
     } finally {
       // Always tear the sandbox down; never leave a billed sandbox running.
       await sandbox.stop().catch(() => {});
     }
   }
+}
+
+/**
+ * Run one sandbox command, surfacing the HTTP body when the SDK *throws* on a failure to
+ * start the process (e.g. the PSG-118 `command_failed` 400 from an invalid cwd). The SDK
+ * hides the real reason behind a generic message exactly as it does for `Sandbox.create`,
+ * so reuse the same deep-serializer to keep `python_worker_jobs.error` self-diagnosing.
+ */
+async function runSandboxCommand(
+  sandbox: SandboxHandle,
+  opts: { cmd: string; args: string[]; cwd?: string; env?: Record<string, string> }
+): Promise<SandboxCommandResult> {
+  try {
+    return await sandbox.runCommand(opts);
+  } catch (err) {
+    const detail = await describeSandboxCreateError(err);
+    throw new Error(
+      `Vercel sandbox command failed to start ` +
+        `[cmd=${opts.cmd}${opts.cwd ? ` cwd=${opts.cwd}` : ""}]: ${detail}`,
+      { cause: err }
+    );
+  }
+}
+
+/** Attach the live sandboxId to a thrown error so jobs.ts persists it on the failure path. */
+function attachSandboxId(err: unknown, sandboxId: string): unknown {
+  if (
+    err &&
+    typeof err === "object" &&
+    (err as { sandboxId?: string }).sandboxId === undefined
+  ) {
+    try {
+      (err as { sandboxId?: string }).sandboxId = sandboxId;
+    } catch {
+      /* frozen error — message still surfaces; sandbox_id just stays null */
+    }
+  }
+  return err;
 }
