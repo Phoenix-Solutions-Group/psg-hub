@@ -1,6 +1,6 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getBridge, SandboxGatedError } from "./bridge";
+import { getBridge, normalizeTargetRef, SandboxGatedError } from "./bridge";
 import { getMutation } from "./registry";
 import type { DryRunResult, ExecuteResult, MutationRequest } from "./types";
 
@@ -30,6 +30,12 @@ export async function recordAndRun(
     throw new Error(`Unknown mutation key: ${req.mutationKey}`);
   }
 
+  // Normalize the target to the platform's API form BEFORE persisting or running — Google
+  // Ads rejects the dashed customer-id display form, so a dashed CID never reaches the API
+  // (PSG-120 Residual A). Persist the normalized value so target_ref matches what ran.
+  const targetRef = normalizeTargetRef(req.targetRef, def.platform);
+  const normalizedReq: MutationRequest = { ...req, targetRef };
+
   const service = createServiceClient();
   const startedAt = new Date().toISOString();
 
@@ -38,13 +44,13 @@ export async function recordAndRun(
     .insert({
       mutation_key: def.key,
       platform: def.platform,
-      mode: req.mode,
-      target_ref: req.targetRef,
-      shop_id: req.shopId ?? null,
+      mode: normalizedReq.mode,
+      target_ref: targetRef,
+      shop_id: normalizedReq.shopId ?? null,
       status: "running",
-      params_jsonb: req.params ?? {},
+      params_jsonb: normalizedReq.params ?? {},
       requested_by: ctx.requestedBy,
-      approval_id: req.approvalId ?? null,
+      approval_id: normalizedReq.approvalId ?? null,
       started_at: startedAt,
     })
     .select("id")
@@ -56,11 +62,11 @@ export async function recordAndRun(
 
   const jobId: string = job.id;
   const bridge = getBridge();
-  const enriched: MutationRequest = { ...req, requestedBy: ctx.requestedBy };
+  const enriched: MutationRequest = { ...normalizedReq, requestedBy: ctx.requestedBy };
 
   try {
     const result =
-      req.mode === "execute"
+      normalizedReq.mode === "execute"
         ? await bridge.execute(enriched)
         : await bridge.dryRun(enriched);
 
@@ -76,21 +82,21 @@ export async function recordAndRun(
       .eq("id", jobId);
 
     // Audit only real executions; dry-runs are observable via python_worker_jobs.
-    if (req.mode === "execute") {
+    if (normalizedReq.mode === "execute") {
       await service.from("ads_audit_logs").insert({
         job_id: jobId,
         op_name: def.applyFn,
         mutation_key: def.key,
         platform: def.platform,
-        target_ref: req.targetRef,
-        shop_id: req.shopId ?? null,
+        target_ref: targetRef,
+        shop_id: normalizedReq.shopId ?? null,
         mode: "execute",
         before_jsonb: result.before ?? null,
         requested_changes_jsonb: result.requestedChanges ?? null,
         after_jsonb: result.after ?? null,
         logs_storage_path: result.logsStoragePath ?? null,
         actor: ctx.requestedBy,
-        approval_id: req.approvalId ?? null,
+        approval_id: normalizedReq.approvalId ?? null,
       });
     }
 

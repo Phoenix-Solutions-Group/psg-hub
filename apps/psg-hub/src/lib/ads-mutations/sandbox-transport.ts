@@ -219,8 +219,19 @@ interface SandboxCommandResult {
   stderr(): Promise<string> | string;
 }
 
+/**
+ * The `@vercel/sandbox` (v2.x) `Sandbox` instance. CRITICAL (PSG-120): the sandbox's
+ * durable identifier is exposed as **`name`** (the README logs `sandbox.name` right after
+ * `create()`, and `Sandbox.get({ name })` resumes by it) — there is NO `sandboxId` getter
+ * on the instance. Reading the non-existent `sandbox.sandboxId` returned `undefined`, which
+ * is why succeeded *and* failed jobs persisted `sandbox_id = null` (JSON drops the undefined
+ * key, so even `result_jsonb.sandboxId` was absent). The legacy `sandboxId`/`id` fields are
+ * kept optional purely as defensive fallbacks so a future SDK rename degrades gracefully.
+ */
 interface SandboxHandle {
-  sandboxId: string;
+  name?: string;
+  sandboxId?: string;
+  id?: string;
   runCommand(opts: {
     cmd: string;
     args: string[];
@@ -228,6 +239,20 @@ interface SandboxHandle {
     env?: Record<string, string>;
   }): Promise<SandboxCommandResult>;
   stop(): Promise<void>;
+}
+
+/**
+ * Resolve the sandbox's durable id from the SDK handle. Prefers `name` (the real v2.x
+ * accessor), then the legacy `sandboxId`/`id` shapes. Returns `undefined` only if none are
+ * present (so callers can decide how to record an unknown id rather than silently storing
+ * the string "undefined").
+ */
+export function resolveSandboxId(
+  sandbox: { name?: string; sandboxId?: string; id?: string } | null | undefined
+): string | undefined {
+  if (!sandbox) return undefined;
+  const id = sandbox.name ?? sandbox.sandboxId ?? sandbox.id;
+  return typeof id === "string" && id.trim() !== "" ? id : undefined;
 }
 
 async function readStream(v: Promise<string> | string): Promise<string> {
@@ -268,6 +293,12 @@ export class VercelSandboxTransport implements SandboxTransport {
       );
     }
 
+    // Resolve the durable sandbox id ONCE, from the real SDK accessor (`sandbox.name`).
+    // Reused on both the success return and the failure-attach so `python_worker_jobs`
+    // records a real id regardless of outcome (PSG-120). Empty-string fallback only fires
+    // if the SDK exposes no recognizable id field — in practice `name` is always set here.
+    const sandboxId = resolveSandboxId(sandbox) ?? "";
+
     try {
       // 1. Install the Python package (editable) so googleads_psg / gtm_psg import.
       //    The relative positional arg resolves against the process cwd (= clone root).
@@ -301,13 +332,13 @@ export class VercelSandboxTransport implements SandboxTransport {
         stdout,
         stderr,
         exitCode: cmd.exitCode,
-        sandboxId: sandbox.sandboxId,
+        sandboxId,
       };
     } catch (err) {
       // The sandbox was created, so record its id on the thrown error: jobs.ts persists it
       // onto python_worker_jobs.sandbox_id even on the failure path (PSG-119 — failures
       // were saved with sandbox_id = null, hiding the sandbox whose logs explain them).
-      throw attachSandboxId(err, sandbox.sandboxId);
+      throw attachSandboxId(err, sandboxId);
     } finally {
       // Always tear the sandbox down; never leave a billed sandbox running.
       await sandbox.stop().catch(() => {});

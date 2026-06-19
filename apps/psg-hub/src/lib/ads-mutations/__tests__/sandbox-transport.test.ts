@@ -4,10 +4,31 @@ import {
   describeAuthMode,
   describeSandboxCreateError,
   resolveAppCwd,
+  resolveSandboxId,
   resolveSandboxTimeoutMs,
 } from "@/lib/ads-mutations/sandbox-transport";
 
 const REPO = "https://github.com/Phoenix-Solutions-Group/psg-hub.git";
+
+describe("resolveSandboxId (PSG-120)", () => {
+  it("reads the real v2.x SDK accessor `name`", () => {
+    // The SDK exposes the id as `sandbox.name` (README logs it post-create); there is NO
+    // `sandboxId` getter. Reading the old `.sandboxId` returned undefined → sandbox_id null.
+    expect(resolveSandboxId({ name: "sbx_abc123" })).toBe("sbx_abc123");
+  });
+
+  it("falls back to legacy sandboxId / id shapes for forward-compat", () => {
+    expect(resolveSandboxId({ sandboxId: "legacy-1" })).toBe("legacy-1");
+    expect(resolveSandboxId({ id: "legacy-2" })).toBe("legacy-2");
+    expect(resolveSandboxId({ name: "win", sandboxId: "lose" })).toBe("win");
+  });
+
+  it("returns undefined when no recognizable id is present (so callers don't store 'undefined')", () => {
+    expect(resolveSandboxId({})).toBeUndefined();
+    expect(resolveSandboxId(null)).toBeUndefined();
+    expect(resolveSandboxId({ name: "   " })).toBeUndefined();
+  });
+});
 
 describe("resolveAppCwd", () => {
   it("joins a relative appDir onto the default /vercel/sandbox clone root (PSG-119)", () => {

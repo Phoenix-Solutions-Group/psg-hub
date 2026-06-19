@@ -20,7 +20,7 @@
  * The default transport dynamically imports `@vercel/sandbox` only when the gate is on,
  * so neither `next build` nor the unit tests need the package installed.
  */
-import type { DryRunResult, ExecuteResult, MutationMode, MutationRequest } from "./types";
+import type { AdsPlatform, DryRunResult, ExecuteResult, MutationMode, MutationRequest } from "./types";
 import { getMutation } from "./registry";
 
 export interface PythonWorkerBridge {
@@ -115,6 +115,18 @@ export function getSmokeTargetOverrides(
   if (cid) overrides.google_ads_customer_id = cid;
   if (gtm) overrides.gtm_container_id = gtm;
   return overrides;
+}
+
+/**
+ * Normalize a target ref to the form the platform's API accepts. Google Ads customer ids
+ * are **digits-only** at the API; the studio/fixtures carry a dashed display form (e.g.
+ * `906-312-6657`) that the API rejects as `INVALID_CUSTOMER_ID` (PSG-120 Residual A — proven
+ * live: dashed ❌, digits-only `9063126657` ✅). Strip non-digits for `google_ads`; GTM
+ * container ids (`GTM-XXXXXXX`) are an opaque public id and pass through untouched.
+ */
+export function normalizeTargetRef(targetRef: string, platform: AdsPlatform): string {
+  if (platform === "google_ads") return targetRef.replace(/\D/g, "");
+  return targetRef;
 }
 
 // ── Sandbox transport seam ────────────────────────────────────────────────────

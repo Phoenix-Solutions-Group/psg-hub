@@ -8,6 +8,7 @@ import {
   getBridge,
   getSmokeTargetOverrides,
   isSandboxEnabled,
+  normalizeTargetRef,
   RESULT_BEGIN,
   RESULT_END,
   type JobSpec,
@@ -118,6 +119,22 @@ describe("getSmokeTargetOverrides", () => {
         ADS_MUTATIONS_SMOKE_GTM_CONTAINER_ID: "  GTM-X1 ",
       })
     ).toEqual({ gtm_container_id: "GTM-X1" });
+  });
+});
+
+describe("normalizeTargetRef (PSG-120 Residual A)", () => {
+  it("strips dashes/whitespace from google_ads customer ids (API needs digits-only)", () => {
+    expect(normalizeTargetRef("906-312-6657", "google_ads")).toBe("9063126657");
+    expect(normalizeTargetRef("412-555-0142", "google_ads")).toBe("4125550142");
+    expect(normalizeTargetRef(" 906 312 6657 ", "google_ads")).toBe("9063126657");
+  });
+
+  it("passes an already-digits CID through unchanged", () => {
+    expect(normalizeTargetRef("9063126657", "google_ads")).toBe("9063126657");
+  });
+
+  it("leaves GTM container ids untouched (the dashed GTM- form is the real id)", () => {
+    expect(normalizeTargetRef("GTM-PSG1234", "gtm")).toBe("GTM-PSG1234");
   });
 });
 
