@@ -18,6 +18,7 @@ export const OPS_FUNCTION_LABELS: Record<OpsFunction, string> = {
   manage_users: "User & Profile Admin",
   manage_reports: "Operational Reports",
   manage_production: "Production",
+  ads_mutations: "Ads Mutation Studio",
 };
 
 export type SecurityProfileDef = {

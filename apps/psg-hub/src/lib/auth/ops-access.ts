@@ -26,6 +26,11 @@ export const OPS_FUNCTIONS = [
   "manage_users",
   "manage_reports",
   "manage_production",
+  // v1.2 Ads Mutation Studio (PSG-26 / PSG-26a). Gates the /ops/ads-mutations
+  // surface + /api/ads-mutations/* routes. psg_superadmin passes implicitly;
+  // psg_internal needs this flag granted. The matching in-DB policy/migration is
+  // tracked on the parent (PSG-26) — app-level is defense-in-depth ahead of RLS.
+  "ads_mutations",
 ] as const;
 
 export type OpsFunction = (typeof OPS_FUNCTIONS)[number];
