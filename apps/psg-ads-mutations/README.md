@@ -61,6 +61,40 @@ python -m ops.wallace.fix_landing_page --customer-id 6048611995
 python -m ops.wallace.fix_landing_page --customer-id 6048611995 --execute
 ```
 
+## Sandbox runner harness (`runner.py`) — psg-hub bridge
+
+`runner.py` is the single entry point the psg-hub `VercelSandboxBridge` (PSG-26b) invokes
+inside a Vercel Sandbox. It takes a **JobSpec** and dispatches by registry key to a
+per-mutation adapter, then prints a sentinel-framed JSON result.
+
+```bash
+# Dry-run (NEVER calls the mutating function — fetch-before + validated requested-changes):
+python runner.py --job '{"mutationKey":"google_ads.campaign_bidding","mode":"dry_run","targetRef":"6048611995","params":{"changes":[{"campaign_id":123,"strategy":"TARGET_CPA","target_cpa_micros":5000000}]}}'
+
+# Execute — actually applies the mutation, returns the after-state:
+python runner.py --job-file job.json
+```
+
+Output is framed for robust extraction by the Node bridge:
+
+```
+__PSG_ADS_RESULT_BEGIN__
+{"ok": true, "before": ..., "requestedChanges": ..., "after": ..., "log": {...}}
+__PSG_ADS_RESULT_END__
+```
+
+On any error it emits `{"ok": false, "errorType": ..., "error": ...}` and exits non-zero.
+**Why adapters, not naive import+call:** the mutation modules have non-uniform signatures
+(single `campaign_id` vs `campaign_ids` list, dataclass-list args, GTM container→workspace→
+tag path walks). Each adapter normalizes JobSpec params into the exact call each module
+expects and serializes via that module's `*_to_dicts` helpers.
+
+Offline tests (no Google SDK required — stdlib `unittest` with module stubs):
+
+```bash
+python -m unittest discover -s tests
+```
+
 ## Verification loop
 
 After every `--execute` run, verify via the read-only MCP:
