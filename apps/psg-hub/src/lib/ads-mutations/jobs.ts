@@ -98,11 +98,15 @@ export async function recordAndRun(
     return { ...result, jobId };
   } catch (err) {
     const gated = err instanceof SandboxGatedError;
+    // The transport attaches sandboxId to errors thrown after Sandbox.create succeeds, so
+    // a failed job still points at the sandbox whose logs explain it (PSG-119).
+    const sandboxId = (err as { sandboxId?: string } | null)?.sandboxId;
     await service
       .from("python_worker_jobs")
       .update({
         status: gated ? "cancelled" : "failed",
         error: err instanceof Error ? err.message : String(err),
+        sandbox_id: sandboxId ?? null,
         finished_at: new Date().toISOString(),
       })
       .eq("id", jobId);

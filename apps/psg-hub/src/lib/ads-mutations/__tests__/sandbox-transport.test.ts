@@ -3,10 +3,34 @@ import {
   buildCreateOptions,
   describeAuthMode,
   describeSandboxCreateError,
+  resolveAppCwd,
   resolveSandboxTimeoutMs,
 } from "@/lib/ads-mutations/sandbox-transport";
 
 const REPO = "https://github.com/Phoenix-Solutions-Group/psg-hub.git";
+
+describe("resolveAppCwd", () => {
+  it("joins a relative appDir onto the default /vercel/sandbox clone root (PSG-119)", () => {
+    // The PSG-118 400 was a bare relative cwd -> SDK chdir from `/` fails. cwd must be
+    // absolute under the clone root where the git source is checked out.
+    expect(resolveAppCwd("apps/psg-ads-mutations", undefined)).toBe(
+      "/vercel/sandbox/apps/psg-ads-mutations"
+    );
+  });
+
+  it("passes an already-absolute appDir through unchanged", () => {
+    expect(resolveAppCwd("/srv/pkg", undefined)).toBe("/srv/pkg");
+  });
+
+  it("honors a clone-root override and normalizes slashes", () => {
+    expect(resolveAppCwd("/apps/x", "/custom/root/")).toBe("/apps/x"); // absolute wins
+    expect(resolveAppCwd("apps/x", "/custom/root/")).toBe("/custom/root/apps/x");
+  });
+
+  it("falls back to the default root when the override is blank", () => {
+    expect(resolveAppCwd("apps/x", "   ")).toBe("/vercel/sandbox/apps/x");
+  });
+});
 
 describe("resolveSandboxTimeoutMs", () => {
   it("defaults to 10 minutes when unset", () => {
