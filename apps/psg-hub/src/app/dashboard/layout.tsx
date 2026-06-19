@@ -5,6 +5,7 @@ import { OnboardingScreen } from "@/components/dashboard/onboarding-screen";
 import { ShopSwitcher } from "@/components/dashboard/shop-switcher";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
 import { getDashboardAccess, decideDashboardAccess } from "@/lib/auth/shop-access";
+import { getOpsAccess, isOpsStaff } from "@/lib/auth/ops-access";
 import { getActiveShopContext } from "@/lib/shop/context";
 
 const NAV = [
@@ -43,6 +44,14 @@ export default async function DashboardLayout({
 
   // Active-shop context for the switcher (additive; the gate above is unchanged).
   const { shops, activeShopId } = await getActiveShopContext(user.id);
+
+  // Internal-ops staff (psg_internal / psg_superadmin) land here on /dashboard with
+  // no visible path to the /ops backbone (PSG-107 / PSG-111). Surface an "Internal
+  // Ops →" switcher for staff only — mirror of the "Client Hub →" toggle in
+  // ops/layout.tsx. Fail closed: non-staff never see it (the link is also a no-op
+  // for them since /ops notFound()s, but we gate here so the surface stays hidden).
+  const opsAccess = await getOpsAccess(user.id);
+  const showOpsLink = isOpsStaff(opsAccess.role);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -84,14 +93,24 @@ export default async function DashboardLayout({
               Client Hub
             </span>
           </div>
-          <form action="/api/auth/signout" method="post">
-            <button
-              type="submit"
-              className="font-heading text-sm font-medium text-muted-foreground transition-colors hover:text-ember"
-            >
-              Sign out
-            </button>
-          </form>
+          <div className="flex items-center gap-5">
+            {showOpsLink && (
+              <a
+                href="/ops"
+                className="font-heading text-sm font-medium text-muted-foreground transition-colors hover:text-ember"
+              >
+                Internal Ops →
+              </a>
+            )}
+            <form action="/api/auth/signout" method="post">
+              <button
+                type="submit"
+                className="font-heading text-sm font-medium text-muted-foreground transition-colors hover:text-ember"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
         </header>
         <main className="flex-1 p-6">{children}</main>
       </div>
