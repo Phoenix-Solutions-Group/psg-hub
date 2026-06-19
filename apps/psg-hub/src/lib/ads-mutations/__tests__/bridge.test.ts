@@ -228,6 +228,28 @@ describe("VercelSandboxBridge error paths", () => {
     await expect(bridge.dryRun(baseReq)).rejects.toThrow(/unparseable output/);
   });
 
+  it("attaches sandboxId to RunnerError so failed jobs stay traceable (PSG-121)", async () => {
+    // ok:false (e.g. GoogleAdsException), non-zero exit, and unparseable stdout must all
+    // carry the sandbox id — the sandbox ran, so jobs.ts can persist sandbox_id on the
+    // failed row. Mirrors the live prod symptom where sandbox_id was null on failure.
+    const cases = [
+      { stdout: frame({ ok: false, errorType: "GoogleAdsException", error: "INVALID_CUSTOMER_ID" }), exitCode: 1, sandboxId: "sbx-fail-1" },
+      { stdout: okStdout, stderr: "boom", exitCode: 137, sandboxId: "sbx-fail-2" },
+      { stdout: "Traceback: kaboom", exitCode: 1, sandboxId: "sbx-fail-3" },
+    ];
+    for (const c of cases) {
+      const { transport } = makeTransport({ stdout: c.stdout, stderr: c.stderr ?? "", exitCode: c.exitCode, sandboxId: c.sandboxId });
+      const bridge = new VercelSandboxBridge({ transport, mirror: recordingMirror("p").mirror });
+      const err = await bridge.dryRun(baseReq).then(
+        () => { throw new Error("expected RunnerError"); },
+        (e) => e as RunnerError
+      );
+      expect(err).toBeInstanceOf(RunnerError);
+      expect(err.sandboxId).toBe(c.sandboxId);
+      expect(err.detail?.sandboxId).toBe(c.sandboxId);
+    }
+  });
+
   it("never mirrors a log when the runner failed", async () => {
     const stdout = frame({ ok: false, error: "x" });
     const { transport } = makeTransport({ stdout, stderr: "", exitCode: 1, sandboxId: "sbx-n" });

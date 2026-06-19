@@ -45,12 +45,25 @@ export class SandboxGatedError extends Error {
 
 /** Thrown when the runner harness reports a failure (non-zero exit or ok:false). */
 export class RunnerError extends Error {
+  /**
+   * The sandbox that produced this failure, when the runner actually ran (i.e. the
+   * failure is a runner non-zero exit / GoogleAdsException, not a provisioning 400).
+   * Surfaced at the top level so `jobs.ts` persists `sandbox_id` on the failed row and
+   * the run stays traceable to its sandbox logs (PSG-121, extends PSG-119).
+   */
+  readonly sandboxId?: string;
   constructor(
     message: string,
-    readonly detail?: { errorType?: string; stderr?: string; exitCode?: number }
+    readonly detail?: {
+      errorType?: string;
+      stderr?: string;
+      exitCode?: number;
+      sandboxId?: string;
+    }
   ) {
     super(message);
     this.name = "RunnerError";
+    this.sandboxId = detail?.sandboxId;
   }
 }
 
@@ -209,7 +222,7 @@ export class VercelSandboxBridge implements PythonWorkerBridge {
       const tail = (res.stderr || res.stdout || "").slice(-600);
       throw new RunnerError(
         `Ads mutation runner produced unparseable output (exit ${res.exitCode}). Tail: ${tail}`,
-        { exitCode: res.exitCode, stderr: res.stderr }
+        { exitCode: res.exitCode, stderr: res.stderr, sandboxId: res.sandboxId }
       );
     }
 
@@ -218,7 +231,12 @@ export class VercelSandboxBridge implements PythonWorkerBridge {
         `Ads mutation runner failed [${parsed.errorType ?? "error"}]: ${
           parsed.error ?? res.stderr ?? "unknown error"
         }`,
-        { errorType: parsed.errorType, stderr: res.stderr, exitCode: res.exitCode }
+        {
+          errorType: parsed.errorType,
+          stderr: res.stderr,
+          exitCode: res.exitCode,
+          sandboxId: res.sandboxId,
+        }
       );
     }
 
