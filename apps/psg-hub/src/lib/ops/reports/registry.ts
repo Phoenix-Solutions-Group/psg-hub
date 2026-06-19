@@ -4,13 +4,26 @@
 // Program, in the 5 milestone-v1.4 batches. Each is declared once with its
 // metadata, parameter spec, columns and deterministic sample rows.
 //
-// dataStatus is "pending-data" for every report today: the backing ops tables
-// (companies / repair_orders / surveys — B1 in PSG-25 v1.1 Ops Foundation) are
-// not built yet. When a report's table lands, flip it to "available" and add a
-// `run()` — the rest of the framework (params, runner, export, routes, UI) is
-// already wired and needs no change. Slugs are frozen by PLANNING.md and are
-// the public report ids; do not rename them.
+// B1 (PSG-25 v1.1 Ops Foundation) has landed: companies / repair_orders /
+// estimates / survey_responses are live. Wiring each report's real data is the
+// mechanical fast-follow — flip its `dataStatus` to "available" and add a
+// `run()` (see ./live/*); the rest of the framework (params, runner, export,
+// routes, UI) is already wired and needs no change. A report stays
+// "pending-data" only while a column it needs has no real source yet (e.g.
+// invoiced $ line items, estimator/tech attribution, survey response-rate /
+// recommend fields) — those land with the invoicing + attribution work. Slugs
+// are frozen by PLANNING.md and are the public report ids; do not rename them.
 
+import {
+  bodyTechPerformanceRun,
+  estimatorCsiRun,
+  marketDashboardRun,
+  monthlyCsiDisplayRun,
+  painterPerformanceRun,
+  performanceDashboardRun,
+  rentalCarAnalysisRun,
+  surveyAlertRecapRun,
+} from "./live/survey";
 import {
   category,
   customerName,
@@ -209,7 +222,10 @@ const definitions: ReportDefinition[] = [
       col("responseRate", "Response Rate", "percent"),
       col("recommend", "Would Recommend", "percent"),
     ],
-    dataStatus: "pending-data",
+    // B1 + PSG-89 landed: returned/CSI from survey_responses, response rate from
+    // survey_dispatches (sent), recommend from survey_responses.would_recommend.
+    dataStatus: "available",
+    run: performanceDashboardRun,
     sampleRows: () =>
       build(6, (i) => ({
         shop: shopName(i),
@@ -232,7 +248,11 @@ const definitions: ReportDefinition[] = [
       col("market", "Market Avg", "number"),
       col("delta", "Delta", "number"),
     ],
-    dataStatus: "pending-data",
+    // B1 landed: per-metric shop avg vs. network ("market") avg over the same
+    // range, derived from survey_responses. Overall CSI is EMI×100; the q05
+    // sub-scores are native scale (matches public.shop_detail).
+    dataStatus: "available",
+    run: marketDashboardRun,
     sampleRows: () =>
       ["Overall CSI", "Quality", "Timeliness", "Communication", "Cleanliness"].map(
         (metric, i) => {
@@ -254,7 +274,9 @@ const definitions: ReportDefinition[] = [
       col("csi", "CSI", "number"),
       col("surveys", "Surveys", "number"),
     ],
-    dataStatus: "pending-data",
+    // B1 landed: survey_responses is live. CSI = avg(scale_emi_pct) × 100.
+    dataStatus: "available",
+    run: monthlyCsiDisplayRun,
     sampleRows: () =>
       build(6, (i) => ({
         month: pick(
@@ -279,7 +301,10 @@ const definitions: ReportDefinition[] = [
       col("csi", "CSI", "number"),
       col("recommend", "Would Recommend", "percent"),
     ],
-    dataStatus: "pending-data",
+    // PSG-89 landed: surveys attributed to the estimator via repair_order_employees
+    // (role=estimator). CSI = avg EMI ×100; recommend from would_recommend.
+    dataStatus: "available",
+    run: estimatorCsiRun,
     sampleRows: () =>
       build(5, (i) => ({
         estimator: estimator(i),
@@ -301,7 +326,10 @@ const definitions: ReportDefinition[] = [
       col("comebackRate", "Comeback Rate", "percent"),
       col("quality", "Quality CSI", "number"),
     ],
-    dataStatus: "pending-data",
+    // PSG-89 landed: jobs + comeback(rework) from repair_order_employees
+    // (role=body_tech); Quality CSI = avg q05_01 (native) from attributed surveys.
+    dataStatus: "available",
+    run: bodyTechPerformanceRun,
     sampleRows: () =>
       build(5, (i) => ({
         tech: tech(i),
@@ -323,7 +351,10 @@ const definitions: ReportDefinition[] = [
       col("redoRate", "Redo Rate", "percent"),
       col("finish", "Finish CSI", "number"),
     ],
-    dataStatus: "pending-data",
+    // PSG-89 landed: jobs + redo(rework) from repair_order_employees
+    // (role=painter); Finish CSI = avg q05_01 (native) from attributed surveys.
+    dataStatus: "available",
+    run: painterPerformanceRun,
     sampleRows: () =>
       build(5, (i) => ({
         painter: tech(i + 2),
@@ -340,13 +371,18 @@ const definitions: ReportDefinition[] = [
       "Surveys that tripped an alert threshold in the period (low score / negative flag), pending follow-up.",
     params: { dateRange: true, filters: [SHOP_FILTER] },
     columns: [
-      col("ro", "RO #", "string"),
+      // Survey rows are not yet linked to a repair order, so this column shows
+      // the survey response_id, not an RO# (see PSG-80). Relabel when the join lands.
+      col("ro", "Survey #", "string"),
       col("shop", "Shop", "string"),
       col("score", "Score", "number"),
       col("alert", "Alert", "string"),
       col("date", "Received", "date"),
     ],
-    dataStatus: "pending-data",
+    // B1 landed: surveys below the 88% CSI alert threshold, newest first. Score/
+    // shop/date/alert derive from live survey_responses; identifier = response_id.
+    dataStatus: "available",
+    run: surveyAlertRecapRun,
     sampleRows: (p) =>
       build(N, (i) => ({
         ro: roNumber(i + 30),
@@ -373,7 +409,12 @@ const definitions: ReportDefinition[] = [
       col("cycleTime", "Cycle Time (days)", "number"),
       col("cost", "Rental Cost", "currency"),
     ],
-    dataStatus: "pending-data",
+    // Live (PSG-96): rental days/cost from public.rental_assignments, cycle time
+    // derived from repair_orders.dates_json (date_out - date_in), shop/insurer
+    // from the spine. See 20260618210000_rental_cycle_time_v1_5. All 8 survey-CSI
+    // reports are now live.
+    dataStatus: "available",
+    run: rentalCarAnalysisRun,
     sampleRows: () =>
       build(N, (i) => {
         const days = seeded(i + 3, 3, 18);
