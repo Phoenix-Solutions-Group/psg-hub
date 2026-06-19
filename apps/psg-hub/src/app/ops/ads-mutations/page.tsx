@@ -6,11 +6,12 @@ import { buildAllPreviews } from "@/lib/ads-mutations/preview";
 import { isSandboxEnabled } from "@/lib/ads-mutations/bridge";
 import { AdsMutationStudio } from "@/components/ops/ads-mutation-studio";
 
-// v1.2 / PSG-26a — Ads Mutation Studio (build-local).
+// v1.2 / PSG-26a + PSG-26d — Ads Mutation Studio.
 // Gated on the `ads_mutations` capability (psg_superadmin passes implicitly). Builds the
-// before/after dry-run previews server-side from fixtures (pure, no Vercel Sandbox) and
-// hands the plain data to the client Studio. The live Python-worker execute path is
-// board-gated and intentionally NOT reachable here (PSG-26).
+// expected before/after diffs server-side from fixtures (pure, no Vercel Sandbox) for the
+// reference preview, and hands the plain data to the client Studio. The Studio also calls
+// the live `/api/ads-mutations/{dry-run,execute}` routes — those fail closed with a clean
+// 503 `gated` state until the operator enables the Vercel Sandbox (PSG-26 board gate).
 export default async function AdsMutationsPage() {
   const supabase = await createClient();
   const {
@@ -31,8 +32,9 @@ export default async function AdsMutationsPage() {
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Ads Mutation Studio</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Browse the Google Ads + GTM write-side mutations and preview a before/after diff before
-          anything runs. Dry-run previews here are computed locally from fixtures; live execution via
-          the Python worker is board-gated.
+          anything runs. The expected diff is computed locally from fixtures; live dry-run / execute
+          call the Python worker via the Vercel Sandbox, which is board-gated until the operator
+          enables it.
         </p>
       </div>
       <AdsMutationStudio previews={previews} sandboxEnabled={isSandboxEnabled()} />

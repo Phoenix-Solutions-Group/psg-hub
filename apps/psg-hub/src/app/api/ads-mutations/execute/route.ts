@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { requireSuperadmin } from "@/lib/auth/ops-access";
+import { requireOpsFn } from "@/lib/auth/ops-access";
 import { mutationBodySchema } from "@/lib/ads-mutations/validation";
 import { validateMutationRequest } from "@/lib/ads-mutations/governance";
 import { recordAndRun } from "@/lib/ads-mutations/jobs";
@@ -11,14 +11,14 @@ import type { MutationRequest } from "@/lib/ads-mutations/types";
 //
 // Run a mutation for real against the target Google Ads customer / GTM container. Mode is
 // forced to `execute`. Order of defenses (fail-closed):
-//   1. auth gate (INTERIM superadmin-only; swap to requireOpsFn("ads_mutations") once
-//      PSG-25 adds the capability key)
+//   1. auth gate — the `ads_mutations` capability (psg_superadmin implicit; psg_internal
+//      needs the flag granted). App-level defense-in-depth ahead of the in-DB RLS.
 //   2. governance — target required; high-risk requires a superadmin/board approvalId
 //   3. execute rate-limit (per-target + global, counted in python_worker_jobs)
 //   4. bridge.execute — disabled until the Vercel Sandbox gate clears → 503 `gated`
 // On success a python_worker_jobs row + an append-only ads_audit_logs row are written.
 export async function POST(request: NextRequest) {
-  const gate = await requireSuperadmin();
+  const gate = await requireOpsFn("ads_mutations");
   if (!gate.ok) return gate.response;
 
   let body: unknown;

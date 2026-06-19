@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { requireSuperadmin } from "@/lib/auth/ops-access";
+import { requireOpsFn } from "@/lib/auth/ops-access";
 import { mutationBodySchema } from "@/lib/ads-mutations/validation";
 import { validateMutationRequest } from "@/lib/ads-mutations/governance";
 import { recordAndRun } from "@/lib/ads-mutations/jobs";
@@ -13,10 +13,10 @@ import type { MutationRequest } from "@/lib/ads-mutations/types";
 // reflects a real request. No rate-limit (dry-runs are free + non-mutating). Returns 503
 // `gated` while the Vercel Sandbox bridge is disabled — never a fabricated diff.
 //
-// INTERIM GATE: superadmin-only; swap to requireOpsFn("ads_mutations") once PSG-25 adds
-// the `ads_mutations` capability key to the ops vocabulary.
+// GATE (PSG-26d): the `ads_mutations` capability (psg_superadmin implicit; psg_internal
+// needs the flag). App-level defense-in-depth ahead of the in-DB RLS.
 export async function POST(request: NextRequest) {
-  const gate = await requireSuperadmin();
+  const gate = await requireOpsFn("ads_mutations");
   if (!gate.ok) return gate.response;
 
   let body: unknown;

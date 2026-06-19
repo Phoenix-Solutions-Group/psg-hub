@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 
 // --- mocks ---------------------------------------------------------------
-// requireSuperadmin is the (interim) auth gate; swap `opsGate` per-test to simulate
-// allowed / forbidden. The registry, governance, rate-limit, bridge and types
+// requireOpsFn("ads_mutations") is the auth gate (PSG-26d); swap `opsGate` per-test to
+// simulate allowed / forbidden. The registry, governance, rate-limit, bridge and types
 // are the REAL modules — these tests prove the route wiring end to end, with the
 // bridge failing closed (no Sandbox), which is the live state today.
 let opsGate: unknown = { ok: true, userId: "user-1", access: {} };
 vi.mock("@/lib/auth/ops-access", () => ({
-  requireSuperadmin: async () => opsGate,
+  requireOpsFn: async (_fn: string) => opsGate,
 }));
 
 // Universal chainable + awaitable Supabase service stub. Every builder method

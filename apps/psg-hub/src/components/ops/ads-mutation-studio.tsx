@@ -9,10 +9,12 @@
 
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { DryRunPreview, Json, JsonDiffEntry } from "@/lib/ads-mutations/preview";
+import { diffJson, type DryRunPreview, type Json, type JsonDiffEntry } from "@/lib/ads-mutations/preview";
+import { runMutation, type LiveMode, type LiveRunOutcome } from "@/lib/ads-mutations/client";
 import type { AdsPlatform, MutationRiskLevel } from "@/lib/ads-mutations/types";
 
 type Props = {
@@ -76,6 +78,74 @@ function DiffSummary({ changes }: { changes: JsonDiffEntry[] }) {
   );
 }
 
+/** Render the normalized outcome of a live dry-run/execute call. */
+function LiveOutcome({ outcome }: { outcome: LiveRunOutcome }) {
+  if (outcome.status === "gated") {
+    return (
+      <div className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm">
+        <p className="font-semibold text-warning">Live execution is gated</p>
+        <p className="mt-1 text-muted-foreground">{outcome.message}</p>
+      </div>
+    );
+  }
+  if (outcome.status === "invalid") {
+    return (
+      <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
+        <p className="font-semibold text-destructive">Rejected by governance</p>
+        <p className="mt-1 text-muted-foreground">{outcome.message}</p>
+      </div>
+    );
+  }
+  if (outcome.status === "rate_limited") {
+    return (
+      <div className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm">
+        <p className="font-semibold text-warning">Rate limited</p>
+        <p className="mt-1 text-muted-foreground">{outcome.message}</p>
+      </div>
+    );
+  }
+  if (outcome.status === "error") {
+    return (
+      <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
+        <p className="font-semibold text-destructive">Run failed</p>
+        <p className="mt-1 text-muted-foreground">{outcome.message}</p>
+      </div>
+    );
+  }
+
+  // ok — the live before/after diff returned by the Python worker.
+  const { result } = outcome;
+  const changes = diffJson(result.before as Json, result.after as Json);
+  return (
+    <div className="space-y-3 rounded-lg border border-success/40 bg-success/5 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-semibold text-success">Live result</p>
+        {result.jobId && <Badge variant="outline">job {result.jobId}</Badge>}
+      </div>
+      <div>
+        <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Changes ({changes.length})
+        </h4>
+        <DiffSummary changes={changes} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="min-w-0">
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Before</h4>
+          <pre className="overflow-x-auto rounded-lg border border-border bg-muted/40 p-3 text-xs">
+            {pretty(result.before as Json)}
+          </pre>
+        </div>
+        <div className="min-w-0">
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">After</h4>
+          <pre className="overflow-x-auto rounded-lg border border-border bg-muted/40 p-3 text-xs">
+            {pretty(result.after as Json)}
+          </pre>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AdsMutationStudio({ previews, sandboxEnabled }: Props) {
   const [selectedKey, setSelectedKey] = useState<string>(previews[0]?.mutationKey ?? "");
   const selected = useMemo(
@@ -88,12 +158,35 @@ export function AdsMutationStudio({ previews, sandboxEnabled }: Props) {
   const [targetRef, setTargetRef] = useState<string>(selected?.targetRef ?? "");
   const [approvalId, setApprovalId] = useState<string>("");
 
+  // Live-run state: the outcome of the most recent dry-run/execute call to the API, plus
+  // which call (if any) is in flight. Reset whenever the selected mutation changes.
+  const [liveBusy, setLiveBusy] = useState<LiveMode | null>(null);
+  const [outcome, setOutcome] = useState<LiveRunOutcome | null>(null);
+
   // Re-seed the target when the selection changes (prefill the fixture target).
   const [lastKey, setLastKey] = useState<string>(selectedKey);
   if (lastKey !== selectedKey) {
     setLastKey(selectedKey);
     setTargetRef(selected?.targetRef ?? "");
     setApprovalId("");
+    setOutcome(null);
+    setLiveBusy(null);
+  }
+
+  async function runLive(mode: LiveMode) {
+    if (!selected) return;
+    setLiveBusy(mode);
+    setOutcome(null);
+    const result = await runMutation(mode, {
+      mutationKey: selected.mutationKey,
+      targetRef: targetRef.trim(),
+      // Params come from the registry fixture's representative request — the live diff is
+      // computed against the real account state by the Python worker, not these values.
+      params: selected.params,
+      approvalId: approvalId.trim() || undefined,
+    });
+    setOutcome(result);
+    setLiveBusy(null);
   }
 
   const grouped = useMemo(() => {
@@ -202,16 +295,61 @@ export function AdsMutationStudio({ previews, sandboxEnabled }: Props) {
             </div>
           )}
 
-          {/* Dry-run preview */}
+          {/* Live run — calls the real /api/ads-mutations routes. Fail-closed: dry-run is
+              always offered (the route returns a clean 503 `gated` when the Sandbox is off);
+              execute is only enabled once the Sandbox is on AND governance passes. */}
+          <div className="space-y-3 rounded-lg border border-border p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-heading text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Live run
+              </h3>
+              {!sandboxEnabled && <Badge variant="warning">Sandbox off · execution gated</Badge>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={targetMissing || liveBusy !== null}
+                onClick={() => runLive("dry-run")}
+              >
+                {liveBusy === "dry-run" ? "Running dry-run…" : "Run live dry-run"}
+              </Button>
+              <Button
+                type="button"
+                variant="accent"
+                size="sm"
+                disabled={!sandboxEnabled || targetMissing || approvalMissing || liveBusy !== null}
+                onClick={() => runLive("execute")}
+              >
+                {liveBusy === "execute" ? "Executing…" : "Execute"}
+              </Button>
+            </div>
+            {!sandboxEnabled && (
+              <p className="text-xs text-muted-foreground">
+                Execute is disabled until the operator enables the Vercel Sandbox (PSG-26 gate).
+                Dry-run is still callable and returns the gated state cleanly.
+              </p>
+            )}
+            {sandboxEnabled && approvalMissing && (
+              <p className="text-xs text-destructive">
+                High-risk mutation — enter an approval ref above before executing.
+              </p>
+            )}
+            {outcome && <LiveOutcome outcome={outcome} />}
+          </div>
+
+          {/* Expected diff — computed locally from the registry fixture (no Sandbox). This
+              is the reference the live dry-run should match once the bridge is enabled. */}
           {targetMissing ? (
             <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              Enter a {TARGET_LABEL[selected.governance.targetKind] ?? "target"} to preview the dry-run diff.
+              Enter a {TARGET_LABEL[selected.governance.targetKind] ?? "target"} to preview the expected diff.
             </p>
           ) : (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-heading text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Dry-run preview
+                  Expected diff
                 </h3>
                 <Badge variant="secondary">fixture data · no live execution</Badge>
               </div>
