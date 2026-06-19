@@ -18,7 +18,7 @@ vi.mock("@/lib/auth/ops-access", () => ({
 }));
 
 // Audit sink — assert it is (or is not) called, and with what action.
-const mockRecordAudit = vi.fn(async () => "audit-1");
+const mockRecordAudit = vi.fn<(...args: unknown[]) => Promise<string>>(async () => "audit-1");
 vi.mock("@/lib/audit/access-audit", () => ({
   recordAuditEvent: (...args: unknown[]) => mockRecordAudit(...args),
 }));
