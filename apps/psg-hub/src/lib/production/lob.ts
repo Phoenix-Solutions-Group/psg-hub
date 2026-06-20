@@ -313,6 +313,8 @@ export class LobAdapter implements MailAdapter {
       params.set("color", String(document.color ?? false));
       // Letters require an address-placement choice; PSG envelopes use a window.
       params.set("address_placement", "top_first_page");
+      // Required by Lob; PSG warranty letters are customer-retention marketing.
+      params.set("use_type", "marketing");
     }
 
     const result = await this.post<{

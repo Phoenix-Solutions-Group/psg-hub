@@ -32,6 +32,8 @@ test.describe("ga4 panel — per-shop (OWNER)", () => {
       name: /Website sessions over the last 30 days/,
     });
     await expect(chart).toBeVisible();
+    // Wait for Recharts to render paths (animation runs after container appears).
+    await expect(chart.locator("svg path").first()).toBeVisible();
     expect(await chart.locator("svg path").count()).toBeGreaterThan(0);
 
     await checkA11y(page, "analytics-ga4");
