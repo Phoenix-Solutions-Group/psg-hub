@@ -1,0 +1,2 @@
+-- Default seed stub. Referenced by [db.seed] sql_paths in config.toml.
+-- Pilot/verify seeds live in supabase/seeds/ and are NOT auto-run.

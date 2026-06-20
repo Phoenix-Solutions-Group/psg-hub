@@ -68,19 +68,20 @@ jobs:
 
       # Spins up the local Supabase stack (Docker) on the ports in
       # apps/psg-hub/supabase/config.toml and applies supabase/migrations/*.
-      # On failure, re-emits the tail of stdout/stderr as ::error:: annotations
-      # so the failure reason is visible via the public check-runs API (the raw
-      # job log is admin-only for agents, but annotations are public).
       - name: Start local Supabase
         working-directory: apps/psg-hub
+        run: pnpm exec supabase start
+
+      # Emit DB logs as ::error:: annotations on failure so the failure reason
+      # is visible via the public check-runs API (raw job log is admin-only for agents).
+      - name: Dump Supabase DB logs on failure
+        if: failure()
+        working-directory: apps/psg-hub
         run: |
-          if ! pnpm exec supabase start 2>&1 | tee /tmp/supabase-start.log; then
-            echo "::error::supabase start failed — last 30 lines of output:"
-            tail -30 /tmp/supabase-start.log | while IFS= read -r line; do
-              echo "::error::  $line"
-            done
-            exit 1
-          fi
+          echo "::error::supabase start or status failed — DB migration log tail:"
+          pnpm exec supabase logs --db 2>&1 | tail -40 | while IFS= read -r line; do
+            echo "::error::  $line"
+          done || true
 
       # Write the LOCAL stack credentials into .env.test.local exactly where
       # playwright.config.ts loads them (and Object.assigns into process.env for
