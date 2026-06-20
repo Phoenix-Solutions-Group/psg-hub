@@ -8,4 +8,9 @@
 export * from "./types";
 export { synthesizeContentBrief, type SynthesizeBriefOptions } from "./market-researcher";
 export { selectKeywordTargets, type SelectKeywordTargetsOptions } from "./seo-auditor";
-export { buildContentDraftRequest } from "./content-writer-handoff";
+export {
+  buildContentDraftRequest,
+  buildContentDraftRequestFromSeoTargets,
+  adaptSeoKeywordTarget,
+  adaptSeoKeywordTargets,
+} from "./content-writer-handoff";

@@ -1,6 +1,6 @@
-// BSM Phase 0 / PSG-153 — SEO Auditor → content keyword handoff (SEAM — to impl).
+// BSM Phase 0 / PSG-153 — SEO Auditor → content keyword handoff.
 //
-// Owner: child issue (Nora). This is the "SEO Auditor → content path": the
+// Owner: the SEO half (PSG-161, Ravi). This is the "SEO Auditor → content path": the
 // auditor "produces keyword targets that feed the Content Writer"
 // (ORIGINAL-README §Agents; ORIGINAL-PLANNING §290–293).
 //
