@@ -102,10 +102,11 @@ test("production happy path: generate -> print (Lob test) -> historical -> repri
       phone: "555-0188",
       email: "alex@e2e-prod.test",
       address: {
-        line1: "9 Elm Street",
-        city: "Austin",
-        state: "TX",
-        postal_code: "78701",
+        // 185 Berry St is Lob's own SF office — guaranteed USPS-deliverable.
+        line1: "185 Berry St Ste 6100",
+        city: "San Francisco",
+        state: "CA",
+        postal_code: "94107",
       },
     },
   });
