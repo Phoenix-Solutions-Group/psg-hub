@@ -53,3 +53,6 @@ export {
   hubRowToCanonical,
   hubRowsToCanonical,
 } from "./bridge";
+// PSG-138 — canonical-38 standardization pipeline (wires the PSG-132 helpers).
+export { standardizeCanonicalRows } from "./standardize";
+export type { StandardizeOptions, StandardizeResult } from "./standardize";
