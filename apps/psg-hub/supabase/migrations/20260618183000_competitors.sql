@@ -12,6 +12,24 @@
 -- AUTHORED ONLY — NOT applied to prod here; prod apply is the v1.6 gate batch
 -- (PROTOCOL-migration-safety.md, mirrors 13-04 / 14-03). ZERO data written.
 
+-- CI compatibility: the remote_schema.sql snapshot (taken before this migration was authored)
+-- creates an older competitors table (intel caching shape: has report_id, lacks normalized_name).
+-- On a fresh apply (CI), we need to replace that table with the new competitor-engine schema.
+-- Guard: drop the old table only when it has the OLD shape (report_id present, normalized_name
+-- absent). No-op if the new table already exists (prod re-run) or if no table exists at all.
+-- The old table has no dependent FK children — competitors is always the FK child, never parent.
+do $$ begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'competitors' and column_name = 'report_id'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'competitors' and column_name = 'normalized_name'
+  ) then
+    drop table public.competitors cascade;
+  end if;
+end $$;
+
 create table if not exists public.competitors (
   id uuid primary key default gen_random_uuid(),
   shop_id uuid not null references public.shops(id) on delete cascade,
