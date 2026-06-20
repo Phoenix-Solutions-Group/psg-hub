@@ -31,6 +31,8 @@ test.describe("gsc panel — per-shop (OWNER)", () => {
       name: /Search clicks over the last 30 days/,
     });
     await expect(chart).toBeVisible();
+    // Wait for Recharts to render paths (animation runs after container appears).
+    await expect(chart.locator("svg path").first()).toBeVisible();
     expect(await chart.locator("svg path").count()).toBeGreaterThan(0);
 
     await checkA11y(page, "analytics-gsc");
