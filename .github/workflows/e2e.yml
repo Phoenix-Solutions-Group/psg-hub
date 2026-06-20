@@ -77,8 +77,12 @@ jobs:
           pnpm exec supabase start 2>&1 | tee /tmp/supabase-start.log
           SUPABASE_EXIT=${PIPESTATUS[0]}
           if [ "$SUPABASE_EXIT" -ne 0 ]; then
-            echo "::error::supabase start failed (exit $SUPABASE_EXIT) — last 50 lines:"
-            tail -50 /tmp/supabase-start.log | while IFS= read -r line; do
+            echo "::error::supabase start failed (exit $SUPABASE_EXIT) — error lines:"
+            grep -iE "error|fatal|failed|panic" /tmp/supabase-start.log | tail -30 | while IFS= read -r line; do
+              echo "::error::  $line"
+            done
+            echo "::error::--- last 20 lines of output ---"
+            tail -20 /tmp/supabase-start.log | while IFS= read -r line; do
               echo "::error::  $line"
             done
             exit 1
