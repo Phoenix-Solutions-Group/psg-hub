@@ -13,6 +13,7 @@
  */
 
 import { heuristicProvider } from "./heuristic-provider";
+import { googlePlacesProvider } from "./google-places-provider";
 import type {
   DiscoveryInput,
   DiscoveryProvider,
@@ -22,6 +23,18 @@ import type {
 export * from "./types";
 export { heuristicProvider } from "./heuristic-provider";
 export {
+  googlePlacesProvider,
+  createGooglePlacesProvider,
+  createTtlCache,
+} from "./google-places-provider";
+export type {
+  GooglePlacesProviderDeps,
+  CompetitorSource,
+  GeoPoint,
+  ProfileCache,
+  FetchLike,
+} from "./google-places-provider";
+export {
   normalizePhone,
   normalizeState,
   inferWebsiteCandidate,
@@ -29,17 +42,29 @@ export {
   cleanText,
 } from "./normalize";
 
-/** Registry of available providers, keyed by ONBOARDING_DISCOVERY_PROVIDER. */
+/**
+ * Registry of available providers, keyed by ONBOARDING_DISCOVERY_PROVIDER.
+ * `google_places` is registered but reports `isConfigured() === false` until the
+ * board-gated GOOGLE_PLACES_API_KEY is provisioned (PSG-149 / PSG-142); until
+ * then `selectProvider` transparently degrades it to the heuristic provider.
+ */
 const PROVIDERS: Record<string, DiscoveryProvider> = {
   heuristic: heuristicProvider,
-  // google_places: googlePlacesProvider,  // board-gated — PSG-142
+  google_places: googlePlacesProvider,
 };
 
 export function selectProvider(
   name: string | undefined = process.env.ONBOARDING_DISCOVERY_PROVIDER
 ): DiscoveryProvider {
   if (!name) return heuristicProvider;
-  return PROVIDERS[name] ?? heuristicProvider;
+  const provider = PROVIDERS[name];
+  if (!provider) return heuristicProvider;
+  // A selected provider that needs credentials it doesn't have degrades to the
+  // offline heuristic provider rather than failing onboarding.
+  if (provider.isConfigured && !provider.isConfigured()) {
+    return heuristicProvider;
+  }
+  return provider;
 }
 
 /**

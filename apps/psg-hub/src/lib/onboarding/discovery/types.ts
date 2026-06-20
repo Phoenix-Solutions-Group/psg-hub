@@ -80,5 +80,12 @@ export interface DiscoveryInput {
  */
 export interface DiscoveryProvider {
   readonly name: string;
+  /**
+   * Optional readiness check. A provider that needs credentials (e.g. Google
+   * Places needs GOOGLE_PLACES_API_KEY) returns false when they are absent so
+   * the registry can degrade to the heuristic provider instead of failing
+   * onboarding. Providers with no external dependency may omit this.
+   */
+  isConfigured?(): boolean;
   discover(input: DiscoveryInput): Promise<EnrichedShopProfile>;
 }
