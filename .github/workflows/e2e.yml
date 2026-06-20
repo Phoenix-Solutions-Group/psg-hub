@@ -92,7 +92,18 @@ jobs:
       - name: Write .env.test.local (local Supabase + Lob test key)
         working-directory: apps/psg-hub
         run: |
-          pnpm exec supabase status -o env > supabase-status.env
+          set +e
+          pnpm exec supabase status -o env > supabase-status.env 2>&1
+          STATUS_EXIT=$?
+          set -e
+          echo "supabase status exit=$STATUS_EXIT"
+          echo "=== supabase status output ==="
+          cat supabase-status.env
+          if [ $STATUS_EXIT -ne 0 ]; then
+            echo "::error::supabase status failed (exit $STATUS_EXIT):"
+            cat supabase-status.env | while IFS= read -r line; do echo "::error::  $line"; done
+            exit 1
+          fi
           echo "=== supabase status -o env keys ==="
           cut -d= -f1 supabase-status.env
           get() { grep -E "^$1=" supabase-status.env | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }
