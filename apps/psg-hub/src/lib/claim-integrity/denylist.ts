@@ -57,8 +57,10 @@ export const KNOWN_CARRIERS: readonly string[] = [
 
 /**
  * Generic insurer phrases that are explicitly OK (spec §5: "We work with all
- * major insurers" is allowed). If a carrier-name match is fully contained in
- * one of these phrases we do not flag it.
+ * major insurers" is allowed). These contain no carrier name, so they never
+ * trip carrier detection in `scanCarrierDisclosure` and pass naturally — no
+ * special-casing required. Retained as a documentation of the allowed §5
+ * phrasing and for any future copy-generation guidance.
  */
 export const ALLOWED_GENERIC_INSURER_PHRASES: readonly string[] = [
   "all major insurers",
@@ -103,12 +105,6 @@ function literalPhraseRegex(phrase: string): RegExp {
   // \b only works at alnum boundaries; for multi-word brand names this is fine
   // because the boundary is anchored on the first/last alnum char.
   return new RegExp(`\\b${escaped}\\b`, "i");
-}
-
-/** True when a carrier match sits entirely inside an allowed generic phrase. */
-function isWithinGenericPhrase(text: string): boolean {
-  const lower = text.toLowerCase();
-  return ALLOWED_GENERIC_INSURER_PHRASES.some((p) => lower.includes(p));
 }
 
 /**
@@ -156,7 +152,11 @@ export function scanCarrierDisclosure(text: string, drp: DrpDisclosure): Violati
     if (seen.has(key)) continue;
     seen.add(key);
     if (!literalPhraseRegex(carrier).test(text)) continue;
-    if (isWithinGenericPhrase(text)) continue; // generic phrasing is allowed
+    // NOTE: no generic-phrase guard here. Generic phrasing (e.g. "all major
+    // insurers") contains no carrier name, so the literal-phrase regex above
+    // never matches it — it passes naturally. A whole-text guard would instead
+    // suppress ALL carrier flagging whenever any generic phrase appeared, which
+    // defeats Check 2 (PSG-150 false-negative).
 
     if (!drp.allowed) {
       violations.push({

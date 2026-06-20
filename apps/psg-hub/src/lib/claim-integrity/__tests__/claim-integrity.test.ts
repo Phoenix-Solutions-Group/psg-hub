@@ -174,6 +174,41 @@ describe("DRP / carrier disclosure (spec §5)", () => {
   it('allows generic "all major insurers" phrasing', () => {
     expect(scanCarrierDisclosure("We work with all major insurers.", baseFacts.drpDisclosure)).toHaveLength(0);
   });
+
+  // PSG-150 regression: a generic phrase must NOT suppress carrier flagging.
+  it("rejects a named carrier riding alongside a generic phrase (opt-out)", () => {
+    const res = checkClaimIntegrity({
+      text: "We work with all major insurers, including State Farm and Geico.",
+      manifest: [],
+      facts: baseFacts, // opted OUT
+    });
+    expect(res.verdict).toBe("reject");
+    const carrierViolations = res.violations.filter((v) => v.code === "carrier_disclosure_not_allowed");
+    expect(carrierViolations.map((v) => v.evidence)).toEqual(
+      expect.arrayContaining(["State Farm", "Geico"]),
+    );
+    expect(carrierViolations).toHaveLength(2);
+  });
+
+  it("does not flag a generic phrase with no named carrier (opt-out, no false-positive)", () => {
+    const res = checkClaimIntegrity({
+      text: "We work with all major insurers.",
+      manifest: [],
+      facts: baseFacts, // opted OUT
+    });
+    expect(res.verdict).toBe("ship");
+    expect(res.violations).toHaveLength(0);
+  });
+
+  it("ships an authorized carrier named alongside a generic phrase (opt-in)", () => {
+    const res = checkClaimIntegrity({
+      text: "We work with all major insurers, including State Farm, our direct repair partner.",
+      manifest: [{ claimText: "State Farm DRP", field: "drpDisclosure", value: "State Farm" }],
+      facts: optedInFacts, // State Farm authorized
+    });
+    expect(res.verdict).toBe("ship");
+    expect(res.violations).toHaveLength(0);
+  });
 });
 
 describe("prohibited-patterns denylist (agent-wiring §3a)", () => {
