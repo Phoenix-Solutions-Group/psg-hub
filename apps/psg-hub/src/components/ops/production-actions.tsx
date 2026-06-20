@@ -237,6 +237,7 @@ export function ProductionDocumentsTable({ rows: initialRows }: { rows: ActionDo
             onChange={(e) => setField("batch_id", e.target.value)}
           />
           <select
+            aria-label="Filter by status"
             value={filters.status}
             onChange={(e) => setField("status", e.target.value)}
             className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
