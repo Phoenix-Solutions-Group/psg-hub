@@ -41,6 +41,9 @@ export default defineConfig({
         "src/lib/semrush/client.ts", // 09-03 SEMrush HTTP client (v0.3)
         "src/lib/semrush/sync.ts", // 09-03 ingest orchestrator (v0.3)
         "src/app/api/cron/semrush-sync/route.ts", // 09-03 cron route (v0.3)
+        "src/types/content-brief.ts", // PSG-160 ContentBrief DTO + schema
+        "src/lib/bsm/content-briefs.ts", // PSG-160 brief writer + loader
+        "src/app/api/shops/[shopId]/content-briefs/route.ts", // PSG-160 brief read API
       ],
       // Excluded v0.2-adjacent surfaces (covered elsewhere / not unit-gateable
       // in env=node), with rationale:
