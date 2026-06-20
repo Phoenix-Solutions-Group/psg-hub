@@ -58,7 +58,7 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
         </nav>
         <div className="border-t border-sidebar-border p-4">
           <p className="truncate text-xs text-sidebar-foreground/70">{user.email}</p>
-          <p className="text-xs text-sidebar-foreground/50">{access.role}</p>
+          <p className="text-xs text-sidebar-foreground/70">{access.role}</p>
         </div>
       </aside>
 

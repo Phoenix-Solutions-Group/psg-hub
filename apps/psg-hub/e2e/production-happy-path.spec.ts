@@ -142,7 +142,8 @@ test("production happy path: generate -> print (Lob test) -> historical -> repri
 
   // --- Step 5: print the batch through the Lob TEST API ------------------------
   const printRes = await page.request.post(`/api/production/batches/${batchId}/print`);
-  expect(printRes.status(), "print batch").toBe(200);
+  const printBody = await printRes.json().catch(() => null);
+  expect(printRes.status(), `print batch body=${JSON.stringify(printBody)}`).toBe(200);
   const { outcome } = (await printRes.json()) as {
     outcome: {
       batchId: string;
