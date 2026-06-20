@@ -93,13 +93,16 @@ jobs:
         working-directory: apps/psg-hub
         run: |
           pnpm exec supabase status -o env > supabase-status.env
+          echo "=== supabase status -o env keys ==="
+          cut -d= -f1 supabase-status.env
           get() { grep -E "^$1=" supabase-status.env | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }
           API_URL="$(get API_URL)"
           ANON_KEY="$(get ANON_KEY)"
           SERVICE_ROLE_KEY="$(get SERVICE_ROLE_KEY)"
           if [ -z "$API_URL" ] || [ -z "$ANON_KEY" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
-            echo "::error::Could not parse local Supabase status env. Keys found:"
-            cut -d= -f1 supabase-status.env
+            echo "::error::Could not parse local Supabase status env."
+            echo "::error::Keys in output: $(cut -d= -f1 supabase-status.env | tr '\n' ' ')"
+            echo "::error::API_URL='${API_URL}' ANON_KEY='${ANON_KEY:0:8}...' SERVICE_ROLE_KEY='${SERVICE_ROLE_KEY:0:8}...'"
             exit 1
           fi
           {
