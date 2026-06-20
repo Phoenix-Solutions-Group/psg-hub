@@ -32,7 +32,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1, // shared local DB — keep deterministic
-  reporter: [["list"]],
+  // In CI add the github reporter so test failures emit ::error:: annotations
+  // visible via the public check-runs API (agents have no raw-log access).
+  reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
   timeout: 60_000,
   expect: { timeout: 10_000 },
   use: {
