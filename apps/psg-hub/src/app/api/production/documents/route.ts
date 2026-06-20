@@ -6,7 +6,7 @@ import { resolveDocumentSort } from "@/lib/ops/production";
 // v1.3 / PSG-27 (PSG-41) — Historical Production search over documents.
 // Allow-listed exact filters (never interpolate raw input): by print ID
 // (external_id), company, product, repair customer, status. Indexes for each
-// path shipped in 20260618180000_production_module_v1_3.sql.
+// path shipped in 20260618180001_production_module_v1_3.sql.
 
 export async function GET(request: NextRequest) {
   const gate = await requireOpsFn("manage_production");
