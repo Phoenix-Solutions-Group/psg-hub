@@ -121,14 +121,18 @@ describe("agent-engine contracts", () => {
   // The SEO Auditor / Content Writer seams (selectKeywordTargets,
   // buildContentDraftRequest) are implemented in PSG-158 — see
   // seo-auditor.test.ts and content-writer-handoff.test.ts for behavior coverage.
-  // The Market Researcher seam (synthesizeContentBrief) remains a child-issue seam
-  // here (PSG-156); it flips to implemented when that work lands.
+  // The Market Researcher seam (synthesizeContentBrief) is implemented in PSG-156;
+  // end-to-end coverage lives in qa-cross-module.e2e.test.ts (PSG-159). This
+  // assertion was flipped from "throws not-implemented" to "implemented" when
+  // PSG-156 landed (as the prior comment said it would).
   describe("synthesis/selection seams (PSG-153 children)", () => {
-    it("synthesizeContentBrief is a defined seam", () => {
+    it("synthesizeContentBrief is implemented (PSG-156)", () => {
       expect(typeof synthesizeContentBrief).toBe("function");
-      expect(() => synthesizeContentBrief(sampleAudit, [sampleSentiment], { briefId: "b", now: NOW })).toThrow(
-        /not implemented/,
-      );
+      const brief = synthesizeContentBrief(sampleAudit, [sampleSentiment], { briefId: "b", now: NOW });
+      expect(() => contentBriefSchema.parse(brief)).not.toThrow();
+      // Provenance traces back to the consumed upstream artifacts.
+      expect(brief.sources.auditReportId).toBe(sampleAudit.id);
+      expect(brief.sources.sentimentReportIds).toContain(sampleSentiment.id);
     });
     it("selectKeywordTargets is implemented (PSG-158)", () => {
       expect(typeof selectKeywordTargets).toBe("function");
