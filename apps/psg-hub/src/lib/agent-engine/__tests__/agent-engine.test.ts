@@ -118,13 +118,15 @@ describe("agent-engine contracts", () => {
     ).toThrow();
   });
 
-  // Seams are locked but not yet implemented — the child issues turn these green.
+  // Seams are locked; the child issues turn these green. The Market Researcher
+  // seam (synthesizeContentBrief, PSG-156) is implemented — dedicated behavior
+  // coverage lives in market-researcher.test.ts.
   describe("synthesis/selection seams (PSG-153 children)", () => {
-    it("synthesizeContentBrief is a defined seam", () => {
+    it("synthesizeContentBrief is implemented and returns a validated brief (PSG-156)", () => {
       expect(typeof synthesizeContentBrief).toBe("function");
-      expect(() => synthesizeContentBrief(sampleAudit, [sampleSentiment], { briefId: "b", now: NOW })).toThrow(
-        /not implemented/,
-      );
+      const brief = synthesizeContentBrief(sampleAudit, [sampleSentiment], { briefId: "b", now: NOW });
+      expect(brief.id).toBe("b");
+      expect(brief.sources.auditReportId).toBe(sampleAudit.id);
     });
     it("selectKeywordTargets is a defined seam", () => {
       expect(typeof selectKeywordTargets).toBe("function");
