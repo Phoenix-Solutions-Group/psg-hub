@@ -10,6 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export function OnboardingWizard() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveryNote, setDiscoveryNote] = useState<string | null>(null);
+  const [pendingFields, setPendingFields] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -19,6 +22,45 @@ export function OnboardingWizard() {
   const [state, setState] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [phone, setPhone] = useState("");
+
+  // PSG-144 smart auto-discovery: name + address -> suggested profile fields.
+  // Suggestions are pre-filled but always editable; the user confirms before the
+  // shop is created (verified-facts mandate — nothing is asserted as truth here).
+  async function handleDiscover() {
+    setDiscovering(true);
+    setError(null);
+    setDiscoveryNote(null);
+    try {
+      const res = await fetch("/api/onboarding/discover", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ shopName, address, city, state }),
+      });
+      if (res.ok) {
+        const { profile } = (await res.json()) as {
+          profile: {
+            websiteUrl: { value: string | null };
+            phone: { value: string | null };
+            pending: string[];
+          };
+        };
+        // Only pre-fill empty fields so we never clobber what the user typed.
+        if (profile.websiteUrl.value && !websiteUrl) {
+          setWebsiteUrl(profile.websiteUrl.value);
+        }
+        if (profile.phone.value && !phone) setPhone(profile.phone.value);
+        setPendingFields(profile.pending ?? []);
+        setDiscoveryNote("Review the suggestions below and edit anything.");
+      } else {
+        setDiscoveryNote("Couldn't auto-fill — enter your details below.");
+      }
+    } catch {
+      setDiscoveryNote("Couldn't auto-fill — enter your details below.");
+    } finally {
+      setDiscovering(false);
+      setStep(3);
+    }
+  }
 
   async function handleSubmit() {
     setLoading(true);
@@ -124,11 +166,34 @@ export function OnboardingWizard() {
                 Continue
               </Button>
             </div>
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={handleDiscover}
+              disabled={discovering || !shopName.trim()}
+            >
+              {discovering ? "Finding your shop..." : "Find my shop & auto-fill"}
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              We&apos;ll suggest your website and details from your name and
+              address. You can edit everything before finishing.
+            </p>
           </div>
         )}
 
         {step === 3 && (
           <div className="space-y-4">
+            {discoveryNote && (
+              <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
+                <p>{discoveryNote}</p>
+                {pendingFields.length > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    We&apos;ll auto-fill {pendingFields.join(", ")} once your data
+                    sources are connected.
+                  </p>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="website">Website URL</Label>
               <Input
