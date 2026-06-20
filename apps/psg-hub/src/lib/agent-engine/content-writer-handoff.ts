@@ -17,18 +17,45 @@
 // builds/validates the request contract that the skill consumes, keeping it pure
 // and node-testable (same discipline as claim-integrity).
 
-import type { ContentBrief, ContentDraftRequest, ContentType, KeywordTarget } from "./types";
+import {
+  contentDraftRequestSchema,
+  type ContentBrief,
+  type ContentDraftRequest,
+  type ContentType,
+  type KeywordTarget,
+} from "./types";
 
 /**
  * Assemble a validated ContentDraftRequest for the Content Writer.
- * @throws until implemented by the PSG-153 Content Writer handoff child issue.
+ *
+ * The effective keyword set is `brief.targetKeywords` UNION the mid-draft asks
+ * in `keywordTargets`, deduped by `keyword` (first occurrence wins, so the
+ * brief's curated targets take precedence over later mid-draft asks for the same
+ * keyword). The request carries `brief.shopId` through so the downstream Content
+ * Writer skill can gate its output against that shop's verified-facts record via
+ * `checkClaimIntegrity` (PSG-143).
+ *
+ * The result is validated with `contentDraftRequestSchema.parse`, which enforces
+ * a non-empty keyword set — a draft request that would feed the writer nothing
+ * throws. Draft generation / the Anthropic call live in the skill, not here.
  */
 export function buildContentDraftRequest(
-  _brief: ContentBrief,
-  _keywordTargets: KeywordTarget[],
-  _contentType: ContentType,
+  brief: ContentBrief,
+  keywordTargets: KeywordTarget[],
+  contentType: ContentType,
 ): ContentDraftRequest {
-  throw new Error(
-    "buildContentDraftRequest not implemented — see PSG-153 Content Writer handoff child issue",
-  );
+  const seen = new Set<string>();
+  const effectiveKeywordTargets: KeywordTarget[] = [];
+  for (const target of [...brief.targetKeywords, ...keywordTargets]) {
+    if (seen.has(target.keyword)) continue;
+    seen.add(target.keyword);
+    effectiveKeywordTargets.push(target);
+  }
+
+  return contentDraftRequestSchema.parse({
+    shopId: brief.shopId,
+    brief,
+    keywordTargets: effectiveKeywordTargets,
+    contentType,
+  });
 }

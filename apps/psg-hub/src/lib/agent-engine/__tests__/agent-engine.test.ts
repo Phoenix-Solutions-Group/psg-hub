@@ -118,7 +118,11 @@ describe("agent-engine contracts", () => {
     ).toThrow();
   });
 
-  // Seams are locked but not yet implemented — the child issues turn these green.
+  // The SEO Auditor / Content Writer seams (selectKeywordTargets,
+  // buildContentDraftRequest) are implemented in PSG-158 — see
+  // seo-auditor.test.ts and content-writer-handoff.test.ts for behavior coverage.
+  // The Market Researcher seam (synthesizeContentBrief) remains a child-issue seam
+  // here (PSG-156); it flips to implemented when that work lands.
   describe("synthesis/selection seams (PSG-153 children)", () => {
     it("synthesizeContentBrief is a defined seam", () => {
       expect(typeof synthesizeContentBrief).toBe("function");
@@ -126,11 +130,11 @@ describe("agent-engine contracts", () => {
         /not implemented/,
       );
     });
-    it("selectKeywordTargets is a defined seam", () => {
+    it("selectKeywordTargets is implemented (PSG-158)", () => {
       expect(typeof selectKeywordTargets).toBe("function");
-      expect(() => selectKeywordTargets(sampleAudit)).toThrow(/not implemented/);
+      expect(() => selectKeywordTargets(sampleAudit)).not.toThrow();
     });
-    it("buildContentDraftRequest is a defined seam", () => {
+    it("buildContentDraftRequest is implemented (PSG-158)", () => {
       expect(typeof buildContentDraftRequest).toBe("function");
       const brief = contentBriefSchema.parse({
         id: "brief-1",
@@ -143,9 +147,7 @@ describe("agent-engine contracts", () => {
         sources: { auditReportId: "audit-1", sentimentReportIds: [] },
         createdAt: NOW,
       });
-      expect(() => buildContentDraftRequest(brief, sampleAudit.keywordTargets, "blog_post")).toThrow(
-        /not implemented/,
-      );
+      expect(() => buildContentDraftRequest(brief, sampleAudit.keywordTargets, "blog_post")).not.toThrow();
     });
   });
 });
