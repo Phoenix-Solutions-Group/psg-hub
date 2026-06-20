@@ -26,13 +26,37 @@ export type SelectKeywordTargetsOptions = {
 
 /**
  * Select & rank the keyword targets the Content Writer should pursue.
- * @throws until implemented by the PSG-153 SEO Auditor child issue.
+ *
+ * Returns a NEW array of `auditReport.keywordTargets` sorted by `priority`
+ * descending (highest opportunity first); the input report and its target
+ * objects are never mutated. When `opts.intents` is supplied, only targets whose
+ * `intent` is in that list are kept; when `opts.limit` is supplied, at most that
+ * many of the top-ranked targets are returned (a non-positive limit yields `[]`).
+ *
+ * This is also the function the Content Writer calls when it "asks the SEO
+ * auditor for keyword targets mid-draft" (ORIGINAL-PLANNING §293).
  */
 export function selectKeywordTargets(
-  _auditReport: AuditReport,
-  _opts?: SelectKeywordTargetsOptions,
+  auditReport: AuditReport,
+  opts: SelectKeywordTargetsOptions = {},
 ): KeywordTarget[] {
-  throw new Error(
-    "selectKeywordTargets not implemented — see PSG-153 SEO Auditor child issue",
-  );
+  const { limit, intents } = opts;
+
+  // Copy before sorting so we never mutate the caller's array (or report).
+  let targets = [...auditReport.keywordTargets];
+
+  if (intents && intents.length > 0) {
+    const allowed = new Set<KeywordIntent>(intents);
+    targets = targets.filter((t) => allowed.has(t.intent));
+  }
+
+  // Highest priority first. Array#sort is stable in modern engines, so equal
+  // priorities preserve their original auditor order.
+  targets.sort((a, b) => b.priority - a.priority);
+
+  if (limit != null) {
+    targets = limit > 0 ? targets.slice(0, limit) : [];
+  }
+
+  return targets;
 }

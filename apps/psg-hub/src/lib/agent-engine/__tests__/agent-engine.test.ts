@@ -118,9 +118,13 @@ describe("agent-engine contracts", () => {
     ).toThrow();
   });
 
-  // Seams are locked; the child issues turn these green. The Market Researcher
-  // seam (synthesizeContentBrief, PSG-156) is implemented — dedicated behavior
-  // coverage lives in market-researcher.test.ts.
+  // All three PSG-153 cross-module seams are now implemented:
+  //  • synthesizeContentBrief (PSG-156) — Market Researcher; behavior coverage in
+  //    market-researcher.test.ts.
+  //  • selectKeywordTargets / buildContentDraftRequest (PSG-158) — SEO Auditor →
+  //    Content Writer; behavior coverage in seo-auditor.test.ts and
+  //    content-writer-handoff.test.ts.
+  // The assertions below are the integration smoke test that they are wired in.
   describe("synthesis/selection seams (PSG-153 children)", () => {
     it("synthesizeContentBrief is implemented and returns a validated brief (PSG-156)", () => {
       expect(typeof synthesizeContentBrief).toBe("function");
@@ -128,11 +132,11 @@ describe("agent-engine contracts", () => {
       expect(brief.id).toBe("b");
       expect(brief.sources.auditReportId).toBe(sampleAudit.id);
     });
-    it("selectKeywordTargets is a defined seam", () => {
+    it("selectKeywordTargets is implemented (PSG-158)", () => {
       expect(typeof selectKeywordTargets).toBe("function");
-      expect(() => selectKeywordTargets(sampleAudit)).toThrow(/not implemented/);
+      expect(() => selectKeywordTargets(sampleAudit)).not.toThrow();
     });
-    it("buildContentDraftRequest is a defined seam", () => {
+    it("buildContentDraftRequest is implemented (PSG-158)", () => {
       expect(typeof buildContentDraftRequest).toBe("function");
       const brief = contentBriefSchema.parse({
         id: "brief-1",
@@ -145,9 +149,7 @@ describe("agent-engine contracts", () => {
         sources: { auditReportId: "audit-1", sentimentReportIds: [] },
         createdAt: NOW,
       });
-      expect(() => buildContentDraftRequest(brief, sampleAudit.keywordTargets, "blog_post")).toThrow(
-        /not implemented/,
-      );
+      expect(() => buildContentDraftRequest(brief, sampleAudit.keywordTargets, "blog_post")).not.toThrow();
     });
   });
 });
