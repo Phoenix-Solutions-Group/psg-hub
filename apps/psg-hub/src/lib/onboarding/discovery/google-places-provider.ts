@@ -6,10 +6,11 @@
  * new v1 surface) to resolve the business and pull *authoritative* enrichment:
  * website, phone, opening hours, review summary, and (when available) a
  * canonical postal address. Competitors come from an injectable
- * `CompetitorSource` (the board-gated BigQuery service-radius query — PSG-142);
- * an optional `KeywordSource` (SEMrush) can layer on later. Both are optional so
- * this provider is useful the moment a Google Places key lands, even before the
- * BigQuery geodata schema is approved.
+ * `CompetitorSource` (the Supabase-native / Yext competitor path; BigQuery was
+ * dropped per the PSG-142 re-scope); an optional `KeywordSource` (SEMrush) can
+ * layer on later. Both are optional so this provider is useful the moment a
+ * Google Places key lands, with competitors simply staying `pending` until a
+ * `CompetitorSource` is wired in.
  *
  * Verified-facts mandate (BSM Phase 0 / PSG-142): only fields sourced from an
  * authoritative external system are marked `verified: true`. Anything inferred
@@ -88,9 +89,10 @@ export interface GeoPoint {
 }
 
 /**
- * Pluggable competitor lookup. The production implementation is the board-gated
- * BigQuery service-radius query (PSG-142); until that schema is approved this is
- * simply omitted and competitors stay `pending`.
+ * Pluggable competitor lookup. The production implementation is the
+ * Supabase-native / Yext competitor path (BigQuery was dropped per the PSG-142
+ * re-scope); until a source is wired in this is simply omitted and competitors
+ * stay `pending`.
  */
 export interface CompetitorSource {
   readonly name: string;
@@ -150,7 +152,7 @@ export interface GooglePlacesProviderDeps {
   apiKey?: string;
   /** Injectable fetch (defaults to global fetch). */
   fetchImpl?: FetchLike;
-  /** Optional BigQuery-backed competitor radius source (PSG-142). */
+  /** Optional competitor source (Supabase-native / Yext path; PSG-142 re-scope). */
   competitorSource?: CompetitorSource;
   /** Result cache (defaults to a 1h in-process TTL cache). */
   cache?: ProfileCache;
@@ -424,7 +426,7 @@ export function createGooglePlacesProvider(
           verified: false,
         };
 
-    // --- competitors (board-gated BigQuery source — optional) --------------
+    // --- competitors (Supabase-native / Yext source — optional) ------------
     let competitors: DiscoveredCompetitor[] = [];
     if (competitorSource) {
       try {

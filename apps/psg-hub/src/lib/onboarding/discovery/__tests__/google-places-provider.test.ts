@@ -204,7 +204,7 @@ describe("googlePlacesProvider — idempotency & resilience", () => {
   });
 });
 
-describe("googlePlacesProvider — competitors (BigQuery seam)", () => {
+describe("googlePlacesProvider — competitors (CompetitorSource seam)", () => {
   it("fills competitors from an injected CompetitorSource and clears pending", async () => {
     const { fetchImpl } = okFetch(fullPlacesPayload());
     const competitorSource: CompetitorSource = {

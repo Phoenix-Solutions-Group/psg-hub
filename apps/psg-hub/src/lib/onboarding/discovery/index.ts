@@ -6,7 +6,7 @@
  * the ONBOARDING_DISCOVERY_PROVIDER env var; it defaults to the offline
  * heuristic provider so the flow works with no paid API keys.
  *
- * Adding a paid provider (Google Places / SEMrush / BigQuery competitor radius)
+ * Adding a paid provider (Google Places / SEMrush / Yext competitor source)
  * is a single entry in `PROVIDERS` once the board approves the spend (PSG-142).
  * If a provider is selected but unavailable (missing key), we fall back to the
  * heuristic provider rather than failing onboarding.
