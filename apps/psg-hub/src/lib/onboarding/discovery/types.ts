@@ -58,7 +58,7 @@ export interface EnrichedShopProfile {
   competitors: DiscoveredCompetitor[];
   /**
    * Enrichments that require a board-gated paid provider that is not yet
-   * configured (Google Places / SEMrush / BigQuery). Surfaced so the wizard can
+   * configured (Google Places / SEMrush / Yext). Surfaced so the wizard can
    * tell the user "we'll auto-fill these once your data sources are connected".
    */
   pending: string[];
@@ -75,10 +75,17 @@ export interface DiscoveryInput {
 
 /**
  * A pluggable discovery backend. The default is offline + deterministic; paid
- * external providers (Google Places, SEMrush, BigQuery competitor radius) slot
+ * external providers (Google Places, SEMrush, Yext competitor source) slot
  * in behind this seam once the board approves their spend (PSG-142).
  */
 export interface DiscoveryProvider {
   readonly name: string;
+  /**
+   * Optional readiness check. A provider that needs credentials (e.g. Google
+   * Places needs GOOGLE_PLACES_API_KEY) returns false when they are absent so
+   * the registry can degrade to the heuristic provider instead of failing
+   * onboarding. Providers with no external dependency may omit this.
+   */
+  isConfigured?(): boolean;
   discover(input: DiscoveryInput): Promise<EnrichedShopProfile>;
 }

@@ -6,7 +6,7 @@
  * field the operator must source from an external provider as `pending`.
  *
  * This is the default provider so the smart-onboarding flow is fully functional
- * (and testable) before the board approves Google Places / SEMrush / BigQuery
+ * (and testable) before the board approves Google Places / SEMrush / Yext
  * spend (escalated on PSG-142). When those land, a real provider replaces this
  * one behind the DiscoveryProvider seam and fills `pending` with verified data.
  */
