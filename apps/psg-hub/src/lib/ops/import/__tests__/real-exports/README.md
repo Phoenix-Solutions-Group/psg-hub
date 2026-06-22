@@ -14,7 +14,9 @@ just synthetic fixtures.
 2. Drop the files here, by kind:
    - RO exports → `ro/`
    - Estimate exports → `estimate/`
-   Any of `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xlsb` are accepted.
+   Any of `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xlsm`, `.xlsb`, `.xls`, or
+   Excel-2003 SpreadsheetML `.xml` are accepted (binary/spreadsheet decode via
+   SheetJS — PSG-186).
 3. Run the harness:
    ```bash
    pnpm --filter psg-hub test real-export-validation
@@ -23,7 +25,10 @@ just synthetic fixtures.
    auto-mapped fields, valid/invalid counts, sample errors) and **asserts**:
    - the file parses and has ≥1 data row,
    - every **required** field auto-resolves from the headers,
-   - **zero** rows have hard validation errors.
+   - the large majority (**≥90%**) of rows are import-ready. Real exports carry
+     a few genuinely-dirty rows (misaligned columns, typo'd states, missing
+     identity) the wizard is meant to flag — so we don't demand zero hard
+     errors, only that a parser/sheet/header regression can't crater the ratio.
 
 Any parser/mapping gap a real export surfaces gets fixed in
 `apps/psg-hub/src/lib/ops/import` and covered by a synthetic test in
