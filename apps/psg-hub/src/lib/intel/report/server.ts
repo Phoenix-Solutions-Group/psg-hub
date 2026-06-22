@@ -60,25 +60,49 @@ function buildPrompt(input: NarrativeInput): string {
 }
 
 /**
+ * Append the grounded research signals (from makeGroundedResearcher) as a bullet block the
+ * writer must also ground in. Empty/absent notes leave the deterministic-numbers prompt
+ * untouched, so the writer behaves exactly as before when no research step ran.
+ */
+function appendResearchNotes(prompt: string, notes?: string[]): string {
+  if (!notes?.length) return prompt;
+  return [prompt, "", "Recent market signals (grounded):", ...notes.map((n) => `- ${n}`)].join(
+    "\n",
+  );
+}
+
+/**
  * Build the grounded-narrative generator for a shop's report. The router enforces the G5 gate:
  * with only the in-budget provider enabled it still produces a (same-family) narrative, and
- * once G5 widens INTEL_ENABLED_PROVIDERS the grounded tier is used. Any router failure (all
- * candidates exhausted / no enabled provider) returns null so the report degrades to the
- * pending-activation notice instead of throwing.
+ * once G5 widens INTEL_ENABLED_PROVIDERS the grounded tier is used. When `spendCapUsd` +
+ * `monthToDateSpendUsd` are supplied they thread into the router so the live month-to-date cost
+ * cap applies to the writer call too (not just the research step). Optional `researchNotes` are
+ * appended to the writer prompt as an extra grounding block. Any router failure (all candidates
+ * exhausted / no enabled provider / cap exceeded with no in-budget fallback) returns null so the
+ * report degrades to the pending-activation notice instead of throwing.
  */
 export function makeNarrativeGenerator(opts: {
   shopId: string;
   userId?: string | null;
+  spendCapUsd?: number;
+  monthToDateSpendUsd?: () => Promise<number>;
+  researchNotes?: string[];
 }): NarrativeGenerator {
   return async (input: NarrativeInput): Promise<GroundedNarrative | null> => {
     try {
       const result = await route<z.infer<typeof narrativeSchema>>(
         "writer",
-        { system: SYSTEM, prompt: buildPrompt(input), schema: narrativeSchema },
+        {
+          system: SYSTEM,
+          prompt: appendResearchNotes(buildPrompt(input), opts.researchNotes),
+          schema: narrativeSchema,
+        },
         {
           generate: gatewayGenerate,
           enabledProviders: resolveEnabledProviders(),
           logCall: makeRouterLogger({ shopId: opts.shopId, userId: opts.userId ?? null }),
+          spendCapUsd: opts.spendCapUsd,
+          monthToDateSpendUsd: opts.monthToDateSpendUsd,
         },
       );
       const parsed = narrativeSchema.safeParse(result.output);
