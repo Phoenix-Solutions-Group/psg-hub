@@ -120,6 +120,17 @@ export const claimManifestEntrySchema = z.object({
    * check that the backing field is present and non-empty.
    */
   value: z.string().min(1).optional(),
+  /**
+   * OPTIONAL provenance-at-rest (PSG-203): the authoritative source URL that
+   * backs this claim — the shop's own-site page the asserted fact was verified
+   * against, as published. Purely additive: the claim-integrity gate never reads
+   * `source`, so it has NO effect on `verifyClaim` / `checkClaimIntegrity`
+   * semantics. It exists so a persisted manifest can carry an immutable snapshot
+   * of the backing source at publish time, independent of later edits to the
+   * verified-facts record (the audit guarantee Check 3 reaches for). Absent when
+   * a claim has no asserted source (e.g. a non-asserted claim) — never an error.
+   */
+  source: z.string().min(1).optional(),
 });
 export type ClaimManifestEntry = z.infer<typeof claimManifestEntrySchema>;
 

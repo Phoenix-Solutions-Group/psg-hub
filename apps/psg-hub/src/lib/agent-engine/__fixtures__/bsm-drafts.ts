@@ -497,7 +497,11 @@ export function gateAllBsmDrafts(): GatedDraft[] {
   return BSM_GENERATED_ASSETS.map(({ key, asset }) => {
     const facts = BSM_VERIFIED_FACTS[asset.shopId];
     if (!facts) throw new Error(`No verified-facts record for ${asset.shopId} (asset ${key})`);
-    const gated = gateGeneratedAsset(asset, facts);
+    // PSG-203: snapshot each claim's own-site provenance source onto the manifest
+    // BEFORE gating, so the gated asset that flows to persistence (Ravi/Child B,
+    // PSG-194/PSG-199) carries the backing source at rest. Additive — `source` is
+    // ignored by the gate, so the verdict is unchanged (still 9/9 ship).
+    const gated = gateGeneratedAsset(withClaimProvenanceSources(asset), facts);
     return {
       key,
       shopId: asset.shopId,
@@ -687,6 +691,46 @@ export function buildAssetProvenanceManifests(): AssetProvenanceManifest[] {
       claims: asset.claimsManifest.map((e) => resolveClaimProvenance(e, facts, prov)),
     };
   });
+}
+
+/**
+ * The own-site source backing a single claim, or `undefined` when none resolves.
+ * Non-throwing sibling of `resolveClaimProvenance`: used to *annotate* a manifest
+ * with provenance-at-rest (PSG-203) where the hard Check-3 enforcement
+ * (`assertProvenanceIntegrity` / `buildAssetProvenanceManifests`) is NOT wanted —
+ * an unresolvable claim leaves `source` absent rather than failing the runner.
+ */
+function claimProvenanceSource(
+  entry: ClaimManifestEntry,
+  facts: VerifiedFacts,
+  prov: ShopProvenance,
+): string | undefined {
+  try {
+    return resolveClaimProvenance(entry, facts, prov).sourceUrl;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Return a copy of `asset` whose claims-manifest entries each carry the shop's-
+ * own-site `source` URL that backs them (PSG-203 — provenance-at-rest). The match
+ * mirrors the validator (via `resolveClaimProvenance`), so the snapshotted source
+ * is the SAME fact the gate accepted. Purely additive: `source` is ignored by the
+ * claim-integrity gate, so the asset ships identically with or without it; a claim
+ * that does not resolve to a sourced fact simply keeps `source` absent.
+ */
+export function withClaimProvenanceSources(asset: GeneratedAsset): GeneratedAsset {
+  const facts = BSM_VERIFIED_FACTS[asset.shopId];
+  const prov = BSM_FACT_PROVENANCE[asset.shopId];
+  if (!facts || !prov) return asset;
+  return {
+    ...asset,
+    claimsManifest: asset.claimsManifest.map((e) => {
+      const source = claimProvenanceSource(e, facts, prov);
+      return source ? { ...e, source } : e;
+    }),
+  };
 }
 
 /** Render the per-asset provenance manifest for the CLI runner / gate handoff. */

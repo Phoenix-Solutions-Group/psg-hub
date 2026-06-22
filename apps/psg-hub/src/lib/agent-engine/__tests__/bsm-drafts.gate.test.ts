@@ -79,6 +79,28 @@ describe("PSG-193 — 9 real BSM drafts gate to ship", () => {
     }
   });
 
+  // PSG-203 — provenance-at-rest: the gated draft that flows to persistence must
+  // carry each claim's own-site source on the manifest, while still shipping 9/9
+  // (the source field is additive and ignored by the gate).
+  it("annotates every gated claim with its shop's-own-site source (provenance-at-rest)", () => {
+    for (const r of results) {
+      const ownDomain = SHOP_OWN_DOMAINS[r.shopId];
+      const manifest = r.gated.asset.claimsManifest;
+      expect(manifest.length).toBeGreaterThan(0);
+      for (const entry of manifest) {
+        // Every claim in these 9 assets resolves to a sourced fact, so each
+        // persisted manifest entry must carry an own-domain source URL.
+        expect(entry.source, `${r.key} "${entry.claimText}" missing provenance source`).toBeTruthy();
+        expect(
+          isOnOwnDomain(entry.source!, ownDomain),
+          `${r.key} "${entry.claimText}" sourced to ${entry.source}, not ${ownDomain}`,
+        ).toBe(true);
+      }
+      // Additive: carrying source must not change the verdict.
+      expect(r.gated.result.verdict).toBe("ship");
+    }
+  });
+
   it("every verified-facts record keeps DRP disclosure default-deny", () => {
     for (const facts of Object.values(BSM_VERIFIED_FACTS)) {
       expect(facts.drpDisclosure.allowed).toBe(false);

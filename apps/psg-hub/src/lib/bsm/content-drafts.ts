@@ -86,6 +86,11 @@ export function toContentItemRow(
     title: draft.title,
     body: draft.body,
     status: draft.status,
+    // PSG-203: `claims_manifest` is JSONB, so each entry's optional `source` (the
+    // shop's-own-site URL backing that claim, snapshotted at gate time by
+    // `withClaimProvenanceSources`) rides along into the persisted row as
+    // provenance-at-rest. No schema change: entries without a source simply omit
+    // the field — a null/absent source stays valid, never an error.
     claims_manifest: draft.claimsManifest,
     claim_integrity_verdict: draft.claimIntegrityVerdict,
     claim_integrity_checked_at: checkedAt,

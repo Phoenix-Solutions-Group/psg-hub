@@ -121,6 +121,13 @@ describe("persistBsmDrafts", () => {
       expect(row.claims_manifest).toBeDefined();
       expect((row.claim_integrity_verdict as { verdict: string }).verdict).toBe("ship");
       expect(String(row.shop_id)).toMatch(/^0{8}-/); // resolved real id, not "shop-*"
+      // PSG-203: provenance-at-rest — every persisted claim carries its backing
+      // own-site source URL on the JSONB manifest (these 9 assets resolve fully).
+      const manifest = row.claims_manifest as Array<{ claimText: string; source?: string }>;
+      expect(manifest.length).toBeGreaterThan(0);
+      for (const entry of manifest) {
+        expect(entry.source, `"${entry.claimText}" persisted without a source`).toMatch(/^https:\/\//);
+      }
     }
   });
 
