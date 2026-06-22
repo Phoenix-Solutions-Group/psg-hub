@@ -15,8 +15,12 @@
 
 export type ImportKind = "ro" | "estimate";
 
-/** Supported upload encodings. xlsb/xlsx decode lazily via an optional dep. */
-export type ImportFileFormat = "csv" | "txt" | "xlsx" | "xlsb";
+/**
+ * Supported upload encodings. csv/txt parse natively; the spreadsheet formats
+ * (xlsx/xlsm/xlsb, legacy binary xls, and Excel-2003 SpreadsheetML xml) decode
+ * through SheetJS. Real pilot RO exports ship in all of these (PSG-51b).
+ */
+export type ImportFileFormat = "csv" | "txt" | "xlsx" | "xlsb" | "xls" | "xml";
 
 /** A parsed file: ordered headers + rows keyed by header. Values are strings. */
 export type RawTable = {

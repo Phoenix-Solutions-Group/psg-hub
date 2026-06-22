@@ -25,6 +25,7 @@ export {
   detectCiecaInterchange,
   UnsupportedSpreadsheetError,
   CiecaInterchangeError,
+  NonTabularSpreadsheetError,
 } from "./parse";
 export { validateRecords } from "./validate";
 export {
