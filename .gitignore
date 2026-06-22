@@ -60,3 +60,7 @@ yarn-error.log*
 .worktrees/
 # deferred classification (Phase 1 close)
 /psg-agentic-os-dev-packet.docx
+# real pilot exports contain live customer PII (names/addresses/emails/phones).
+# NEVER commit. Used locally only to validate the in-hub importer (PSG-51).
+/docs/Filemaker Exports/
+/docs/psg/
