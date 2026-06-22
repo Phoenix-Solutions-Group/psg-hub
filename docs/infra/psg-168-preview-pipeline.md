@@ -5,6 +5,44 @@
 **accept**, standing up a green preview + handing live-route QA to Tess is
 mechanical — no design left to do at execution time.
 
+---
+
+## 0. Verified state — 2026-06-22 (supersedes the §2 "operator-only" rows for Vercel)
+
+Re-checked end-to-end with the now-provisioned credential:
+
+| Item | Status (2026-06-22) | Evidence |
+|------|--------------------|----------|
+| **Credential #1 — Vercel deploy token** | ✅ **Provisioned + verified** | `VERCEL_TOKEN` present in Ada's adapter env; `GET /v2/teams` → `psg-digital` (`team_kja381MckoaFyZU0XYF4G7LJ`); `GET /v9/projects/psg-hub` → `prj_CBrI1FRqqgPzCbAwin6LbSknY48U`, framework `nextjs`, prod branch `main`. |
+| **Branch → Vercel preview pipeline** | ✅ **Proven green** (no extra work) | `GET /v6/deployments` shows auto preview builds `READY` for `feat/psg-186`, `feat/psg-183`, `feat/psg-182`, `feat/psg-51`; `main` → production `READY`. The deploy half of the mandate is satisfied. |
+| **Credential #2 — non-prod seedable Supabase in Preview scope** | ❌ **Not provisioned** | `GET /v9/projects/psg-hub/env` → `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are **`production`-only**. Preview deploys have **zero** Supabase env → cannot exercise `createServiceClient()` routes. |
+| Self-provision a non-prod Supabase | ⚠️ **Recurring spend, board-gated** | Org `rcieugtrzvqiztwemnne`: new project = **$10/mo**, persistent branch = **~$0.013/hr (~$10/mo)**. And the MCP still exposes **anon/publishable keys only** — no `service_role` getter — so even a self-created project still needs the operator to hand over its service-role key. |
+| ⚠️ Security | **Prod service-role key still sitting in a non-prod agent adapter env** | `NEXT_PUBLIC_SUPABASE_URL` in Ada's env still resolves to prod `gylkkzmcmbdftxieyabw`; `SUPABASE_SERVICE_ROLE_KEY` is therefore prod. Recommend de-provisioning these from the adapter env (and/or rotating). Board rejected the rotate ask (`49276fbb`); flagged, not actioned. |
+
+**Board decision recorded:** `b9332e8f` accepted (provision creds) → only the Vercel
+token was delivered; `49276fbb` (re-point Supabase at non-prod + rotate) **rejected**
+2026-06-22T16:30Z, no reason text. Net effect = the seedable-Supabase half is
+**deferred by the board**. The deploy-pipeline half is **delivered + proven**.
+
+**One-command wiring when the Supabase half is eventually funded** (a non-prod project
+`<REF>` exists with URL + anon + service-role known):
+
+```bash
+TEAM=team_kja381MckoaFyZU0XYF4G7LJ
+for kv in \
+  "NEXT_PUBLIC_SUPABASE_URL=https://<REF>.supabase.co" \
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon>" \
+  "SUPABASE_SERVICE_ROLE_KEY=<service_role>"; do
+  k="${kv%%=*}"; v="${kv#*=}"
+  curl -s -X POST "https://api.vercel.com/v10/projects/psg-hub/env?teamId=$TEAM" \
+    -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
+    -d "{\"key\":\"$k\",\"value\":\"$v\",\"type\":\"encrypted\",\"target\":[\"preview\"]}"
+done
+```
+
+Then redeploy any `feat/*` branch and run §4–§5 against the preview URL. Because the
+token + green pipeline are proven, this step is now mechanical.
+
 > Scope note: this doc + `apps/psg-hub/supabase/seeds/bsm_live_route_qa.sql` are
 > **build-prep artifacts**, written and grounded against the real route/schema
 > but **not yet executed** (no non-prod seedable Supabase exists from the agent
