@@ -43,10 +43,14 @@ describe("CompetitorIntel render branches", () => {
     expect(html).not.toContain("Run report");
   });
 
-  it("with shops: metered notice + shop picker with all options + run button", () => {
+  it("with shops: cost notice + shop picker with all options + run button", () => {
     const list = shops(2);
     const html = renderToStaticMarkup(<CompetitorIntel shops={list} />);
-    expect(html).toContain("Metered");
+    // Plain-language cost notice (PSG-213): keeps the cost + fail-closed meaning, drops jargon.
+    expect(html).toContain("Costs a few cents to run");
+    expect(html).toContain("full competitor scoreboard");
+    expect(html).not.toContain("deterministic");
+    expect(html).not.toContain("gateway key");
     expect(html).toContain('aria-label="Shop"');
     expect((html.match(/<option/g) ?? []).length).toBe(2);
     expect(html).toContain("Run report");
