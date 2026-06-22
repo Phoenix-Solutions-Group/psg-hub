@@ -15,8 +15,12 @@
 
 export type ImportKind = "ro" | "estimate";
 
-/** Supported upload encodings. xlsb/xlsx decode lazily via an optional dep. */
-export type ImportFileFormat = "csv" | "txt" | "xlsx" | "xlsb";
+/**
+ * Supported upload encodings. The spreadsheet encodings (xlsx/xlsm/xlsb/legacy
+ * xls/Excel-2003 SpreadsheetML `xml`) all decode through SheetJS; csv/txt are
+ * dependency-free.
+ */
+export type ImportFileFormat = "csv" | "txt" | "xlsx" | "xlsb" | "xls" | "xml";
 
 /** A parsed file: ordered headers + rows keyed by header. Values are strings. */
 export type RawTable = {

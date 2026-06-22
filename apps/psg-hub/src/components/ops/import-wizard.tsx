@@ -178,12 +178,12 @@ export function ImportWizard({
             </select>
           </div>
           <div className="grow">
-            <Label htmlFor="file">File (csv, txt, xlsx, xlsb)</Label>
+            <Label htmlFor="file">File (csv, txt, xlsx, xlsb, xls, xml)</Label>
             <Input
               id="file"
               ref={fileRef}
               type="file"
-              accept=".csv,.txt,.tsv,.xlsx,.xlsb,.xlsm"
+              accept=".csv,.txt,.tsv,.xlsx,.xlsb,.xlsm,.xls,.xml"
               className="mt-1"
               onChange={(e) => {
                 setFile(e.target.files?.[0] ?? null);

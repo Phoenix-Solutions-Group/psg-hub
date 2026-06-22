@@ -64,7 +64,7 @@ export default async function CompanyImportPage({
           Import — {company.name}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload RO or estimate exports (csv, txt, xlsx, xlsb). Columns auto-map; save a template to reuse the mapping.
+          Upload RO or estimate exports (csv, txt, xlsx, xlsb, xls, xml). Columns auto-map; save a template to reuse the mapping.
         </p>
       </div>
       <ImportWizard companyId={company.id} initialKind={initialKind} />

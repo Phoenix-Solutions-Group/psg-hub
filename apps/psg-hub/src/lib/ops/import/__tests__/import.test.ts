@@ -67,8 +67,12 @@ describe("file parsing", () => {
     expect(detectFormat("a.CSV")).toBe("csv");
     expect(detectFormat("a.txt")).toBe("txt");
     expect(detectFormat("a.xlsx")).toBe("xlsx");
+    expect(detectFormat("a.xlsm")).toBe("xlsx");
     expect(detectFormat("a.xlsb")).toBe("xlsb");
+    expect(detectFormat("a.xls")).toBe("xls"); // legacy BIFF → spreadsheet path (PSG-186)
     expect(detectFormat("a.pdf")).toBeNull();
+    // .xml is content-routed (SpreadsheetML vs CIECA BMS), not decided by extension.
+    expect(detectFormat("a.xml")).toBeNull();
   });
 
   it("detects delimiter and parses quoted CSV cells", () => {
