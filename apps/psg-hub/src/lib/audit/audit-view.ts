@@ -12,7 +12,7 @@ import { AUDIT_ACTIONS, type AuditAction } from "@/lib/audit/actions";
  */
 
 /** Coarse grouping used by the viewer's category filter. */
-export type AuditCategory = "users" | "modules" | "profiles" | "superadmin" | "other";
+export type AuditCategory = "users" | "modules" | "profiles" | "superadmin" | "intel" | "other";
 
 const ACTION_LABELS: Record<AuditAction, string> = {
   "role.grant": "Granted role",
@@ -33,6 +33,7 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "security_profile_def.delete": "Deleted security profile",
   "superadmin.add": "Added superadmin",
   "superadmin.remove": "Removed superadmin",
+  "intel.competitor_report.run": "Ran competitor report",
 };
 
 /** Human label for an action; falls back to the raw key for forward-compat. */
@@ -48,6 +49,7 @@ export function auditCategory(action: string): AuditCategory {
   if (action.startsWith("module")) return "modules";
   if (action.startsWith("security_profile")) return "profiles";
   if (action.startsWith("superadmin")) return "superadmin";
+  if (action.startsWith("intel")) return "intel";
   return "other";
 }
 
@@ -56,6 +58,7 @@ export const AUDIT_CATEGORY_LABELS: Record<AuditCategory, string> = {
   modules: "Module access",
   profiles: "Security profiles",
   superadmin: "Superadmin allowlist",
+  intel: "Intel reports",
   other: "Other",
 };
 
