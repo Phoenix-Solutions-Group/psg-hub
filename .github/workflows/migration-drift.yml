@@ -1,0 +1,56 @@
+# Supabase migration drift check (PSG-197).
+#
+# Catches the silent gap that bit PSG-44/PSG-197: migrations merged to `main` but
+# never applied to the prod DB. The psg-hub pipeline does not auto-apply Supabase
+# migrations (Vercel = build-only; e2e.yml = throwaway local DB), so without this
+# check a merged migration can ship code that targets a table that does not exist.
+#
+# This does NOT apply migrations — prod DDL stays a human operator gate per
+# docs/runbooks/supabase-migration-apply.md. It only DETECTS drift, by reconciling
+# apps/psg-hub/supabase/migrations/*.sql against the live
+# supabase_migrations.schema_migrations ledger (by embedded name, not version).
+#
+# ACTIVATION: enforcement turns on when the read-only `SUPABASE_DB_URL` repo secret
+# is set (a role with select on supabase_migrations.schema_migrations is enough).
+# Until then this job WARNS and passes (exit 2) so it never blocks unrelated work.
+
+name: Migration drift
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: migration-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: supabase migration drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # psql is preinstalled on the ubuntu-latest runner image (postgresql-client).
+      - name: Check migration drift
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set +e
+          node scripts/check-migration-drift.mjs
+          code=$?
+          if [ "$code" = "2" ]; then
+            echo "::warning title=Migration drift check skipped::SUPABASE_DB_URL secret not set — enforcement is OFF. See docs/runbooks/supabase-migration-apply.md."
+            exit 0
+          fi
+          exit $code
