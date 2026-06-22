@@ -12,11 +12,16 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  assertProvenanceIntegrity,
   BSM_GENERATED_ASSETS,
   BSM_VERIFIED_FACTS,
+  buildAssetProvenanceManifests,
   CONVERSION_JOBS,
   formatGateReport,
+  formatProvenanceReport,
   gateAllBsmDrafts,
+  isOnOwnDomain,
+  SHOP_OWN_DOMAINS,
 } from "../__fixtures__/bsm-drafts";
 import { toContentItemDraft } from "../content-writer-run";
 
@@ -78,6 +83,42 @@ describe("PSG-193 — 9 real BSM drafts gate to ship", () => {
     for (const facts of Object.values(BSM_VERIFIED_FACTS)) {
       expect(facts.drpDisclosure.allowed).toBe(false);
       expect(facts.drpDisclosure.authorizedCarriers).toHaveLength(0);
+    }
+  });
+
+  // PSG-173 Check-3 preconditions (Lee's handoff contract): per-fact provenance
+  // is mandatory and must cite the shop's OWN site, never a third-party directory.
+  it("every verified fact is sourced to the shop's own site (Lee Check-3 non-negotiable)", () => {
+    // Throws (failing the runner here) if any cert/warranty/tenure datum lacks an
+    // own-domain source, or cites a third-party directory/aggregator.
+    expect(() => assertProvenanceIntegrity()).not.toThrow();
+  });
+
+  it("only accepts the shop's own domain as a provenance source", () => {
+    // Guard the guard: a directory/aggregator host must be rejected.
+    expect(isOnOwnDomain("https://www.tracysbodyshop.com/x", "tracysbodyshop.com")).toBe(true);
+    expect(isOnOwnDomain("https://www.yelp.com/biz/whatever", "tedescoautobody.com")).toBe(false);
+    expect(isOnOwnDomain("not-a-url", "tracysbodyshop.com")).toBe(false);
+  });
+
+  it("links every asset's claims manifest to its shop's-own-site source", () => {
+    const manifests = buildAssetProvenanceManifests();
+    // Surfaced in CI so Lee/QA see claim → fact → own-site source per asset.
+    console.log("\n" + formatProvenanceReport(manifests) + "\n");
+
+    expect(manifests).toHaveLength(9);
+    for (const m of manifests) {
+      const ownDomain = SHOP_OWN_DOMAINS[m.shopId];
+      expect(ownDomain, `${m.shopId} has no declared own-domain`).toBeTruthy();
+      // Every claim resolves to a backing fact + a source on the shop's own site.
+      expect(m.claims.length).toBeGreaterThan(0);
+      for (const c of m.claims) {
+        expect(c.backingFact, `${m.key} "${c.claimText}" has no backing fact`).toBeTruthy();
+        expect(
+          isOnOwnDomain(c.sourceUrl, ownDomain),
+          `${m.key} "${c.claimText}" sourced to ${c.sourceUrl}, not ${ownDomain}`,
+        ).toBe(true);
+      }
     }
   });
 });

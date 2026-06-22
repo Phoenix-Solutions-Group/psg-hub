@@ -25,7 +25,12 @@
 //
 // Pure data + a pure `gateAllBsmDrafts()` helper — node-testable, no I/O.
 
-import { verifiedFactsSchema, type VerifiedFacts } from "@/lib/claim-integrity";
+import {
+  verifiedFactsSchema,
+  type ClaimField,
+  type ClaimManifestEntry,
+  type VerifiedFacts,
+} from "@/lib/claim-integrity";
 import {
   gateGeneratedAsset,
   isShippable,
@@ -34,47 +39,90 @@ import {
 } from "../content-writer-run";
 
 /* -------------------------------------------------------------------------- */
-/* Provenance — every asserted fact traces to an authoritative public source. */
+/* Provenance — every asserted fact traces to the shop's OWN public source.   */
+/*                                                                            */
+/* PSG-173 Check-3 precondition (Lee, CMO — handoff contract on PSG-173):     */
+/*   1. Per-fact provenance is MANDATORY for every certification, warranty    */
+/*      term, DRP/carrier relationship, and "years in business" claim.        */
+/*   2. The source MUST be the shop's OWN site / own verified profile. Third-  */
+/*      party directories or aggregators (Yelp, Carwise, Birdeye, …) do NOT   */
+/*      satisfy Check 3 — that's the implied-certification trap the brand-     */
+/*      voice charter forbids shipping.                                       */
+/*   3. No soft→hard upgrades: a fact that can only be third-party-sourced is  */
+/*      DROPPED from the record, never softened to fit.                       */
+/*                                                                            */
+/* `assertProvenanceIntegrity()` enforces (1) and (2) mechanically, and       */
+/* `buildAssetProvenanceManifests()` emits, per asset, every claim mapped to  */
+/* the shop's-own-site source that backs it — so each draft arrives at Lee's  */
+/* gate with its provenance visible instead of bouncing as an unverifiable    */
+/* badge. Provenance is keyed to the verified-facts data (exact cert label /  */
+/* warranty / tenure) so a record edit that drops its source fails the runner */
+/* here, not at the gate.                                                      */
 /* -------------------------------------------------------------------------- */
 
-/** A single fact's public source (the shop's own site / profile). */
-export type FactProvenance = {
-  /** The verified-facts datum this source backs, e.g. "I-CAR Gold Class". */
-  fact: string;
-  /** Authoritative public URL (shop website / Google profile / cert page). */
-  source: string;
+/** The shop's own authoritative domain. Every provenance URL must live here. */
+export const SHOP_OWN_DOMAINS: Record<string, string> = {
+  "shop-tracys": "tracysbodyshop.com",
+  "shop-tedesco": "tedescoautobody.com",
+  "shop-wallace": "wallacecollisionrepair.com",
 };
 
-export const BSM_FACT_PROVENANCE: Record<string, FactProvenance[]> = {
-  "shop-tracys": [
-    { fact: "I-CAR Gold Class", source: "https://www.tracysbodyshop.com/our-certifications/" },
-    { fact: "Honda/Acura ProFirst Certified Collision Repair Facility", source: "https://www.tracysbodyshop.com/our-certifications/" },
-    { fact: "FCA US LLC Certified", source: "https://www.tracysbodyshop.com/our-certifications/" },
-    { fact: "Assured Performance Network Certified", source: "https://www.tracysbodyshop.com/our-certifications/" },
-    { fact: "Lifetime warranty on metalwork and paint for as long as you own the vehicle", source: "https://www.tracysbodyshop.com/our-services/" },
-    { fact: "In business since November 1969 (Lincoln, NE)", source: "https://www.tracysbodyshop.com/about-tracys/" },
-  ],
-  "shop-tedesco": [
-    { fact: "I-CAR Gold Class", source: "https://www.tedescoautobody.com/certifications/" },
-    { fact: "ASE Certified", source: "https://www.tedescoautobody.com/certifications/" },
-    { fact: "FCA US LLC Certified Collision Repair Center", source: "https://www.tedescoautobody.com/certifications/fca/" },
-    { fact: "Hyundai Recognized Collision Repair Center", source: "https://www.tedescoautobody.com/certifications/" },
-    { fact: "Nissan Certified Collision Repair Network", source: "https://www.tedescoautobody.com/certifications/" },
-    { fact: "Porsche Approved Collision Center", source: "https://www.tedescoautobody.com/certifications/" },
-    { fact: "Tesla Approved", source: "https://www.tedescoautobody.com/certifications/" },
-    { fact: "Written lifetime warranty on labor and workmanship for as long as you own the vehicle", source: "https://www.tedescoautobody.com/collision-services/" },
-    { fact: "Located at 320 Main St, New Rochelle, NY", source: "https://www.yelp.com/biz/tedesco-auto-body-new-rochelle" },
-  ],
-  "shop-wallace": [
-    { fact: "I-CAR Gold Class Certified", source: "https://wallacecollisionrepair.com/certifications/" },
-    { fact: "BMW Certified Collision Repair Center", source: "https://wallacecollisionrepair.com/certifications/" },
-    { fact: "Tesla Approved Body Shop", source: "https://wallacecollisionrepair.com/certifications/" },
-    { fact: "Subaru Certified Collision Center", source: "https://wallacecollisionrepair.com/certifications/" },
-    { fact: "Kia Certified Collision Repair Center", source: "https://wallacecollisionrepair.com/certifications/" },
-    { fact: "Ford National Body Shop Network", source: "https://wallacecollisionrepair.com/certifications/" },
-    { fact: "Rivian Certified Collision Center", source: "https://wallacecollisionrepair.com/certifications/" },
-    { fact: "Limited lifetime workmanship warranty for as long as you own the vehicle (Bristol, TN)", source: "https://wallacecollisionrepair.com/certifications/" },
-  ],
+/**
+ * Per-shop provenance, keyed to the verified-facts datum it backs:
+ *  - `certifications[label]` — keyed by the EXACT cert label in the record.
+ *  - `warranty` — source for the warranty terms (required when a warranty is set).
+ *  - `yearsInBusiness` — source for the tenure claim (required when tenure is set).
+ *  - `location` — SUPPLEMENTARY (street address). Not a Check-3 claim field, but
+ *    still cited to the shop's own page rather than a directory.
+ * Every URL must resolve to the shop's own domain (`SHOP_OWN_DOMAINS`).
+ */
+export type ShopProvenance = {
+  certifications: Record<string, string>;
+  warranty?: string;
+  yearsInBusiness?: string;
+  location?: string;
+};
+
+export const BSM_FACT_PROVENANCE: Record<string, ShopProvenance> = {
+  "shop-tracys": {
+    certifications: {
+      "I-CAR Gold Class": "https://www.tracysbodyshop.com/our-certifications/",
+      "Honda Acura ProFirst Certified Collision Repair Facility": "https://www.tracysbodyshop.com/our-certifications/",
+      "FCA US LLC Certified": "https://www.tracysbodyshop.com/our-certifications/",
+      "Assured Performance Network Certified": "https://www.tracysbodyshop.com/our-certifications/",
+    },
+    warranty: "https://www.tracysbodyshop.com/our-services/",
+    yearsInBusiness: "https://www.tracysbodyshop.com/about-tracys/",
+  },
+  "shop-tedesco": {
+    certifications: {
+      "I-CAR Gold Class": "https://www.tedescoautobody.com/certifications/",
+      "ASE Certified": "https://www.tedescoautobody.com/certifications/",
+      "FCA US LLC Certified Collision Repair Center": "https://www.tedescoautobody.com/certifications/fca/",
+      "Hyundai Recognized Collision Repair Center": "https://www.tedescoautobody.com/certifications/",
+      "Nissan Certified Collision Repair Network": "https://www.tedescoautobody.com/certifications/",
+      "Porsche Approved Collision Center": "https://www.tedescoautobody.com/certifications/",
+      "Tesla Approved": "https://www.tedescoautobody.com/certifications/",
+    },
+    warranty: "https://www.tedescoautobody.com/collision-services/",
+    // Address (320 Main St, New Rochelle, NY 10801) stated on the shop's own
+    // contact page. Repointed off Yelp per Lee's own-source mandate; the address
+    // is not a Check-3 claim field (no `location` in VerifiedFacts), so it is not
+    // asserted via the claims manifest — it only supports the "directions" CTA.
+    location: "https://www.tedescoautobody.com/contact/",
+  },
+  "shop-wallace": {
+    certifications: {
+      "I-CAR Gold Class Certified": "https://wallacecollisionrepair.com/certifications/",
+      "BMW Certified Collision Repair Center": "https://wallacecollisionrepair.com/certifications/",
+      "Tesla Approved Body Shop": "https://wallacecollisionrepair.com/certifications/",
+      "Subaru Certified Collision Center": "https://wallacecollisionrepair.com/certifications/",
+      "Kia Certified Collision Repair Center": "https://wallacecollisionrepair.com/certifications/",
+      "Ford National Body Shop Network": "https://wallacecollisionrepair.com/certifications/",
+      "Rivian Certified Collision Center": "https://wallacecollisionrepair.com/certifications/",
+    },
+    warranty: "https://wallacecollisionrepair.com/certifications/",
+  },
 };
 
 /* -------------------------------------------------------------------------- */
@@ -475,5 +523,182 @@ export function formatGateReport(results: GatedDraft[]): string {
     ...lines,
     `  ${"-".repeat(64)}`,
     `  ${shipped}/${results.length} ship`,
+  ].join("\n");
+}
+
+/* -------------------------------------------------------------------------- */
+/* Provenance enforcement + per-asset provenance manifest (PSG-173 Check 3).  */
+/* -------------------------------------------------------------------------- */
+
+function norm(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+/** True when `sourceUrl`'s host is (or is a subdomain of) the shop's own domain. */
+export function isOnOwnDomain(sourceUrl: string, ownDomain: string): boolean {
+  let host: string;
+  try {
+    host = new URL(sourceUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  const domain = ownDomain.toLowerCase();
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+/**
+ * Enforce Lee's two Check-3 non-negotiables across all three records:
+ *   1. Per-fact provenance is mandatory — every certification, every warranty
+ *      term, and every years-in-business datum present in a record has a source.
+ *   2. Every source is the shop's OWN site (`SHOP_OWN_DOMAINS`). A third-party
+ *      directory/aggregator does not satisfy Check 3; a fact that can only be
+ *      third-party-sourced must be dropped from the record, not kept.
+ * Throws on the first gap so the runner fails HERE, not at the brand-voice gate.
+ */
+export function assertProvenanceIntegrity(): void {
+  for (const [shopId, facts] of Object.entries(BSM_VERIFIED_FACTS)) {
+    const ownDomain = SHOP_OWN_DOMAINS[shopId];
+    const prov = BSM_FACT_PROVENANCE[shopId];
+    if (!ownDomain) throw new Error(`No own-domain declared for ${shopId}`);
+    if (!prov) throw new Error(`No provenance record for ${shopId}`);
+
+    const requireOwnSource = (what: string, label: string, url: string | undefined) => {
+      if (!url) {
+        throw new Error(`${shopId}: missing provenance source for ${what} ("${label}")`);
+      }
+      if (!isOnOwnDomain(url, ownDomain)) {
+        throw new Error(
+          `${shopId}: provenance for ${what} ("${label}") cites "${url}", not the shop's own ` +
+            `domain (${ownDomain}). Drop the fact or source it to the shop's own statement — ` +
+            `third-party directories/aggregators do not satisfy Check 3.`,
+        );
+      }
+    };
+
+    for (const cert of facts.certifications) {
+      requireOwnSource("certification", cert.label, prov.certifications[cert.label]);
+    }
+    if (facts.warranty) requireOwnSource("warranty", facts.warranty.terms, prov.warranty);
+    if (facts.yearsInBusiness !== undefined) {
+      requireOwnSource("years in business", String(facts.yearsInBusiness), prov.yearsInBusiness);
+    }
+    // DRP/carrier stays default-deny for all three (drpDisclosure.allowed=false),
+    // so no carrier is named and no carrier provenance is required. If a shop ever
+    // opts in, each authorized carrier would need its own own-source entry here.
+    if (prov.location) requireOwnSource("location", "address", prov.location);
+  }
+}
+
+/** One claim, annotated with the shop's-own-site source that backs it. */
+export type ProvenancedClaim = {
+  claimText: string;
+  field: ClaimField;
+  value?: string;
+  /** The verified-facts datum the claim resolves to (cert label / warranty / tenure). */
+  backingFact: string;
+  /** Authoritative source URL on the shop's own domain. */
+  sourceUrl: string;
+};
+
+/** A single asset's claims manifest, every entry linked to its own-site source. */
+export type AssetProvenanceManifest = {
+  key: string;
+  shopId: string;
+  contentType: GeneratedAsset["contentType"];
+  claims: ProvenancedClaim[];
+};
+
+/**
+ * Resolve one manifest entry to the verified fact it backs and that fact's
+ * own-site source. The cert match mirrors the validator (`verifyClaim`) exactly,
+ * so the annotation points at the SAME cert the gate accepted. Throws if a claim
+ * cannot be resolved to a sourced fact — an asset that passes claim-integrity but
+ * carries an unsourced claim is a Check-3 reject (Lee's contract).
+ */
+function resolveClaimProvenance(
+  entry: ClaimManifestEntry,
+  facts: VerifiedFacts,
+  prov: ShopProvenance,
+): ProvenancedClaim {
+  const { field, value, claimText } = entry;
+  const fail = (msg: string): never => {
+    throw new Error(`${facts.shopId} claim "${claimText}": ${msg}`);
+  };
+
+  switch (field) {
+    case "certifications": {
+      const cert = facts.certifications.find(
+        (c) =>
+          value === undefined ||
+          norm(c.label) === norm(value) ||
+          (c.level !== undefined && norm(c.level) === norm(value)) ||
+          norm(c.label).includes(norm(value)),
+      );
+      if (!cert) return fail(`no certification in the record backs value "${value ?? ""}"`);
+      const src = prov.certifications[cert.label];
+      if (!src) return fail(`certification "${cert.label}" has no own-site provenance source`);
+      return { claimText, field, value, backingFact: cert.label, sourceUrl: src };
+    }
+    case "warranty": {
+      if (!facts.warranty) return fail("record has no warranty");
+      if (!prov.warranty) return fail("warranty has no own-site provenance source");
+      return {
+        claimText,
+        field,
+        value,
+        backingFact: facts.warranty.terms,
+        sourceUrl: prov.warranty,
+      };
+    }
+    case "yearsInBusiness": {
+      if (facts.yearsInBusiness === undefined) return fail("record has no tenure");
+      if (!prov.yearsInBusiness) return fail("tenure has no own-site provenance source");
+      return {
+        claimText,
+        field,
+        value,
+        backingFact: `${facts.yearsInBusiness} years in business`,
+        sourceUrl: prov.yearsInBusiness,
+      };
+    }
+    default:
+      // approvedReviewQuotes / drpDisclosure are not used by these assets; a claim
+      // on either would need its own sourced provenance before it could ship.
+      return fail(`field "${field}" carries no provenance for these assets`);
+  }
+}
+
+/**
+ * Build, for every asset, its claims manifest with each entry linked to the
+ * shop's-own-site source backing it. This is the artifact Lee runs Check 3
+ * against: claim → verified fact → own-site URL.
+ */
+export function buildAssetProvenanceManifests(): AssetProvenanceManifest[] {
+  return BSM_GENERATED_ASSETS.map(({ key, asset }) => {
+    const facts = BSM_VERIFIED_FACTS[asset.shopId];
+    const prov = BSM_FACT_PROVENANCE[asset.shopId];
+    if (!facts || !prov) {
+      throw new Error(`Missing facts/provenance for ${asset.shopId} (asset ${key})`);
+    }
+    return {
+      key,
+      shopId: asset.shopId,
+      contentType: asset.contentType,
+      claims: asset.claimsManifest.map((e) => resolveClaimProvenance(e, facts, prov)),
+    };
+  });
+}
+
+/** Render the per-asset provenance manifest for the CLI runner / gate handoff. */
+export function formatProvenanceReport(manifests: AssetProvenanceManifest[]): string {
+  const blocks = manifests.map((m) => {
+    const rows = m.claims.map(
+      (c) => `    - "${c.claimText}" → ${c.backingFact} [${c.sourceUrl}]`,
+    );
+    return [`  ${m.key} (${m.contentType}):`, ...rows].join("\n");
+  });
+  return [
+    `BSM drafts — claim provenance (every claim → shop's own source, PSG-173 Check 3):`,
+    ...blocks,
   ].join("\n");
 }
