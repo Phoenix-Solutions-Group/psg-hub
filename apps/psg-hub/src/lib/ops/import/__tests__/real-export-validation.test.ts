@@ -8,8 +8,8 @@
 // Drop real exports into (both are .gitignore'd — they contain customer PII and
 // MUST NOT be committed):
 //
-//   src/lib/ops/import/__tests__/real-exports/ro/*.csv|.txt|.tsv|.xlsx|.xlsb
-//   src/lib/ops/import/__tests__/real-exports/estimate/*.csv|.txt|.tsv|.xlsx|.xlsb
+//   src/lib/ops/import/__tests__/real-exports/ro/*.csv|.txt|.tsv|.xlsx|.xlsb|.xls|.xml
+//   src/lib/ops/import/__tests__/real-exports/estimate/*.csv|.txt|.tsv|.xlsx|.xlsb|.xls|.xml
 //
 // For every file present, the harness asserts: it parses, every REQUIRED field
 // auto-resolves from the headers, and zero rows have hard validation errors —
@@ -23,7 +23,7 @@ import { describe, it, expect } from "vitest";
 import { previewImport, requiredFields, type ImportKind } from "@/lib/ops/import";
 
 const REAL_DIR = path.resolve(__dirname, "real-exports");
-const PARSEABLE = new Set([".csv", ".txt", ".tsv", ".xlsx", ".xlsm", ".xlsb"]);
+const PARSEABLE = new Set([".csv", ".txt", ".tsv", ".xlsx", ".xlsm", ".xlsb", ".xls", ".xml"]);
 
 function discover(kind: ImportKind): string[] {
   const dir = path.join(REAL_DIR, kind);
