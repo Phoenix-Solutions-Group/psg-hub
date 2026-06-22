@@ -14,3 +14,12 @@ export {
   adaptSeoKeywordTarget,
   adaptSeoKeywordTargets,
 } from "./content-writer-handoff";
+export {
+  renderAssetText,
+  gateGeneratedAsset,
+  isShippable,
+  toContentItemDraft,
+  type GeneratedAsset,
+  type GatedAsset,
+  type ContentItemDraft,
+} from "./content-writer-run";

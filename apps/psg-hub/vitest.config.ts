@@ -44,6 +44,9 @@ export default defineConfig({
         "src/types/content-brief.ts", // PSG-160 ContentBrief DTO + schema
         "src/lib/bsm/content-briefs.ts", // PSG-160 brief writer + loader
         "src/app/api/shops/[shopId]/content-briefs/route.ts", // PSG-160 brief read API
+        "src/app/api/content/[id]/publish/route.ts", // PSG-194 approved->published gate
+        "src/app/api/content/[id]/reject/route.ts", // PSG-194 reject-bug regression
+        "src/lib/bsm/content-drafts.ts", // PSG-194 idempotent draft persistence
       ],
       // Excluded v0.2-adjacent surfaces (covered elsewhere / not unit-gateable
       // in env=node), with rationale:
