@@ -14,6 +14,20 @@ export { standardizeVehicles } from "./vehicle-standardization";
 export { applyRules, DEFAULT_FLEET_KEYWORDS } from "./rules-engine";
 export { MASTER_HEADER_MAPPINGS } from "./header-mappings";
 export {
+  ADVANTAGE2_FIELD_MAP,
+  ADVANTAGE2_OVERFLOW_MAP,
+  resolveAdvantage2Header,
+  mapAdvantage2Row,
+  assertAdvantage2Coverage,
+} from "./advantage2-profile";
+export type {
+  Advantage2FieldSpec,
+  Advantage2OverflowSpec,
+  Advantage2OverflowPath,
+  Advantage2MappedRow,
+  Advantage2Payload,
+} from "./advantage2-profile";
+export {
   USPS_SUFFIXES,
   USPS_DIRECTIONALS,
   USPS_UNITS,
