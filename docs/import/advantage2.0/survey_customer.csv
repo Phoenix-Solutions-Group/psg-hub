@@ -1,0 +1,106 @@
+SurveyCustomerField,DataPresence
+S_CreationDate,NOT FOUND
+S_RC_ShopID,NOT FOUND
+S_RC_ShopName,NOT FOUND
+S_RC_PayType,FOUND
+S_MatchField_Customer,NOT FOUND
+S_RC_Cust_Name_First,FOUND
+S_RC_Cust_Name_Last,FOUND
+S_RC_Company,NOT FOUND
+S_RC_Cust_Address,FOUND
+S_RC_Cust_Address2,FOUND
+S_RC_Cust_City,FOUND
+S_RC_Cust_State,FOUND
+S_RC_Cust_Zip,NOT FOUND
+S_RC_Phone1,FOUND
+S_RC_Phone2,FOUND
+S_RC_Phone3,FOUND
+S_RC_Repeat,FOUND
+S_RC_Referral,FOUND
+S_RC_Referral_Type_UI,NOT FOUND
+S_RC_Referral_From,FOUND
+S_RC_InsuranceCompany,FOUND
+S_RC_Agent_First,FOUND
+S_RC_Agent_Last,FOUND
+S_RC_Agent_Address,FOUND
+S_RC_Agent_Address2,FOUND
+S_RC_Agent_City,FOUND
+S_RC_Agent_State,FOUND
+S_RC_Agent_Zip,FOUND
+S_RC_Date_In,FOUND
+S_RC_Date_Out,FOUND
+S_RC_RepairTotal,FOUND
+S_RC_Veh_YR,FOUND
+S_RC_Veh_Make,FOUND
+S_RC_Veh_Model,FOUND
+S_RC_RONumber,FOUND
+SQ_Repeat_Past,NOT FOUND
+SQ_Repeat_Past_yrs,FOUND
+SQ_Repeat_Past_legend,NOT FOUND
+SQ_Choice_InsPS,FOUND
+SQ_Choice_MyShop,FOUND
+SQ_Choice_PSList,FOUND
+SQ_Selection_NoChoice_text,NOT FOUND
+SQ_Referral_Agent,NOT FOUND
+SQ_Referral_InsRep,NOT FOUND
+SQ_Referral_Dealer,FOUND
+SQ_Referral_Consumer,NOT FOUND
+SQ_Referral_BtoB,NOT FOUND
+SQ_Referral_Other,NOT FOUND
+SQ_Referral_Other_Who,NOT FOUND
+SQ_Repair_Visted,FOUND
+SQ_Selection_Google,NOT FOUND
+SQ_Selection_Website,NOT FOUND
+SQ_Selection_BSB,NOT FOUND
+SQ_Selection_SocialMedia,NOT FOUND
+SQ_Selection_Reviews,NOT FOUND
+SQ_Selection_Reviews2,NOT FOUND
+SQ_Selection_Courtesy,NOT FOUND
+SQ_Selection_PastRelation,NOT FOUND
+SQ_Selection_HighQuality,NOT FOUND
+SQ_Selection_Recommend,NOT FOUND
+SQ_Selection_Reputation,NOT FOUND
+SQ_Selection_Location,NOT FOUND
+SQ_Selection_Warranty,NOT FOUND
+SQ_Selection_InsApproval,NOT FOUND
+SQ_Selection_Certified,NOT FOUND
+SQ_Selection_Parts,NOT FOUND
+SQ_Selection_Owned,NOT FOUND
+SQ_Selection_OPCost,NOT FOUND
+SQ_Selection_Rental,NOT FOUND
+SQ_Selection_Community,NOT FOUND
+SQ_Selection_Enviroment,NOT FOUND
+SQ_Selection_DelDate,NOT FOUND
+SQ_Selection_Status,NOT FOUND
+SQ_Selection_TVRadio,NOT FOUND
+SQ_ShopSelection_Else,NOT FOUND
+SQ_Scale_Informed,NOT FOUND
+SQ_DelDate_Give,FOUND
+SQ_DelDate_Met,FOUND
+SQ_DelDate_Comments,FOUND
+SQ_Scale_Courteous,FOUND
+SQ_Scale_Comm,FOUND
+SQ_RepairReview,FOUND
+SQ_Scale_Work,FOUND
+SQ_Scale_Clean,FOUND
+SQ_RepairWarr_Explain,FOUND
+SQ_Unresolved_Shop,FOUND
+SQ_Unresolved_Shop_Notes,FOUND
+SQ_ImproveQuality_text,FOUND
+SQ_Would Recom_Shop_NP,FOUND
+SQ_Would Recom_Facility_text,NOT FOUND
+SQ_Age_16_25,NOT FOUND
+SQ_Age_26_40,NOT FOUND
+SQ_Age_41_60,NOT FOUND
+SQ_Age_61Up,NOT FOUND
+SQ_Scale_Claims,NOT FOUND
+SQ_Scale_RateAgent,NOT FOUND
+SQ_Scale_Rental,NOT FOUND
+SQ_Scale_RentalUsed_Com,NOT FOUND
+SQ_Scale_RentalUsed_Other,NOT FOUND
+SQ_Scale_RentalUsed_Text,NOT FOUND
+SQ_Comments_Customer,NOT FOUND
+SQ_Comments_ACRB,NOT FOUND
+SQ_Scale_EMI_pct,NOT FOUND
+SQ_Scale_CSI_logic_pct,NOT FOUND
+SQ_Scale_CSI_Emotion_pct,NOT FOUND

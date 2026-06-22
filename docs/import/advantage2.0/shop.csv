@@ -1,0 +1,515 @@
+ShopMasterField
+M_Shop_Name
+M_ShopName_Letters
+M_Shop_Reports
+M_Shop_Address
+M_Shop_Address2
+M_Shop_City
+M_Shop_State
+M_Shop_Zip
+M_Shop_Phone_1
+M_Shop_Fax
+M_WebAddress
+M_InitialStartUp
+M_Shop_Owner_MrMs
+M_Shop_Owner_First
+M_Shop_Owner_Last
+M_Mrk_NameSig_PS
+M_Shop_Owner_Title
+M_CreditHold_flag
+M_CreditHold_date
+M_Member_Status
+M_Member_WhyLeftPSG
+M_Shop_Type
+M_SerialNumber_MSO
+M_Shop_Reports_MSO
+M_Date_Names
+M_Sales_Names
+M_Sales_RepairVolume
+M_Sales_RepairVolume_annual
+M_Sales_Names_Forecast
+M_TypeOfPayment
+M_Shop_Name_MSO
+M_InputMethod
+M_DPM_Status
+M_DPM_DPM
+M_DPM_DPM_QTY
+M_DPM_DPM_Charge
+M_DPM_DPM_Discount
+M_DPM_DPM_Total
+M_DPM_Digital Ads
+M_DPM_Digital Ads_QTY
+M_DPM_Digital Ads_Charge
+M_DPM_Digital Ads_Discount
+M_DPM_Digital Ads_Total
+M_DPM_Social Media
+M_DPM_Social Media_QTY
+M_DPM_Social Media_Charge
+M_DPM_Social Media_Discount
+M_DPM_Social Media_Total
+M_DPM_Content Creation
+M_DPM_Content Creation_QTY
+M_DPM_Content Creation_Charge
+M_DPM_Content Creation_Discount
+M_DPM_Content Creation_Total
+M_DPM_Advantage Program
+M_DPM_Advantage Program_QTY
+M_DPM_Advantage Program_Charge
+M_DPM_Advantage Program_Discount
+M_DPM_Advantage Program_Total
+M_DPM_Website Development
+M_DPM_Website Development_QTY
+M_DPM_Website Development_Charge
+M_DPM_Website Development_Discount
+M_DPM_Website Development_Total
+M_DPM_Auto Pay Date
+M_DPM_Monthly Total
+M_Notes
+Alert_Email1
+Alert_Email2
+Alert_Email3
+Alert_Email4
+Alert_Email5
+Alert_Email6
+Alert_Email7
+Alert_Email8
+Alert_Email9
+Alert_Email10
+Alert_Email11
+Alert_Email12
+Alert_Email13
+Alert_Email14
+Alert_Email15
+Alert_Email16
+Alert_Email17
+Alert_Email18
+Alert_Email19
+Alert_Email20
+M_Report_Email 1_Audit
+M_Report_Email 2_Audit
+M_Report_Email 3_Audit
+M_Report_Email 4_Audit
+M_Report_Email 5_Audit
+M_Report_Email 6_Audit
+M_Report_Email 7_Audit
+M_Report_Email 8_Audit
+M_Report_Email 9_Audit
+M_Report_Email 10_Audit
+M_Report_Email 1_Weekly
+M_Report_Email 2_Weekly
+M_Report_Email 3_Weekly
+M_Report_Email 4_Weekly
+M_Report_Email 5_Weekly
+M_Report_Email 6_Weekly
+M_Report_Email 7_Weekly
+M_Report_Email 8_Weekly
+M_Report_Email 9_Weekly
+M_Report_Email 10_Weekly
+M_Report_Email 11_Weekly
+M_Report_Email 12_Weekly
+M_Report_Email 13_Weekly
+M_Report_Email 14_Weekly
+M_Report_Email 15_Weekly
+M_Report_Email 1_Reports
+M_Report_Email 2_Reports
+M_Report_Email 3_Reports
+M_Report_Email 4_Reports
+M_Report_Email 5_Reports
+M_Report_Email 6_Reports
+M_Report_Email 7_Reports
+M_Report_Email 8_Reports
+M_Report_Email 9_Reports
+M_Report_Email 10_Reports
+M_Report_Email 1_MSO
+M_Report_Email 2_MSO
+M_Report_Email 3_MSO
+M_Report_Email 4_MSO
+M_Report_Email 5_MSO
+M_Report_Email 6_MSO
+M_Report_Email 7_MSO
+M_Report_Email 8_MSO
+M_Report_Email 9_MSO
+M_Report_Email 10_MSO
+M_Report_Email 11_MSO
+M_Report_Email 1_Special
+M_Report_Email 2_Special
+M_Report_Email 3_Special
+M_Report_Email 4_Special
+M_Report_Email 5_Special
+M_Report_Email 1_SpecialMSO
+M_Report_Email 2_SpecialMSO
+M_Report_Email 3_SpecialMSO
+M_Report_Email 4_SpecialMSO
+M_Report_Email 5_SpecialMSO
+M_Report_Email 1_Group
+M_Report_Email 2_Group
+M_Sort_62_ABConcepts
+M_Sort_63_ACE
+M_Sort_123
+M_Sort_13
+M_Sort_14
+M_Sort_65_BStreet
+M_Sort_70_BASF1
+M_Sort_29
+M_Sort_69_Benchmark
+M_Sort_111
+M_Sort_117
+M_Sort_98_Bob Maloney
+M_Sort_32
+M_Sort_108
+M_Sort_48_Caulks
+M_Sort_119
+M_Sort_68_Collision One
+M_Sort_105_Compact
+M_Sort_97_CompleteAutoBody
+M_Sort_121
+M_Sort_66_Coyote
+M_Sort_80_Danlar
+M_Sort_88_Digman
+M_Sort_85_DRPFull
+M_Sort_86_DRPMed
+M_Sort_87_DRPSma
+M_Sort_12
+M_Employee_Flag
+M_Sort_72_Enneking
+M_Sort_116
+M_Sort_60_FIT
+M_Sort_112
+M_Sort_79_GreatPlains
+M_Sort_120
+M_Sort_61_Lamettry
+M_Sort_106
+M_Sort_91_Mahneke
+M_Sort_109
+M_Sort_102_MHPAC
+M_Sort_8
+M_Sort_89_NWA
+M_Sort_110
+M_Sort_41
+M_Sort_115
+M_Sort_122
+M_Sort_64_Star
+M_Sort_73_SunnySide
+M_Sort_104_OnLineEmail
+M_Sort_82_Texas
+M_Sort_114
+M_Sort_113
+M_Sort_15
+M_Sort_19
+M_Sort_44_Universal
+M_Sort_118
+M_Mrk_ThankYou_Text_IDs
+M_Mrk_ThankYou_ACRB
+M_Mrk_ThankYou_Price_ACRB
+M_Mrk_ThankYou_NoSurWar_Text_IDs
+M_Mrk_ThankYou_NoSurWar
+M_Mrk_ThankYou_Price_NoSurWar
+M_Mrk_ThankYou_NoWar
+M_Mrk_ThankYou_Price_NoWar
+M_Mrk_ThankYou_NoSur_Text_IDs
+M_Mrk_ThankYou_NoSur
+M_Mrk_ThankYou_Price_NoSur
+M_Mrk_Warranty_Shop
+M_Mrk_Warranty_ACRB
+M_Mrk_Warranty_Price_ACRB
+M_Mrk_Survey
+M_Mrk_Survey_Price
+M_Mrk_3Month_Text_IDs
+M_Mrk_3Month
+M_Mrk_3Month_Price
+M_Mrk_Birthday
+M_Mrk_Birthday_Price
+M_Mrk_Drivers
+M_Mrk_Drivers_Price
+M_Mrk_6Month_Text_IDs
+M_Mrk_6Month
+M_Mrk_6Month_Price
+M_Mrk_1Year_Text_IDs
+M_Mrk_1Year
+M_Mrk_1Year_Price
+M_Mrk_2Year
+M_Mrk_2Year_Price
+M_Mrk_18Month_Text_IDs
+M_Mrk_18Month
+M_Mrk_18Month_Price
+M_Mrk_ReportCard
+M_Mrk_ReportCard_Price
+M_Mrk_ReportCard_Cond
+M_Mrk_Emailed Survey Only
+M_Mrk_Emailed Survey Only_Price
+M_Mrk_Package Name
+M_Mrk_Contacts_sum
+M_Mrk_Cost_Standard
+M_Mrk_EstFU_Flag_Maze
+M_Mrk_EstFU_Flag_Maze_ID
+M_Mrk_EstFU_Flag_Maze_Price
+M_Mrk_EstFU_Flag_Maze_Cost
+M_Mrk_EstFU_Flag_NoCoupon
+M_Mrk_EstFU_Flag_NoCoupon_ID
+M_Mrk_EstFU_Flag_NoCoupon_Price
+M_Mrk_EstFU_Flag_NoCoupon_Cost
+M_Mrk_EstFU_Flag_Custom
+M_Mrk_EstFU_Flag_Custom_ID
+M_Mrk_EstFU_Flag_Custom_price
+M_Mrk_EstFU_Flag_Custom_cost
+M_Mrk_EstFU_Flag_Search
+M_Mrk_EstFU_Flag_Search_ID
+M_Mrk_EstFU_Flag_Search_Price
+M_Mrk_EstFU_Flag_Search_Cost
+M_Mrk_EstFU_Discount
+M_Mrk_EstFU_MinRepair
+M_Mrk_EstFU_Flag_Bill
+M_Mrk_Total
+M_Mrk_Total_ID
+M_Mrk_Total_Price
+M_Mrk_Total_Cost
+M_Mrk_TotalSpecial
+M_Mrk_TotalSpecial_ID
+M_Mrk_TotalSpecial_Price
+M_Mrk_TotalSpecial_Cost
+M_Mrk_TotalLegal
+M_Mrk_TotalLegal_ID
+M_Mrk_TotalLegal_Price
+M_Mrk_TotalLegal_Cost
+M_Warranty_Style
+M_Warranty_National
+M_Warranty_Flag
+M_Warranty_Adds
+M_Paint Set Up
+M_Paint_Line
+M_Change_Program_1
+M_Change_Program_1_Text
+M_Change_Program_2
+M_Change_Program_2_Text
+M_Change_Program_3
+M_Change_Program_3_Text
+M_Coupon_Discount_1
+M_Coupon_Discount_1_max
+M_Coupon_Discount_2
+M_Coupon_Discount_2_max
+M_Coupon_Discount_3
+M_Coupon_Discount_3_max
+M_Coupon_ExceedDLZ
+M_Coupon_ReferralBonus
+M_Coupon_Discount_Friend
+M_Mrk_NameSig_First
+M_Mrk_NameSig_Last
+M_Mrk_NameSig_Title
+M_Mrk_NameSig_First2
+M_Mrk_NameSig_Last2
+M_Mrk_NameSig_Title2
+M_Mrk_NameSig_TitleDual
+M_Mrk_NameSig_Letter
+M_TagLine
+M_TagLine_global
+M_Mrk_ThankYou_NoSur_PS
+M_Mrk_3Month_PS
+M_Mrk_1Year_PS
+M_90Day_Review
+M_90Day_Review_empty
+M_RedFlag_1_survey
+M_RedFlag_1_survey_bench
+M_RedFlag_1_survey_goal
+M_RedFlag_2_survey
+M_RedFlag_2_survey_bench
+M_RedFlag_2_survey_goal
+M_RedFlag_3_survey
+M_RedFlag_3_survey_bench
+M_RedFlag_3_survey_goal
+M_RedFlag_4_survey
+M_RedFlag_4_survey_bench
+M_RedFlag_4_survey_goal
+M_RedFlag_5_survey
+M_RedFlag_5_survey_bench
+M_RedFlag_5_survey_goal
+M_RedFlag_6
+M_RedFlag_6_Bench
+M_RedFlag_6_Goal
+MP_YrsBusiness
+MP_YrsBusiness_Yes
+MP_SqFootage
+MP_MgmSystem
+MP_EstSystem
+MP_PaintCompany
+MP_Survey_Y_N
+MP_Survey_Method
+MP_Survey_Supplier
+MP_Survey_Learn
+MP_Warranty_Y_N
+MP_Referrals_Y_N
+MP_Referrals_Thanking
+MP_Agents_Y_N
+MP_Agents_Marketing_Y_N
+MP_Agents_Marketing_How
+MP_ClosingPCT
+MP_FU_Estimates_Y_N
+MP_FU_Estimates_How
+MP_FU_TotalCust_Y_N
+MP_FU_TotalCust_How
+MP_LoanerCars_Y_N
+MP_RentalCars_OnSite_Y_N
+MP_RentalCars_OnSite_Who
+MP_Mechancial_Y_N
+MP_Perceived
+MP_HowDifferent
+MP_WhyPSG
+MP_ListCurrentMarketing
+M_Report91
+M_Report103
+M_Report106
+M_Report19_SurAlert
+M_Report19_SurAlert_mso
+M_Report29
+M_Report29_mso
+M_Report43
+M_Report43_mso
+M_Report104
+M_Report104_mso
+M_Report4
+M_Report4_mso
+M_Report32
+M_Report137
+M_Report147
+M_Report157
+M_Report157_mso
+M_Report108_mso
+M_Report176
+M_Report186_mso
+M_Report195
+M_Report195_mso
+M_Report45
+M_Report45_mso
+M_Report46
+M_Report9
+M_Report10
+M_Report10_mso
+M_Report11
+M_Report11_mso
+M_Report94
+M_Report138
+M_Report139
+M_Report153_MSO
+M_Report154_MSO
+M_Report152
+M_Report152_mso
+M_Report159
+M_Report159_mso
+M_Report68_mso
+M_Report73_mso
+M_Report81
+M_Report82
+M_Report86_mso
+M_Report160
+M_Report161_mso
+M_Report162
+M_Report162_mso
+M_Report163_mso
+M_Report164_mso
+M_Report178_mso
+M_Report182
+M_Report182_mso
+M_Report184
+M_Report97_mso
+M_Report107
+M_Report1_ID
+M_Report1
+M_Report179_mso
+M_Report98_mso
+M_Report99
+M_Report100
+M_Report100_mso
+M_Report101
+M_Report105_mso
+M_Report5
+M_Report23_AgentCapture
+M_Report23_AgentCapture_mso
+M_Report146_mso
+M_Report177_mso
+M_Report69
+M_Report69_mso
+M_Report38
+M_Report38_mso
+M_Report60
+M_Report62
+M_Report63
+M_Report64
+M_Report13
+M_Report33
+M_Report33_mso
+M_Report92
+M_Report132
+M_Report134
+M_Report134_mso
+M_Report140
+M_Report140_mso
+M_Report142
+M_Report142_mso
+M_Report192
+M_Report192_mso
+M_Report193
+M_Report193_mso
+M_Report143_mso
+M_Report145_mso
+M_Report158
+M_Report79
+M_Report174
+M_Report180_mso
+M_Report196
+M_Report187
+M_Report188
+M_Report189
+M_Report190
+M_Report191
+M_Report194
+M_Report194_mso
+M_Report65_mso
+M_Report4_weekly
+M_Report4_weekly_mso
+M_Report74
+M_Report74_mso
+M_Report75
+M_Report75_mso
+M_Report47_Email
+M_Report100_weekly
+M_Report100_weekly_mso
+M_Report144_mso
+M_Report166
+M_Report17_CSI Display_weekly
+M_Report101_weekly
+M_Report101_weekly_mso
+M_Report65_weekly
+M_Report181_weekly_mso
+M_Report195_weekly
+M_Report195_weekly_mso
+M_Report197_weekly_mso
+M_Report198_weekly_mso
+M_Envelope_Flag
+M_Report17_CSI Display
+M_Report148
+M_Report150
+M_Report150_mso
+M_Report156_MSO
+M_Report52_Email_ReportCards
+M_Report39
+M_Report131
+M_Report133_CSIDis_Print
+M_Report155
+M_ReferralNoted_flag
+M_ReferralNoted_flag_date
+M_ReferralNoted_flag2
+M_ReferralNoted_flag_date2
+M_Report167
+M_Report168
+M_Report169
+M_Report170
+M_Report151
+M_Report151_mso
+M_Report171
+M_Report171_mso
+M_Report172
+M_Report172_mso
+M_Report173
+M_Report173_mso
+M_Report199
+M_Report200
+M_Graphic_Logo_flag
