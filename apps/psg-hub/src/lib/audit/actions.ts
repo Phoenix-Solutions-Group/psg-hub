@@ -37,6 +37,10 @@ export const AUDIT_ACTIONS = [
   // superadmin allowlist
   "superadmin.add",
   "superadmin.remove",
+  // intel competitor report (v1.6 / PSG-177b) — superadmin runs the (G5-gated, metered)
+  // competitor intelligence report from the ops surface; the run is audited so any metered
+  // spend is attributable to an actor + shop.
+  "intel.competitor_report.run",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
