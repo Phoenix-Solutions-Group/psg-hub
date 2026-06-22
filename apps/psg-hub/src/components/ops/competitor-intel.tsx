@@ -9,16 +9,64 @@
 // The three states the route can produce are surfaced cleanly:
 //   - rendered      — 200, the branded HTML report
 //   - no-data       — 404, the shop has no scored competitor set (no metered call was made)
-//   - error         — 401/403/5xx, shown verbatim from the route's { error } body
-// A standing metered/cost notice is shown before any run: the grounded narrative calls a paid
-// model (a few cents) and is G5/spend-cap-gated — this is the cost-aware superadmin surface.
+//   - error         — 401/403/5xx, a plain-language line over the route's { error } detail
+// A standing cost notice is shown before any run (the report calls a paid AI service, a few
+// cents, and counts against the monthly budget cap) — this is the cost-aware superadmin surface.
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
 export type IntelShopOption = { id: string; name: string };
+
+// The report HTML has an inherently variable height (one threat-table row per competitor,
+// wrapping rationales, a wide-swinging executive summary). A fixed iframe height is wrong in
+// both directions — too tall nests a double-scrollbar and pushes the "Not for external
+// distribution" footer below the fold; too short leaves an empty white gap below it.
+// Because `srcDoc` iframes are same-origin with the host, we can read the rendered document
+// height directly: measure on load, then a ResizeObserver catches the post-@font-face-swap
+// reflow. `MIN_REPORT_HEIGHT` guards the pre-measure first paint.
+const MIN_REPORT_HEIGHT = 480;
+
+function AutoHeightReportFrame({ title, html }: { title: string; html: string }) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const [height, setHeight] = useState(MIN_REPORT_HEIGHT);
+
+  const measure = useCallback(() => {
+    const doc = frameRef.current?.contentWindow?.document;
+    const h = doc?.documentElement?.scrollHeight ?? 0;
+    // +8px buffer absorbs sub-pixel rounding so no hairline inner scrollbar appears.
+    if (h > 0) setHeight(Math.max(MIN_REPORT_HEIGHT, h + 8));
+  }, []);
+
+  const handleLoad = useCallback(() => {
+    measure();
+    // Re-measure on the post-@font-face-swap reflow. Use the iframe's OWN ResizeObserver so it
+    // observes the report document's growth (the host Window type doesn't expose it).
+    const win = frameRef.current?.contentWindow as (Window & typeof globalThis) | null;
+    const root = win?.document?.documentElement;
+    if (!win || !root || typeof win.ResizeObserver !== "function") return;
+    observerRef.current?.disconnect();
+    const ro = new win.ResizeObserver(() => measure());
+    ro.observe(root);
+    observerRef.current = ro;
+  }, [measure]);
+
+  useEffect(() => () => observerRef.current?.disconnect(), []);
+
+  return (
+    <iframe
+      ref={frameRef}
+      title={title}
+      srcDoc={html}
+      onLoad={handleLoad}
+      style={{ height }}
+      className="w-full rounded-lg border border-border bg-white"
+    />
+  );
+}
 
 type RunState =
   | { kind: "idle" }
@@ -92,11 +140,11 @@ export function CompetitorIntel({ shops }: { shops: IntelShopOption[] }) {
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm">
-        <p className="font-semibold text-warning">Metered — runs a paid model</p>
+        <p className="font-semibold text-warning">Costs a few cents to run</p>
         <p className="mt-1 text-muted-foreground">
-          Running a report calls a grounded AI model (a few cents) and is enforced against the
-          monthly spend cap. If the cap is hit or the gateway key is unset, the report still
-          renders the deterministic score table and degrades the narrative fail-closed.
+          Each report uses a paid AI service (a few cents) and counts against the monthly budget
+          cap. If the budget is reached, the report still shows the full competitor scoreboard —
+          only the written summary is skipped.
         </p>
       </div>
 
@@ -132,13 +180,17 @@ export function CompetitorIntel({ shops }: { shops: IntelShopOption[] }) {
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
           <p className="font-semibold">No competitor data</p>
           <p className="mt-1 text-muted-foreground">{state.message}</p>
+          <p className="mt-1 text-muted-foreground">
+            Run the competitor sync for this shop to populate it.
+          </p>
         </div>
       )}
 
       {state.kind === "error" && (
-        <p className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {state.message}
-        </p>
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <p className="font-semibold">Couldn&rsquo;t run the report — please try again.</p>
+          <p className="mt-1 text-destructive/80">{state.message}</p>
+        </div>
       )}
 
       {state.kind === "rendered" && (
@@ -147,10 +199,9 @@ export function CompetitorIntel({ shops }: { shops: IntelShopOption[] }) {
             <Badge variant="secondary">Report</Badge>
             {selectedName}
           </p>
-          <iframe
+          <AutoHeightReportFrame
             title={`Competitor report — ${selectedName}`}
-            srcDoc={state.html}
-            className="h-[1400px] w-full rounded-lg border border-border bg-white"
+            html={state.html}
           />
         </div>
       )}
