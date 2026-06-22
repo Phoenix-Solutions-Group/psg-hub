@@ -12,14 +12,19 @@ const OPUS = "anthropic/claude-opus-4.8";
 const SONNET = "anthropic/claude-sonnet-4.6";
 const HAIKU = "anthropic/claude-haiku-4.5";
 
-// NON-ANTHROPIC SLUGS ARE PROVISIONAL (activation-pending).
-// These providers are off by default (G5 gate). The exact gateway model ids MUST be
-// verified against the live AI Gateway model list at G5 activation before enabling them.
-// Until then they are never dispatched, so a stale slug here cannot cause a live failure.
-const GPT = "openai/gpt-5.1"; // provisional — verify at G5 activation
-const GEMINI_PRO = "google/gemini-3-pro"; // provisional — verify at G5 activation
-const GEMINI_FLASH = "google/gemini-3-flash"; // provisional — verify at G5 activation
-const SONAR = "perplexity/sonar-pro"; // provisional — verify at G5 activation
+// Non-Anthropic slugs VERIFIED against the live Vercel AI Gateway model list
+// (GET https://ai-gateway.vercel.sh/v1/models — 281 models — PSG-177, 2026-06-22).
+// These providers stay off by default (G5 gate); re-verify at the activation smoke since
+// the gateway list churns. Two provisional slugs were stale and are corrected here:
+//   openai/gpt-5.1        -> openai/gpt-5.5               (gpt-5.1 base no longer listed)
+//   google/gemini-3-pro   -> google/gemini-3.1-pro-preview (gemini-3-pro no longer listed)
+// google/gemini-3-flash and perplexity/sonar-pro are confirmed live as-is. Until G5 these
+// are never dispatched, so a future drift still cannot cause a live failure (the router
+// falls through to the Anthropic tail).
+const GPT = "openai/gpt-5.5"; // verified live 2026-06-22 (was openai/gpt-5.1, delisted)
+const GEMINI_PRO = "google/gemini-3.1-pro-preview"; // verified live (was google/gemini-3-pro, delisted)
+const GEMINI_FLASH = "google/gemini-3-flash"; // verified live 2026-06-22
+const SONAR = "perplexity/sonar-pro"; // verified live 2026-06-22
 
 /**
  * Capability-first ordering. A same-family Anthropic candidate is appended to every

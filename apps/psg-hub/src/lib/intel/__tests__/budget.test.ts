@@ -34,8 +34,9 @@ describe("estimateCallCostUsd", () => {
 
   it("treats null/undefined token counts as zero", () => {
     expect(estimateCallCostUsd("anthropic/claude-opus-4.8", null, null)).toBe(0);
+    // opus 4.8 input rate verified at $5/MTok (PSG-177): 1M in => $5.
     expect(estimateCallCostUsd("anthropic/claude-opus-4.8", 1_000_000, undefined)).toBeCloseTo(
-      15,
+      5,
       6,
     );
   });
@@ -50,7 +51,7 @@ describe("totalSpendUsd", () => {
   it("sums estimated cost across logged rows, tolerating nulls", () => {
     const rows = [
       { modelId: "anthropic/claude-haiku-4.5", inputTokens: 1_000_000, outputTokens: 0 }, // $1
-      { modelId: "openai/gpt-5.1", inputTokens: 0, outputTokens: 1_000_000 }, // $30
+      { modelId: "openai/gpt-5.5", inputTokens: 0, outputTokens: 1_000_000 }, // $30
       { modelId: null, inputTokens: null, outputTokens: null }, // $0
     ];
     expect(totalSpendUsd(rows)).toBeCloseTo(31, 6);
@@ -63,8 +64,8 @@ describe("totalSpendUsd", () => {
 
 describe("applySpendCap", () => {
   const reasoning: ModelSpec[] = [
-    { provider: "openai", model: "openai/gpt-5.1", costTier: 4 },
-    { provider: "google", model: "google/gemini-3-pro", costTier: 3 },
+    { provider: "openai", model: "openai/gpt-5.5", costTier: 4 },
+    { provider: "google", model: "google/gemini-3.1-pro-preview", costTier: 3 },
     { provider: "anthropic", model: "anthropic/claude-sonnet-4.6", costTier: 2 },
   ];
 
@@ -80,7 +81,7 @@ describe("applySpendCap", () => {
   it("throws SpendCapExceededError when the profile has no in-budget fallback", () => {
     const meteredOnly: ModelSpec[] = [
       { provider: "perplexity", model: "perplexity/sonar-pro", costTier: 3, grounded: true },
-      { provider: "google", model: "google/gemini-3-pro", costTier: 3, grounded: true },
+      { provider: "google", model: "google/gemini-3.1-pro-preview", costTier: 3, grounded: true },
     ];
     expect(() => applySpendCap(meteredOnly, 250, 200, "web_grounded")).toThrow(
       SpendCapExceededError,
