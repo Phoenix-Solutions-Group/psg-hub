@@ -108,3 +108,10 @@ turning a silent gap into a loud, blocking signal.
 `monthly_reports_claim`, `stripe_webhook_events`, `reconcile_subscription_tier`,
 `invoices_and_payment_events`, `module_registry`, `verified_facts`,
 `content_items_publish_gate`. Post-apply drift check = 0.
+
+> Note: 6 of these 7 migration files are in `main` as of this writeup.
+> `content_items_publish_gate` (`20260622120000_content_items_publish_gate.sql`)
+> was applied to prod in the same pass, but its file lands via a separate
+> feature branch — so a drift run on `main` before that branch merges sees
+> only 6 of these names as repo files; the 7th surfaces as a benign
+> "no matching repo file" ledger note, not drift. Expected.
