@@ -146,6 +146,48 @@ describe("template mapping (smart column resolution)", () => {
     expect(missingRequiredMappings("estimate", m)).toContain("estimate_number");
   });
 
+  // PSG-51 — regressions from REAL pilot exports (header shapes only, no PII).
+  // The old substring resolver mis-mapped compound camelCase headers; these lock
+  // in the scoring/tokenizing resolver. See docs/Filemaker Exports.
+  it("maps a CCC ONE export without grabbing decoy ID columns", () => {
+    // RODataPreparationID / CustomerProgramID precede the real columns — the old
+    // resolver grabbed them via "ro" / "st" substrings ("cu·st·omer").
+    const headers = [
+      "RODataPreparationID", "RepairOrderID", "CustomerProgramID", "RONumber",
+      "OwnerFName", "OwnerLName", "OwnerAddress1", "OwnerCity",
+      "OwnerStateProvince", "OwnerPostalZip", "OwnerHomePhone", "OwnerCellPhone",
+      "OwnerEmail", "VehicleMake", "VehicleModel", "TotalLaborHrs", "DeliveredDate",
+    ];
+    const m = suggestMapping("ro", headers);
+    expect(m.ro_number).toBe("RONumber");
+    expect(m.address_state).toBe("OwnerStateProvince");
+    expect(m.customer_phone).toBe("OwnerCellPhone"); // cell preferred over home
+    expect(m.address_zip).toBe("OwnerPostalZip");
+    expect(m.date_out).toBe("DeliveredDate");
+    // No real total-loss column present -> must stay unmapped (not TotalLaborHrs).
+    expect(m.total_loss_flag).toBeUndefined();
+  });
+
+  it("maps the canonical PSG export, picking RONumber over phone columns", () => {
+    // "OwnerOtherPhone" contains the substring "ro" — the old resolver mapped
+    // ro_number to it (col 10) instead of RONumber (col 18).
+    const headers = [
+      "BusinessKeyPSG", "OwnerFName", "OwnerLName", "OwnerAddress1",
+      "OwnerCity", "OwnerStateProvince", "OwnerPostalZip", "OwnerCellPhone",
+      "OwnerOtherPhone", "OwnerEmail", "RONumber", "Total_Loss",
+    ];
+    const m = suggestMapping("ro", headers);
+    expect(m.ro_number).toBe("RONumber");
+    expect(m.address_state).toBe("OwnerStateProvince");
+    expect(m.total_loss_flag).toBe("Total_Loss");
+  });
+
+  it("does not map total-loss to a dollar 'Total' column", () => {
+    const m = suggestMapping("ro", ["RO", "First Name", "Last Name", "Total"]);
+    expect(m.ro_number).toBe("RO");
+    expect(m.total_loss_flag).toBeUndefined();
+  });
+
   it("applies a mapping to produce canonical-keyed rows", () => {
     const table = { format: "csv" as const, headers: ["RO #", "First Name"], rows: [{ "RO #": "1", "First Name": "Jane" }] };
     const mapped = applyMapping(table, { ro_number: "RO #", customer_first_name: "First Name" });
@@ -178,6 +220,21 @@ describe("validation", () => {
     const summary = validateRecords("ro", { customer_first_name: "First Name" }, []);
     expect(summary.unmappedRequired).toContain("ro_number");
     expect(summary.unmappedRequired).toContain("customer_last_name");
+    // first name is optional (commercial/fleet ROs have no personal first name).
+    expect(summary.unmappedRequired).not.toContain("customer_first_name");
+  });
+
+  // PSG-51 — commercial / fleet ROs carry the business name in the last-name
+  // field with a blank first name (e.g. "CARMAX", "OMAHA GLASS CO"). These are
+  // valid records, not errors.
+  it("accepts a commercial RO with a company last name and no first name", () => {
+    const summary = validateRecords(
+      "ro",
+      { ro_number: "RONumber", customer_first_name: "OwnerFName", customer_last_name: "OwnerLName" },
+      [{ ro_number: "141647", customer_first_name: "", customer_last_name: "OMAHA GLASS CO" }],
+    );
+    expect(summary.invalid).toBe(0);
+    expect(summary.rows[0].errors).toEqual([]);
   });
 });
 
