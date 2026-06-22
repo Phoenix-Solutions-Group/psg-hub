@@ -50,11 +50,11 @@ function fakeClient(
 /* -------------------------------------------------------------------------- */
 
 describe("monthToDateSpendUsd", () => {
-  // haiku: $1/MTok in, $5/MTok out. gpt-5.1: $10/MTok in, $30/MTok out.
+  // haiku: $1/MTok in, $5/MTok out. gpt-5.5: $5/MTok in, $30/MTok out.
   // 1M haiku-in ($1) + 0.5M gpt-out ($15) + a null-model row ($0) => $16.
   const fixture = [
     { model_id: "anthropic/claude-haiku-4.5", input_tokens: 1_000_000, output_tokens: 0 },
-    { model_id: "openai/gpt-5.1", input_tokens: 0, output_tokens: 500_000 },
+    { model_id: "openai/gpt-5.5", input_tokens: 0, output_tokens: 500_000 },
     { model_id: null, input_tokens: null, output_tokens: null },
   ];
 
