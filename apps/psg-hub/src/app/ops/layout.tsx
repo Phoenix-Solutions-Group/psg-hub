@@ -5,7 +5,10 @@ import { getOpsAccess, isOpsStaff } from "@/lib/auth/ops-access";
 
 // Internal-ops backbone shell (v1.1 / PSG-25). psg_internal + psg_superadmin only;
 // fine-grained module access is enforced per-route via requireOpsFn() + RLS.
-const OPS_NAV = [
+// `superadminOnly` items (e.g. Competitor Intel, PSG-210) are hidden from psg_internal so the
+// nav matches the route's own superadmin gate — visibility is not access control, but not
+// advertising a surface a user cannot reach keeps the nav honest.
+const OPS_NAV: { href: string; label: string; superadminOnly?: boolean }[] = [
   { href: "/ops", label: "Ops Home" },
   { href: "/ops/companies", label: "Companies" },
   { href: "/ops/repair-customers", label: "Repair Customers" },
@@ -15,6 +18,7 @@ const OPS_NAV = [
   { href: "/ops/data-import/estimates", label: "Import Estimates" },
   { href: "/ops/surveys", label: "Surveys" },
   { href: "/ops/ads-mutations", label: "Ads Mutations" },
+  { href: "/ops/intel", label: "Competitor Intel", superadminOnly: true },
   { href: "/ops/sys-config", label: "System Config" },
 ];
 
@@ -46,7 +50,9 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
           </span>
         </div>
         <nav className="flex-1 space-y-1 p-3">
-          {OPS_NAV.map((item) => (
+          {OPS_NAV.filter(
+            (item) => !item.superadminOnly || access.role === "psg_superadmin",
+          ).map((item) => (
             <a
               key={item.href}
               href={item.href}
