@@ -132,8 +132,8 @@ export const BSM_FACT_PROVENANCE: Record<string, ShopProvenance> = {
 
 /**
  * Tracy's Collision Center — Lincoln, NE. Founded November 1969; as of June 2026
- * that is 56 full years, so `yearsInBusiness` is recorded as 56 (copy claims the
- * conservative "since 1969" / "more than 50 years", which never over-claims).
+ * that is 56 full years, so `yearsInBusiness` is recorded as 56. The copy claims
+ * "since 1969" and its manifest entries bind to the verified 56 (never over-claims).
  */
 const tracysFacts: VerifiedFacts = verifiedFactsSchema.parse({
   shopId: "shop-tracys",
@@ -255,7 +255,7 @@ export const BSM_GENERATED_ASSETS: KeyedAsset[] = [
         { claimText: "Honda and Acura ProFirst certified", field: "certifications", value: "Honda" },
         { claimText: "FCA US LLC certified", field: "certifications", value: "FCA" },
         { claimText: "Certified through the Assured Performance network", field: "certifications", value: "Assured Performance" },
-        { claimText: "doing this for Lincoln drivers since 1969", field: "yearsInBusiness", value: "50" },
+        { claimText: "doing this for Lincoln drivers since 1969", field: "yearsInBusiness", value: "56" },
         { claimText: "lifetime warranty on the metalwork and paint for as long as you own the vehicle", field: "warranty", value: "lifetime" },
       ],
     },
@@ -288,7 +288,7 @@ export const BSM_GENERATED_ASSETS: KeyedAsset[] = [
         { claimText: "I-CAR Gold Class technicians on every repair", field: "certifications", value: "I-CAR Gold Class" },
         { claimText: "Manufacturer-certified work for Honda and Acura", field: "certifications", value: "Honda" },
         { claimText: "FCA US LLC certified", field: "certifications", value: "FCA" },
-        { claimText: "put Lincoln's cars back together since 1969", field: "yearsInBusiness", value: "50" },
+        { claimText: "put Lincoln's cars back together since 1969", field: "yearsInBusiness", value: "56" },
         { claimText: "lifetime warranty on metalwork and paint for as long as you own the car", field: "warranty", value: "lifetime" },
       ],
     },
@@ -303,7 +303,7 @@ export const BSM_GENERATED_ASSETS: KeyedAsset[] = [
         "I-CAR Gold Class collision repair in Lincoln, NE — trusted since 1969. Lifetime warranty on metalwork and paint. Call Tracy's for a straight estimate.",
       claimsManifest: [
         { claimText: "I-CAR Gold Class collision repair", field: "certifications", value: "I-CAR Gold Class" },
-        { claimText: "trusted since 1969", field: "yearsInBusiness", value: "50" },
+        { claimText: "trusted since 1969", field: "yearsInBusiness", value: "56" },
         { claimText: "lifetime warranty on metalwork and paint", field: "warranty", value: "lifetime" },
       ],
     },
