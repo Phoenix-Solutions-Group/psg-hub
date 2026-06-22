@@ -15,19 +15,23 @@ export interface CostRate {
   readonly outputPerMTok: number;
 }
 
-// PROVISIONAL published list rates (USD / 1M tokens). These MUST be verified at G5
-// activation alongside the gateway model slugs (catalog.ts) — until G5 the non-Anthropic
-// models are never dispatched, so a stale rate here cannot affect live spend. Anthropic
-// rates are included so the in-budget path is costed too (the cap covers ALL router
-// spend, not only the G5 providers).
+// Published list rates (USD / 1M tokens) VERIFIED against the live Vercel AI Gateway
+// pricing (GET https://ai-gateway.vercel.sh/v1/models — PSG-177, 2026-06-22). Keys are
+// kept in lockstep with catalog.ts. Re-verify at the G5 activation smoke; until then the
+// non-Anthropic models are never dispatched, so a stale rate here cannot affect live
+// spend. Anthropic rates are included so the in-budget path is costed too (the cap covers
+// ALL router spend, not only the G5 providers).
+// NOTE: perplexity/sonar-pro is request-priced on the gateway (no per-token rate listed);
+// the conservative per-token estimate below is retained so its token usage is still costed
+// against the cap rather than counted as free.
 export const MODEL_COST_RATES: Record<string, CostRate> = {
-  "anthropic/claude-opus-4.8": { inputPerMTok: 15, outputPerMTok: 75 },
-  "anthropic/claude-sonnet-4.6": { inputPerMTok: 3, outputPerMTok: 15 },
-  "anthropic/claude-haiku-4.5": { inputPerMTok: 1, outputPerMTok: 5 },
-  "openai/gpt-5.1": { inputPerMTok: 10, outputPerMTok: 30 },
-  "google/gemini-3-pro": { inputPerMTok: 7, outputPerMTok: 21 },
-  "google/gemini-3-flash": { inputPerMTok: 0.3, outputPerMTok: 2.5 },
-  "perplexity/sonar-pro": { inputPerMTok: 3, outputPerMTok: 15 },
+  "anthropic/claude-opus-4.8": { inputPerMTok: 5, outputPerMTok: 25 }, // verified 2026-06-22 (was 15/75)
+  "anthropic/claude-sonnet-4.6": { inputPerMTok: 3, outputPerMTok: 15 }, // verified
+  "anthropic/claude-haiku-4.5": { inputPerMTok: 1, outputPerMTok: 5 }, // verified
+  "openai/gpt-5.5": { inputPerMTok: 5, outputPerMTok: 30 }, // verified (replaces delisted gpt-5.1)
+  "google/gemini-3.1-pro-preview": { inputPerMTok: 2, outputPerMTok: 12 }, // verified (replaces delisted gemini-3-pro)
+  "google/gemini-3-flash": { inputPerMTok: 0.5, outputPerMTok: 3 }, // verified 2026-06-22 (was 0.3/2.5)
+  "perplexity/sonar-pro": { inputPerMTok: 3, outputPerMTok: 15 }, // request-priced on gateway; conservative token estimate
 };
 
 // Conservative fallback for an unrecognised model id (e.g. a slug renamed at activation):
