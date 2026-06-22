@@ -26,19 +26,22 @@ export type IntelShopOption = { id: string; name: string };
 // distribution" footer below the fold; too short leaves an empty white gap below it.
 // Because `srcDoc` iframes are same-origin with the host, we can read the rendered document
 // height directly: measure on load, then a ResizeObserver catches the post-@font-face-swap
-// reflow. `MIN_REPORT_HEIGHT` guards the pre-measure first paint.
-const MIN_REPORT_HEIGHT = 480;
+// reflow. `INITIAL_REPORT_HEIGHT` is only the pre-measure first-paint height — once measured,
+// the height tracks the report exactly (no floor), so a short report (e.g. Demo Body Shop)
+// leaves no empty gap below the footer, which is the primary defect this fixes.
+const INITIAL_REPORT_HEIGHT = 480;
 
 function AutoHeightReportFrame({ title, html }: { title: string; html: string }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
-  const [height, setHeight] = useState(MIN_REPORT_HEIGHT);
+  const [height, setHeight] = useState(INITIAL_REPORT_HEIGHT);
 
   const measure = useCallback(() => {
     const doc = frameRef.current?.contentWindow?.document;
     const h = doc?.documentElement?.scrollHeight ?? 0;
-    // +8px buffer absorbs sub-pixel rounding so no hairline inner scrollbar appears.
-    if (h > 0) setHeight(Math.max(MIN_REPORT_HEIGHT, h + 8));
+    // +8px buffer absorbs sub-pixel rounding so no hairline inner scrollbar appears. No min
+    // floor on the measured value — the iframe hugs the real report height in both directions.
+    if (h > 0) setHeight(h + 8);
   }, []);
 
   const handleLoad = useCallback(() => {
