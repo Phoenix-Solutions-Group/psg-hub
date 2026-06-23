@@ -42,6 +42,13 @@ import {
   reprintRecapRun,
 } from "./live/volume";
 import {
+  hotSpotRun,
+  misFireRun,
+  perfectScoreRun,
+  referralComparisonRun,
+  referralNotedRun,
+} from "./live/individual-survey";
+import {
   category,
   customerName,
   estimator,
@@ -689,7 +696,8 @@ const definitions: ReportDefinition[] = [
       col("estimator", "Estimator", "string"),
       col("date", "Received", "date"),
     ],
-    dataStatus: "pending-data",
+    dataStatus: "available",
+    run: perfectScoreRun,
     sampleRows: (p) =>
       build(N, (i) => ({
         ro: roNumber(i + 60),
@@ -713,7 +721,8 @@ const definitions: ReportDefinition[] = [
       col("lowSub", "Low Sub-Score", "string"),
       col("subScore", "Sub Value", "number"),
     ],
-    dataStatus: "pending-data",
+    dataStatus: "available",
+    run: misFireRun,
     sampleRows: () =>
       build(N, (i) => ({
         ro: roNumber(i + 70),
@@ -736,7 +745,8 @@ const definitions: ReportDefinition[] = [
       col("count", "Mentions", "number"),
       col("avgScore", "Avg Score", "number"),
     ],
-    dataStatus: "pending-data",
+    dataStatus: "available",
+    run: hotSpotRun,
     sampleRows: () =>
       build(6, (i) => ({
         shop: shopName(i),
@@ -762,6 +772,12 @@ const definitions: ReportDefinition[] = [
       col("daysOpen", "Days Open", "number"),
       col("date", "Reported", "date"),
     ],
+    // PSG-49: stays pending-data. survey_responses (+ spine) carries no
+    // resolution / service-recovery state, no typed issue field, and no
+    // resolution timestamp — so "Issue", "Days Open", and "no logged
+    // resolution" have no honest source (the only issue text is the PII
+    // free-text comment, which is excluded). Wire when a service-recovery /
+    // resolution-tracking edge lands; see the PSG-49 thread.
     dataStatus: "pending-data",
     sampleRows: (p) =>
       build(N, (i) => ({
@@ -788,7 +804,8 @@ const definitions: ReportDefinition[] = [
       col("category", "Referral Category", "string"),
       col("source", "Source Named", "string"),
     ],
-    dataStatus: "pending-data",
+    dataStatus: "available",
+    run: referralNotedRun,
     sampleRows: () =>
       build(N, (i) => ({
         ro: roNumber(i + 90),
@@ -810,7 +827,8 @@ const definitions: ReportDefinition[] = [
       col("current", "Current Period", "number"),
       col("delta", "Change", "percent"),
     ],
-    dataStatus: "pending-data",
+    dataStatus: "available",
+    run: referralComparisonRun,
     sampleRows: () =>
       ["Insurance Agent", "Repeat Customer", "Dealership", "Web/Search", "Word of Mouth"].map(
         (cat, i) => {
