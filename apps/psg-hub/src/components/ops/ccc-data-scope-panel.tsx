@@ -27,7 +27,14 @@ export function CccDataScopePanel({
               ✓
             </span>
             <span>
-              <span className="text-foreground">{field.label}</span>
+              {/* `optional` fields get the softer treatment the contract promises — muted +
+                  italic — so the flag drives behavior instead of living only in note text
+                  (designer P3, PSG-275). */}
+              <span
+                className={field.optional ? "text-muted-foreground italic" : "text-foreground"}
+              >
+                {field.label}
+              </span>
               {field.note && (
                 <span className="ml-1 text-muted-foreground">({field.note})</span>
               )}

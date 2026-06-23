@@ -5,7 +5,7 @@
 //
 // Presentational + state-driven, FIXTURE-DRIVEN — no live `ccc_accounts` wiring (that's child 3).
 // It renders all five states from the §2 state machine via the pure CONNECTION_PRESENTATION
-// mapping, surfaces the "Get connection steps" list (A′) and the "Last event…" line, and embeds
+// mapping, surfaces the "Get connection steps" list (A′) and the "Last update…" line, and embeds
 // the shared data-scope panel (C). The mutating CTAs (cancel / disconnect / reconnect / request
 // again) are optional callbacks so child 3 can bind them to server actions without touching the
 // presentation. Mirrors competitor-intel.tsx / access-audit-viewer.tsx conventions.
@@ -115,7 +115,9 @@ export function CccConnectionCard({
         )}
         {view.status === "connected" && lastEvent && (
           <p className="text-muted-foreground">
-            <span className="text-foreground">Last event:</span> {lastEvent}
+            {/* "Last update" reads friendlier than "Last event" (designer P2, PSG-275);
+                the value still carries CCC's own term ("Workfile saved"). */}
+            <span className="text-foreground">Last update:</span> {lastEvent}
           </p>
         )}
         {view.status === "error" && (
@@ -206,6 +208,11 @@ export function CccConnectionCard({
             Do this in your CCC ONE Total Repair Platform:
           </p>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-foreground">
+            {/* TODO(child 3): step 1 carries the ⚠ PHASE-0 FIRM-UP placeholder
+                ("[exact menu path confirmed in Phase 0]"). Before this reaches a real shop,
+                gate it on the real menu path and render a human fallback (e.g. "your PSG rep
+                will confirm the exact menu path") rather than the bracketed token (designer
+                P1, PSG-275). */}
             {CCC_CONNECTION_STEPS.map((step) => (
               <li key={step}>{step}</li>
             ))}
@@ -216,6 +223,19 @@ export function CccConnectionCard({
           </p>
           <div className="mt-4">
             <CccDataScopePanel dataScope={view.dataScope} />
+          </div>
+          {/* Close affordance (wireframe A′ "[Close]") — on not_connected, "Get connection
+              steps" is the only CTA, so without this a shop that opens the list can't dismiss
+              it and the standalone scope toggle stays gated on !stepsOpen (designer P1, PSG-275). */}
+          <div className="mt-4">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setStepsOpen(false)}
+            >
+              Close
+            </Button>
           </div>
         </div>
       )}

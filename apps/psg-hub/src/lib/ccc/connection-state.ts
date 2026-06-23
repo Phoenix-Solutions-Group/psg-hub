@@ -39,7 +39,9 @@ export const CTA_LABELS: Record<CtaKey, string> = {
   get_steps: "Get connection steps",
   cancel_request: "Cancel request",
   disconnect: "Disconnect",
-  view_scope: "View scope",
+  // "What we share" (not "View scope") so the connected/error CTA speaks the same plain
+  // voice as the not_connected "What we'll receive ▸" affordance (designer P2, PSG-275).
+  view_scope: "What we share",
   reconnect: "Reconnect",
   request_again: "Request again",
 };
@@ -86,7 +88,9 @@ export const CONNECTION_PRESENTATION: Record<CccConnectionStatus, StatePresentat
     label: "Connected",
     badgeVariant: "success",
     glyph: "✓",
-    summary: "Approved and receiving events from CCC ONE.",
+    // "repair orders", not "events" — shop owners think in jobs/ROs, not system events
+    // (designer P2, PSG-275). "Workfile saved" in the last-event line keeps CCC's own term.
+    summary: "Approved — now receiving completed repair orders from CCC ONE.",
     ctas: ["view_scope", "disconnect"],
   },
   error: {
@@ -94,13 +98,16 @@ export const CONNECTION_PRESENTATION: Record<CccConnectionStatus, StatePresentat
     label: "Connection error",
     badgeVariant: "destructive",
     glyph: "⚠",
-    summary: "We stopped receiving events from CCC ONE.",
+    summary: "We stopped receiving repair orders from CCC ONE.",
     ctas: ["reconnect", "view_scope"],
   },
   declined: {
     status: "declined",
     label: "Declined",
-    badgeVariant: "destructive",
+    // Neutral, not destructive(red): a declined request is a recoverable PSG business
+    // decision ("Request again"), not a system failure like `error` — red reads punitive
+    // and conflates the two (designer P3, PSG-275). Spec §2 doesn't pin a color here.
+    badgeVariant: "secondary",
     glyph: "⊘",
     summary: "PSG declined this connection request.",
     ctas: ["request_again"],
