@@ -11,9 +11,13 @@
 //
 // Hashing is injected (MailHasher). Production binds src/lib/ops/mail/household.ts
 // (PSG-221) so mail_send_history keys match mail_suppression's. The TEST hasher
-// below reproduces household.ts's semantics (USPS street normalization via the
-// shared address resolver + honorific-drop) so the "123 Main St === 123 Main
-// Street" dedup is proven here without coupling to the unmerged module.
+// below is a deterministic stand-in: it shares household.ts's USPS street
+// normalization (via the shared address resolver) but is intentionally STRICTER
+// on names — it also strips honorifics, which household.ts does NOT. That extra
+// strip lets the "123 Main St === 123 Main Street" + honorific dedup be proven
+// here without coupling to the module; it is also why the real-batch split under
+// this stand-in (1766/13) differs by one from the production binding (1767/12).
+// household_key is address-only, so suppression is unaffected either way.
 
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
@@ -33,7 +37,7 @@ import {
 const FIXTURE_DIR = path.resolve(__dirname, "fixtures");
 const SENT_DATE = "2021-09-07";
 
-// ── Deterministic test hasher (mirrors household.ts semantics) ──────────────
+// ── Deterministic test stand-in hasher (NOT identical to household.ts: see above) ──
 function canonAddress(a: AddressInput): string {
   const r = resolveAddress(a).address;
   return [r.line1, r.line2, r.city, r.state, r.zip]

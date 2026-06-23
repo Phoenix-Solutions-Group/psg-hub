@@ -3,7 +3,7 @@
 Spec: `docs/specs/002-mail-send-history-w0/spec.md` §3.1. Code:
 `apps/psg-hub/src/lib/ops/mail/` (`parse-production-batch.ts`,
 `send-history-import.ts`). Migration:
-`apps/psg-hub/supabase/migrations/20260623130000_mail_send_history_w0.sql`.
+`apps/psg-hub/supabase/migrations/20260623140000_mail_send_history_w0.sql`.
 
 ## What the importer reads
 
@@ -54,14 +54,18 @@ household.ts's USPS-normalization semantics.
 persisted + deduplicated + rejected**, with per-reason and per-file breakdowns and
 PII-safe rejection detail. `formatReconciliationReport()` renders it for logs/QA.
 
-Proof against the **real** 2021-09-07 batch (10 envelope files):
+Proof against the **real** 2021-09-07 batch (10 envelope files), production
+hasher (`household.ts`, PSG-221) bound:
 
 ```
 source rows in: 1779
-persisted:      1766
-deduplicated:   13   (same recipient+piece collapsed by send_ref — idempotency)
+persisted:      1767
+deduplicated:   12   (same recipient+piece collapsed by send_ref — idempotency)
 rejected:       0
 ```
+
+(The in-repo unit test's stand-in hasher also strips honorifics and so reports
+`1766 / 13`; `household_key` is address-only so suppression is identical either way.)
 
 ## Status / not yet wired
 
