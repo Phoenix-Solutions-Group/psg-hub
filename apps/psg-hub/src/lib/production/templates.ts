@@ -48,13 +48,19 @@ export interface ProgramCustomizations {
   /** Greeting line override (e.g. "Thank you, {{customer.firstName}}!"). */
   greeting?: string;
   /**
-   * Per-shop workmanship-warranty TERM clause, e.g. "for as long as you own the
-   * vehicle" or "for 12 months or 12,000 miles, whichever comes first". Honest-
-   * claims go-live gate (PSG-316 C1): the warranty duration is NOT universal —
-   * each shop asserts only its own term. Warranty copy tokenizes this as
-   * `{{program.warrantyTerm}}` so no shop ever prints another shop's term.
-   * Fail-closed: unconfigured → the token resolves to nothing and the proof
-   * gate's missing-token report blocks the piece (never an invented term).
+   * Per-shop workmanship-warranty TERM clause. Honest-claims go-live gate
+   * (PSG-316 C1): the warranty duration is NOT universal — each shop asserts only
+   * its own term. Warranty copy tokenizes this as `{{program.warrantyTerm}}` so no
+   * shop ever prints another shop's term.
+   *
+   * AUTHORING CONTRACT (Lee, PSG-322): the copy frames read "covered — {{term}}",
+   * "warranty {{term}}", "performed {{term}}", so author this as a clause that
+   * BEGINS WITH "for …", e.g. "for as long as you own the vehicle" or "for 12
+   * months or 12,000 miles, whichever comes first". A bare "12 months / 12k miles"
+   * (no leading "for") reads off in those frames.
+   *
+   * Fail-closed: unconfigured → the token resolves to nothing and the proof gate's
+   * missing-token report blocks the piece (never an invented term).
    */
   warrantyTerm?: string;
   /**
@@ -62,6 +68,10 @@ export interface ProgramCustomizations {
    * ask (PSG-316 C3, optional enhancement). When set, the review CTA becomes a
    * one-click link; when unset, copy falls back to the generic "online" ask via a
    * `{{#if program.reviewLink}}` block — so an unconfigured shop still sends.
+   *
+   * PRINT NOTE (Lee, PSG-322): this renders as a RAW URL inline on a printed
+   * letter — recipients type it by hand. Configure a short, human-typable review
+   * URL (g.page short link / vanity), not a long tracking URL.
    */
   reviewLink?: string;
   /** Free-form extra overrides referenced by bespoke templates. */
