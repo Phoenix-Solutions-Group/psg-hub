@@ -534,14 +534,17 @@ export function buildLetterPlan(
  * recovery piece is rejected if any of these surface (PSG-115d §10.4,
  * Honest-claims lens).
  */
-// The `\$\s?\d` (bare dollar-amount) branch lives OUTSIDE the leading-`\b`
-// group on purpose. `$` is a non-word char, so a `\b` immediately before it
-// only matches when the preceding char is a word char — but real offer copy
-// has a space/`>` before the amount (" $50 off", ">$25"), so a `\b`-prefixed
-// `\$\d` never fires (PSG-319 / AC5 gap from PSG-311). Recovery letters are
-// relationship-only, so flagging ANY `$NN` is the correct fail-closed net.
+// The `\$\s?\d` (bare dollar-amount) and percent branches live OUTSIDE the
+// leading-`\b` group on purpose. `$` and `%` are non-word chars, so a `\b`
+// immediately before them only matches when the preceding char is a word char
+// — but real offer copy has a space/`>`/digit-with-space before the symbol
+// (" $50 off", ">$25", "50 % off", bare "% off"), so a `\b`-prefixed `\$\d` /
+// `% off` never fires (PSG-319 + PSG-324 / AC5 gap from PSG-311). Recovery
+// letters are relationship-only, so flagging ANY `$NN`, ANY `%` (spaced,
+// spelled-out, or bare), and the word "percent" is the correct fail-closed
+// net. Legit recovery copy (phone numbers, "Job J-10293") carries no `%`.
 const RECOVERY_OFFER_PATTERN =
-  /\b(?:coupon|discount|\d+%\s*off|% off|save \$|free (?:detail|wash|service|gift)|special offer|promo(?:tion|tional)?\b|deal\b|sale\b|redeem)|\$\s?\d/i;
+  /\b(?:coupon|discount|save \$|free (?:detail|wash|service|gift)|special offer|promo(?:tion|tional)?\b|deal\b|sale\b|redeem)|\$\s?\d|\d*\s?%(?:\s*off)?|\bpercent\b/i;
 
 /**
  * Validate that rendered recovery content carries no offer/coupon/price hook.
