@@ -15,7 +15,7 @@ prove **per-shop RLS isolation** before the monitor cron runs across real custom
   month-to-date intel ledger.
 - `src/app/api/cron/competitor-monitor/route.ts` — `CRON_SECRET`-gated GET/POST trigger.
 - `vercel.json` — weekly cron `0 10 * * 1` (Mon 10:00 UTC).
-- `supabase/migrations/20260623130000_competitor_monitor_runs.sql` — append-only per-shop
+- `supabase/migrations/20260623150000_competitor_monitor_runs.sql` — append-only per-shop
   monitor log. **Authored, NOT yet applied to prod** (v1.6 gate batch). RLS default-deny,
   membership-clamped SELECT only; service-role writes.
 
