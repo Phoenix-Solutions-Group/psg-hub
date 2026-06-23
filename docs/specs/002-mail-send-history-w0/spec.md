@@ -163,11 +163,13 @@ For each segment compute outcome rate per piece and per A/B variant; write rows 
 
 | Child | Deliverable | Owner | Blocked by |
 |-------|-------------|-------|-----------|
-| PSG-216a | §3 schema migration + send-history importer + reconciliation report | Ravi | §2 send-log source (Steve) |
-| PSG-216b | §3.2 suppression/dedup table + `isSuppressed()` engine interface + tests | Nora | — |
-| PSG-216c | §4 numbered-letter-library catalog (md+json) | Nora | — |
-| PSG-216d | §5 mining → trigger/A-B priors → `mail_send_priors` + doc | Ravi | PSG-216a |
+| PSG-223 | §3.1 schema migration + send-history importer + reconciliation report | Ravi | full-history import gated on §2 send-log source (Steve); buildable now on sample batch |
+| PSG-221 | §3.2 suppression/dedup table + `isSuppressed()` engine interface + tests | Nora | — |
+| PSG-222 | §4 numbered-letter-library catalog (md+json) | Nora | — |
+| PSG-224 | §5 mining → trigger/A-B priors → `mail_send_priors` + doc | Ravi | PSG-223 (needs imported rows) |
 | QA | test plan + verification for each | Tess | each child |
 
-W0 is parallel to W1: 216b and 216c start immediately; 216a/216d gate on the
-send-log source. No live-mail spend at any step.
+W0 is parallel to W1: PSG-221 and PSG-222 start immediately; PSG-223 builds the
+importer + reconciliation harness against the sample batch now and completes the
+full 30-yr import when the send-log source lands; PSG-224 (mining) waits on
+PSG-223. No live-mail spend at any step.
