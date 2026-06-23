@@ -35,29 +35,31 @@ type PageIssue = { note: string; severity: FindingSeverity };
 export function evaluatePage(page: CrawledPage): PageIssue[] {
   const issues: PageIssue[] = [];
 
+  // Customer-facing copy (PSG-264 item 1): plain language, no SEO jargon — these
+  // notes surface verbatim in the report's findings table and inventory rows.
   if (page.statusCode != null && page.statusCode >= 400) {
-    issues.push({ note: `Returns HTTP ${page.statusCode} (broken page)`, severity: "critical" });
+    issues.push({ note: `This page is broken and shows an error to visitors (error ${page.statusCode}).`, severity: "critical" });
   }
   if (page.indexable === false) {
-    issues.push({ note: "Not indexable (noindex / canonical points away)", severity: "high" });
+    issues.push({ note: "This page is hidden from Google, so it can't show up in search results.", severity: "high" });
   }
   if (page.title != null && page.title.trim() === "") {
-    issues.push({ note: "Missing <title> tag", severity: "high" });
+    issues.push({ note: "This page has no title, so search engines don't know what it's about.", severity: "high" });
   } else if (page.title != null && page.title.trim().length < 15) {
-    issues.push({ note: "Title tag is too short to rank well", severity: "medium" });
+    issues.push({ note: "This page's title is too short to attract search clicks.", severity: "medium" });
   }
   if (page.metaDescription != null && page.metaDescription.trim() === "") {
-    issues.push({ note: "Missing meta description", severity: "medium" });
+    issues.push({ note: "This page is missing the short summary that appears under its link in search results.", severity: "medium" });
   }
   if (page.h1Count != null) {
-    if (page.h1Count === 0) issues.push({ note: "No <h1> heading", severity: "medium" });
-    else if (page.h1Count > 1) issues.push({ note: `Multiple <h1> headings (${page.h1Count})`, severity: "low" });
+    if (page.h1Count === 0) issues.push({ note: "This page has no clear main headline.", severity: "medium" });
+    else if (page.h1Count > 1) issues.push({ note: `This page has ${page.h1Count} competing main headlines instead of one.`, severity: "low" });
   }
   if (page.wordCount != null && page.wordCount < THIN_CONTENT_WORDS) {
-    issues.push({ note: `Thin content (${page.wordCount} words)`, severity: "medium" });
+    issues.push({ note: `This page has very little content (${page.wordCount} words) — too thin to rank well.`, severity: "medium" });
   }
   if (page.hasImageAltGaps === true) {
-    issues.push({ note: "Images missing alt text", severity: "low" });
+    issues.push({ note: "Some images are missing text descriptions, which hurts accessibility and search.", severity: "low" });
   }
 
   return issues;

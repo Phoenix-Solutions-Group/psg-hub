@@ -60,22 +60,37 @@ describe("evaluatePage", () => {
 
   it("flags noindex as high", () => {
     const issues = evaluatePage({ url: "u", indexable: false });
-    expect(issues.some((i) => i.severity === "high" && /indexable/i.test(i.note))).toBe(true);
+    expect(issues.some((i) => i.severity === "high" && /hidden from Google/i.test(i.note))).toBe(true);
   });
 
   it("flags empty + short titles distinctly", () => {
-    expect(evaluatePage({ url: "u", title: "" }).some((i) => /Missing <title>/.test(i.note))).toBe(true);
+    expect(evaluatePage({ url: "u", title: "" }).some((i) => /has no title/.test(i.note))).toBe(true);
     expect(evaluatePage({ url: "u", title: "short" }).some((i) => /too short/.test(i.note))).toBe(true);
   });
 
   it("flags thin content under the threshold but not above", () => {
-    expect(evaluatePage({ url: "u", wordCount: 50 }).some((i) => /Thin/.test(i.note))).toBe(true);
-    expect(evaluatePage({ url: "u", wordCount: 500 }).some((i) => /Thin/.test(i.note))).toBe(false);
+    expect(evaluatePage({ url: "u", wordCount: 50 }).some((i) => /too thin/.test(i.note))).toBe(true);
+    expect(evaluatePage({ url: "u", wordCount: 500 }).some((i) => /too thin/.test(i.note))).toBe(false);
   });
 
   it("flags zero and multiple h1s differently", () => {
-    expect(evaluatePage({ url: "u", h1Count: 0 }).some((i) => /No <h1>/.test(i.note))).toBe(true);
-    expect(evaluatePage({ url: "u", h1Count: 3 }).some((i) => /Multiple <h1>/.test(i.note))).toBe(true);
+    expect(evaluatePage({ url: "u", h1Count: 0 }).some((i) => /no clear main headline/.test(i.note))).toBe(true);
+    expect(evaluatePage({ url: "u", h1Count: 3 }).some((i) => /competing main headlines/.test(i.note))).toBe(true);
+  });
+
+  it("findings copy is plain-language — no SEO jargon leaks to the customer (PSG-264 item 1)", () => {
+    const issues = evaluatePage({
+      url: "u",
+      statusCode: 404,
+      indexable: false,
+      title: "",
+      metaDescription: "",
+      h1Count: 0,
+      wordCount: 10,
+      hasImageAltGaps: true,
+    });
+    const all = issues.map((i) => i.note).join(" ");
+    expect(all).not.toMatch(/<title>|<h1>|noindex|canonical|crawl budget|meta description|HTTP \d/i);
   });
 
   it("treats unknown signals as no defect (never a false Improve)", () => {
@@ -260,9 +275,87 @@ describe("renderShopAuditReportHtml", () => {
   it("greenfield report renders the build-plan framing, not a score", () => {
     const report = buildShopAuditReport(brief({ domain: null }), { generatedAt: T });
     const html = renderShopAuditReportHtml(report);
-    expect(html).toContain("Greenfield build plan");
+    // PSG-264 item 2: hero H2 reworded to customer voice.
+    expect(html).toContain("Your website build plan");
+    expect(html).not.toContain("Greenfield build plan");
     expect(html).toContain("No live site");
     expect(html).not.toContain("Your SEO health score");
+  });
+
+  it("greenfield KPIs show plan metrics, not 0/0/0 crawl counts (PSG-264 item 3)", () => {
+    const report = buildShopAuditReport(
+      brief({
+        domain: null,
+        services: ["collision repair", "frame straightening", "dent removal"],
+        locations: [
+          { city: "Lincoln", state: "NE", primary: true },
+          { city: "Omaha", state: "NE", primary: false },
+        ],
+      }),
+      { generatedAt: T },
+    );
+    // 4 foundation + 3 services + 2 cities = 9 pages to build, all grounded in the brief.
+    expect(report.summary.plan).toEqual({ pagesToBuild: 9, servicePages: 3, citiesToCover: 2 });
+    const html = renderShopAuditReportHtml(report);
+    expect(html).toContain("Pages to build");
+    expect(html).toContain("Service pages");
+    expect(html).toContain("Cities to cover");
+    expect(html).toContain("Keyword targets");
+    // No misleading "Pages reviewed" / "Pages to keep" labels for a no-site report.
+    expect(html).not.toContain("Pages reviewed");
+    expect(html).not.toContain("Pages to keep");
+  });
+
+  it("audited summary carries plan: null and keeps crawl-count KPIs", () => {
+    const pages: CrawledPage[] = [
+      { url: "https://x.com/", title: "Homepage title long enough", statusCode: 200, wordCount: 600, h1Count: 1, metaDescription: "ok" },
+    ];
+    const report = buildShopAuditReport(brief(), { generatedAt: T, pages });
+    expect(report.summary.plan).toBeNull();
+    const html = renderShopAuditReportHtml(report);
+    expect(html).toContain("Pages reviewed");
+    expect(html).not.toContain("Pages to build");
+  });
+
+  it("findings table uses a 'Page' header with the path trimmed (PSG-264 item 4)", () => {
+    const pages: CrawledPage[] = [
+      { url: "https://shop.example.com/services/dent-repair", statusCode: 404 },
+    ];
+    const report = buildShopAuditReport(brief(), { generatedAt: T, pages });
+    const html = renderShopAuditReportHtml(report);
+    expect(html).toContain("<th>Page</th>");
+    expect(html).not.toContain("<th>Area</th>");
+    // value trimmed to the path — protocol + domain stripped in the findings column.
+    expect(html).toContain('<td class="page">/services/dent-repair</td>');
+    expect(html).not.toContain('<td class="page">https://shop.example.com/services/dent-repair</td>');
+  });
+
+  it("renders findings critical → low regardless of input order (PSG-264 item 5)", () => {
+    // Hand-build a report with a Low ordered before a Critical to prove the
+    // renderer sorts for display (not relying on upstream order).
+    const report = buildShopAuditReport(brief({ domain: null }), { generatedAt: T });
+    report.findings = [
+      { severity: "low", area: "images", detail: "low finding" },
+      { severity: "critical", area: "website", detail: "critical finding" },
+      { severity: "medium", area: "content", detail: "medium finding" },
+    ];
+    const html = renderShopAuditReportHtml(report);
+    const critPos = html.indexOf("critical finding");
+    const medPos = html.indexOf("medium finding");
+    const lowPos = html.indexOf("low finding");
+    expect(critPos).toBeGreaterThan(-1);
+    expect(critPos).toBeLessThan(medPos);
+    expect(medPos).toBeLessThan(lowPos);
+  });
+
+  it("adds a mobile breakpoint, scroll wrappers, and AA-contrast KPI labels (PSG-264 items 6–7)", () => {
+    const report = buildShopAuditReport(brief({ domain: null }), { generatedAt: T });
+    const html = renderShopAuditReportHtml(report);
+    expect(html).toContain("@media (max-width: 640px)");
+    expect(html).toContain("grid-template-columns: repeat(2, 1fr)");
+    expect(html).toContain('class="table-scroll"');
+    // item 7: KPI label uses dark-ash (AA), not the sub-AA mist token.
+    expect(html).toContain(".kpi .l { font-size: var(--fs-13); color: var(--psg-dark-ash);");
   });
 });
 

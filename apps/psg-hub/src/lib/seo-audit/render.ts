@@ -36,6 +36,31 @@ const SEVERITY_LABEL: Record<FindingSeverity, string> = {
   low: "Low",
 };
 
+/** Display ordering for findings: critical first, low last (PSG-264 item 5). */
+const SEVERITY_RANK: Record<FindingSeverity, number> = {
+  critical: 3,
+  high: 2,
+  medium: 1,
+  low: 0,
+};
+
+/**
+ * Trim a finding's `area` to a readable path for the report's "Page" column
+ * (PSG-264 item 4). Audited findings carry a full page URL — strip the protocol
+ * and domain so the customer sees `/services/dent-repair`, not the whole URL.
+ * Greenfield findings carry a plain label ("service pages") that isn't a URL —
+ * leave those untouched.
+ */
+function pageLabel(area: string): string {
+  try {
+    const u = new URL(area);
+    const path = `${u.pathname}${u.search}`;
+    return path === "" ? "/" : path;
+  } catch {
+    return area;
+  }
+}
+
 const INTENT_LABEL: Record<KeywordTarget["intent"], string> = {
   local: "Local",
   service: "Service",
@@ -53,7 +78,7 @@ function renderHero(report: ShopAuditReport): string {
     return (
       `<section class="panel hero greenfield"><div class="score-wrap">` +
       `<div class="score new">NEW</div>` +
-      `<div class="score-copy"><h2>Greenfield build plan</h2>` +
+      `<div class="score-copy"><h2>Your website build plan</h2>` +
       `<p class="lead">We couldn't find a live website to audit, so this report is a ` +
       `prioritized plan for the site we'll build with you — not a score. Once your ` +
       `site is live, re-run this audit for a graded baseline.</p></div></div></section>`
@@ -73,12 +98,22 @@ function renderHero(report: ShopAuditReport): string {
 
 function renderKpis(report: ShopAuditReport): string {
   const s = report.summary;
-  const cards: { n: string; l: string }[] = [
-    { n: String(s.pagesCrawled), l: "Pages reviewed" },
-    { n: String(s.keepCount), l: "Pages to keep" },
-    { n: String(s.improveCount), l: "Pages to improve" },
-    { n: String(s.keywordOpportunities), l: "Keyword opportunities" },
-  ];
+  // Greenfield reports have nothing crawled — show build-plan metrics instead of
+  // the 0/0/0 crawl counts (PSG-264 item 3). Plan numbers are grounded in summary.plan.
+  const cards: { n: string; l: string }[] =
+    report.mode === "greenfield" && s.plan
+      ? [
+          { n: String(s.plan.pagesToBuild), l: "Pages to build" },
+          { n: String(s.plan.servicePages), l: "Service pages" },
+          { n: String(s.plan.citiesToCover), l: "Cities to cover" },
+          { n: String(s.keywordOpportunities), l: "Keyword targets" },
+        ]
+      : [
+          { n: String(s.pagesCrawled), l: "Pages reviewed" },
+          { n: String(s.keepCount), l: "Pages to keep" },
+          { n: String(s.improveCount), l: "Pages to improve" },
+          { n: String(s.keywordOpportunities), l: "Keyword opportunities" },
+        ];
   return (
     `<div class="kpis">` +
     cards
@@ -100,18 +135,25 @@ function renderFindings(findings: AuditFinding[], mode: ShopAuditReport["mode"])
       `<p class="empty">No issues found — your pages clear our baseline checks.</p></section>`
     );
   }
-  const rows = findings
+  // Lead with what matters: sort globally critical→low so a Critical never renders
+  // below a Low regardless of crawl/page order (PSG-264 item 5). Stable within a
+  // severity tier (preserves upstream ordering).
+  const ordered = findings
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => SEVERITY_RANK[b.f.severity] - SEVERITY_RANK[a.f.severity] || a.i - b.i)
+    .map(({ f }) => f);
+  const rows = ordered
     .map(
       (f) =>
         `<tr><td><span class="sev ${f.severity}">${SEVERITY_LABEL[f.severity]}</span></td>` +
-        `<td class="area">${escapeHtml(f.area)}</td>` +
+        `<td class="page">${escapeHtml(pageLabel(f.area))}</td>` +
         `<td>${escapeHtml(f.detail)}</td></tr>`,
     )
     .join("");
   return (
     `<section class="panel"><h2>${heading}</h2>` +
-    `<table class="psg"><thead><tr><th>Priority</th><th>Area</th><th>Finding</th></tr></thead>` +
-    `<tbody>${rows}</tbody></table></section>`
+    `<div class="table-scroll"><table class="psg"><thead><tr><th>Priority</th><th>Page</th><th>Finding</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table></div></section>`
   );
 }
 
@@ -135,8 +177,8 @@ function renderInventory(inventory: InventoryUrl[]): string {
     `<section class="panel"><h2>Page inventory</h2>` +
     `<p class="lead">Every page we found on your site, with a clear call: carry it ` +
     `forward as-is (Keep) or rework it (Improve).</p>` +
-    `<table class="psg"><thead><tr><th>URL</th><th>Title</th><th>Verdict</th><th>Why</th></tr></thead>` +
-    `<tbody>${rows}</tbody></table></section>`
+    `<div class="table-scroll"><table class="psg"><thead><tr><th>URL</th><th>Title</th><th>Verdict</th><th>Why</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table></div></section>`
   );
 }
 
@@ -154,8 +196,8 @@ function renderKeywords(targets: KeywordTarget[]): string {
     `<section class="panel"><h2>Keyword opportunities</h2>` +
     `<p class="lead">The searches your future customers are typing — ranked by how ` +
     `close they are to booking a job. These seed your content plan.</p>` +
-    `<table class="psg"><thead><tr><th>Keyword</th><th>Intent</th><th>Priority</th></tr></thead>` +
-    `<tbody>${rows}</tbody></table></section>`
+    `<div class="table-scroll"><table class="psg"><thead><tr><th>Keyword</th><th>Intent</th><th>Priority</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table></div></section>`
   );
 }
 
@@ -224,11 +266,12 @@ section.panel h2 { font-size: var(--fs-24); color: var(--psg-midnight); margin-b
 .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); margin: var(--space-2) 0 0; }
 .kpi { background: var(--psg-bone); border: 1px solid var(--psg-stone); border-radius: var(--radius-md); padding: var(--space-5); }
 .kpi .n { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-36); color: var(--psg-midnight); line-height: 1; font-variant-numeric: tabular-nums; }
-.kpi .l { font-size: var(--fs-13); color: var(--psg-mist); margin-top: var(--space-2); }
+.kpi .l { font-size: var(--fs-13); color: var(--psg-dark-ash); margin-top: var(--space-2); }
 table.psg { width: 100%; border-collapse: collapse; margin-top: var(--space-3); }
 table.psg th { text-align: left; background: var(--psg-midnight); color: var(--psg-paper); font-family: var(--font-display); font-weight: 500; font-size: var(--fs-13); padding: var(--space-3) var(--space-4); }
 table.psg td { font-size: var(--fs-14); color: var(--psg-graphite); border-bottom: 1px solid var(--psg-stone); padding: var(--space-3) var(--space-4); vertical-align: top; }
-.area, .url { font-size: var(--fs-13); color: var(--psg-dark-ash); word-break: break-all; max-width: 32ch; }
+.page, .url { font-size: var(--fs-13); color: var(--psg-dark-ash); word-break: break-all; max-width: 32ch; }
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .note { color: var(--psg-dark-ash); font-size: var(--fs-13); }
 .kw { font-weight: 500; }
 .sev, .disp, .intent { display: inline-block; font-family: var(--font-display); font-size: var(--fs-12); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--psg-paper); border-radius: var(--radius-pill); padding: 2px 9px; }
@@ -242,6 +285,12 @@ table.psg td { font-size: var(--fs-14); color: var(--psg-graphite); border-botto
 ul.moves { margin: 0; padding-left: var(--space-5); color: var(--psg-graphite); }
 ul.moves li { margin-bottom: var(--space-2); line-height: 1.5; }
 footer.psg { background: var(--psg-midnight); color: var(--psg-midnight-70); font-size: var(--fs-13); padding: var(--space-6) 0; margin-top: var(--space-7); }
+@media (max-width: 640px) {
+  .wrap { padding-left: var(--space-4); padding-right: var(--space-4); }
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .score-wrap { flex-direction: column; align-items: flex-start; gap: var(--space-4); }
+  table.psg { min-width: 32rem; }
+}
 </style>`;
 }
 

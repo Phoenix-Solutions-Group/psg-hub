@@ -109,6 +109,23 @@ export const auditSummarySchema = z.object({
   }),
   /** Keyword opportunities surfaced for the content plan. */
   keywordOpportunities: z.number().int().nonnegative(),
+  /**
+   * Greenfield-only build-plan metrics (null for audited reports). Lets the
+   * renderer show plan KPIs (Pages to build · Service pages · Cities to cover)
+   * instead of the 0/0/0 crawl counts a no-site report would otherwise display.
+   * Every value is grounded in the brief — the renderer invents nothing.
+   */
+  plan: z
+    .object({
+      /** Total pages the build plan recommends (foundation + service + city). */
+      pagesToBuild: z.number().int().nonnegative(),
+      /** One landing page per core service. */
+      servicePages: z.number().int().nonnegative(),
+      /** One service-area page per city served. */
+      citiesToCover: z.number().int().nonnegative(),
+    })
+    .nullable()
+    .default(null),
 });
 export type AuditSummary = z.infer<typeof auditSummarySchema>;
 

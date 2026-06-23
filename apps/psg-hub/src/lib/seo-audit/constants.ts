@@ -7,6 +7,13 @@ import type { FindingSeverity } from "./types";
 /** Below this visible word count a page is "thin content" (Improve). */
 export const THIN_CONTENT_WORDS = 300;
 
+/**
+ * Foundation pages every greenfield build needs before service/location pages:
+ * Home, Services overview, Service-area overview, Contact. Used to size the
+ * greenfield "Pages to build" KPI so the number is grounded, not invented.
+ */
+export const GREENFIELD_FOUNDATION_PAGES = 4;
+
 /** Health-score penalty per finding, by severity. Score starts at 100. */
 export const SEVERITY_PENALTY: Record<FindingSeverity, number> = {
   critical: 25,
