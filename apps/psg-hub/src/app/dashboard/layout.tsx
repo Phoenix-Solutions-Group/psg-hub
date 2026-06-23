@@ -12,6 +12,7 @@ const NAV = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/dashboard/analytics", label: "Analytics" },
   { href: "/dashboard/content", label: "Content" },
+  { href: "/dashboard/approvals", label: "Approvals" },
   { href: "/dashboard/reviews", label: "Reviews" },
   { href: "/dashboard/ads", label: "Ads" },
   // Invoices nav removed with the Invoiced.com vertical (PSG-58). Stripe-native
