@@ -5,6 +5,10 @@ vi.mock("server-only", () => ({}));
 
 // Deterministic test env for Google Ads + crypto modules.
 process.env.ADS_ENCRYPTION_KEY = Buffer.alloc(32, 1).toString("base64");
+// CCC Secure Share (PSG-260). Deterministic 32-byte v1 key + rate-limit envs.
+process.env.CCC_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+process.env.CCC_MUTATE_LIMIT_PER_HOUR = "20";
+process.env.CCC_READ_LIMIT_PER_HOUR = "500";
 process.env.ADS_STATE_SECRET = "test-state-secret-do-not-use-in-prod";
 process.env.ANTHROPIC_API_KEY = "test-anthropic-key";
 process.env.ADS_MUTATE_LIMIT_PER_HOUR = "20";
