@@ -1,7 +1,7 @@
 # Send-history column mapping — W0 (PSG-223 / PSG-115e)
 
 Maps the legacy FileMaker / production-center **send record** onto
-`public.mail_send_history` (migration `20260623120000_mail_send_history_w0.sql`,
+`public.mail_send_history` (migration `20260623140000_mail_send_history_w0.sql`,
 spec [`002-mail-send-history-w0/spec.md`](../../specs/002-mail-send-history-w0/spec.md) §3.1).
 
 Importer: `src/lib/ops/import` decoders are reused for address normalization;
@@ -85,17 +85,17 @@ of the mail-merge those tables drive. When Steve delivers the **structured**
 tests). Rejects are classified (`missing_psgid` / `missing_name` /
 `missing_street` / `unparseable_city_state_zip`) with PII-safe detail.
 
-Proven against the real **2021-09-07** batch:
+Proven against the real **2021-09-07** batch (production `household.ts` hasher bound):
 
 ```
 source rows in: 1779
-persisted:      1766
-deduplicated:   13     ← same (shop, recipient, piece, date) mailed twice → idempotent collapse
+persisted:      1767
+deduplicated:   12     ← same (shop, recipient, piece, date) mailed twice → idempotent collapse
 rejected:       0
 ```
 
-Per-file: 04b=149, 07=244, 10=388, 10b=68, 12=10, 13=2, 14=527, 15=313, 16=64, t=1
-(accepted). The 13 dedups are recipients printed more than once in a single
+Per-file: 04b=149, 07=244, 10=388, 10b=68, 12=10, 13=2, 14=527, 15=314, 16=64, t=1
+(accepted). The 12 dedups are recipients printed more than once in a single
 envelope run; `send_ref` collapses them so a re-import never double-counts.
 
 ## 4. Gated on operator data (full 30-year history)
