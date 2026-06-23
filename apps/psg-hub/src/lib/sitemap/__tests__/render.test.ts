@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { renderSitemapDeliverable } from "../render";
 import { toMermaid } from "../architecture";
 import { runSitemapPipeline, type CheckpointApproval, type CheckpointPayload, type ShopBrief, type SitemapPackage } from "../index";
+import { COLLISION_PERSONAS } from "../collision-vertical";
 
 const BRIEF: ShopBrief = {
   shopId: "shop-courtesy",
@@ -80,5 +81,42 @@ describe("renderSitemapDeliverable", () => {
     const pkg = await buildPackage();
     const html = renderSitemapDeliverable(pkg);
     expect(html).toMatch(/pill pill-(new|keep|improve)/);
+  });
+
+  // ── PSG-259 Lee design-review change requests ──────────────────────────────
+  describe("client-facing polish (PSG-259)", () => {
+    it("CR-2: no internal (intent) suffix leaks into the rendered surface", async () => {
+      const pkg = await buildPackage();
+      const html = renderSitemapDeliverable(pkg);
+      expect(html).not.toMatch(/\((?:service|local|transactional|informational|emergency)\)/i);
+    });
+
+    it("CR-4: the inventory uses a shop-owner 'Goal' column, not the internal 'Intent'", async () => {
+      const pkg = await buildPackage();
+      const html = renderSitemapDeliverable(pkg);
+      expect(html).toContain("<th>Goal</th>");
+      expect(html).not.toContain("<th>Intent</th>");
+      expect(html).toMatch(/>(Book|Inform|Convert)</);
+    });
+
+    it("CR-5: long keyword lists are capped with a '+N more' affordance", async () => {
+      const pkg = await buildPackage();
+      const html = renderSitemapDeliverable(pkg);
+      expect(html).toMatch(/\+\d+ more/);
+    });
+
+    it("CR-6: empty keyword cells render a '—' placeholder, never blank", async () => {
+      const pkg = await buildPackage();
+      const html = renderSitemapDeliverable(pkg);
+      // Hub pages (Services / Service Areas / Resources) carry no keywords.
+      expect(html).toContain("—");
+    });
+
+    it("CR-3: the calendar does not dump the full persona wall on a row", async () => {
+      const pkg = await buildPackage();
+      const html = renderSitemapDeliverable(pkg);
+      const allEight = COLLISION_PERSONAS.map((p) => p.name).join(", ");
+      expect(html).not.toContain(allEight);
+    });
   });
 });

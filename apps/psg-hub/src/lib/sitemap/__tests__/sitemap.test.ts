@@ -18,6 +18,7 @@ import {
   clusterKeywords,
   deterministicKeywordProvider,
   flattenHierarchy,
+  humanizeClusterTitle,
   pageTypeForIntent,
   runSitemapPipeline,
   slugify,
@@ -363,5 +364,73 @@ describe("runSitemapPipeline (end-to-end)", () => {
     const flat = flattenHierarchy(result.package.root);
     expect(flat.find((f) => f.node.slug === "about")?.node.disposition).toBe("keep");
     expect(flat.find((f) => f.node.slug === "contact")?.node.disposition).toBe("improve");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* PSG-259 (Lee design review) — cluster→page quality gate + clean titles     */
+/* -------------------------------------------------------------------------- */
+
+describe("PSG-259: no keyword-clustering noise reaches the client page tree", () => {
+  async function buildCollisionPackage() {
+    const onCheckpoint = vi.fn(async (payload: CheckpointPayload) => ({ ...autoApprove(), phase: payload.phase }));
+    const result = await runSitemapPipeline(COLLISION_BRIEF, { generatedAt: "2026-06-23T12:00:00.000Z", onCheckpoint });
+    if (result.status !== "complete") throw new Error("pipeline did not complete");
+    return result.package;
+  }
+
+  it("humanizeClusterTitle strips the internal (intent) suffix and fixes acronym casing (CR-2)", () => {
+    expect(humanizeClusterTitle("Pdr (service)")).toBe("PDR");
+    expect(humanizeClusterTitle("Auto Repair (service)")).toBe("Auto Repair");
+    expect(humanizeClusterTitle("Our (local)")).toBe("Our");
+    expect(humanizeClusterTitle("Ev Repair (service)")).toBe("EV Repair");
+    expect(humanizeClusterTitle("Collision Repair")).toBe("Collision Repair"); // idempotent / no suffix
+  });
+
+  it("no page title carries an internal (intent) annotation (CR-2)", async () => {
+    const pkg = await buildCollisionPackage();
+    for (const { node } of flattenHierarchy(pkg.root)) {
+      expect(node.title).not.toMatch(/\((?:service|local|transactional|informational|emergency)\)/i);
+    }
+  });
+
+  it("the specific noise pages Lee flagged are gone, and are not duplicated (CR-1)", async () => {
+    const pkg = await buildCollisionPackage();
+    const titles = flattenHierarchy(pkg.root).map((f) => f.node.title);
+    for (const junk of ["Pdr (service)", "Auto Repair (service)", "Our (local)", "Class Gold (local)", "Rental Repaired (local)", "Auto Turnaround (local)", "Body (transactional)"]) {
+      expect(titles).not.toContain(junk);
+    }
+    // PDR appears exactly once — as the real required service page, not a bare duplicate.
+    expect(titles.filter((t) => /paintless dent repair/i.test(t))).toHaveLength(1);
+    expect(titles).not.toContain("PDR");
+    expect(titles).not.toContain("Auto Repair");
+  });
+
+  it("folds the noise clusters' keywords into the correct spine pages instead of dropping them (CR-1)", async () => {
+    const pkg = await buildCollisionPackage();
+    const flat = flattenHierarchy(pkg.root);
+    const find = (slug: string) => flat.find((f) => f.node.slug === slug)?.node;
+    const allKeywords = flat.flatMap((f) => f.node.targetKeywords);
+    // "auto body repair" → Collision Repair; the bare "PDR" acronym → Paintless Dent Repair.
+    expect(find("collision-repair")?.targetKeywords).toContain("auto body repair");
+    expect(find("paintless-dent-repair")?.targetKeywords).toContain("PDR");
+    // The persona-fragment keywords are folded into a real page somewhere, never dropped.
+    expect(allKeywords).toContain("I-CAR gold class");
+    expect(allKeywords).toContain("rental car while repaired");
+    expect(allKeywords).toContain("fast turnaround auto body");
+  });
+
+  it("preserves every cluster in the source artifact even when not promoted to a page (no silent loss, CR-1)", async () => {
+    const pkg = await buildCollisionPackage();
+    // The dropped fragments stay in pkg.clusters (the raw hand-off) — more clusters than pages.
+    expect(pkg.clusters.length).toBeGreaterThan(flattenHierarchy(pkg.root).length);
+  });
+
+  it("the general (non-collision) flow still promotes its real service clusters (no over-gating)", async () => {
+    const clusters = await clusterKeywords(await deterministicKeywordProvider(GENERAL_BRIEF), {});
+    const root = buildArchitecture(GENERAL_BRIEF, clusters);
+    const titles = flattenHierarchy(root).map((f) => f.node.title.toLowerCase());
+    expect(titles.some((t) => t.includes("drain"))).toBe(true);
+    expect(titles.some((t) => t.includes("heater"))).toBe(true);
   });
 });

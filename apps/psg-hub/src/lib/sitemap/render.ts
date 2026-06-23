@@ -41,9 +41,47 @@ function dateLabel(iso: string): string {
   return iso.slice(0, 10);
 }
 
-function personaNames(ids: string[]): string {
+/** Cap the personas shown on the client surface (PSG-259 CR-3): a wall of all 8 buyer
+ *  names on every row carries no signal. Show the 1–2 primary personas + "+N more"; the
+ *  full mapping stays in the source artifact (page-inventory.csv / calendar). */
+function personaNames(ids: string[], max = 2): string {
+  if (ids.length === 0) return "—";
   const names = ids.map((id) => personaById(id)?.name ?? id);
-  return names.length ? names.join(", ") : "—";
+  if (names.length <= max) return names.join(", ");
+  return `${names.slice(0, max).join(", ")} +${names.length - max} more`;
+}
+
+/** Shop-owner-facing "goal" for a page's search intent (PSG-259 CR-4): the raw intent
+ *  vocabulary (service/local/transactional) is internal and reads as a near-duplicate of
+ *  the Type column. The raw intent stays in the CSV export. */
+function intentGoal(intent: string): string {
+  switch (intent) {
+    case "transactional":
+    case "emergency":
+      return "Convert";
+    case "informational":
+      return "Inform";
+    case "service":
+    case "local":
+    default:
+      return "Book";
+  }
+}
+
+/** Strip any internal "(intent)" annotation that reached a title (PSG-259 CR-2). The
+ *  engine humanizes cluster titles at the source now; this is a defensive twin so the
+ *  rendered surface is clean even for the general flow or a future engine regression. */
+function displayTitle(title: string): string {
+  return title.replace(/\s*\((?:service|local|transactional|informational|emergency)\)\s*$/i, "").trim() || title;
+}
+
+/** Cap a "; "-joined keyword list to the primary terms for the client table
+ *  (PSG-259 CR-5/CR-6): the full set stays in the CSV; an empty set renders "—". */
+function keywordCell(joined: string, max = 6): string {
+  const terms = joined.split(";").map((t) => t.trim()).filter(Boolean);
+  if (terms.length === 0) return "—";
+  const shown = terms.slice(0, max).join("; ");
+  return terms.length > max ? `${shown}; +${terms.length - max} more` : shown;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -103,12 +141,12 @@ function renderInventory(pkg: SitemapPackage): string {
       const disp = r.disposition as PageDisposition;
       return (
         `<tr>` +
-        `<td>${indent}${escapeHtml(r.title)}</td>` +
+        `<td>${indent}${escapeHtml(displayTitle(r.title))}</td>` +
         `<td class="path">${escapeHtml(r.path)}</td>` +
         `<td>${escapeHtml(r.page_type)}</td>` +
-        `<td>${escapeHtml(r.intent)}</td>` +
+        `<td>${escapeHtml(intentGoal(r.intent))}</td>` +
         `<td><span class="${dispositionClass(disp)}">${DISPOSITION_LABEL[disp]}</span></td>` +
-        `<td class="kw">${escapeHtml(r.target_keywords)}</td>` +
+        `<td class="kw">${escapeHtml(keywordCell(r.target_keywords))}</td>` +
         `</tr>`
       );
     })
@@ -116,7 +154,7 @@ function renderInventory(pkg: SitemapPackage): string {
   return (
     `<section class="block"><h2>Page inventory</h2>` +
     `<table class="psg"><thead><tr>` +
-    `<th>Page</th><th>Path</th><th>Type</th><th>Intent</th><th>Status</th><th>Target keywords</th>` +
+    `<th>Page</th><th>Path</th><th>Type</th><th>Goal</th><th>Status</th><th>Target keywords</th>` +
     `</tr></thead><tbody>${body}</tbody></table></section>`
   );
 }
@@ -135,7 +173,7 @@ function renderCalendar(calendar: ContentCalendar): string {
         .get(month)!
         .map(
           (e) =>
-            `<tr><td>${escapeHtml(e.title)} <span class="path">${escapeHtml(e.pagePath)}</span></td>` +
+            `<tr><td>${escapeHtml(displayTitle(e.title))} <span class="path">${escapeHtml(e.pagePath)}</span></td>` +
             `<td>${escapeHtml(e.pageType)}</td>` +
             `<td><span class="${dispositionClass(e.disposition)}">${DISPOSITION_LABEL[e.disposition]}</span></td>` +
             `<td>${escapeHtml(e.primaryKeyword || "—")}</td>` +
@@ -233,7 +271,7 @@ table.psg th{text-align:left;background:var(--psg-midnight);color:var(--psg-pape
 table.psg td{padding:8px 10px;border-bottom:1px solid var(--psg-bone);vertical-align:top;}
 table.psg tr:nth-child(even) td{background:var(--color-surface);}
 td.path,.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--psg-mist);}
-td.kw{color:var(--psg-dark-ash);max-width:320px;}
+td.kw{color:var(--psg-dark-ash);max-width:320px;word-break:break-word;}
 .pill{display:inline-block;font-family:var(--font-display);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--psg-paper);border-radius:var(--radius-pill);padding:2px 9px;}
 .pill-new{background:var(--psg-midnight);}
 .pill-keep{background:var(--color-ok);}
@@ -243,7 +281,18 @@ ul.checks li,ul.approvals li{padding:6px 0;border-bottom:1px solid var(--psg-bon
 ul.checks li.ok{color:var(--color-ok);}
 ul.checks li.bad{color:var(--color-bad);}
 footer.foot{margin-top:56px;padding-top:20px;border-top:1px solid var(--psg-stone);color:var(--psg-mist);font-size:12px;}
-@media print{.wrap{padding:0;}.kpi,.diagram{box-shadow:none;}}
+@media print{
+  @page{margin:14mm;}
+  .wrap{padding:0;max-width:none;}
+  .kpi,.diagram{box-shadow:none;}
+  table.psg{font-size:11px;}
+  table.psg thead{display:table-header-group;}   /* repeat column headers on every printed page */
+  table.psg tr{break-inside:avoid;}              /* never split a row across a page break */
+  h2,h3{break-after:avoid;}                       /* keep a section heading with its first rows */
+  .block{break-inside:auto;}
+  .diagram{overflow:visible;}
+  .diagram pre.mermaid{white-space:pre-wrap;}
+}
 `;
 
 /* -------------------------------------------------------------------------- */

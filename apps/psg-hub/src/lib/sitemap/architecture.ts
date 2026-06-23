@@ -15,6 +15,7 @@
 import {
   COLLISION_REQUIRED_PAGES,
   isCollisionVertical,
+  personaById,
   type RequiredPage,
 } from "./collision-vertical";
 import type {
@@ -192,12 +193,17 @@ export function buildArchitecture(
   //    creating a second one. Only genuinely-novel clusters survive to step 2.
   if (collision) {
     // Build required nodes + a topic-token index for overlap matching.
-    const reqNodes = COLLISION_REQUIRED_PAGES.map((req) => {
+    const reqNodes: ReqNodeEntry[] = COLLISION_REQUIRED_PAGES.map((req) => {
       const node = nodeFromRequired(req, undefined);
+      // Fold-in signals include the search themes of the personas this page serves, so
+      // persona-derived clusters land on the right page instead of becoming junk pages.
+      const personaThemes = req.personaIds.flatMap((id) => personaById(id)?.searchThemes ?? []);
+      const matchStrings = [req.title, req.key, ...req.seedKeywords, ...personaThemes];
       return {
         req,
         node,
-        tokens: topicTokens([req.title, req.key, ...req.seedKeywords]),
+        tokens: topicTokens(matchStrings, 3),
+        phrases: [req.title, ...req.seedKeywords, ...personaThemes].map(normPhrase),
       };
     });
 
@@ -221,11 +227,21 @@ export function buildArchitecture(
   }
 
   // 2) Clusters not already consumed by the spine become pages, routed by pageType.
+  //    QUALITY GATE (PSG-259 CR-1): a cluster only earns a standalone CLIENT page when
+  //    it has a real page identity — at least one substantive topical token. A cluster
+  //    whose keywords are all head terms / stopwords (e.g. "body shop near me" stemming
+  //    to a bare "Body" page) is keyword-clustering noise, not a page a shop owner would
+  //    recognize; it is NOT promoted. Its keywords remain in `pkg.clusters` (the raw
+  //    source artifact) and it has already had its chance to fold into the spine above.
+  //    Titles are humanized for the client surface (internal "(intent)" suffix stripped,
+  //    acronyms cased) so machine labels like "Pdr (service)" never reach the deliverable.
   for (const c of clusters) {
     if (usedClusterIds.has(c.id)) continue;
+    if (!hasRealPageIdentity(c.keywords.map((k) => k.keyword))) continue;
+    const title = humanizeClusterTitle(c.label);
     const node = makeNode({
-      title: c.label,
-      slug: slugify(c.label),
+      title,
+      slug: slugify(title),
       pageType: c.pageType,
       intent: c.intent,
       disposition: "new",
@@ -322,40 +338,98 @@ export function buildArchitecture(
   });
 }
 
-/** Topical tokens (alnum, length > 3, deduped) used to match clusters to pages. */
+/** Stopwords stripped before topical-token comparison (generic auto-body filler). */
 const TOPIC_STOPWORDS = new Set(["near", "best", "your", "auto", "body", "shop", "repair", "service", "services"]);
-function topicTokens(strings: string[]): Set<string> {
+
+/** Topical tokens (deduped) at the given min length, stopwords removed. */
+function topicTokens(strings: string[], minLen: number): Set<string> {
   const out = new Set<string>();
   for (const s of strings) {
     for (const t of s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)) {
-      if (t.length > 3 && !TOPIC_STOPWORDS.has(t)) out.add(t);
+      if (t.length >= minLen && !TOPIC_STOPWORDS.has(t)) out.add(t);
     }
   }
   return out;
 }
 
-type ReqNodeEntry = { req: RequiredPage; node: PageNode; tokens: Set<string> };
+/** Normalize a phrase for whole-phrase containment matching. */
+function normPhrase(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
 
 /**
- * Pick the required page a cluster should fold into, or null if it's genuinely
- * novel. Match = highest token overlap between the cluster's keywords and the page's
- * topic tokens (ties broken by the page's seed-keyword count, then key). A cluster
- * with zero overlap surfaces as its own page (step 2 of buildArchitecture).
+ * A cluster has a "real page identity" (PSG-259 CR-1) when its keywords carry at least
+ * one substantive topical token (≥4 chars, not a generic auto-body stopword). Clusters
+ * that reduce to only head terms ("body shop near me", "our shop") produce indefensible
+ * bare page titles and are NOT promoted to standalone client pages.
+ */
+function hasRealPageIdentity(keywords: string[]): boolean {
+  return topicTokens(keywords, 4).size > 0;
+}
+
+/** Known acronyms restored to correct casing in client-facing titles. */
+const TITLE_ACRONYMS = new Map<string, string>([
+  ["pdr", "PDR"],
+  ["ev", "EV"],
+  ["oem", "OEM"],
+  ["adas", "ADAS"],
+  ["suv", "SUV"],
+  ["icar", "I-CAR"],
+]);
+
+/**
+ * Turn an internal cluster label into a client-facing page title (PSG-259 CR-2):
+ * strip the internal "(intent)" annotation and restore acronym casing. Defensive twin
+ * of the renderer's display cleanup — fixing it here keeps the CSV/Mermaid artifacts
+ * clean at the single hierarchy source, not just the rendered HTML.
+ */
+export function humanizeClusterTitle(label: string): string {
+  const base = label
+    .replace(/\s*\((?:service|local|transactional|informational|emergency)\)\s*$/i, "")
+    .trim();
+  const cased = base
+    .split(/\s+/)
+    .map((w) => TITLE_ACRONYMS.get(w.toLowerCase()) ?? w)
+    .join(" ")
+    .trim();
+  return cased || base || label;
+}
+
+type ReqNodeEntry = { req: RequiredPage; node: PageNode; tokens: Set<string>; phrases: string[] };
+
+/**
+ * Pick the required page a cluster should fold into, or null if it's genuinely novel.
+ * Two signals (PSG-259 CR-1 — stop near-duplicate spine pages and persona-fragment
+ * pages from surviving):
+ *   • token overlap — cluster topical tokens (≥3 chars) vs the page's tokens, which
+ *     include the page's seed keywords AND the search themes of the personas it serves
+ *     (so "I-CAR gold class" folds into Certifications, "fast turnaround auto body" into
+ *     Fleet Services), and
+ *   • phrase containment — a cluster keyword that equals, or contains, one of the page's
+ *     seed phrases/themes (so all-stopword phrases like "auto body repair" → Collision
+ *     Repair and the bare "PDR" acronym → Paintless Dent Repair still fold in).
+ * Highest combined score wins; a zero score means the cluster surfaces on its own.
  */
 function bestRequiredMatch(cluster: SerpCluster, reqNodes: ReqNodeEntry[]): ReqNodeEntry | null {
-  const clusterTokens = topicTokens(cluster.keywords.map((k) => k.keyword));
-  if (clusterTokens.size === 0) return null;
+  const clusterTokens = topicTokens(cluster.keywords.map((k) => k.keyword), 3);
+  const clusterPhrases = cluster.keywords.map((k) => normPhrase(k.keyword));
   let best: ReqNodeEntry | null = null;
-  let bestOverlap = 0;
+  let bestScore = 0;
   for (const entry of reqNodes) {
-    let overlap = 0;
-    for (const t of clusterTokens) if (entry.tokens.has(t)) overlap += 1;
-    if (overlap > bestOverlap) {
-      bestOverlap = overlap;
+    let score = 0;
+    for (const t of clusterTokens) if (entry.tokens.has(t)) score += 1;
+    for (const cp of clusterPhrases) {
+      for (const rp of entry.phrases) {
+        if (cp === rp) score += 3;
+        else if (rp.includes(" ") && rp.length >= 6 && cp.includes(rp)) score += 3;
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
       best = entry;
     }
   }
-  return bestOverlap > 0 ? best : null;
+  return bestScore > 0 ? best : null;
 }
 
 function nodeFromRequired(req: RequiredPage, cluster: SerpCluster | undefined): PageNode {

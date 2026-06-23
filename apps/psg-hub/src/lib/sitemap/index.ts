@@ -28,6 +28,7 @@ export {
   validateArchitecture,
   toMermaid,
   toPageInventoryRows,
+  humanizeClusterTitle,
   PAGE_INVENTORY_COLUMNS,
   MAX_CLICK_DEPTH,
   type FlatPage,
