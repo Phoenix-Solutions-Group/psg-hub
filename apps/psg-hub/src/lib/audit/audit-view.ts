@@ -44,6 +44,7 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "production.template.approve": "Approved mail template",
   "production.template.release": "Released mail template",
   "production.template.revoke": "Revoked mail template",
+  "sitemap.run": "Ran sitemap pipeline",
 };
 
 /** Human label for an action; falls back to the raw key for forward-compat. */
