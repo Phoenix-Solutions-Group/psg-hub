@@ -20,6 +20,7 @@ export type AuditCategory =
   | "intel"
   | "production"
   | "approvals"
+  | "sitemap"
   | "other";
 
 const ACTION_LABELS: Record<AuditAction, string> = {
@@ -47,6 +48,7 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "production.template.revoke": "Revoked mail template",
   "approval.approve": "Approved queued action",
   "approval.reject": "Rejected queued action",
+  "sitemap.run": "Ran sitemap pipeline",
 };
 
 /** Human label for an action; falls back to the raw key for forward-compat. */
@@ -65,6 +67,7 @@ export function auditCategory(action: string): AuditCategory {
   if (action.startsWith("intel")) return "intel";
   if (action.startsWith("production")) return "production";
   if (action.startsWith("approval")) return "approvals";
+  if (action.startsWith("sitemap")) return "sitemap";
   return "other";
 }
 
@@ -76,6 +79,7 @@ export const AUDIT_CATEGORY_LABELS: Record<AuditCategory, string> = {
   intel: "Intel reports",
   production: "Mail production",
   approvals: "Approval queue",
+  sitemap: "Sitemap runs",
   other: "Other",
 };
 

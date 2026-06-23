@@ -68,3 +68,29 @@ export {
   type ClusterCheckpointPayload,
   type PackageCheckpointPayload,
 } from "./pipeline";
+export {
+  makeKeywordProvider,
+  makeAuditProvider,
+  makeContentGapProvider,
+  makeClusterRefiner,
+  type KeywordSource,
+  type RawKeyword,
+  type KeywordProviderOptions,
+  type AuditProviderDeps,
+  type CrawledUrl,
+  type UrlAuditVerdict,
+  type ContentGapDeps,
+  type ClusterRefinerDeps,
+  type StructuredCompletion,
+} from "./providers";
+export { renderSitemapDeliverable, type RenderDeliverableOptions } from "./render";
+export {
+  persistSitemapPackage,
+  loadSitemapPackages,
+  SITEMAP_ARTIFACT_TYPE,
+  SITEMAP_SOURCE_SKILL,
+  type SitemapArtifactData,
+  type SitemapArtifactRow,
+  type PersistSitemapOptions,
+  type PersistedSitemap,
+} from "./persistence";
