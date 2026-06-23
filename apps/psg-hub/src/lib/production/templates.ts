@@ -72,11 +72,27 @@ export interface MailCompany {
   state?: string;
 }
 
+/**
+ * Pre-computed boolean / scalar flags a template can branch on via `{{#if}}`
+ * blocks (L2, PSG-115c). PSG's variability model selects block content by
+ * attribute — EV/ICE, in/out of warranty, repeat/first-time, repair-$ threshold
+ * — so the trigger engine (./triggers.ts) resolves these flags once per
+ * recipient and the template merely reads them. Keeping the values pre-computed
+ * (rather than evaluating expressions in the template) matches the historical
+ * Advantage model where each client picks a fixed trigger amount up front.
+ */
+export type TemplateFlags = Record<string, boolean | string | number | undefined>;
+
 /** Everything a template can merge against. */
 export interface MailMergeData {
   customer: MailCustomer;
   company: MailCompany;
   program: ProgramCustomizations;
+  /**
+   * Optional condition flags for `{{#if flags.xxx}}` block selection. Absent on
+   * legacy templates, which render exactly as before.
+   */
+  flags?: TemplateFlags;
 }
 
 /**
@@ -132,13 +148,126 @@ function resolvePath(data: MailMergeData, path: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Resolve a dotted path to its RAW value (un-stringified) for truthiness checks
+ * in `{{#if}}` conditions. Unlike `resolvePath`, this does not coerce booleans
+ * to "true"/"false" — `false` stays falsy.
+ */
+function resolveRaw(data: MailMergeData, path: string): unknown {
+  const segments = path.split(".");
+  let cursor: unknown = data;
+  for (const segment of segments) {
+    if (cursor === null || typeof cursor !== "object") return undefined;
+    cursor = (cursor as Record<string, unknown>)[segment];
+  }
+  return cursor;
+}
+
+/**
+ * Truthiness for `{{#if}}` conditions. Empty string, the strings "false"/"0"/
+ * "no" (case-insensitive), 0, NaN, null and undefined are falsy; everything else
+ * is truthy. Objects/arrays are never valid condition leaves.
+ */
+function isTruthyValue(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0 && !Number.isNaN(value);
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    return v !== "" && v !== "false" && v !== "0" && v !== "no";
+  }
+  return false;
+}
+
+type BlockToken =
+  | { type: "text"; value: string }
+  | { type: "if"; expr: string }
+  | { type: "else" }
+  | { type: "endif" };
+
+const BLOCK_RE = /\{\{\s*#if\s+(!?[\w.]+)\s*\}\}|\{\{\s*else\s*\}\}|\{\{\s*\/if\s*\}\}/g;
+
+/** Split a template into text + `{{#if}}`/`{{else}}`/`{{/if}}` control tokens. */
+function tokenizeBlocks(template: string): BlockToken[] {
+  const tokens: BlockToken[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  BLOCK_RE.lastIndex = 0;
+  while ((match = BLOCK_RE.exec(template)) !== null) {
+    if (match.index > last) {
+      tokens.push({ type: "text", value: template.slice(last, match.index) });
+    }
+    if (match[1] !== undefined) tokens.push({ type: "if", expr: match[1] });
+    else if (/else/.test(match[0])) tokens.push({ type: "else" });
+    else tokens.push({ type: "endif" });
+    last = match.index + match[0].length;
+  }
+  if (last < template.length) tokens.push({ type: "text", value: template.slice(last) });
+  return tokens;
+}
+
+/**
+ * Render `{{#if path}} … {{else}} … {{/if}}` conditional blocks (L2, PSG-115c)
+ * against `data` BEFORE merge-field substitution. Conditions are a dotted path,
+ * optionally negated with a leading `!`, evaluated for truthiness via
+ * `isTruthyValue` (so `{{#if flags.isEV}}` / `{{#if !flags.inWarranty}}` work).
+ * Blocks nest. Templates with no `{{#if` are returned untouched (fast path), so
+ * existing pure-merge templates are unaffected.
+ */
+export function renderConditionalBlocks(template: string, data: MailMergeData): string {
+  if (!template.includes("{{#if")) return template;
+  const tokens = tokenizeBlocks(template);
+  let i = 0;
+
+  const renderUntil = (stops: ReadonlySet<BlockToken["type"]>): string => {
+    let out = "";
+    while (i < tokens.length) {
+      const token = tokens[i];
+      if (stops.has(token.type)) return out; // leave the stop token for the caller
+      if (token.type === "text") {
+        out += token.value;
+        i++;
+        continue;
+      }
+      if (token.type === "if") {
+        const negate = token.expr.startsWith("!");
+        const path = negate ? token.expr.slice(1) : token.expr;
+        i++; // consume the #if
+        const condition = negate
+          ? !isTruthyValue(resolveRaw(data, path))
+          : isTruthyValue(resolveRaw(data, path));
+        const thenBranch = renderUntil(IF_STOPS);
+        let elseBranch = "";
+        if (i < tokens.length && tokens[i].type === "else") {
+          i++; // consume the else
+          elseBranch = renderUntil(ENDIF_STOPS);
+        }
+        if (i < tokens.length && tokens[i].type === "endif") i++; // consume the /if
+        out += condition ? thenBranch : elseBranch;
+        continue;
+      }
+      // Stray {{else}} / {{/if}} with no opener: drop it and continue.
+      i++;
+    }
+    return out;
+  };
+
+  return renderUntil(NO_STOPS);
+}
+
+const NO_STOPS: ReadonlySet<BlockToken["type"]> = new Set();
+const IF_STOPS: ReadonlySet<BlockToken["type"]> = new Set(["else", "endif"]);
+const ENDIF_STOPS: ReadonlySet<BlockToken["type"]> = new Set(["endif"]);
+
 const TOKEN_RE = /\{\{\s*([\w.]+)\s*\}\}/g;
 
 /**
  * Substitute `{{ path }}` tokens in `template` with HTML-escaped values from
- * `data`. Synthesises `customer.fullName` from first/last when not provided.
- * Returns the rendered string plus the list of tokens that resolved to nothing
- * (deduped, in first-seen order) so callers can surface incomplete templates.
+ * `data`. Conditional `{{#if}}` blocks (L2, PSG-115c) are resolved first, so a
+ * single template can yield materially different copy by attribute. Synthesises
+ * `customer.fullName` from first/last when not provided. Returns the rendered
+ * string plus the list of tokens that resolved to nothing (deduped, in
+ * first-seen order) so callers can surface incomplete templates.
  */
 export function renderMergeFields(
   template: string,
@@ -154,8 +283,9 @@ export function renderMergeFields(
     },
   };
 
+  const selected = renderConditionalBlocks(template, enriched);
   const missing: string[] = [];
-  const html = template.replace(TOKEN_RE, (_match, path: string) => {
+  const html = selected.replace(TOKEN_RE, (_match, path: string) => {
     const value = resolvePath(enriched, path);
     if (value === undefined || value === "") {
       if (!missing.includes(path)) missing.push(path);
