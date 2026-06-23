@@ -54,3 +54,34 @@ What is **still missing** for full-scale row-level work (per-recipient suppressi
 > **The full per-recipient `Production Files` archive** (every dated batch), **or** a **FileMaker per-recipient send-history table export** (recipient, piece, mailed-date, opt-out flag).
 
 This is **board-gated** — only Nick can produce it from the live production system / FileMaker. Decision posed to Nick separately (see PSG-216 thread). W0 can proceed now on: full aggregate ledger (here) + the `2021-09-07` per-recipient sample (in repo). **No live-mail spend at any step (G4 unaffected).**
+
+---
+
+## 5. Addendum (PSG-249, Ravi · 2026-06-23) — full per-piece ledger ingested
+
+The §3 schema-drift caveat ("the flat render only exposes rich per-piece detail
+for the first 59 mailings; 2022–2024 lives in the workbook's yearly tabs") was a
+limitation of the **flat-text render**, not of the source. Exporting the live
+Google Sheet's first tab to CSV (Drive fileId
+`1EuJRRGX34AybuZCsSTN4Hi9k7-74k3medvL8TMAbOrk`) yields the **full 41-column
+per-piece schema for the entire series** — no per-tab assembly needed. Committed
+verbatim (counts only, PII-free) as
+[`production-counts-ledger.full.csv`](./production-counts-ledger.full.csv):
+**476 mailings, 2021-08-10 → 2026-06-18, 715,177 pieces.**
+
+Notes for consumers:
+- **Production Date is the canonical key** (always present). The Printed/Mailed
+  Date columns stopped being populated ~04/2022 while per-piece counts continued,
+  so they are informational only. (Confirms the §3 col0=`22`=Production-Date quirk.)
+- Per-piece **count = max over that piece's component columns** (letter/envelope/
+  warranty/survey are equal per recipient).
+- The ledger folds the `b` A/B alternates into their base column; a per-recipient
+  reconciliation must fold `04b→04`, `10b→10`, etc.
+
+Ingested by `apps/psg-hub/src/lib/ops/mail/production-counts-ledger.ts`
+(parse + aggregate volume priors + reconcile, pure). **AC1** is satisfied by
+reconciling the `2021-09-07` per-recipient batch against its ledger row: 8 pieces
+match exactly; piece `04` is short by 1 because its envelope artifact is absent
+from the sample batch (letter-only recipient) — 1779 parsed + 1 = the ledger's
+1780; the importer dedups to 1766. **AC3-aggregate** volume priors are written to
+[`../priors/aggregate-volumes.md`](../priors/aggregate-volumes.md).
