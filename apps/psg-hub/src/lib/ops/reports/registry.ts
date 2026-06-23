@@ -15,6 +15,16 @@
 // are frozen by PLANNING.md and are the public report ids; do not rename them.
 
 import {
+  agentCaptureRun,
+  agentSalesRun,
+  claimsReviewRun,
+  nameRecapByShopRun,
+  payTypeAnalysisRun,
+  referralDirectoryRun,
+  vehicleAnalysisMakeRun,
+  vehicleAnalysisModelRun,
+} from "./live/customer-insurance";
+import {
   bodyTechPerformanceRun,
   estimatorCsiRun,
   marketDashboardRun,
@@ -24,6 +34,7 @@ import {
   rentalCarAnalysisRun,
   surveyAlertRecapRun,
 } from "./live/survey";
+import { auditRun, reprintRecapRun } from "./live/volume";
 import {
   category,
   customerName,
@@ -87,6 +98,13 @@ const definitions: ReportDefinition[] = [
       col("closed", "ROs Closed", "number"),
       col("processed", "Processed", "currency"),
     ],
+    // PSG-46: RO opened/closed COUNTS are sourceable today, but the headline
+    // "Processed $" column has no canonical source — repair_orders carries no
+    // invoiced-$ column and the per-source payload figure is sparse (only CCC/BMS
+    // rows record a grand total; generic + Advantage2.0 RO imports record none,
+    // and even the pilot seed has zero amounts). Flipping this to "available" now
+    // would render a misleading $0 for most shops. Stays pending-data until the
+    // RO invoiced-$ data model lands (PSG-46 follow-up); then sum the real column.
     dataStatus: "pending-data",
     sampleRows: () =>
       build(6, (i) => ({
@@ -101,6 +119,11 @@ const definitions: ReportDefinition[] = [
     // dropped Invoiced.com billing vendor. This report is decoupled from the Stripe/Invoiced
     // billing surface; it stays pending-data on the B1 ops tables (repair_orders) — deferred,
     // no re-point needed.
+    // PSG-46: confirmed still blocked — this is a shop × pay-type × invoiced-$
+    // cross-tab, and pay type (Advantage2.0 only) and amount (CCC/BMS only) come
+    // from disjoint import sources that never co-occur on one RO, so the cross-tab
+    // is incoherent today. Blocked on the same RO invoiced-$ + canonical pay-type
+    // data model as processing-recap (PSG-46 follow-up).
     slug: "invoicing-recap",
     title: "Monthly Processing Invoicing Recap",
     batch: "volume-invoicing",
@@ -142,7 +165,11 @@ const definitions: ReportDefinition[] = [
       col("count", "Reprints", "number"),
       col("date", "Reprinted", "date"),
     ],
-    dataStatus: "pending-data",
+    // PSG-46: live source is complete — production_reprint_log → documents →
+    // batches / companies (PSG-27 production module). Grouped by shop × batch ×
+    // reason with a count and the most-recent reprint date. See ./live/volume.
+    dataStatus: "available",
+    run: reprintRecapRun,
     sampleRows: (p) =>
       build(N, (i) => ({
         shop: shopName(i),
@@ -166,6 +193,10 @@ const definitions: ReportDefinition[] = [
       col("current", "Current", "currency"),
       col("trend", "MoM %", "percent"),
     ],
+    // PSG-46: a 3-month trailing invoiced-$ comparison — same missing invoiced-$
+    // source as processing-recap (monthly buckets of a dollar figure repair_orders
+    // does not yet carry). Stays pending-data until the RO invoiced-$ data model
+    // lands (PSG-46 follow-up).
     dataStatus: "pending-data",
     sampleRows: () =>
       build(6, (i) => {
@@ -195,7 +226,13 @@ const definitions: ReportDefinition[] = [
       col("status", "Status", "string"),
       col("date", "Closed", "date"),
     ],
-    dataStatus: "pending-data",
+    // PSG-46: live line-level reconciliation listing of repair_orders in the
+    // period. RO #/shop/status/date off the spine (PSG-25); pay type + amount
+    // read from payload_jsonb where the import source recorded them (CCC/BMS
+    // grand total, Advantage2.0 pay type) and blank otherwise — honest "not
+    // recorded", never fabricated. Honors shop + pay-type filters. See ./live/volume.
+    dataStatus: "available",
+    run: auditRun,
     sampleRows: (p) =>
       build(N, (i) => ({
         ro: roNumber(i),
@@ -442,7 +479,10 @@ const definitions: ReportDefinition[] = [
       col("amount", "Amount", "currency"),
       col("share", "Share", "percent"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: pay type spine-derived (insurer present → Insurance, else
+    // Customer Pay); ROs = count, amount = Σ payload grandTotal, share of total $.
+    dataStatus: "available",
+    run: payTypeAnalysisRun,
     sampleRows: () => {
       const base = build(4, (i) => ({
         payType: payType(i),
@@ -467,7 +507,10 @@ const definitions: ReportDefinition[] = [
       col("ros", "ROs", "number"),
       col("avgSeverity", "Avg Severity", "currency"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: repair_orders → vehicles(make); ROs = count, avgSeverity =
+    // avg payload grandTotal. ROs with no decoded vehicle group under "—".
+    dataStatus: "available",
+    run: vehicleAnalysisMakeRun,
     sampleRows: () =>
       build(6, (i) => ({
         make: make(i),
@@ -487,7 +530,9 @@ const definitions: ReportDefinition[] = [
       col("ros", "ROs", "number"),
       col("avgSeverity", "Avg Severity", "currency"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: repair_orders → vehicles(make, model); grouped by make+model.
+    dataStatus: "available",
+    run: vehicleAnalysisModelRun,
     sampleRows: () =>
       build(6, (i) => ({
         make: make(i),
@@ -509,7 +554,11 @@ const definitions: ReportDefinition[] = [
       col("ros", "ROs", "number"),
       col("amount", "Captured", "currency"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: referral category/source spine-derived from the insurer/agent
+    // edges (Insurance Agent → agent, Insurance Company → insurer, else Direct);
+    // ROs = count, amount = Σ payload grandTotal.
+    dataStatus: "available",
+    run: referralDirectoryRun,
     sampleRows: () =>
       build(N, (i) => ({
         category: category(i),
@@ -531,7 +580,10 @@ const definitions: ReportDefinition[] = [
       col("ros", "ROs Referred", "number"),
       col("firstSeen", "First Seen", "date"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: repair_orders with an insurance_agent_id, grouped by agent;
+    // ROs = count, firstSeen = earliest created_at (date).
+    dataStatus: "available",
+    run: agentCaptureRun,
     sampleRows: (p) =>
       build(N, (i) => ({
         agent: customerName(i + 4),
@@ -553,7 +605,10 @@ const definitions: ReportDefinition[] = [
       col("ros", "ROs", "number"),
       col("sales", "Sales", "currency"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: same agent grouping as agent-capture; sales = Σ payload
+    // grandTotal, ranked by sales desc.
+    dataStatus: "available",
+    run: agentSalesRun,
     sampleRows: () =>
       build(N, (i) => ({
         agent: customerName(i + 4),
@@ -576,7 +631,11 @@ const definitions: ReportDefinition[] = [
       col("supplements", "Supplements", "number"),
       col("amount", "Claim $", "currency"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: repair_orders with an insurer, grouped by insurer; claims =
+    // count, totalLoss = total_loss_flag count, amount = Σ payload grandTotal.
+    // Supplements have no per-insurer source on the spine yet → null.
+    dataStatus: "available",
+    run: claimsReviewRun,
     sampleRows: () =>
       build(6, (i) => ({
         insurer: insurer(i),
@@ -599,7 +658,11 @@ const definitions: ReportDefinition[] = [
       col("ros", "ROs", "number"),
       col("amount", "Amount", "currency"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: repair_orders → companies(shop) + repair_customers(name),
+    // grouped by shop+customer; ROs = count, amount = Σ payload grandTotal. Only
+    // the customer name (this report's business field) is output — no other PII.
+    dataStatus: "available",
+    run: nameRecapByShopRun,
     sampleRows: () =>
       build(N, (i) => ({
         shop: shopName(i),
