@@ -296,6 +296,21 @@ describe("no-offer guard for the Owner Service-Recovery letter (PSG-115d §10.4)
     expect(validateRecoveryContent("$ 25 credit").ok).toBe(false);
   });
 
+  // PSG-324 — same leading-`\b` defect as PSG-319, but on the percent branches.
+  // `% off` / `\d+%\s*off` sat inside the `\b(?:…)` group, so spaced
+  // ("50 % off"), spelled-out ("15 percent off"), bare ("% off"), and
+  // no-"off" ("save 20%") percent forms slipped past. Fail closed on ANY `%`.
+  it("rejects percent-form offers the old leading-\\b group missed", () => {
+    expect(validateRecoveryContent("save 20%").ok).toBe(false);
+    expect(validateRecoveryContent("50 % off").ok).toBe(false);
+    expect(validateRecoveryContent("15 percent off").ok).toBe(false);
+    expect(validateRecoveryContent("% off").ok).toBe(false);
+    // forms already caught pre-PSG-324 stay caught
+    expect(validateRecoveryContent("10% off").ok).toBe(false);
+    expect(validateRecoveryContent("Enjoy 20% off your next visit!").ok).toBe(false);
+    expect(validateRecoveryContent("20% discount").ok).toBe(false);
+  });
+
   it("still passes legit relationship-only copy with no offer (phone, job#)", () => {
     const html =
       "<p>Dear Jane, I'm the owner. Please call me directly at (555) 014-2200 about " +
