@@ -13,7 +13,11 @@
 // field_mapping_jsonb). The field_mapping maps a canonical target field key to
 // the source column header it should read from.
 
-export type ImportKind = "ro" | "estimate";
+// "ccc_estimate" ingests a CIECA BMS estimate XML document (CCC Secure Share,
+// PSG-261) rather than a tabular RO/estimate list — its parse step routes to the
+// BMS parser/mapper in src/lib/ccc-secure-share/bms; the rest of the pipeline
+// (suggest/validate/normalize/commit) is shared with the tabular kinds.
+export type ImportKind = "ro" | "estimate" | "ccc_estimate";
 
 /**
  * Supported upload encodings. csv/txt parse natively; the spreadsheet formats

@@ -11,6 +11,7 @@
 // (e.g. "ownerstateprovince") so the resolver matches them whole-header and
 // never has to guess from a loose substring. (PSG-51 real-export hardening.)
 
+import { CCC_BMS_PAYLOAD_FIELD } from "@/lib/ccc-secure-share/bms";
 import type { FieldDef, ImportKind } from "./types";
 
 const CUSTOMER_FIELDS: FieldDef[] = [
@@ -156,9 +157,94 @@ const ESTIMATE_FIELDS: FieldDef[] = [
   },
 ];
 
+// CCC Secure Share estimate (CIECA BMS XML) — PSG-261. The BMS parser/mapper
+// projects an estimate onto a single row keyed by these canonical field keys, so
+// the headers it emits auto-resolve 1:1; the aliases also let a flattened CCC
+// *tabular* export resolve through the same catalog later. The reserved carry
+// field (CCC_BMS_PAYLOAD_FIELD) ferries the non-tabular detail (line items,
+// supplements, BMS overflow) through validate to toCommitRecord — it is a system
+// field, never an operator-mapped column.
+const CCC_ESTIMATE_FIELDS: FieldDef[] = [
+  ...CUSTOMER_FIELDS,
+  {
+    key: "estimate_number",
+    label: "Estimate number",
+    required: true,
+    type: "string",
+    aliases: ["estimate #", "estimate number", "estimate id", "est #", "est no", "estimate", "est"],
+  },
+  {
+    key: "ro_number",
+    label: "RO number",
+    required: false,
+    type: "string",
+    aliases: ["ro #", "ro number", "repair order number", "ro no", "ro#", "repair order", "ro"],
+  },
+  {
+    key: "claim_number",
+    label: "Claim number",
+    required: false,
+    type: "string",
+    aliases: ["claim #", "claim number", "claim no", "claim", "claimnumber"],
+  },
+  {
+    key: "vehicle_vin",
+    label: "VIN",
+    required: false,
+    type: "string",
+    aliases: ["vin", "vin number", "vehicle vin", "vinnumber"],
+  },
+  {
+    key: "vehicle_year",
+    label: "Vehicle year",
+    required: false,
+    type: "string",
+    aliases: ["year", "model year", "vehicle year", "modelyear"],
+  },
+  {
+    key: "vehicle_make",
+    label: "Vehicle make",
+    required: false,
+    type: "string",
+    aliases: ["make", "vehicle make", "veh make", "vehiclemake", "make description"],
+  },
+  {
+    key: "vehicle_model",
+    label: "Vehicle model",
+    required: false,
+    type: "string",
+    aliases: ["model", "vehicle model", "veh model", "vehiclemodel", "model name"],
+  },
+  {
+    key: "estimate_status",
+    label: "Estimate status",
+    required: false,
+    type: "string",
+    aliases: ["status", "estimate status", "est status", "estimatestatus"],
+  },
+  {
+    key: "estimate_total",
+    label: "Estimate total",
+    required: false,
+    type: "number",
+    aliases: ["total", "estimate total", "net total", "grand total", "amount", "est total"],
+  },
+  {
+    // System carry field — see CCC_BMS_PAYLOAD_FIELD. Holds the full canonical
+    // estimate JSON so non-tabular detail reaches commit; not shown for manual
+    // mapping. Its unique key never collides with a real CCC/BMS header.
+    key: CCC_BMS_PAYLOAD_FIELD,
+    label: "CCC BMS payload (system)",
+    required: false,
+    type: "string",
+    aliases: ["ccc bms payload"],
+  },
+];
+
 const CATALOG: Record<ImportKind, FieldDef[]> = {
   ro: RO_FIELDS,
   estimate: ESTIMATE_FIELDS,
+  ccc_estimate: CCC_ESTIMATE_FIELDS,
 };
 
 export function fieldsFor(kind: ImportKind): FieldDef[] {
