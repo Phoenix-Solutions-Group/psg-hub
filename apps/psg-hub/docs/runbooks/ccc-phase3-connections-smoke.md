@@ -89,6 +89,14 @@ acting superadmin as actor, and the target `shop_id`:
 - Pick a shop in the dropdown → Approve becomes enabled → click Approve → the row **links then connects in
   one action** (single POST with `{ shopId }`). Confirm the `access_audit` row's target shop = the picked shop.
 
+> ⚠️ **Seeding caveat (real finding):** `ccc_accounts.shop_id` is declared **`NOT NULL`** (Phase 1A migration
+> `20260623190000`), and **no later migration relaxes it**. So the orphan row (`shop_id = null`) **cannot be
+> inserted** — the seed will fail with a not-null violation. The whole unmatched/link-to-shop UI + `approveCccConnection`'s
+> `if (!shopId) throw` path therefore can't be reached against the current schema. **AC4 is already proven by
+> unit tests on the merged tree (PSG-298 PASS)** — recommend **skipping AC4 in the live smoke** rather than
+> relaxing a column on the shared prod DB just for a click-through. Tracked as a follow-up for the PSG-267 owner
+> (schema gap: either make `shop_id` nullable, or document the unmatched UI as not-yet-reachable). See §5.
+
 ### AC5 — double-decision (409)
 - A second decision on an already-resolved row is rejected by the state machine → route returns **409**, and
   the error is surfaced inline in the row (red text under the actions).
@@ -116,3 +124,84 @@ acting superadmin as actor, and the target `shop_id`:
 | AC5 | re-approve connected | 409 surfaced in row, no 2nd audit | | | |
 
 **Hand back to:** QA — [Tess](/PSG/agents/tess) on PSG-303. Re-loop if anything diverges from Expected.
+
+---
+
+## 4. Concrete operator how-to (exact commands)
+
+> **There is NO separate test/pilot DB.** Per `.paul/phases/06-rbac-rls-spine/PROTOCOL-migration-safety.md`,
+> all psg-hub DDL lands on the **shared prod** Supabase project `gylkkzmcmbdftxieyabw` ("localreach",
+> ~314k PII rows / 142 shops). So "apply in test/pilot" = apply to that shared project, carefully. The
+> migration itself is additive + idempotent (safe). The **seed rows are synthetic test data written to a
+> prod table** — tag them and delete them after (§4e). Prefer a low-traffic window.
+
+### 4a. Apply the migration  (operator gate — `supabase db push`)
+The migration MCP tools are read-only inspection only here; schema changes go through the CLI so the review
+trail + history stay in sync:
+```bash
+cd apps/psg-hub
+supabase login                 # one-time; uses the OS keychain — never pass --password/--token inline
+supabase db push               # applies all pending migrations incl. 20260624130000_ccc_phase3_connection_status
+supabase migration list        # confirm 20260624130000 shows as applied (remote)
+```
+After push, run `get_advisors(security)` (read-only MCP) and confirm **no new** ERROR/WARN vs the baseline.
+Rollback if needed: `alter table public.ccc_accounts drop column connection_status, last_event_at, last_event_label, enabled_at, approved_by, approved_at, declined_reason, error_reason, data_scope;`
+
+### 4b. Pick real shop UUIDs  (Supabase dashboard → SQL editor, read-only)
+```sql
+select id, name from public.shops order by name limit 5;
+```
+Use two of these ids below as `:shopA` / `:shopB`.
+
+### 4c. Seed the smoke rows  (SQL editor; service-role bypasses RLS)
+All rows tagged `SMOKE-*` for clean teardown. **Omit the orphan row** — see the AC4 caveat (NOT NULL).
+```sql
+insert into public.ccc_accounts (shop_id, ccc_account_id, facility_id, credential_kind, status,
+                                 connection_status, enabled_at, last_event_at, last_event_label)
+values
+  (:shopA, 'SMOKE-PENDING-1',  'F-1001', 'unconfirmed', 'linked', 'pending_review', now(), now(), 'Enabled in CCC'),
+  (:shopB, 'SMOKE-CONNECTED',  'F-1002', 'unconfirmed', 'linked', 'connected',      now(), now(), 'Connection approved'),
+  (:shopA, 'SMOKE-ERROR',      'F-1003', 'unconfirmed', 'error',  'error',          now(), now(), 'Ingest auth failed'),
+  (:shopB, 'SMOKE-DECLINED',   'F-1004', 'unconfirmed', 'linked', 'declined',       now(), now(), 'Request declined');
+update public.ccc_accounts set declined_reason = 'Smoke: not an active BSM site' where ccc_account_id = 'SMOKE-DECLINED';
+update public.ccc_accounts set error_reason    = 'auth_failed' where ccc_account_id = 'SMOKE-ERROR';
+```
+Expected tab counts with this set: **Pending 1 · Connected 1 · Errors 1 · All 4** (no Declined tab; declined shows only under All). Adjust the runbook's "2 / 5" numbers down by the missing orphan row.
+
+### 4d. Sessions
+- **Superadmin:** grant yourself (find your auth uid in dashboard → Authentication → Users, or
+  `select id, email from auth.users where email = '<you>';`):
+  ```sql
+  insert into public.app_user_roles (profile_id, role) values (:myUid, 'psg_superadmin')
+    on conflict (profile_id) do update set role = 'psg_superadmin';
+  ```
+- **Non-superadmin (AC1):** log in as any account **without** `psg_superadmin` — a normal shop user, or a
+  `psg_internal` user that lacks the `manage_ccc_integration` capability. Confirm the restricted notice + the
+  nav entry to this route is hidden. (Don't downgrade your own row mid-test; use a second browser/account.)
+
+### 4e. Verify the audit trail + clean up
+```sql
+-- after each AC3 transition:
+select action, actor_profile_id, target_shop_id, payload_jsonb, created_at
+  from public.access_audit
+ where action like 'ccc.connection.%'
+ order by created_at desc;
+
+-- teardown when done (also removes any approved/declined SMOKE rows):
+delete from public.access_audit where action like 'ccc.connection.%'
+   and payload_jsonb->>'cccAccountId' like 'SMOKE-%';   -- only if your access_audit is delete-able; it is append-only by policy, so superadmin/service-role only
+delete from public.ccc_accounts where ccc_account_id like 'SMOKE-%';
+```
+> Note: `access_audit` is **append-only** (INSERT-only policy) — the smoke will leave a few `ccc.connection.*`
+> rows behind. That is expected/by-design; they are honest audit history of the smoke and can be left in place.
+
+### Lighter-touch alternative (recommended if you'd rather not write synthetic rows to prod)
+Apply the migration (§4a), then verify **AC1 (gate)** + **AC2 (the queue renders; an empty queue is itself a
+valid render of the real env)** only, and rely on the green unit/integration suite (PSG-298) for the
+AC3/AC4/AC5 transition logic — those are pure state-machine + route tests, not env-dependent. This proves the
+deploy is wired (gate + service-client read + page render) without seeding prod.
+
+## 5. Follow-up filed
+- **Schema gap (AC4):** `ccc_accounts.shop_id NOT NULL` makes the unmatched/link-to-shop flow unreachable in
+  prod. Filed to the PSG-267 owner to decide: relax to nullable, or document the UI as future-only. The live
+  AC4 step is skipped until that lands (logic already covered by PSG-298 unit tests).
