@@ -42,6 +42,7 @@
 // the resolved company name in JS (surveys-API convention), like rentalCarAnalysisRun.
 
 import type { ReportContext, ReportParams, ReportRow } from "../types";
+import { fetchAllRows } from "./paginate";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -121,23 +122,19 @@ async function fetchRepairOrders(
   params: ReportParams,
   ctx: ReportContext,
 ): Promise<RoRow[]> {
-  let query = ctx.db!.from("repair_orders").select(RO_SELECT);
-  if (params.start && YMD.test(params.start)) {
-    query = query.gte("created_at", params.start);
-  }
-  if (params.end && YMD.test(params.end)) {
-    query = query.lte("created_at", `${params.end}T23:59:59.999Z`);
-  }
-  if (ctx.shopIds) {
-    query = query.in("company_id", ctx.shopIds);
-  }
-
-  const { data, error } = (await query) as {
-    data: RoRow[] | null;
-    error: { message: string } | null;
-  };
-  if (error) throw new Error(error.message);
-  return data ?? [];
+  return fetchAllRows<RoRow>(() => {
+    let query = ctx.db!.from("repair_orders").select(RO_SELECT);
+    if (params.start && YMD.test(params.start)) {
+      query = query.gte("created_at", params.start);
+    }
+    if (params.end && YMD.test(params.end)) {
+      query = query.lte("created_at", `${params.end}T23:59:59.999Z`);
+    }
+    if (ctx.shopIds) {
+      query = query.in("company_id", ctx.shopIds);
+    }
+    return query;
+  });
 }
 
 // ── Per-RO resolved fields, computed once so each report reads the same view. ──
