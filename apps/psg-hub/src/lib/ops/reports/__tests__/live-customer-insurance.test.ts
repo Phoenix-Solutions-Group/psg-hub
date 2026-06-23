@@ -46,6 +46,10 @@ function stubDb(rows: unknown[], error: { message: string } | null = null) {
       calls.in = { col, vals };
       return builder;
     },
+    // PSG-360: fetchRepairOrders now paginates via fetchAllRows, which calls
+    // .range(); the builder is thenable and returns its (sub-1000-row) data on
+    // the first page, so the loop short-circuits after one page.
+    range: () => builder,
     then(resolve: (r: { data: unknown[] | null; error: unknown }) => unknown) {
       return Promise.resolve(resolve({ data: error ? null : rows, error }));
     },
@@ -322,5 +326,57 @@ describe("shared scoping", () => {
   it("propagates a db error so the runner degrades to sample", async () => {
     const { db } = stubDb([], { message: "boom" });
     await expect(payTypeAnalysisRun(params(), ctx(db))).rejects.toThrow("boom");
+  });
+});
+
+// ───────────────── PSG-360: pagination past the 1000-row cap ─────────────────
+//
+// Proves fetchRepairOrders (shared by all 8 reports) actually paginates: a
+// PostgREST stub that caps each .range() at 1000 rows must NOT truncate a
+// >1000-row period. payTypeAnalysisRun stands in for every Customer & Insurance
+// run() (they all fetch through the same fetchAllRows path now).
+
+/** Single-table stub honouring .range(from,to) against `total` rows, capped at
+ *  the PostgREST default of 1000 per page — exactly what the server does. */
+function pagingDb(total: number) {
+  let pages = 0;
+  // All Customer Pay (no insurer) so the report collapses to a single group
+  // whose `ros` count == the number of rows actually fetched.
+  const rows = Array.from({ length: total }, () => ({
+    created_at: "2026-03-15T12:00:00.000Z",
+    total_loss_flag: false,
+    insurance_company_id: null,
+    insurance_agent_id: null,
+    payload_jsonb: null,
+    companies: { name: "Mega Collision" },
+    vehicles: null,
+    insurance_companies: null,
+    insurance_agents: null,
+    repair_customers: null,
+  }));
+  const builder: Record<string, unknown> = {
+    from: () => builder,
+    select: () => builder,
+    gte: () => builder,
+    lte: () => builder,
+    in: () => builder,
+    range(from: number, to: number) {
+      pages += 1;
+      const want = to - from + 1;
+      const slice = rows.slice(from, from + Math.min(want, 1000));
+      return Promise.resolve({ data: slice, error: null });
+    },
+  };
+  return { db: builder as unknown as ReportContext["db"], pages: () => pages };
+}
+
+describe("live run() pagination (PSG-360)", () => {
+  it("accumulates >1000 repair_orders instead of truncating at 1000", async () => {
+    const db = pagingDb(2300);
+    const out = await payTypeAnalysisRun(params(), ctx(db.db));
+    // One pay-type group; its RO count proves nothing was lost at the 1000 cap.
+    expect(out).toHaveLength(1);
+    expect(out[0].ros).toBe(2300);
+    expect(db.pages()).toBe(3); // 1000 + 1000 + 300 (short → stop)
   });
 });
