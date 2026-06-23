@@ -521,10 +521,12 @@ export function buildLetterPlan(
  * recovery piece is rejected if any of these surface (PSG-115d §10.4,
  * Honest-claims lens).
  */
-// NOTE (PSG-311 QA): the dollar-amount branch must live OUTSIDE the leading `\b`
-// group — `$` is a non-word char, so `\b\$\d` never fires when the offer is
-// preceded by a space / `>` (real copy), letting bare "$25 off" slip through.
-// `\$\s?\d` as its own top-level alternative catches it; word offers keep `\b`.
+// The `\$\s?\d` (bare dollar-amount) branch lives OUTSIDE the leading-`\b`
+// group on purpose. `$` is a non-word char, so a `\b` immediately before it
+// only matches when the preceding char is a word char — but real offer copy
+// has a space/`>` before the amount (" $50 off", ">$25"), so a `\b`-prefixed
+// `\$\d` never fires (PSG-319 / AC5 gap from PSG-311). Recovery letters are
+// relationship-only, so flagging ANY `$NN` is the correct fail-closed net.
 const RECOVERY_OFFER_PATTERN =
   /\b(?:coupon|discount|\d+%\s*off|% off|save \$|free (?:detail|wash|service|gift)|special offer|promo(?:tion|tional)?\b|deal\b|sale\b|redeem)|\$\s?\d/i;
 
