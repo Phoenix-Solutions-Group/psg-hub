@@ -28,6 +28,7 @@ import {
   responseRatePct,
   reworkRatePct,
 } from "./attribution";
+import { fetchAllRows } from "./paginate";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -70,26 +71,22 @@ export async function monthlyCsiDisplayRun(
 ): Promise<ReportRow[]> {
   if (!ctx.db) throw new Error("monthlyCsiDisplayRun requires a db context");
 
-  let query = ctx.db
-    .from("survey_responses")
-    .select("shop_name, survey_date, scale_emi_pct");
-
-  if (params.start && YMD.test(params.start)) {
-    query = query.gte("survey_date", params.start);
-  }
-  if (params.end && YMD.test(params.end)) {
-    query = query.lte("survey_date", params.end);
-  }
-  const shop = params.filters.shopId?.trim();
-  if (shop) {
-    query = query.ilike("shop_name", `%${shop}%`);
-  }
-
-  const { data, error } = (await query) as {
-    data: SurveyRow[] | null;
-    error: { message: string } | null;
-  };
-  if (error) throw new Error(error.message);
+  const data = await fetchAllRows<SurveyRow>(() => {
+    let query = ctx
+      .db!.from("survey_responses")
+      .select("shop_name, survey_date, scale_emi_pct");
+    if (params.start && YMD.test(params.start)) {
+      query = query.gte("survey_date", params.start);
+    }
+    if (params.end && YMD.test(params.end)) {
+      query = query.lte("survey_date", params.end);
+    }
+    const shop = params.filters.shopId?.trim();
+    if (shop) {
+      query = query.ilike("shop_name", `%${shop}%`);
+    }
+    return query;
+  });
 
   // Group by (month, shop). Track survey count separately from the EMI sample
   // (EMI may be null on some rows) so a missing score never deflates the count.
@@ -98,7 +95,7 @@ export async function monthlyCsiDisplayRun(
     { month: string; shop: string; surveys: number; emis: number[] }
   >();
 
-  for (const row of data ?? []) {
+  for (const row of data) {
     const date = typeof row.survey_date === "string" ? row.survey_date : "";
     if (!YMD.test(date)) continue; // skip rows we can't bucket into a month
     const month = date.slice(0, 7); // YYYY-MM
@@ -190,25 +187,20 @@ export async function marketDashboardRun(
 
   // Fetch the full network for the date range; the shop subset is sliced in JS
   // so a single query yields both the shop score and the market benchmark.
-  let query = ctx.db
-    .from("survey_responses")
-    .select(
-      "shop_name, survey_date, scale_emi_pct, q05_01, q05_02, q05_03, q05_04",
-    );
-  if (params.start && YMD.test(params.start)) {
-    query = query.gte("survey_date", params.start);
-  }
-  if (params.end && YMD.test(params.end)) {
-    query = query.lte("survey_date", params.end);
-  }
-
-  const { data, error } = (await query) as {
-    data: SurveyMetricRow[] | null;
-    error: { message: string } | null;
-  };
-  if (error) throw new Error(error.message);
-
-  const network = data ?? [];
+  const network = await fetchAllRows<SurveyMetricRow>(() => {
+    let query = ctx
+      .db!.from("survey_responses")
+      .select(
+        "shop_name, survey_date, scale_emi_pct, q05_01, q05_02, q05_03, q05_04",
+      );
+    if (params.start && YMD.test(params.start)) {
+      query = query.gte("survey_date", params.start);
+    }
+    if (params.end && YMD.test(params.end)) {
+      query = query.lte("survey_date", params.end);
+    }
+    return query;
+  });
   const shop = params.filters.shopId?.trim();
   const shopRows = shop
     ? network.filter((r) => shopMatches(r.shop_name, shop))
@@ -270,30 +262,27 @@ export async function surveyAlertRecapRun(
 ): Promise<ReportRow[]> {
   if (!ctx.db) throw new Error("surveyAlertRecapRun requires a db context");
 
-  let query = ctx.db
-    .from("survey_responses")
-    .select(
-      "shop_name, survey_date, scale_emi_pct, q05_01, q05_02, q05_03, q05_04, response_id",
-    );
-  if (params.start && YMD.test(params.start)) {
-    query = query.gte("survey_date", params.start);
-  }
-  if (params.end && YMD.test(params.end)) {
-    query = query.lte("survey_date", params.end);
-  }
-  const shop = params.filters.shopId?.trim();
-  if (shop) {
-    query = query.ilike("shop_name", `%${shop}%`);
-  }
-
-  const { data, error } = (await query) as {
-    data: SurveyAlertRow[] | null;
-    error: { message: string } | null;
-  };
-  if (error) throw new Error(error.message);
+  const data = await fetchAllRows<SurveyAlertRow>(() => {
+    let query = ctx
+      .db!.from("survey_responses")
+      .select(
+        "shop_name, survey_date, scale_emi_pct, q05_01, q05_02, q05_03, q05_04, response_id",
+      );
+    if (params.start && YMD.test(params.start)) {
+      query = query.gte("survey_date", params.start);
+    }
+    if (params.end && YMD.test(params.end)) {
+      query = query.lte("survey_date", params.end);
+    }
+    const shop = params.filters.shopId?.trim();
+    if (shop) {
+      query = query.ilike("shop_name", `%${shop}%`);
+    }
+    return query;
+  });
 
   const rows: (ReportRow & { _date: string; _score: number })[] = [];
-  for (const r of data ?? []) {
+  for (const r of data) {
     const emi = num(r.scale_emi_pct);
     if (emi === null) continue; // no score → no alert to report
     const score = round1(emi * 100);
@@ -386,22 +375,19 @@ async function fetchAttributedSurveys(
   ctx: ReportContext,
   role: string,
 ): Promise<AttrSurveyRow[]> {
-  let query = ctx.db!.from("survey_responses").select(SURVEY_ATTR_SELECT);
-  if (params.start && YMD.test(params.start)) {
-    query = query.gte("survey_date", params.start);
-  }
-  if (params.end && YMD.test(params.end)) {
-    query = query.lte("survey_date", params.end);
-  }
-  const shop = params.filters.shopId?.trim();
-  if (shop) query = query.ilike("shop_name", `%${shop}%`);
-
-  const { data, error } = (await query) as {
-    data: SurveyAttrRow[] | null;
-    error: { message: string } | null;
-  };
-  if (error) throw new Error(error.message);
-  return attributeSurveys(data ?? [], role);
+  const data = await fetchAllRows<SurveyAttrRow>(() => {
+    let query = ctx.db!.from("survey_responses").select(SURVEY_ATTR_SELECT);
+    if (params.start && YMD.test(params.start)) {
+      query = query.gte("survey_date", params.start);
+    }
+    if (params.end && YMD.test(params.end)) {
+      query = query.lte("survey_date", params.end);
+    }
+    const shop = params.filters.shopId?.trim();
+    if (shop) query = query.ilike("shop_name", `%${shop}%`);
+    return query;
+  });
+  return attributeSurveys(data, role);
 }
 
 /** Group attributed survey rows by (trimmed, non-empty) employee key. */
@@ -459,25 +445,22 @@ async function fetchRoleJobs(
   ctx: ReportContext,
   role: string,
 ): Promise<{ key: string; rework: boolean }[]> {
-  let query = ctx
-    .db!.from("repair_order_employees")
-    .select("role, rework, created_at, employees(name)")
-    .eq("role", role);
-  if (params.start && YMD.test(params.start)) {
-    query = query.gte("created_at", params.start);
-  }
-  if (params.end && YMD.test(params.end)) {
-    query = query.lte("created_at", `${params.end}T23:59:59.999Z`);
-  }
-
-  const { data, error } = (await query) as {
-    data: RoEmpJobRow[] | null;
-    error: { message: string } | null;
-  };
-  if (error) throw new Error(error.message);
+  const data = await fetchAllRows<RoEmpJobRow>(() => {
+    let query = ctx
+      .db!.from("repair_order_employees")
+      .select("role, rework, created_at, employees(name)")
+      .eq("role", role);
+    if (params.start && YMD.test(params.start)) {
+      query = query.gte("created_at", params.start);
+    }
+    if (params.end && YMD.test(params.end)) {
+      query = query.lte("created_at", `${params.end}T23:59:59.999Z`);
+    }
+    return query;
+  });
 
   const out: { key: string; rework: boolean }[] = [];
-  for (const r of data ?? []) {
+  for (const r of data) {
     const key = (first(r.employees)?.name ?? "").trim();
     if (!key) continue;
     out.push({ key, rework: !!r.rework });
@@ -605,33 +588,34 @@ export async function performanceDashboardRun(
 
   const shop = params.filters.shopId?.trim();
 
-  let sQuery = ctx.db
-    .from("survey_responses")
-    .select("shop_name, survey_date, scale_emi_pct, would_recommend");
-  if (params.start && YMD.test(params.start)) {
-    sQuery = sQuery.gte("survey_date", params.start);
-  }
-  if (params.end && YMD.test(params.end)) {
-    sQuery = sQuery.lte("survey_date", params.end);
-  }
-  if (shop) sQuery = sQuery.ilike("shop_name", `%${shop}%`);
-
-  let dQuery = ctx.db.from("survey_dispatches").select("shop_name, sent_date");
-  if (params.start && YMD.test(params.start)) {
-    dQuery = dQuery.gte("sent_date", params.start);
-  }
-  if (params.end && YMD.test(params.end)) {
-    dQuery = dQuery.lte("sent_date", params.end);
-  }
-  if (shop) dQuery = dQuery.ilike("shop_name", `%${shop}%`);
-
-  const [{ data: sData, error: sErr }, { data: dData, error: dErr }] =
-    (await Promise.all([sQuery, dQuery])) as [
-      { data: PerfSurveyRow[] | null; error: { message: string } | null },
-      { data: DispatchRow[] | null; error: { message: string } | null },
-    ];
-  if (sErr) throw new Error(sErr.message);
-  if (dErr) throw new Error(dErr.message);
+  const [sData, dData] = await Promise.all([
+    fetchAllRows<PerfSurveyRow>(() => {
+      let sQuery = ctx
+        .db!.from("survey_responses")
+        .select("shop_name, survey_date, scale_emi_pct, would_recommend");
+      if (params.start && YMD.test(params.start)) {
+        sQuery = sQuery.gte("survey_date", params.start);
+      }
+      if (params.end && YMD.test(params.end)) {
+        sQuery = sQuery.lte("survey_date", params.end);
+      }
+      if (shop) sQuery = sQuery.ilike("shop_name", `%${shop}%`);
+      return sQuery;
+    }),
+    fetchAllRows<DispatchRow>(() => {
+      let dQuery = ctx
+        .db!.from("survey_dispatches")
+        .select("shop_name, sent_date");
+      if (params.start && YMD.test(params.start)) {
+        dQuery = dQuery.gte("sent_date", params.start);
+      }
+      if (params.end && YMD.test(params.end)) {
+        dQuery = dQuery.lte("sent_date", params.end);
+      }
+      if (shop) dQuery = dQuery.ilike("shop_name", `%${shop}%`);
+      return dQuery;
+    }),
+  ]);
 
   // Normalize the cross-table join key (lower-cased) but keep a display label.
   type Group = {
@@ -653,14 +637,14 @@ export async function performanceDashboardRun(
     return g;
   };
 
-  for (const r of sData ?? []) {
+  for (const r of sData) {
     const g = groupFor(r.shop_name);
     g.returned += 1;
     const emi = num(r.scale_emi_pct);
     if (emi !== null) g.emis.push(emi);
     g.recRows.push({ would_recommend: r.would_recommend ?? null });
   }
-  for (const r of dData ?? []) {
+  for (const r of dData) {
     groupFor(r.shop_name).sent += 1;
   }
 
@@ -749,19 +733,16 @@ export async function rentalCarAnalysisRun(
 ): Promise<ReportRow[]> {
   if (!ctx.db) throw new Error("rentalCarAnalysisRun requires a db context");
 
-  let query = ctx.db.from("rental_assignments").select(RENTAL_SELECT);
-  if (params.start && YMD.test(params.start)) {
-    query = query.gte("start_date", params.start);
-  }
-  if (params.end && YMD.test(params.end)) {
-    query = query.lte("start_date", params.end);
-  }
-
-  const { data, error } = (await query) as {
-    data: RentalRow[] | null;
-    error: { message: string } | null;
-  };
-  if (error) throw new Error(error.message);
+  const data = await fetchAllRows<RentalRow>(() => {
+    let query = ctx.db!.from("rental_assignments").select(RENTAL_SELECT);
+    if (params.start && YMD.test(params.start)) {
+      query = query.gte("start_date", params.start);
+    }
+    if (params.end && YMD.test(params.end)) {
+      query = query.lte("start_date", params.end);
+    }
+    return query;
+  });
 
   const shopFilter = params.filters.shopId?.trim();
 
@@ -774,7 +755,7 @@ export async function rentalCarAnalysisRun(
   };
   const groups = new Map<string, Group>();
 
-  for (const r of data ?? []) {
+  for (const r of data) {
     const ro = first(r.repair_orders);
     const shop = (first(ro?.companies)?.name ?? "—").trim() || "—";
     if (shopFilter && !shopMatches(shop, shopFilter)) continue;
