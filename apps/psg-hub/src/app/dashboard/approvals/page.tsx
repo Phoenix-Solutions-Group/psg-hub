@@ -52,8 +52,13 @@ export default async function ApprovalsPage() {
         <h1 className="text-2xl font-bold tracking-tight">Approvals</h1>
         <p className="text-muted-foreground">
           Review agent-proposed actions before they go live. Approving publishes
-          the action; rejecting discards it. {recentCount > 0 ? `${recentCount} already decided.` : ""}
+          the action; rejecting discards it.
         </p>
+        {recentCount > 0 && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            {recentCount} already reviewed.
+          </p>
+        )}
       </div>
 
       {pending.length === 0 ? (

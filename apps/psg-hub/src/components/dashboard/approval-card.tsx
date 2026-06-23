@@ -27,6 +27,27 @@ const ACTION_LABELS: Record<string, string> = {
   review_reply: "Review reply",
 };
 
+/** Title-cased, space-separated fallback so an unlabelled action_type (e.g. a
+ * new publisher landing before its label) degrades to "Seo Meta", never raw
+ * snake_case. */
+function humanizeActionType(type: string): string {
+  return type
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+// A UUID/opaque slug is not a friendly thing to show a shop owner; only render
+// the "proposed by" clause when it looks like a human/source name.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function friendlyProposer(proposedBy: string | null): string | null {
+  if (!proposedBy) return null;
+  const trimmed = proposedBy.trim();
+  if (!trimmed || UUID_RE.test(trimmed)) return null;
+  return trimmed;
+}
+
 async function postJson(url: string, body?: unknown): Promise<unknown> {
   const res = await fetch(url, {
     method: "POST",
@@ -59,7 +80,8 @@ export function ApprovalCard({ row }: { row: ApprovalCardRow }) {
     }
   }
 
-  const typeLabel = ACTION_LABELS[row.actionType] ?? row.actionType;
+  const typeLabel = ACTION_LABELS[row.actionType] ?? humanizeActionType(row.actionType);
+  const proposer = friendlyProposer(row.proposedBy);
 
   return (
     <section className="rounded-lg border border-border p-5">
@@ -68,7 +90,7 @@ export function ApprovalCard({ row }: { row: ApprovalCardRow }) {
           <h2 className="font-heading text-lg font-semibold">{row.title}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             <span className="rounded-full bg-muted px-2 py-0.5 font-medium">{typeLabel}</span>
-            {row.proposedBy ? ` · proposed by ${row.proposedBy}` : ""}
+            {proposer ? ` · proposed by ${proposer}` : ""}
             {` · ${new Date(row.createdAt).toLocaleString()}`}
           </p>
         </div>
