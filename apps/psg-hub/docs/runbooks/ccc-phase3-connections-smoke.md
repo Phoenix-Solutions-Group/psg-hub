@@ -17,7 +17,8 @@ All facts below were verified by QA against the merged source (2026-06-23):
 - state machine: `src/lib/ccc/approval-queue.ts`
 - routes: `src/app/api/ops/admin/integrations/ccc/[id]/{approve,decline,revoke}/route.ts`
 - queue UI: `src/components/ops/ccc-approval-queue.tsx`
-- migration: `supabase/migrations/20260624130000_ccc_phase3_connection_status.sql`
+- migrations: `supabase/migrations/20260624130000_ccc_phase3_connection_status.sql` +
+  `supabase/migrations/20260624150000_ccc_accounts_shop_id_nullable.sql` (PSG-305, `shop_id` → nullable)
 
 ---
 
@@ -25,10 +26,14 @@ All facts below were verified by QA against the merged source (2026-06-23):
 
 ### 1a. Apply the migrations (operator gate — PROTOCOL-migration-safety)
 
-> ⚠️ **Verified 2026-06-23: `ccc_accounts` does not exist in prod yet**, so you must apply **both** the Phase 1A
-> foundation (`20260623190000`) *and* Phase 3 (`20260624130000`), in that order — not just Phase 3 as originally
-> worded. **And do NOT use `supabase db push` / `migration repair --reverted` / `db pull` here** — see **§4a** for
-> the verified state, why those CLI commands are unsafe on this shared DB, and the correct dashboard-SQL apply path.
+> ⚠️ **Verified 2026-06-23 (read-only `execute_sql` on `gylkkzmcmbdftxieyabw`): `ccc_accounts` does not exist
+> in prod yet.** Apply **all three** CCC migrations, in version order — not just Phase 3 as originally worded:
+> 1. `20260623190000_ccc_secure_share_foundation.sql` — **Phase 1A**, *creates* `ccc_accounts` (+ `ccc_api_call_log`, the `manage_ccc_integration` capability, RLS). **Not applied.**
+> 2. `20260624130000_ccc_phase3_connection_status.sql` — **Phase 3**, *adds* `connection_status` etc. (carries a phantom "applied" ledger row even though its table never existed).
+> 3. `20260624150000_ccc_accounts_shop_id_nullable.sql` — **[PSG-305]**, relaxes `shop_id` to **NULLABLE** so the unmatched/link-to-shop flow + AC4 are reachable as designed. No access widening — a NULL `shop_id` makes the membership SELECT predicate not-true, so an unmatched row is invisible to every customer session; only the service-role superadmin queue sees it.
+>
+> **Do NOT use `supabase db push` / `migration repair --status reverted …` / `db pull` on this shared DB** —
+> see **§4a** for the verified state, why those CLI commands are unsafe here, and the correct dashboard-SQL apply path.
 
 ### 1b. Seed `ccc_accounts` rows spanning statuses
 
@@ -88,13 +93,13 @@ acting superadmin as actor, and the target `shop_id`:
 - Pick a shop in the dropdown → Approve becomes enabled → click Approve → the row **links then connects in
   one action** (single POST with `{ shopId }`). Confirm the `access_audit` row's target shop = the picked shop.
 
-> ⚠️ **Seeding caveat (real finding):** `ccc_accounts.shop_id` is declared **`NOT NULL`** (Phase 1A migration
-> `20260623190000`), and **no later migration relaxes it**. So the orphan row (`shop_id = null`) **cannot be
-> inserted** — the seed will fail with a not-null violation. The whole unmatched/link-to-shop UI + `approveCccConnection`'s
-> `if (!shopId) throw` path therefore can't be reached against the current schema. **AC4 is already proven by
-> unit tests on the merged tree (PSG-298 PASS)** — recommend **skipping AC4 in the live smoke** rather than
-> relaxing a column on the shared prod DB just for a click-through. Tracked as a follow-up for the PSG-267 owner
-> (schema gap: either make `shop_id` nullable, or document the unmatched UI as not-yet-reachable). See §5.
+> ✅ **Resolved ([PSG-305]):** the original Phase-1A schema declared `ccc_accounts.shop_id` **`NOT NULL`**,
+> which made the orphan row (`shop_id = null`) unseedable and the whole unmatched/link-to-shop UI unreachable.
+> Migration `20260624150000_ccc_accounts_shop_id_nullable.sql` (§1a / §4a) relaxes it to NULLABLE, so once
+> applied AC4 is seedable and fully testable as designed. **Seed the orphan row** (`shop_id = null`) below.
+> No access is widened — a NULL `shop_id` is invisible to every customer session (the membership SELECT
+> predicate is not-true), so only the service-role superadmin queue sees an unmatched row. AC4's transition
+> logic is also already covered by unit tests on the merged tree (PSG-298 PASS).
 
 ### AC5 — double-decision (409)
 - A second decision on an already-resolved row is rejected by the state machine → route returns **409**, and
@@ -137,9 +142,10 @@ acting superadmin as actor, and the target `shop_id`:
 ### 4a. Apply the migrations  (operator gate)  — **DO NOT use `supabase db push` here**
 
 **Verified prod state (2026-06-23, read-only `execute_sql` on `gylkkzmcmbdftxieyabw`):**
-- `public.ccc_accounts` **does not exist** (0 `ccc_*` tables). So **both** CCC migrations are unapplied:
+- `public.ccc_accounts` **does not exist** (0 `ccc_*` tables). So **all three** CCC migrations are unapplied:
   - `20260623190000_ccc_secure_share_foundation.sql` — **Phase 1A**, *creates* `ccc_accounts` + `ccc_api_call_log` + the `manage_ccc_integration` capability + RLS. **Not recorded applied.**
   - `20260624130000_ccc_phase3_connection_status.sql` — **Phase 3**, *adds* `connection_status` etc. **Has a phantom "applied" ledger row** even though its target table never existed (the remote `schema_migrations` table is unreliable here).
+  - `20260624150000_ccc_accounts_shop_id_nullable.sql` — **[PSG-305]**, `alter column shop_id drop not null` (makes AC4's orphan row seedable). New, not applied.
 - Everything else the smoke needs already exists: `access_audit`, `app_user_roles` (already has **2** `psg_superadmin`s), `shops`, `public.user_shop_ids()`, `private.current_user_has_fn`. So Phase 1A's RLS policy will create cleanly.
 
 > ⛔ **Do NOT run `supabase db push`, `supabase migration repair --status reverted …`, or `supabase db pull`.**
@@ -151,10 +157,12 @@ acting superadmin as actor, and the target `shop_id`:
 > Phase 3 (phantom row) while batch-applying a large backlog of local-only versions to prod. Avoid all of it.
 
 **Apply path — dashboard SQL editor (no CLI auth needed):** open the Supabase dashboard → SQL editor for project
-`gylkkzmcmbdftxieyabw`, and run the two migration files **in order**. Both are fully idempotent
-(`create table if not exists` / `add column if not exists`), so they are safe even if partially present:
+`gylkkzmcmbdftxieyabw`, and run the three migration files **in version order**. All are fully idempotent
+(`create table if not exists` / `add column if not exists` / `alter column … drop not null`), so they are safe
+even if partially present:
 1. paste the contents of `apps/psg-hub/supabase/migrations/20260623190000_ccc_secure_share_foundation.sql`, run;
-2. paste the contents of `apps/psg-hub/supabase/migrations/20260624130000_ccc_phase3_connection_status.sql`, run.
+2. paste the contents of `apps/psg-hub/supabase/migrations/20260624130000_ccc_phase3_connection_status.sql`, run;
+3. paste the contents of `apps/psg-hub/supabase/migrations/20260624150000_ccc_accounts_shop_id_nullable.sql`, run.
 
 (`cat apps/psg-hub/supabase/migrations/20260623190000_*.sql` to copy them — you're already in the repo.) No
 ledger surgery needed; the phantom `20260624130000` row is harmless once the table actually exists. Then verify:
@@ -163,7 +171,8 @@ select column_name from information_schema.columns
  where table_schema='public' and table_name='ccc_accounts' order by 1;   -- expect connection_status, declined_reason, error_reason, …
 ```
 After applying, `get_advisors(security)` should show **no new** ERROR/WARN vs baseline.
-Rollback if needed: `drop table public.ccc_api_call_log, public.ccc_accounts;` (also removes the Phase-3 columns).
+Rollback if needed: `drop table public.ccc_api_call_log, public.ccc_accounts;` (drops everything Phase 1A/3/305
+added). Or column-level for Phase 3/305 only: `alter table public.ccc_accounts drop column connection_status, last_event_at, last_event_label, enabled_at, approved_by, approved_at, declined_reason, error_reason, data_scope;` and (PSG-305, only while no NULL-shop_id rows exist) `alter table public.ccc_accounts alter column shop_id set not null;`
 
 ### 4b. Pick real shop UUIDs  (Supabase dashboard → SQL editor, read-only)
 ```sql
@@ -172,19 +181,22 @@ select id, name from public.shops order by name limit 5;
 Use two of these ids below as `:shopA` / `:shopB`.
 
 ### 4c. Seed the smoke rows  (SQL editor; service-role bypasses RLS)
-All rows tagged `SMOKE-*` for clean teardown. **Omit the orphan row** — see the AC4 caveat (NOT NULL).
+All rows tagged `SMOKE-*` for clean teardown. The orphan row (`shop_id = null`) is now seedable after the
+PSG-305 nullable migration (§4a) — include it to exercise AC4.
 ```sql
 insert into public.ccc_accounts (shop_id, ccc_account_id, facility_id, credential_kind, status,
                                  connection_status, enabled_at, last_event_at, last_event_label)
 values
   (:shopA, 'SMOKE-PENDING-1',  'F-1001', 'unconfirmed', 'linked', 'pending_review', now(), now(), 'Enabled in CCC'),
+  (null,   'SMOKE-ORPHAN',     'F-1000', 'unconfirmed', 'linked', 'pending_review', now(), now(), 'Enabled in CCC'),
   (:shopB, 'SMOKE-CONNECTED',  'F-1002', 'unconfirmed', 'linked', 'connected',      now(), now(), 'Connection approved'),
   (:shopA, 'SMOKE-ERROR',      'F-1003', 'unconfirmed', 'error',  'error',          now(), now(), 'Ingest auth failed'),
   (:shopB, 'SMOKE-DECLINED',   'F-1004', 'unconfirmed', 'linked', 'declined',       now(), now(), 'Request declined');
 update public.ccc_accounts set declined_reason = 'Smoke: not an active BSM site' where ccc_account_id = 'SMOKE-DECLINED';
 update public.ccc_accounts set error_reason    = 'auth_failed' where ccc_account_id = 'SMOKE-ERROR';
 ```
-Expected tab counts with this set: **Pending 1 · Connected 1 · Errors 1 · All 4** (no Declined tab; declined shows only under All). Adjust the runbook's "2 / 5" numbers down by the missing orphan row.
+Expected tab counts with this set: **Pending 2 · Connected 1 · Errors 1 · All 5** (no Declined tab; declined
+shows only under All) — matching the §1b table and the §3 evidence grid.
 
 ### 4d. Sessions
 - **Superadmin:** grant yourself (find your auth uid in dashboard → Authentication → Users, or
@@ -220,6 +232,13 @@ AC3/AC4/AC5 transition logic — those are pure state-machine + route tests, not
 deploy is wired (gate + service-client read + page render) without seeding prod.
 
 ## 5. Follow-up filed
-- **Schema gap (AC4):** `ccc_accounts.shop_id NOT NULL` makes the unmatched/link-to-shop flow unreachable in
-  prod. Filed to the PSG-267 owner to decide: relax to nullable, or document the UI as future-only. The live
-  AC4 step is skipped until that lands (logic already covered by PSG-298 unit tests).
+- **Schema gap (AC4) — RESOLVED ([PSG-305]):** the Phase-1A `ccc_accounts.shop_id NOT NULL` constraint made
+  the unmatched/link-to-shop flow unreachable. Decision (owner PSG-267): **relax `shop_id` to nullable** —
+  the handshake design intentionally creates a CCC account row before it is matched to a PSGID, and a NULL
+  `shop_id` is invisible to customer sessions (no access widening). Delivered as migration
+  `20260624150000_ccc_accounts_shop_id_nullable.sql`; once the operator applies it (§4a), the live AC4 step is
+  no longer skipped — seed the orphan row (§4c) and run it.
+- **Non-blocking Phase-2 note:** the foundation's `unique (shop_id, ccc_account_id)` upsert target treats NULL
+  `shop_id` as distinct, so it does not dedupe two unmatched rows sharing a `ccc_account_id`. If duplicate
+  unmatched ingest becomes real, add a partial unique index on `(ccc_account_id) where shop_id is null` in the
+  ingest phase (see the migration header).

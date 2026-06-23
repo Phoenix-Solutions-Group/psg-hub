@@ -1,0 +1,42 @@
+-- CCC Secure Share — relax ccc_accounts.shop_id to NULLABLE. [PSG-305, follow-up to PSG-267/PSG-303]
+--
+-- WHY: Phase 1A (20260623190000_ccc_secure_share_foundation.sql:42) declared
+--   `shop_id uuid not null`. But the Phase-3 approval-queue (PSG-267) is built around an
+--   "unmatched → link to shop → approve" flow where a CCC account row exists BEFORE it is
+--   matched to a PSGID:
+--     - src/lib/ccc/approval-queue.ts          → CccAccountRow.shop_id: string | null; the
+--                                                  approveCccConnection orphan-link branch
+--                                                  (`if (!shopId) throw "Link it first."`).
+--     - src/app/ops/admin/integrations/ccc/page.tsx → renders a null shop_id as "(unmatched)".
+--     - src/components/ops/ccc-approval-queue.tsx   → the "Link to shop:" dropdown that gates
+--                                                  Approve until a shop is picked (spec §4 B / AC4).
+--   The handshake (Phase 0/2) creates a `pending_review` row that the superadmin queue then
+--   links to a shop and approves. With shop_id NOT NULL an orphan row can never exist in prod,
+--   so the unmatched/link UI + the `if (!shopId) throw` branch were unreachable and the PSG-303
+--   live-smoke AC4 was unseedable (the `shop_id = null` insert tripped a not-null violation).
+--   This migration relaxes the constraint so the schema matches the UX spec (§4 B "no orphan")
+--   and the merged code contract.
+--
+-- TENANT ISOLATION (no widening): the ccc_accounts SELECT policy
+--   (`shop_id in (select public.user_shop_ids()) and private.current_user_has_fn(...)`) evaluates
+--   to NOT-TRUE for a NULL shop_id (`null in (...)` is never true), so an UNMATCHED row is
+--   invisible to EVERY authenticated customer session and is only reachable via the service-role
+--   superadmin queue (RLS bypass). This is strictly MORE restrictive than a matched row — it does
+--   not widen access. Once the operator links the row (sets shop_id), the existing membership
+--   predicate applies as before.
+--
+-- KNOWN FOLLOW-UP (Phase 2, non-blocking): the foundation's `unique (shop_id, ccc_account_id)`
+--   upsert target treats NULL shop_id as DISTINCT (Postgres NULL semantics), so it does not dedupe
+--   two unmatched rows that share a ccc_account_id. Unmatched rows are operator-triaged and linked
+--   promptly (dedup re-applies once linked); if duplicate-unmatched ingest becomes a real concern,
+--   add a partial unique index on (ccc_account_id) WHERE shop_id IS NULL in the ingest phase.
+--
+-- Idempotent: `alter column ... drop not null` is a no-op if the column is already nullable.
+-- LOCAL-applied during build; PROD apply stays behind the operator gate (PROTOCOL-migration-
+-- safety.md — DDL on shared prod project gylkkzmcmbdftxieyabw, NOT auto-applied by the pipeline).
+--
+-- Rollback: alter table public.ccc_accounts alter column shop_id set not null;
+--   (only safe while no unmatched/NULL-shop_id rows exist).
+
+alter table public.ccc_accounts
+  alter column shop_id drop not null;
