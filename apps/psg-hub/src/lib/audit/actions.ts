@@ -41,6 +41,12 @@ export const AUDIT_ACTIONS = [
   // competitor intelligence report from the ops surface; the run is audited so any metered
   // spend is attributable to an actor + shop.
   "intel.competitor_report.run",
+  // mail template proof/approve/release gate (PSG-217 / PSG-115b) — a template must be
+  // signed off (approve) then made eligible for live batches (release) before it can be
+  // mailed; each transition is attributable to an actor so the sign-off is provable.
+  "production.template.approve",
+  "production.template.release",
+  "production.template.revoke",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

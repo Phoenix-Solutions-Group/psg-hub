@@ -6,6 +6,12 @@ import {
   generateBatchSchema,
   type GenerateCustomer,
 } from "@/lib/ops/production";
+import { supabaseApprovalStore } from "@/lib/ops/template-approvals";
+import {
+  currentTemplateHash,
+  ineligibleReason,
+  TemplateNotApprovedError,
+} from "@/lib/production/template-gate";
 
 // v1.3 / PSG-27 (PSG-52) — production batch generation. The "pick product →
 // pick company → generate" step from PLANNING.md (/api/production/generate):
@@ -14,6 +20,12 @@ import {
 // rendered HTML feeds the Lob adapter directly at print time. Gated by
 // manage_production; RLS backstops. No vendor spend here — generation only
 // renders + persists; the (Lob test / in-house) submit happens at print time.
+//
+// PSG-217 / PSG-115b GATE: this route is the entry point for a LIVE batch, so it
+// is also the chokepoint that refuses an un-approved template. Before any rows are
+// written, the template (product) must have a `released` approval matching the
+// current template bytes; otherwise the batch is rejected (422). No un-approved
+// template can ever reach a live run.
 
 export async function POST(request: NextRequest) {
   const gate = await requireOpsFn("manage_production");
@@ -35,6 +47,24 @@ export async function POST(request: NextRequest) {
   const { name, company_id, product_id, product, repair_customer_ids, vendor } = parsed.data;
 
   const service = createServiceClient();
+
+  // GATE: the template must be released for live batches (matching current bytes).
+  const templateHash = currentTemplateHash(product);
+  const approvalRow = await supabaseApprovalStore(service).get(product, templateHash);
+  const approvalState = approvalRow
+    ? { templateKey: product, contentHash: approvalRow.content_hash, status: approvalRow.status }
+    : null;
+  const blocked = ineligibleReason(approvalState, templateHash);
+  if (blocked) {
+    return NextResponse.json(
+      {
+        error: new TemplateNotApprovedError(product, blocked).message,
+        templateKey: product,
+        reason: blocked,
+      },
+      { status: 422 }
+    );
+  }
 
   // The company supplies the from-address + merge fields for every piece.
   const { data: company, error: companyError } = await service
