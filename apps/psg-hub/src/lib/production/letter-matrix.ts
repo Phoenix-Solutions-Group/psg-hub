@@ -22,7 +22,7 @@
  * PURE: no DB, no clock, no network — data + string composition only.
  */
 
-import { letterDoc, type MailTemplate } from "./templates";
+import { defaultTemplate, letterDoc, type MailProduct, type MailTemplate } from "./templates";
 import type { LetterCategory, LetterPiece, LetterRecipient } from "./triggers";
 
 /* -------------------------------------------------------------------------- */
@@ -59,7 +59,16 @@ export interface LetterVariant {
   id: string;
   /** Human / creative-direction label (UI + audit). */
   label: string;
-  blocks: LetterBlocks;
+  /**
+   * Reuse an APPROVED W1 master from `DEFAULT_TEMPLATES` (PSG-308) verbatim,
+   * instead of composing blocks. Set on the canonical variant of pieces that
+   * already shipped an approved master (thank_you / warranty / service_recovery)
+   * so the dry-run proof — and its content hash — is the approved template, with
+   * no copy drift. When set, `blocks` is ignored.
+   */
+  useDefaultProduct?: MailProduct;
+  /** Block copy for a composed variant. Required unless `useDefaultProduct` is set. */
+  blocks?: LetterBlocks;
 }
 
 /** A piece in the matrix: trigger-engine identity + its creative variants. */
@@ -96,6 +105,11 @@ const DEFAULT_GREETING = "Dear {{customer.firstName}},";
 /** Compose the ordered blocks of one variant into a full letter HTML body. */
 export function composeLetterBody(def: LetterDefinition, variant: LetterVariant): string {
   const b = variant.blocks;
+  if (!b) {
+    throw new Error(
+      `Variant "${variant.id}" of piece "${def.piece}" has no blocks and no useDefaultProduct`
+    );
+  }
   const parts: string[] = [];
   // Shop identity leads (never PSG) — PSG-219 reconciliation against the library.
   parts.push(`<div class="masthead">{{company.name}}</div>`);
@@ -124,8 +138,10 @@ export function composeLetterBody(def: LetterDefinition, variant: LetterVariant)
  * unaffected (it is a free-form label at the type level for matrix templates).
  */
 export function templateForVariant(def: LetterDefinition, variant: LetterVariant): MailTemplate {
+  // Canonical variants reuse the approved W1 master verbatim (PSG-308) — no drift.
+  if (variant.useDefaultProduct) return defaultTemplate(variant.useDefaultProduct);
   return {
-    // `product` is a label here; matrix pieces extend beyond the 3 base products.
+    // `product` is a label here; matrix pieces extend beyond the base products.
     product: def.piece as unknown as MailTemplate["product"],
     pieceType: "letter",
     color: def.color,
@@ -175,16 +191,9 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
     variants: [
       {
         id: "A",
-        label: "Faithful Letter (Handshake)",
-        blocks: {
-          headline: "Thank you for trusting us with your {{customer.vehicle}}.",
-          body:
-            `<p>It was our pleasure getting you safely back on the road. Choosing where to repair ` +
-            `your vehicle is a real decision, and we are grateful you chose {{company.name}}.</p>` +
-            `<p>We stand behind every repair we deliver — your trust is something we work to keep.</p>`,
-          warranty: WARRANTY_PARA,
-          surveyCta: SURVEY_CTA,
-        },
+        label: "Faithful Letter (PSG-308 approved master)",
+        // Canonical: the approved W1 Thank-You + ACRB survey master (PSG-308).
+        useDefaultProduct: "thank_you",
       },
       {
         id: "B",
@@ -213,14 +222,10 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
     variants: [
       {
         id: "A",
-        label: "Peace of Mind",
-        blocks: {
-          headline: "Your repair is covered — {{program.warrantyTerm}}.",
-          body:
-            `<p>Your {{customer.vehicle}}, repaired on {{customer.serviceDate}}, is protected by our ` +
-            `written workmanship warranty. We want you to drive with complete peace of mind.</p>`,
-          warranty: WARRANTY_PARA,
-        },
+        label: "Workmanship Warranty (PSG-308 approved master)",
+        // Canonical: the approved W1 warranty letter (PSG-308). Its warranty-term
+        // claim is tokenized as {{program.warrantyTerm}} in DEFAULT_TEMPLATES (PSG-316 C1).
+        useDefaultProduct: "warranty",
       },
       {
         id: "B",
@@ -256,7 +261,6 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
             `<p>If you would be willing to share your experience with others` +
             `{{#if program.reviewLink}} at {{program.reviewLink}}{{else}} online{{/if}}, it would help ` +
             `more of your neighbors find a shop they can trust.</p>`,
-          surveyCta: SURVEY_CTA,
         },
       },
       {
@@ -270,7 +274,6 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
             `<p>A few words about your experience` +
             `{{#if program.reviewLink}} at {{program.reviewLink}}{{else}} online{{/if}} would mean a ` +
             `great deal to us.</p>`,
-          surveyCta: SURVEY_CTA,
         },
       },
     ],
@@ -291,8 +294,8 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
         blocks: {
           headline: "Your insurance should work as hard for you as we did.",
           body:
-            `<p>While repairing your {{customer.vehicle}}, we sensed the claim process may not have ` +
-            `gone as smoothly as it should have. You deserve an agent who is in your corner.</p>` +
+            `<p>A claim should leave you feeling supported, not stressed. If your recent experience ` +
+            `fell short of that, you deserve an agent who is truly in your corner.</p>` +
             `<p>If you would ever like an introduction to an independent agent we trust, just call ` +
             `{{company.phone}} — there is never any pressure.</p>`,
         },
@@ -366,7 +369,6 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
             `<p>We are glad we could restore your {{customer.vehicle}} for you. Your agent helped ` +
             `make the process possible — a short call to thank them goes a long way.</p>` +
             `<p>And know that {{company.name}} is always here for your next repair.</p>`,
-          surveyCta: SURVEY_CTA,
         },
       },
       {
@@ -378,7 +380,6 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
             `<p>Your repair is complete, and we hope your {{customer.vehicle}} feels good as new. ` +
             `If your agent made the claim easier, they would appreciate hearing it from you.</p>` +
             `<p>We will be right here whenever you need us again.</p>`,
-          surveyCta: SURVEY_CTA,
         },
       },
     ],
@@ -547,17 +548,9 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
     variants: [
       {
         id: "A",
-        label: "The Owner's Direct Line",
-        blocks: {
-          headline: "I want to make this right — personally.",
-          body:
-            `<p>I am the owner of {{company.name}}, and I read your survey myself. It is clear we ` +
-            `did not meet the standard you deserved on your {{customer.vehicle}}, and that is on ` +
-            `me.</p>` +
-            `<p>I would like the chance to understand what happened and put it right. Please call ` +
-            `me directly at {{company.phone}}.</p>`,
-          signoff: "Personally,",
-        },
+        label: "The Owner's Direct Line (PSG-308 approved master)",
+        // Canonical: the approved W1 owner service-recovery master (PSG-308).
+        useDefaultProduct: "service_recovery",
       },
       {
         id: "B",

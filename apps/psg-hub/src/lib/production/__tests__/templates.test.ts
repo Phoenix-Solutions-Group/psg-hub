@@ -208,17 +208,33 @@ describe("default templates", () => {
   it("exposes a default for every product", () => {
     expect(Object.keys(DEFAULT_TEMPLATES).sort()).toEqual([
       "envelope",
+      "service_recovery",
       "thank_you",
       "warranty",
     ]);
   });
 
-  it("thank_you default is a 4x6 postcard with front + back", () => {
+  it("thank_you default is the faithful US-Letter (W1 master, color)", () => {
     const tpl = defaultTemplate("thank_you");
-    expect(tpl.pieceType).toBe("postcard");
-    expect(tpl.size).toBe("4x6");
-    expect(tpl.frontHtml).toContain("{{company.name}}");
-    expect(tpl.backHtml).toContain("{{customer.firstName}}");
+    expect(tpl.pieceType).toBe("letter");
+    expect(tpl.color).toBe(true);
+    // Block-decomposed faithful letter: shop masthead, the ACRB survey P.S.,
+    // the warranty variant block, and the tri-part footer.
+    expect(tpl.bodyHtml).toContain("block:masthead");
+    expect(tpl.bodyHtml).toContain("block:survey-cta");
+    expect(tpl.bodyHtml).toContain("{{#if program.hasWarranty}}");
+    expect(tpl.bodyHtml).toContain("{{customer.surveySecurityCode}}");
+    expect(tpl.bodyHtml).toContain("{{program.pieceCode}}");
+  });
+
+  it("service_recovery default is the austere owner letter (W1 master)", () => {
+    const tpl = defaultTemplate("service_recovery");
+    expect(tpl.pieceType).toBe("letter");
+    expect(tpl.color).toBe(true);
+    expect(tpl.bodyHtml).toContain("call me directly");
+    expect(tpl.bodyHtml).toContain("{{program.ownerDirectLine}}");
+    // No survey ask on the recovery piece — its one job is the owner phone call.
+    expect(tpl.bodyHtml).not.toContain("block:survey-cta");
   });
 
   it("warranty default is a letter referencing the service date", () => {
@@ -227,22 +243,19 @@ describe("default templates", () => {
     expect(tpl.bodyHtml).toContain("{{customer.serviceDate}}");
   });
 
-  it("renders a complete, self-contained postcard from the default + real data", () => {
-    const { document, missing } = buildMailDocument({
+  it("renders a complete, self-contained thank_you letter from the default + real data", () => {
+    const { document } = buildMailDocument({
       template: defaultTemplate("thank_you"),
       data: DATA,
       documentId: "doc-default",
       to: TO,
       from: FROM,
     });
-    // doctype + the shop name merged in, no leftover tokens.
-    expect(document.front).toContain("<!doctype html>");
-    expect(document.front).toContain("Ace Body Shop");
-    expect(document.back).toContain("Jane");
-    expect(document.front).not.toContain("{{");
-    expect(document.back).not.toContain("{{");
-    // The default only references fields present in DATA, so nothing is missing.
-    expect(missing).toEqual([]);
+    // Letters carry a single `file`, not front/back.
+    expect(document.front).toBeUndefined();
+    expect(document.file).toContain("<!doctype html>");
+    expect(document.file).toContain("Ace Body Shop");
+    expect(document.file).toContain("Jane");
   });
 
   it("escapes merged values inside the default template HTML", () => {
@@ -256,6 +269,6 @@ describe("default templates", () => {
       to: TO,
       from: FROM,
     });
-    expect(document.front).toContain("Bob &amp; Sons &lt;Auto&gt;");
+    expect(document.file).toContain("Bob &amp; Sons &lt;Auto&gt;");
   });
 });

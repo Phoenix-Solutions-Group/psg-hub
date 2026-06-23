@@ -12,8 +12,9 @@ import {
   type DryRunRecipient,
 } from "@/lib/production/dry-run";
 import type { CustomerAttributes, LetterPiece } from "@/lib/production/triggers";
-import { TRIGGER_RULES } from "@/lib/production/triggers";
+import { TRIGGER_RULES, validateRecoveryContent } from "@/lib/production/triggers";
 import type { MailMergeData } from "@/lib/production/templates";
+import { SAMPLE_MERGE_DATA } from "@/lib/production/template-gate";
 import type { MailAddress } from "@/lib/production/types";
 import { alreadyMailedRow, type SuppressionRow } from "@/lib/ops/mail/suppression";
 
@@ -22,36 +23,14 @@ import { alreadyMailedRow, type SuppressionRow } from "@/lib/ops/mail/suppressio
 /* missing tokens; de-identified throughout (never a real customer).          */
 /* -------------------------------------------------------------------------- */
 
+// Reuse the canonical, fully-populated proof sample (PSG-308) so the approved
+// W1 masters reused as canonical variants render with 0 missing tokens; extend
+// it with `offer` for the upsell pieces' coupon block.
 const SAMPLE_MERGE: MailMergeData = {
-  customer: {
-    firstName: "Jordan",
-    lastName: "Rivera",
-    vehicle: "2021 Honda CR-V",
-    serviceDate: "2026-05-14",
-    // per-customer ACRB survey + ancillary fields used across variants
-    surveySecurityCode: "AC-7781",
-    surveyId: "SV-0042",
-  },
-  company: {
-    name: "ABC Collision",
-    phone: "(555) 014-2200",
-    email: "service@abccollision.example",
-    websiteUrl: "abccollision.example",
-    city: "Lincoln",
-    state: "NE",
-  },
-  program: {
-    greeting: "We appreciate your business.",
-    footer: "ABC Collision ·",
-    ownerName: "Steve Smith",
-    ownerTitle: "Owner",
-    jobNumber: "J-10293",
-    offer: "$25 off",
-    // Per-shop warranty TERM (PSG-316 C1): warranty copy tokenizes this so the
-    // proof renders 0 missing tokens. (reviewLink intentionally omitted — the
-    // perfect_score CTA falls back to the generic "online" ask via {{#if}}.)
-    warrantyTerm: "for as long as you own the vehicle",
-  },
+  ...SAMPLE_MERGE_DATA,
+  // SAMPLE_MERGE_DATA.program already carries warrantyTerm (PSG-316 C1); add the
+  // upsell coupon. reviewLink stays unset → perfect_score falls back to "online".
+  program: { ...SAMPLE_MERGE_DATA.program, offer: "$25 off" },
 };
 
 const TO: MailAddress = {
@@ -169,7 +148,7 @@ describe("AC1: every letter resolves trigger → template + variant → merge �
       expect(proof!.missingTokens).toEqual([]);
       // The proof is a real letter document with rendered HTML body.
       expect(proof!.document.file).toMatch(/<html/i);
-      expect(proof!.document.file).toContain("ABC Collision");
+      expect(proof!.document.file).toContain("Demo Body Works");
     });
   }
 
@@ -314,12 +293,30 @@ describe("AC4: dry-run only — zero live submits, audit per attempt", () => {
 /* -------------------------------------------------------------------------- */
 
 describe("recovery is offer-free and variant selection is sound", () => {
-  it("no recovery variant carries offer/coupon language", () => {
+  it("no recovery variant trips the LIVE offer guard (validateRecoveryContent)", () => {
     const def = definitionForPiece("service_recovery");
     for (const v of def.variants) {
       const t = templateForVariant(def, v);
-      expect(t.bodyHtml?.toLowerCase()).not.toMatch(/coupon|% off|\$\d|discount|save \$/);
+      expect(validateRecoveryContent(t.bodyHtml ?? "").ok, `${def.piece}/${v.id}`).toBe(true);
     }
+  });
+
+  // PSG-311 regression: the live guard must catch BARE dollar offers. The prior
+  // `\b\$\d` branch silently passed "$25 off" (the literal program.offer value).
+  it("validateRecoveryContent fails closed on bare dollar offers", () => {
+    for (const bad of ["Present this letter for $25 off.", "save $50 today", "$5 off your visit"]) {
+      const res = validateRecoveryContent(`<p>${bad}</p>`);
+      expect(res.ok, `should reject: ${bad}`).toBe(false);
+      expect(res.offenders.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("validateRecoveryContent also still catches word offers and passes clean copy", () => {
+    expect(validateRecoveryContent("<p>here is a coupon</p>").ok).toBe(false);
+    expect(validateRecoveryContent("<p>20% off</p>").ok).toBe(false);
+    expect(validateRecoveryContent("<p>Please call me directly. I will make it right.</p>").ok).toBe(
+      true
+    );
   });
 
   it("selectVariant skips when all variants are exhausted", () => {
@@ -356,12 +353,17 @@ function proofsWithMerge(piece: LetterPiece, program: MailMergeData["program"]) 
 }
 
 describe("C1: warranty term is per-shop, fail-closed when unconfigured", () => {
-  // The matrix source carries NO hardcoded duration phrase anymore — it is a token.
-  it("matrix warranty copy no longer hardcodes 'as long as you own the vehicle'", () => {
+  // Block-composed matrix copy (the surface PSG-316 owns) carries NO hardcoded
+  // duration phrase anymore — it is a token. Approved W1 masters reused via
+  // `useDefaultProduct` are governed by their own proof approval (PSG-308); the
+  // residual term still in the service_recovery master is tracked separately as a
+  // C1 extension that requires re-proof/re-approval — NOT silently edited here.
+  it("block-composed matrix warranty copy no longer hardcodes 'as long as you own the vehicle'", () => {
     for (const def of LETTER_DEFINITIONS) {
       for (const v of def.variants) {
+        if (v.useDefaultProduct) continue; // approved master — separate governance
         const t = templateForVariant(def, v);
-        expect(t.bodyHtml).not.toMatch(/as long as you own the vehicle/i);
+        expect(t.bodyHtml, `${def.piece}/${v.id}`).not.toMatch(/as long as you own the vehicle/i);
       }
     }
   });

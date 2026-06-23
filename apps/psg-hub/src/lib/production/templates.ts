@@ -29,8 +29,19 @@
 
 import type { MailAddress, MailDocument, MailPieceType } from "./types";
 
-/** The PSG product a template is for. Mirrors the production piece catalog. */
-export type MailProduct = "thank_you" | "warranty" | "envelope";
+/**
+ * The PSG product a template is for. Mirrors the production piece catalog.
+ *
+ * `thank_you` is the W1 master "Thank-You + ACRB survey" letter (PSG-115a /
+ * PSG-308, faithful US-Letter productization of the real PS682/PS105 pieces);
+ * `service_recovery` is the W1 master owner service-recovery letter ("The
+ * Owner's Direct Line"). Both are authored as block-decomposed letters here.
+ */
+export type MailProduct =
+  | "thank_you"
+  | "warranty"
+  | "envelope"
+  | "service_recovery";
 
 /**
  * Per-shop customization overrides, sourced from
@@ -74,6 +85,41 @@ export interface ProgramCustomizations {
    * URL (g.page short link / vanity), not a long tracking URL.
    */
   reviewLink?: string;
+
+  /* W1 master-template skin keys (PSG-219 §2 → PSG-308). All flat strings so the
+   * engine's resolvePath resolves them; missing keys collapse to "". */
+  /** Hex accent override for the `ember` accent token. */
+  accent?: string;
+  /** Owner's name, rendered under the signature. */
+  ownerName?: string;
+  /** Owner's title under the signature (e.g. "Owner"). */
+  ownerTitle?: string;
+  /** Owner first name for the survey P.S. sign-off. */
+  ownerFirstName?: string;
+  /** Absolute URL of the owner's hand-signature PNG (transparent). */
+  ownerSignatureUrl?: string;
+  /** Owner's direct/cell line for the service-recovery letter. */
+  ownerDirectLine?: string;
+  /** Masthead shop address, line 1 (street). */
+  addressLine1?: string;
+  /** Masthead shop address, line 2 (city/state/zip). */
+  addressLine2?: string;
+  /** ACRB survey landing URL (e.g. "www.theacrb.com"). */
+  surveyUrl?: string;
+  /** Footer tagline (center of the tri-part footer). */
+  tagline?: string;
+  /** Footer piece code (left of the tri-part footer, e.g. "PS682"). */
+  pieceCode?: string;
+  /** Footer job number (right of the tri-part footer). */
+  jobNumber?: string;
+  /** Pre-rendered certifications string the shop actually holds (honest-claims). */
+  certifications?: string;
+  /**
+   * Truthy when the shop offers a written workmanship warranty — the PS105
+   * warranty paragraph (a `{{#if program.hasWarranty}}` block) renders only then.
+   */
+  hasWarranty?: string;
+
   /** Free-form extra overrides referenced by bespoke templates. */
   [key: string]: string | undefined;
 }
@@ -85,14 +131,29 @@ export interface MailCustomer {
   /** Full display name; defaults to "firstName lastName" when absent. */
   fullName?: string;
   vehicle?: string;
+  /** Short vehicle reference (e.g. "Accord") for in-body copy. */
+  vehicleShort?: string;
   /** ISO date (yyyy-mm-dd) the work / repair completed, for warranty copy. */
   serviceDate?: string;
-  /**
-   * Per-customer ACRB survey credentials (PSG-219): the Online Security Code and
-   * Survey ID printed on survey-ask pieces. Per-customer data, not per-shop skin.
-   */
+
+  /* W1 master-template per-recipient fields (PSG-219 §2/§3 → PSG-308). These
+   * ride on the customer/RO feed, never on the per-shop skin. */
+  /** Letter dateline (display string, e.g. "June 2026"). */
+  letterDate?: string;
+  /** Recipient mailing street line (for the #10 window address block). */
+  addressLine1?: string;
+  /** Recipient city. */
+  city?: string;
+  /** Recipient state. */
+  state?: string;
+  /** Recipient ZIP. */
+  zip?: string;
+  /** ACRB per-recipient online security code (survey P.S.). */
   surveySecurityCode?: string;
+  /** ACRB per-recipient survey ID (survey P.S.). */
   surveyId?: string;
+  /** Repair-order number (footer job number / correlation). */
+  roNumber?: string;
 }
 
 /** The body shop (PSG's client) the piece is sent on behalf of. */
@@ -420,37 +481,13 @@ const BRAND = {
   fontBody: `Georgia, "Times New Roman", serif`,
 } as const;
 
-/**
- * Base print CSS for a 4x6 postcard side. Lob's 4x6 trim is 6.25in x 4.25in
- * with a 0.125in bleed and a 0.1875in safe margin; we render to the full bleed
- * size and keep content inside the safe area.
- */
-function postcardStyle(): string {
-  return `<style>
-@page { size: 6.25in 4.25in; margin: 0; }
-html, body { margin: 0; padding: 0; }
-.side { box-sizing: border-box; width: 6.25in; height: 4.25in; padding: 0.3125in; position: relative; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: ${BRAND.fontBody}; color: ${BRAND.graphite}; }
-.front { background: ${BRAND.midnight}; color: ${BRAND.paper}; display: flex; flex-direction: column; justify-content: center; }
-.eyebrow { font-family: ${BRAND.fontDisplay}; text-transform: uppercase; letter-spacing: 0.18em; font-size: 11pt; color: ${BRAND.ember}; margin: 0 0 0.12in; }
-.headline { font-family: ${BRAND.fontDisplay}; font-size: 30pt; line-height: 1.1; margin: 0 0 0.12in; }
-.front .sub { font-size: 13pt; line-height: 1.4; max-width: 4.2in; color: ${BRAND.paper}; }
-.back { background: ${BRAND.paper}; }
-.greeting { font-family: ${BRAND.fontDisplay}; font-size: 16pt; color: ${BRAND.midnight}; margin: 0 0 0.1in; }
-.body { font-size: 11.5pt; line-height: 1.5; max-width: 3.6in; }
-.signoff { margin-top: 0.18in; font-size: 11.5pt; }
-.company { font-family: ${BRAND.fontDisplay}; font-weight: 700; color: ${BRAND.midnight}; }
-.contact { font-size: 9.5pt; color: ${BRAND.mist}; position: absolute; left: 0.3125in; bottom: 0.28in; }
-</style>`;
-}
-
-/** Wrap a postcard side body in a self-contained HTML document. */
-export function postcardDoc(klass: string, inner: string): string {
-  return (
-    `<!doctype html><html lang="en"><head><meta charset="UTF-8" />` +
-    postcardStyle() +
-    `</head><body><div class="side ${klass}">${inner}</div></body></html>`
-  );
-}
+// NOTE: the prior brand-aligned 4x6 postcard chassis (postcardStyle/postcardDoc)
+// was removed when the W1 thank-you was re-anchored to the faithful US-Letter
+// (PSG-308; the postcard was a first-cut invention — design-system doc §0/§4).
+// The engine still renders postcards generically (renderMailContent/
+// buildMailDocument handle `pieceType: "postcard"`); a postcard "nudge" piece is
+// a documented W2+ opt-in and can be authored fresh when scoped. The W2 letter
+// matrix (./letter-matrix.ts) composes its pieces via `letterDoc` (US-Letter).
 
 /** Base print CSS for a US-Letter letter body (Lob letters, #10 window envelope). */
 function letterStyle(): string {
@@ -477,6 +514,118 @@ export function letterDoc(inner: string): string {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* W1 master letter chassis (PSG-219 brand system → PSG-308).                 */
+/* Faithful US-Letter productization of PSG's real library pieces: shop        */
+/* identity leads, hand-signed owner signature, tri-part footer. Shared by the */
+/* Thank-You+ACRB-survey and the owner service-recovery masters; per-shop      */
+/* variability flows entirely through the `program.*` skin (customizations_jsonb). */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Print CSS for a W1 master letter. US-Letter, full-bleed, content inside the
+ * 1in/0.75in safe area; first page top reserved for the #10 window address
+ * block. Font-stack only (Lob renders server-side, no webfonts). BRAND tokens
+ * are inlined (matching letterStyle/postcardStyle house style) — no CSS custom
+ * properties — so the HTML renders identically wherever Lob rasterizes it.
+ */
+function masterLetterStyle(): string {
+  return `<style>
+@page { size: 8.5in 11in; margin: 0; }
+html, body { margin: 0; padding: 0; }
+.page { box-sizing: border-box; width: 8.5in; min-height: 11in; background: #FFFFFF; padding: 0.75in 1in; position: relative; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: ${BRAND.fontBody}; color: ${BRAND.graphite}; }
+.masthead { display: flex; align-items: flex-end; justify-content: space-between; padding-bottom: 0.06in; }
+.masthead .addr, .masthead .tel { font-family: ${BRAND.fontDisplay}; font-size: 9.5pt; line-height: 1.35; color: ${BRAND.graphite}; border-bottom: 1.25px solid ${BRAND.midnight}; padding-bottom: 0.04in; min-width: 2.1in; }
+.masthead .tel { text-align: right; }
+.masthead .logo { text-align: center; flex: 1; padding: 0 0.25in; }
+.masthead .logo img { max-height: 0.7in; max-width: 2.6in; }
+.masthead .logo .name { font-family: ${BRAND.fontDisplay}; font-weight: 700; font-size: 17pt; letter-spacing: 0.04em; color: ${BRAND.midnight}; }
+.date { margin: 0.5in 0 0.35in; font-size: 11pt; }
+.address { font-size: 11pt; line-height: 1.4; margin-bottom: 0.45in; }
+.salutation { font-size: 11.5pt; margin: 0 0 0.14in; }
+.headline { font-family: ${BRAND.fontDisplay}; font-size: 13pt; font-weight: 700; color: ${BRAND.midnight}; margin: 0 0 0.16in; }
+.body p { font-size: 11.5pt; line-height: 1.52; margin: 0 0 0.16in; max-width: 6.4in; }
+.ps { font-size: 11.5pt; line-height: 1.52; margin: 0.18in 0 0; max-width: 6.4in; }
+.ps .field { font-family: ${BRAND.fontDisplay}; font-weight: 700; color: ${BRAND.midnight}; }
+.ps .val { font-family: ${BRAND.fontDisplay}; color: ${BRAND.ember}; text-decoration: underline; letter-spacing: 0.02em; }
+.signoff { font-size: 11.5pt; margin: 0.22in 0 0; }
+.sig-img { height: 0.5in; display: block; margin: 0.04in 0; }
+.sig-fallback { font-family: ${BRAND.fontDisplay}; font-style: italic; font-weight: 700; color: ${BRAND.midnight}; font-size: 16pt; margin: 0.06in 0; }
+.sig-name { font-family: ${BRAND.fontDisplay}; font-weight: 700; color: ${BRAND.midnight}; font-size: 12pt; }
+.sig-title { font-size: 10.5pt; color: ${BRAND.graphite}; }
+.sig-contact { font-size: 10.5pt; color: ${BRAND.graphite}; margin-top: 0.04in; }
+.footer { position: absolute; left: 1in; right: 1in; bottom: 0.5in; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #e2e2e2; padding-top: 0.08in; }
+.footer .code, .footer .job { font-family: ${BRAND.fontDisplay}; font-size: 8.5pt; color: ${BRAND.mist}; }
+.footer .tagline { font-style: italic; font-size: 11pt; color: ${BRAND.midnight}; text-align: center; flex: 1; }
+</style>`;
+}
+
+/** Wrap a W1 master letter body in a self-contained HTML document. */
+function masterLetterDoc(inner: string): string {
+  return (
+    `<!doctype html><html lang="en"><head><meta charset="UTF-8" />` +
+    masterLetterStyle() +
+    `</head><body><div class="page">${inner}</div></body></html>`
+  );
+}
+
+/**
+ * `masthead` block — shop identity leads (never PSG): address left, logo center
+ * (typeset shop-name fallback so the piece always mails — PSG-219 §1.4), phone /
+ * website right. Rules under address and phone per the real letterhead.
+ */
+const MASTER_MASTHEAD =
+  `<!-- block:masthead -->` +
+  `<div class="masthead">` +
+  `<div class="addr">{{program.addressLine1}}<br/>{{program.addressLine2}}</div>` +
+  `<div class="logo">` +
+  `{{#if program.logo}}<img src="{{program.logo}}" alt="{{company.name}}" />` +
+  `{{else}}<div class="name">{{company.name}}</div>{{/if}}` +
+  `</div>` +
+  `<div class="tel">Phone: {{company.phone}}<br/>{{company.websiteUrl}}</div>` +
+  `</div>` +
+  `<!-- /block:masthead -->`;
+
+/** Dateline + `address` block (recipient / #10 window). */
+const MASTER_DATE_ADDRESS =
+  `<p class="date">{{customer.letterDate}}</p>` +
+  `<!-- block:address -->` +
+  `<div class="address">` +
+  `{{customer.fullName}}<br/>` +
+  `{{customer.addressLine1}}<br/>` +
+  `{{customer.city}}, {{customer.state}} {{customer.zip}}` +
+  `</div>` +
+  `<!-- /block:address -->`;
+
+/**
+ * `signature` block — hand-signed owner convention (PSG-219 §1.4). The owner's
+ * hand-signature PNG when present; typeset display-italic owner name as the
+ * fallback so the piece still mails. `signoff` is the closing line ("Sincerely,"
+ * / "Personally,"); `extra` carries an optional direct-contact line.
+ */
+function masterSignature(signoff: string, extra = ""): string {
+  return (
+    `<!-- block:signature -->` +
+    `<p class="signoff">${signoff}</p>` +
+    `{{#if program.ownerSignatureUrl}}<img class="sig-img" src="{{program.ownerSignatureUrl}}" alt="" />` +
+    `{{else}}<div class="sig-fallback">{{program.ownerName}}</div>{{/if}}` +
+    `<div class="sig-name">{{program.ownerName}}</div>` +
+    `<div class="sig-title">{{program.ownerTitle}}</div>` +
+    extra +
+    `<!-- /block:signature -->`
+  );
+}
+
+/** `footer` block — real tri-part convention: piece code · tagline · job number. */
+const MASTER_FOOTER =
+  `<!-- block:footer -->` +
+  `<div class="footer">` +
+  `<span class="code">{{program.pieceCode}}</span>` +
+  `<span class="tagline">{{program.tagline}}</span>` +
+  `<span class="job">{{program.jobNumber}}</span>` +
+  `</div>` +
+  `<!-- /block:footer -->`;
+
 /**
  * The brand-aligned default templates, one per product. These are the fallback
  * used when a shop has no custom Sanity template; they reference the standard
@@ -484,25 +633,50 @@ export function letterDoc(inner: string): string {
  * flows through automatically.
  */
 export const DEFAULT_TEMPLATES: Record<MailProduct, MailTemplate> = {
+  // W1 Piece 1 — Thank-You + ACRB survey, Direction A "Faithful Letter"
+  // (PSG-219 §4, locked A/A → PSG-308). 1:1 productization of the real PS682 /
+  // PS105 US-Letter pieces: warm owner-voice thanks, the PS105 warranty
+  // paragraph as a `{{#if program.hasWarranty}}` variant block, the ACRB survey
+  // ask as a P.S. with the recipient's security code + survey ID, hand signature,
+  // tri-part footer. (The prior 4x6 postcard was a first-cut invention; the real
+  // piece is a letter — see the design-system doc §0 source reconciliation.)
   thank_you: {
     product: "thank_you",
-    pieceType: "postcard",
-    size: "4x6",
-    frontHtml: postcardDoc(
-      "front",
-      `<p class="eyebrow">{{company.name}}</p>` +
-        `<h1 class="headline">Thank you for trusting us with your repair.</h1>` +
-        `<p class="sub">It was our pleasure getting you back on the road.</p>`
-    ),
-    backHtml: postcardDoc(
-      "back",
-      `<p class="greeting">{{program.greeting}}</p>` +
-        `<p class="greeting">Dear {{customer.firstName}},</p>` +
-        `<p class="body">Thank you for choosing {{company.name}} to repair your {{customer.vehicle}}. ` +
-        `We stand behind our work and we are grateful for your trust. If anything is less than perfect, ` +
-        `please reach out — we will make it right.</p>` +
-        `<p class="signoff">Warm regards,<br /><span class="company">{{company.name}}</span></p>` +
-        `<p class="contact">{{program.footer}} {{company.phone}} &middot; {{company.websiteUrl}}</p>`
+    pieceType: "letter",
+    color: true,
+    bodyHtml: masterLetterDoc(
+      MASTER_MASTHEAD +
+        MASTER_DATE_ADDRESS +
+        `<p class="salutation">Dear {{customer.firstName}},</p>` +
+        `<!-- block:body -->` +
+        `<div class="body">` +
+        `<p>Please accept my personal thanks for choosing {{company.name}} to handle the repair of ` +
+        `your {{customer.vehicle}}. We realize that you have options, and we are especially grateful ` +
+        `that you have chosen us. When it comes to collision repair, we understand the level of trust ` +
+        `it takes to earn your business, and we never take that for granted.</p>` +
+        `<p>Should you have the slightest question or concern with any aspect of the repair of your ` +
+        `{{customer.vehicleShort}}, please notify us immediately. You and your family&rsquo;s safety ` +
+        `and peace of mind are more important to us than anything else we do here.</p>` +
+        // block:warranty — PS105 variant; renders only when the shop offers a written warranty.
+        `{{#if program.hasWarranty}}<!-- block:warranty --><p>All our repairs carry a comprehensive ` +
+        `warranty designed to deliver total satisfaction and protection for you. Enclosed you will find ` +
+        `your completed warranty. Review it carefully and, as with any important document, please retain ` +
+        `it in a safe place. If you have any questions regarding your warranty, call at any time.</p>` +
+        `<!-- /block:warranty -->{{/if}}` +
+        `<p>Thank you again for your business and confidence.</p>` +
+        `</div>` +
+        `<!-- /block:body -->` +
+        masterSignature("Sincerely,") +
+        `<!-- block:survey-cta -->` +
+        `<p class="ps">P.S. You will soon receive a satisfaction survey from the Automotive Customer ` +
+        `Relations Bureau about your experience here. Your feedback helps us improve our service, so ` +
+        `please let them know how you feel. To respond right away, go to ` +
+        `<span class="field">{{program.surveyUrl}}</span> and enter your ` +
+        `<span class="field">Online Security Code:</span> <span class="val">{{customer.surveySecurityCode}}</span> ` +
+        `and your <span class="field">Survey ID:</span> <span class="val">{{customer.surveyId}}</span>. ` +
+        `Thank you. {{program.ownerFirstName}}</p>` +
+        `<!-- /block:survey-cta -->` +
+        MASTER_FOOTER
     ),
   },
   warranty: {
@@ -530,6 +704,50 @@ export const DEFAULT_TEMPLATES: Record<MailProduct, MailTemplate> = {
     bodyHtml: letterDoc(
       `<div class="masthead">{{company.name}}</div>` +
         `<p>{{customer.fullName}}</p>`
+    ),
+  },
+  // W1 Piece 2 — Owner service-recovery, Direction A "The Owner's Direct Line"
+  // (PSG-219 §5, locked A/A → PSG-308). The highest-stakes letter PSG mails:
+  // triggered by an ACRB "Hot Spot / Unresolved" survey alert, its one job is to
+  // get the customer to call the owner directly so the shop can make it right.
+  // Austere/sincere — zero marketing gloss: acknowledge → apologize → commit,
+  // reaffirm the guarantee (variant block), hand-signed by the owner with a
+  // direct line. Productized from the closest library sources (#10 ACRB Report
+  // Card + #15 owner check-in); re-anchored 1:1 if PSG supplies the original.
+  service_recovery: {
+    product: "service_recovery",
+    pieceType: "letter",
+    color: true,
+    bodyHtml: masterLetterDoc(
+      MASTER_MASTHEAD +
+        MASTER_DATE_ADDRESS +
+        `<p class="salutation">Dear {{customer.firstName}},</p>` +
+        `<!-- block:headline -->` +
+        `<div class="headline">A personal note from the owner</div>` +
+        `<!-- /block:headline -->` +
+        `<!-- block:body -->` +
+        `<div class="body">` +
+        `<p>I am writing to you personally. I understand that your recent experience with the repair ` +
+        `of your {{customer.vehicle}} did not fully meet your expectations, and for that I am sorry. ` +
+        `That is not the standard we hold ourselves to, and it is not the experience I want for anyone ` +
+        `who trusts us with their vehicle.</p>` +
+        `<p>Your satisfaction &mdash; and your family&rsquo;s safety and peace of mind &mdash; matter ` +
+        `more to me than anything else we do here. I would like the chance to understand exactly what ` +
+        `happened and to make it right.</p>` +
+        // block:warranty — reaffirm the guarantee when the shop offers a written warranty.
+        `{{#if program.hasWarranty}}<!-- block:warranty --><p>Every repair we perform is backed by our ` +
+        `written workmanship warranty for as long as you own the vehicle. That guarantee still stands, ` +
+        `and I stand behind it personally.</p><!-- /block:warranty -->{{/if}}` +
+        `<p>Please call me directly at {{program.ownerDirectLine}}. If I am not in when you call, leave ` +
+        `a message and I will personally call you back. There is no concern too small to bring to my ` +
+        `attention.</p>` +
+        `</div>` +
+        `<!-- /block:body -->` +
+        masterSignature(
+          "Personally,",
+          `<div class="sig-contact">Direct line: {{program.ownerDirectLine}}</div>`
+        ) +
+        MASTER_FOOTER
     ),
   },
 };

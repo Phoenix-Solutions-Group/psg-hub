@@ -305,6 +305,27 @@ describe("no-offer guard for the Owner Service-Recovery letter (PSG-115d §10.4)
     expect(validateRecoveryContent("Here is a free detail on us.").ok).toBe(false);
     expect(validateRecoveryContent("Save $50 when you return.").ok).toBe(false);
   });
+
+  // PSG-319 — the leading-`\b` group never let `\$\d` fire after a space/`>`,
+  // so bare dollar-amount offers (the literal value of `program.offer` in the
+  // W2 letter matrix) slipped past the guard. Fail closed on any `$NN`.
+  it("rejects bare $NN / $NN off offers that the old leading-\\b group missed", () => {
+    expect(validateRecoveryContent("$25 off").ok).toBe(false);
+    expect(validateRecoveryContent("Present this letter for $50 off your next visit.").ok).toBe(
+      false,
+    );
+    expect(validateRecoveryContent("Bring this in for $25 off when you schedule.").ok).toBe(false);
+    // also catches a `>`-prefixed amount (rendered HTML boundary)
+    expect(validateRecoveryContent("<span>$30</span>").ok).toBe(false);
+    expect(validateRecoveryContent("$ 25 credit").ok).toBe(false);
+  });
+
+  it("still passes legit relationship-only copy with no offer (phone, job#)", () => {
+    const html =
+      "<p>Dear Jane, I'm the owner. Please call me directly at (555) 014-2200 about " +
+      "Job J-10293 so I can make it right.</p>";
+    expect(validateRecoveryContent(html).ok).toBe(true);
+  });
 });
 
 describe("attributesToFlags — L2 block-selection inputs", () => {
