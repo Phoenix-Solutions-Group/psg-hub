@@ -255,7 +255,6 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
             `world to our whole team, and we do not take it for granted.</p>` +
             `<p>If you would be willing to share your experience with others online, it would help ` +
             `more of your neighbors find a shop they can trust.</p>`,
-          surveyCta: SURVEY_CTA,
         },
       },
       {
@@ -267,7 +266,6 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
             `<p>Thank you for rating your repair on your {{customer.vehicle}} a perfect 100%. ` +
             `Reviews from customers like you are the best compliment we can receive.</p>` +
             `<p>A few words about your experience online would mean a great deal to us.</p>`,
-          surveyCta: SURVEY_CTA,
         },
       },
     ],
@@ -288,8 +286,8 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
         blocks: {
           headline: "Your insurance should work as hard for you as we did.",
           body:
-            `<p>While repairing your {{customer.vehicle}}, we sensed the claim process may not have ` +
-            `gone as smoothly as it should have. You deserve an agent who is in your corner.</p>` +
+            `<p>A claim should leave you feeling supported, not stressed. If your recent experience ` +
+            `fell short of that, you deserve an agent who is truly in your corner.</p>` +
             `<p>If you would ever like an introduction to an independent agent we trust, just call ` +
             `{{company.phone}} — there is never any pressure.</p>`,
         },
@@ -363,7 +361,6 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
             `<p>We are glad we could restore your {{customer.vehicle}} for you. Your agent helped ` +
             `make the process possible — a short call to thank them goes a long way.</p>` +
             `<p>And know that {{company.name}} is always here for your next repair.</p>`,
-          surveyCta: SURVEY_CTA,
         },
       },
       {
@@ -375,7 +372,6 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
             `<p>Your repair is complete, and we hope your {{customer.vehicle}} feels good as new. ` +
             `If your agent made the claim easier, they would appreciate hearing it from you.</p>` +
             `<p>We will be right here whenever you need us again.</p>`,
-          surveyCta: SURVEY_CTA,
         },
       },
     ],
