@@ -34,7 +34,13 @@ import {
   rentalCarAnalysisRun,
   surveyAlertRecapRun,
 } from "./live/survey";
-import { auditRun, reprintRecapRun } from "./live/volume";
+import {
+  auditRun,
+  invoicingRecapRun,
+  processingRecapRun,
+  recapTrailingRun,
+  reprintRecapRun,
+} from "./live/volume";
 import {
   category,
   customerName,
@@ -98,14 +104,12 @@ const definitions: ReportDefinition[] = [
       col("closed", "ROs Closed", "number"),
       col("processed", "Processed", "currency"),
     ],
-    // PSG-46: RO opened/closed COUNTS are sourceable today, but the headline
-    // "Processed $" column has no canonical source — repair_orders carries no
-    // invoiced-$ column and the per-source payload figure is sparse (only CCC/BMS
-    // rows record a grand total; generic + Advantage2.0 RO imports record none,
-    // and even the pilot seed has zero amounts). Flipping this to "available" now
-    // would render a misleading $0 for most shops. Stays pending-data until the
-    // RO invoiced-$ data model lands (PSG-46 follow-up); then sum the real column.
-    dataStatus: "pending-data",
+    // PSG-46: live — opened = ROs created in the period, closed = those now in
+    // status 'closed', processed = SUM of the canonical repair_orders
+    // .repair_amount_cents (PSG-352), null when a shop has no recorded amounts
+    // (honest, never $0). See ./live/volume.
+    dataStatus: "available",
+    run: processingRecapRun,
     sampleRows: () =>
       build(6, (i) => ({
         shop: shopName(i),
@@ -117,13 +121,10 @@ const definitions: ReportDefinition[] = [
   {
     // PSG-58: "Invoiced" here = repair dollars billed to insurer/customer per RO, NOT the
     // dropped Invoiced.com billing vendor. This report is decoupled from the Stripe/Invoiced
-    // billing surface; it stays pending-data on the B1 ops tables (repair_orders) — deferred,
-    // no re-point needed.
-    // PSG-46: confirmed still blocked — this is a shop × pay-type × invoiced-$
-    // cross-tab, and pay type (Advantage2.0 only) and amount (CCC/BMS only) come
-    // from disjoint import sources that never co-occur on one RO, so the cross-tab
-    // is incoherent today. Blocked on the same RO invoiced-$ + canonical pay-type
-    // data model as processing-recap (PSG-46 follow-up).
+    // billing surface.
+    // PSG-46: live — per-shop × canonical pay_type (PSG-352) invoice count, summed
+    // repair_amount_cents, and avg ticket (over invoices that carry an amount).
+    // ROs with no recorded pay type bucket under "—". See ./live/volume.
     slug: "invoicing-recap",
     title: "Monthly Processing Invoicing Recap",
     batch: "volume-invoicing",
@@ -137,7 +138,8 @@ const definitions: ReportDefinition[] = [
       col("amount", "Invoiced", "currency"),
       col("avgTicket", "Avg Ticket", "currency"),
     ],
-    dataStatus: "pending-data",
+    dataStatus: "available",
+    run: invoicingRecapRun,
     sampleRows: () =>
       build(N, (i) => {
         const invoices = seeded(i + 2, 8, 40);
@@ -193,11 +195,11 @@ const definitions: ReportDefinition[] = [
       col("current", "Current", "currency"),
       col("trend", "MoM %", "percent"),
     ],
-    // PSG-46: a 3-month trailing invoiced-$ comparison — same missing invoiced-$
-    // source as processing-recap (monthly buckets of a dollar figure repair_orders
-    // does not yet carry). Stays pending-data until the RO invoiced-$ data model
-    // lands (PSG-46 follow-up).
-    dataStatus: "pending-data",
+    // PSG-46: live — per-shop summed repair_amount_cents (PSG-352) for the 3-month
+    // trailing window anchored on the period END month (2-mo-ago / last / current)
+    // + MoM %. Empty shop-months report null, not $0. See ./live/volume.
+    dataStatus: "available",
+    run: recapTrailingRun,
     sampleRows: () =>
       build(6, (i) => {
         const m1 = seeded(i + 6, 40000, 120000);
@@ -227,10 +229,10 @@ const definitions: ReportDefinition[] = [
       col("date", "Closed", "date"),
     ],
     // PSG-46: live line-level reconciliation listing of repair_orders in the
-    // period. RO #/shop/status/date off the spine (PSG-25); pay type + amount
-    // read from payload_jsonb where the import source recorded them (CCC/BMS
-    // grand total, Advantage2.0 pay type) and blank otherwise — honest "not
-    // recorded", never fabricated. Honors shop + pay-type filters. See ./live/volume.
+    // period. RO #/shop/status/date off the spine (PSG-25); pay type + amount are
+    // the canonical repair_orders.pay_type / repair_amount_cents columns (PSG-352),
+    // blank when unknown — honest "not recorded", never fabricated, and identical
+    // to what the aggregation reports sum. Honors shop + pay-type filters. See ./live/volume.
     dataStatus: "available",
     run: auditRun,
     sampleRows: (p) =>
