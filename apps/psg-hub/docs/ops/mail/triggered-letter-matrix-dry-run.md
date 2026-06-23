@@ -23,8 +23,12 @@ mail** — that stays behind the G4 spend gate + prod Lob key + a QA-signed dry 
 `seasonal_greeting` (birthday/seasonal) · `service_recovery` (offer-free).
 
 Each piece carries **two creative directions (A/B)** — the rotation axis the
-per-recipient anti-repeat uses. Copy is productized from PSG's real library; final
-brand-voice is the proof gate / CMO + designer's call (PSG-219 owner).
+per-recipient anti-repeat uses. For the three pieces that already shipped an
+**approved W1 master** (PSG-308: `thank_you`, `warranty`, `service_recovery`),
+variant **A reuses that approved template verbatim** (via `useDefaultProduct`), so
+its dry-run proof — and content hash — is the approved master with no copy drift;
+variant B is the rotation alternate. The remaining pieces are block-composed A/B.
+Final brand-voice is the proof gate / CMO + designer's call (PSG-219 owner, PSG-312).
 
 ## Acceptance, as executable tests
 

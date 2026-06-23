@@ -14,6 +14,7 @@ import {
 import type { CustomerAttributes, LetterPiece } from "@/lib/production/triggers";
 import { TRIGGER_RULES } from "@/lib/production/triggers";
 import type { MailMergeData } from "@/lib/production/templates";
+import { SAMPLE_MERGE_DATA } from "@/lib/production/template-gate";
 import type { MailAddress } from "@/lib/production/types";
 import { alreadyMailedRow, type SuppressionRow } from "@/lib/ops/mail/suppression";
 
@@ -22,32 +23,12 @@ import { alreadyMailedRow, type SuppressionRow } from "@/lib/ops/mail/suppressio
 /* missing tokens; de-identified throughout (never a real customer).          */
 /* -------------------------------------------------------------------------- */
 
+// Reuse the canonical, fully-populated proof sample (PSG-308) so the approved
+// W1 masters reused as canonical variants render with 0 missing tokens; extend
+// it with `offer` for the upsell pieces' coupon block.
 const SAMPLE_MERGE: MailMergeData = {
-  customer: {
-    firstName: "Jordan",
-    lastName: "Rivera",
-    vehicle: "2021 Honda CR-V",
-    serviceDate: "2026-05-14",
-    // per-customer ACRB survey + ancillary fields used across variants
-    surveySecurityCode: "AC-7781",
-    surveyId: "SV-0042",
-  },
-  company: {
-    name: "ABC Collision",
-    phone: "(555) 014-2200",
-    email: "service@abccollision.example",
-    websiteUrl: "abccollision.example",
-    city: "Lincoln",
-    state: "NE",
-  },
-  program: {
-    greeting: "We appreciate your business.",
-    footer: "ABC Collision ·",
-    ownerName: "Steve Smith",
-    ownerTitle: "Owner",
-    jobNumber: "J-10293",
-    offer: "$25 off",
-  },
+  ...SAMPLE_MERGE_DATA,
+  program: { ...SAMPLE_MERGE_DATA.program, offer: "$25 off" },
 };
 
 const TO: MailAddress = {
@@ -163,7 +144,7 @@ describe("AC1: every letter resolves trigger → template + variant → merge �
       expect(proof!.missingTokens).toEqual([]);
       // The proof is a real letter document with rendered HTML body.
       expect(proof!.document.file).toMatch(/<html/i);
-      expect(proof!.document.file).toContain("ABC Collision");
+      expect(proof!.document.file).toContain("Demo Body Works");
     });
   }
 
