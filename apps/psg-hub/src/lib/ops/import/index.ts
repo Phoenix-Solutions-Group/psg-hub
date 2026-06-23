@@ -5,6 +5,14 @@
 // commit route writes. Importing from "@/lib/ops/import" gives callers the whole
 // module without reaching into individual files.
 
+import {
+  CCC_BMS_PAYLOAD_FIELD,
+  bmsEstimatePayloadJsonb,
+  bmsRepairOrderPayloadJsonb,
+  bmsXmlToCanonical,
+  canonicalToRawTable,
+  parseCarriedEstimate,
+} from "@/lib/ccc-secure-share/bms";
 import { parseFile } from "./parse";
 import { applyMapping, suggestMapping } from "./template";
 import { validateRecords } from "./validate";
@@ -43,6 +51,24 @@ export type PreviewResult = {
 };
 
 /**
+ * Parse an uploaded file into a RawTable for the given kind. Tabular kinds
+ * (ro/estimate) route to the generic format parser; `ccc_estimate` routes to the
+ * CIECA BMS parser/mapper (PSG-261), which projects the estimate document onto a
+ * single canonical-keyed row. This is the one kind-aware step — the rest of the
+ * pipeline (suggest/validate/normalize/commit) is shared across kinds.
+ */
+export async function parseImportTable(
+  kind: ImportKind,
+  filename: string,
+  buffer: Buffer,
+): Promise<RawTable> {
+  if (kind === "ccc_estimate") {
+    return canonicalToRawTable(bmsXmlToCanonical(buffer.toString("utf8")));
+  }
+  return parseFile(filename, buffer);
+}
+
+/**
  * Full preview from an uploaded file. When `mapping` is omitted, columns are
  * auto-resolved from the headers (smart resolution); callers can then let the
  * operator adjust before commit.
@@ -53,7 +79,7 @@ export async function previewImport(args: {
   buffer: Buffer;
   mapping?: FieldMapping;
 }): Promise<PreviewResult> {
-  const table = await parseFile(args.filename, args.buffer);
+  const table = await parseImportTable(args.kind, args.filename, args.buffer);
   const mapping = args.mapping ?? suggestMapping(args.kind, table.headers);
   const records = applyMapping(table, mapping);
   const validation = validateRecords(args.kind, mapping, records);
@@ -111,6 +137,37 @@ export function toCommitRecord(kind: ImportKind, row: ValidatedRow): CommitRecor
       postal_code: str(v.address_zip),
     },
   };
+
+  if (kind === "ccc_estimate") {
+    // The full canonical estimate rode through validate in the reserved carry
+    // column; recover it to build payload_jsonb. A CCC estimate carries both an
+    // estimate and (when present) its RO, so we emit both insert payloads.
+    const canonical = parseCarriedEstimate(str(v[CCC_BMS_PAYLOAD_FIELD]));
+    const record: CommitRecord = {
+      index: row.index,
+      customer,
+      estimate: {
+        estimate_number: str(v.estimate_number) ?? "",
+        payload_jsonb: canonical
+          ? bmsEstimatePayloadJsonb(canonical)
+          : { source: "ccc_secure_share_bms" },
+      },
+    };
+    const roNumber = str(v.ro_number);
+    if (roNumber) {
+      record.ro = {
+        ro_number: roNumber,
+        total_loss_flag: false,
+        dates_json: {},
+        vehicle_make: str(v.vehicle_make),
+        vehicle_model: str(v.vehicle_model),
+        payload_jsonb: canonical
+          ? bmsRepairOrderPayloadJsonb(canonical)
+          : { source: "ccc_secure_share_bms" },
+      };
+    }
+    return record;
+  }
 
   if (kind === "ro") {
     const dates: Record<string, string> = {};
