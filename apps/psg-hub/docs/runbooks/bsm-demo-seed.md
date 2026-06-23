@@ -69,6 +69,30 @@ prerequisites (below).
 
 ---
 
+## Address precondition for the PSG-333 generate → print run
+
+The "test all the way to production" run (`docs/runbooks/lob-test-run-end-to-end.md`:
+`POST /api/production/generate` → `.../batches/[id]/print`) renders the customer's stored
+address into **both** the mailing envelope (`to_address`) and the inside-address block of the
+`thank_you` / `service_recovery` master letters (the latter since PSG-333). Both read the
+canonical `StoredAddressInput` shape — `{ line1, line2?, city, state, postal_code }`.
+
+- **Customer (seeded here):** Maria's `repair_customers.address` jsonb uses the
+  `postal_code` key (not `zip`). A wrong key fails-closed to a blank ZIP and is surfaced in
+  the generate response's `missingByCustomer`, never blank-as-filled.
+- **Pilot company from-address (pre-existing FK `…089000`):** the generate route reads
+  `companies.address` for the from-address and **404s if the company row is absent**. Before
+  the run, confirm that row exists and its `address` jsonb also uses `line1/city/state/postal_code`.
+  Quick check:
+  `select id, name, address from public.companies where id = '00000000-0000-4000-8000-000000089000';`
+  If `address` is null or uses a `zip` key, patch it to the `postal_code` shape (the from-address
+  block otherwise prints a blank ZIP, same fail-closed behavior).
+
+A clean run is one where the generate response returns an **empty `missingByCustomer`** for the
+demo customer — that proves the inside address + `letterDate` resolved.
+
+---
+
 ## Apply / re-apply the seed
 
 ```

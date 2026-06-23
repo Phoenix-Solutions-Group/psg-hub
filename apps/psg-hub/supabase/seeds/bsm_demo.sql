@@ -147,7 +147,11 @@ on conflict (id) do nothing;
 insert into public.repair_customers (id, company_id, first_name, last_name, address, phone, email) values
   ('d5e00000-0000-4000-8000-000000000061','00000000-0000-4000-8000-000000089000',
    'Maria','Alvarez',
-   '{"line1":"742 Evergreen Terrace","city":"Lincoln","state":"NE","zip":"68508"}'::jsonb,
+   -- Key must be `postal_code` (the canonical StoredAddressInput shape read by
+   -- toStoredAddress for the envelope AND by buildBatchDocuments for the inside
+   -- address since PSG-333). A `zip` key would fail-closed to a blank ZIP in
+   -- both the mailing envelope and the letter body, surfaced in missingByCustomer.
+   '{"line1":"742 Evergreen Terrace","city":"Lincoln","state":"NE","postal_code":"68508"}'::jsonb,
    '(555) 014-3321','maria.alvarez@example.com')
 on conflict (id) do nothing;
 
