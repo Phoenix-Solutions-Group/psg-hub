@@ -39,7 +39,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MIGRATIONS_DIR = resolve(__dirname, '../apps/psg-hub/supabase/migrations');
+// MIGRATIONS_DIR env override exists so the duplicate-version guard and the
+// reconciliation can be exercised against a scratch fixture dir (see the
+// self-verification in docs/runbooks/supabase-migration-apply.md / PSG-269 QA).
+const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR
+  ? resolve(process.env.MIGRATIONS_DIR)
+  : resolve(__dirname, '../apps/psg-hub/supabase/migrations');
 
 // Reduce a filename or ledger name to its stable token sequence. Operators apply
 // migrations via MCP with inconsistent names: the timestamp can lead the filename
@@ -59,6 +64,36 @@ function tokenize(filenameOrLedgerName) {
 // Human-readable embedded name (display only; not used for matching).
 function embeddedName(filename) {
   return tokenize(filename).join('_');
+}
+
+// PSG-269 — the migration VERSION is the leading all-digit timestamp token of the
+// filename (`20260623130000` in `20260623130000_competitor_monitor_runs.sql`).
+// Supabase keys supabase_migrations.schema_migrations on THIS value, so two files
+// sharing it is a latent hazard regardless of applied-state — see findDuplicateVersions.
+function migrationVersion(filename) {
+  const m = /^(\d+)_/.exec(String(filename).replace(/.*\//, ''));
+  return m ? m[1] : null;
+}
+
+// Find local migration files whose leading version timestamp collides. Returns
+// [{ version, files: [...] }] for every version used by >1 file, sorted. This is a
+// PURE repo invariant — it needs NO database, so it runs even when the ledger
+// reconciliation is skipped (no SUPABASE_DB_URL). A fresh `supabase db push`/`start`
+// records a given version ONCE and silently skips later files at that version, so
+// the skipped file's DDL never runs (its table is simply absent). PSG-238/PSG-265
+// hit exactly this; the fix is a byte-identical rename to a free version slot.
+function findDuplicateVersions(local) {
+  const byVersion = new Map();
+  for (const m of local) {
+    const v = migrationVersion(m.file);
+    if (!v) continue;
+    if (!byVersion.has(v)) byVersion.set(v, []);
+    byVersion.get(v).push(m.file);
+  }
+  return [...byVersion.entries()]
+    .filter(([, files]) => files.length > 1)
+    .map(([version, files]) => ({ version, files: files.slice().sort() }))
+    .sort((a, b) => a.version.localeCompare(b.version));
 }
 
 // True if `needle` tokens appear as a contiguous run inside `hay` tokens. This lets
@@ -132,6 +167,29 @@ function appliedFromDb(dbUrl) {
 }
 
 function main() {
+  const local = localMigrations();
+
+  // PSG-269 — duplicate-version guard. Runs FIRST and unconditionally: it is a pure
+  // repo invariant (no DB), so it fails CI even while ledger enforcement is OFF
+  // (no SUPABASE_DB_URL). This would have caught the 20260623130000 collision
+  // (competitor_monitor_runs / mail_template_approvals) at PR time.
+  const duplicateVersions = findDuplicateVersions(local);
+  if (duplicateVersions.length) {
+    console.error(
+      `\n[drift] DUPLICATE MIGRATION VERSION(S) — ${duplicateVersions.length} version prefix(es) used by more than one file:`,
+    );
+    for (const { version, files } of duplicateVersions) {
+      console.error(`         ✗ ${version}`);
+      for (const f of files) console.error(`             • ${f}`);
+    }
+    console.error('\n[drift] Supabase keys schema_migrations on the leading version timestamp, so a fresh');
+    console.error("[drift] `supabase db push`/`supabase start` records that version ONCE and SKIPS the");
+    console.error("[drift] other file(s) as 'already applied' — their DDL never runs and their tables are");
+    console.error('[drift] absent. Rename the colliding file(s) to a free version slot (keep the SQL');
+    console.error('[drift] byte-identical). Precedent: PSG-238, PSG-265.');
+    process.exit(1);
+  }
+
   const argv = process.argv.slice(2);
   const fileFlagIdx = argv.indexOf('--applied-file');
   const appliedFile = fileFlagIdx !== -1 ? argv[fileFlagIdx + 1] : null;
@@ -148,7 +206,6 @@ function main() {
     process.exit(2);
   }
 
-  const local = localMigrations();
   const appliedTokenLists = applied.map((a) => a.tokens);
 
   const unapplied = local.filter((m) => !migrationApplied(m.tokens, appliedTokenLists));
@@ -177,4 +234,10 @@ function main() {
   process.exit(1);
 }
 
-main();
+// Run as a CLI unless imported (e.g. by a verification harness pointing
+// MIGRATIONS_DIR at a scratch fixture).
+const invokedDirectly =
+  process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) main();
+
+export { tokenize, migrationVersion, findDuplicateVersions, isContiguousSubsequence, migrationApplied };
