@@ -60,6 +60,14 @@ export const AUDIT_ACTIONS = [
   // attributable to an actor + shop. The payload's `outcome` records complete vs.
   // awaiting a checkpoint approval.
   "sitemap.run",
+  // CCC Secure Share connection approval queue (PSG-267 / Phase 3) — a superadmin drives the
+  // per-shop connection state machine from /ops/admin/integrations/ccc: approve a pending
+  // request (→ connected), decline it with a reason (→ declined), or revoke an active/errored
+  // connection (→ not_connected). Each transition is attributable to an actor + shop so the
+  // operator gate on a customer data pipe is provable (spec §5).
+  "ccc.connection.approve",
+  "ccc.connection.decline",
+  "ccc.connection.revoke",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
