@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PSG-261 — REPRESENTATIVE CIECA BMS estimate fixture.
+  Hand-authored to the public BMS data dictionary (element names + nesting),
+  NOT exported from a live CCC Secure Share account. To be re-validated against a
+  real CCC export in Phase 2 (see ../README.md). No real customer/claim data.
+-->
+<VehicleDamageEstimate xmlns="http://www.cieca.com/BMS">
+  <DocumentInfo>
+    <DocumentID>DOC-2025-09-0007</DocumentID>
+    <DocumentType>EstimateRecord</DocumentType>
+    <DocumentVersion>BMS 4.0</DocumentVersion>
+    <CreateDateTime>2025-09-07T10:15:00-05:00</CreateDateTime>
+  </DocumentInfo>
+  <AdminInfo>
+    <EstimateInfo>
+      <EstimateID>EST-2025-0001</EstimateID>
+      <EstimateStatus>Supplement</EstimateStatus>
+      <RepairOrderNumber>RO-88231</RepairOrderNumber>
+      <SupplementInfo>
+        <SupplementNumber>1</SupplementNumber>
+        <SupplementSequenceNumber>1</SupplementSequenceNumber>
+        <SupplementDate>2025-09-12</SupplementDate>
+        <SupplementReason>Additional hidden damage found on teardown</SupplementReason>
+      </SupplementInfo>
+    </EstimateInfo>
+    <ClaimInfo>
+      <ClaimNumber>CLM-553201</ClaimNumber>
+      <PolicyNumber>POL-99821</PolicyNumber>
+      <LossType>Collision</LossType>
+      <DeductibleAmount>500.00</DeductibleAmount>
+      <InsuranceCompany>
+        <CompanyName>Acme Mutual Insurance</CompanyName>
+      </InsuranceCompany>
+    </ClaimInfo>
+    <RepairFacility>
+      <FacilityID>PS1042</FacilityID>
+      <BusinessName>Demo Body Shop</BusinessName>
+      <Address>
+        <City>Omaha</City>
+        <StateProvince>NE</StateProvince>
+      </Address>
+    </RepairFacility>
+    <Owner>
+      <PersonInfo>
+        <FirstName>Jordan</FirstName>
+        <LastName>Rivera</LastName>
+      </PersonInfo>
+      <ContactInfo>
+        <Phone>(555) 123-4567</Phone>
+        <Email>jordan.rivera@example.com</Email>
+      </ContactInfo>
+      <Address>
+        <Address1>123 Main St</Address1>
+        <Address2>Apt 4</Address2>
+        <City>Omaha</City>
+        <StateProvince>NE</StateProvince>
+        <PostalCode>68102</PostalCode>
+      </Address>
+    </Owner>
+  </AdminInfo>
+  <VehicleInfo>
+    <VIN>1HGCM82633A004352</VIN>
+    <ModelYear>2003</ModelYear>
+    <MakeDescription>Honda</MakeDescription>
+    <ModelName>Accord</ModelName>
+    <BodyStyle>4D Sedan</BodyStyle>
+    <ExteriorColor>Satin Silver</ExteriorColor>
+    <Odometer>84210</Odometer>
+    <LicensePlate>ABC1234</LicensePlate>
+  </VehicleInfo>
+  <DamageInfo>
+    <DamageLineInfo>
+      <LineNumber>1</LineNumber>
+      <LineType>Part</LineType>
+      <OperationCode>Repl</OperationCode>
+      <LineDescription>Front bumper cover</LineDescription>
+      <PartNumber>04711-T2A-A90</PartNumber>
+      <PartType>OEM</PartType>
+      <Quantity>1</Quantity>
+      <UnitPrice>345.50</UnitPrice>
+      <ExtendedPrice>345.50</ExtendedPrice>
+    </DamageLineInfo>
+    <DamageLineInfo>
+      <LineNumber>2</LineNumber>
+      <LineType>Part</LineType>
+      <OperationCode>Repl</OperationCode>
+      <LineDescription>Front grille</LineDescription>
+      <PartNumber>71121-T2A-A00</PartNumber>
+      <PartType>OEM</PartType>
+      <Quantity>1</Quantity>
+      <UnitPrice>88.00</UnitPrice>
+      <ExtendedPrice>88.00</ExtendedPrice>
+    </DamageLineInfo>
+    <DamageLineInfo>
+      <LineNumber>3</LineNumber>
+      <LineType>Labor</LineType>
+      <LaborType>Body</LaborType>
+      <OperationCode>R&amp;I</OperationCode>
+      <LineDescription>R&amp;I front bumper cover</LineDescription>
+      <LaborHours>2.5</LaborHours>
+      <UnitPrice>52.00</UnitPrice>
+      <ExtendedPrice>130.00</ExtendedPrice>
+    </DamageLineInfo>
+    <DamageLineInfo>
+      <LineNumber>4</LineNumber>
+      <LineType>Labor</LineType>
+      <LaborType>Body</LaborType>
+      <OperationCode>Repl</OperationCode>
+      <LineDescription>Replace front grille</LineDescription>
+      <LaborHours>0.5</LaborHours>
+      <UnitPrice>52.00</UnitPrice>
+      <ExtendedPrice>26.00</ExtendedPrice>
+    </DamageLineInfo>
+    <DamageLineInfo>
+      <LineNumber>5</LineNumber>
+      <LineType>Refinish</LineType>
+      <LaborType>Refinish</LaborType>
+      <OperationCode>Refinish</OperationCode>
+      <LineDescription>Refinish front bumper cover</LineDescription>
+      <LaborHours>2.0</LaborHours>
+      <UnitPrice>52.00</UnitPrice>
+      <ExtendedPrice>104.00</ExtendedPrice>
+    </DamageLineInfo>
+  </DamageInfo>
+  <RepairTotalsInfo>
+    <SummaryTotalsInfo>
+      <PartsAmount>433.50</PartsAmount>
+      <LaborAmount>260.00</LaborAmount>
+      <PaintMaterialsAmount>45.00</PaintMaterialsAmount>
+      <TaxAmount>35.20</TaxAmount>
+      <NetTotalAmount>773.70</NetTotalAmount>
+    </SummaryTotalsInfo>
+  </RepairTotalsInfo>
+</VehicleDamageEstimate>
