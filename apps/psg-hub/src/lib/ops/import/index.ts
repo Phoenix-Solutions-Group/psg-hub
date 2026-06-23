@@ -177,9 +177,14 @@ export function toCommitRecord(kind: ImportKind, row: ValidatedRow): CommitRecor
         // estimate carries none — never 0). bms.totals.grandTotal also stays in
         // payload_jsonb (bmsRepairOrderPayloadJsonb) for audit/back-compat.
         repair_amount_cents: dollarsToCents(canonical?.totals.grandTotal ?? null),
-        // PSG-352: CCC/BMS carries NO pay type, so leave it NULL — we do not
-        // infer a bucket from the claim number (honest sourcing; per PSG-358).
-        pay_type: null,
+        // PSG-352 (Ada review, divergence #2): the commit route sets no
+        // insurance linkage on the RO, so pay_type is the only channel by which
+        // CCC/BMS insurance dollars reach the Volume pay-type breakdown. A CCC/DRP
+        // estimate carrying a claim number IS an insurance job — this is a
+        // derivation from recorded data (bms.claim.number), not a fabrication
+        // (same insurer-signal pattern shipped in PSG-48). No claim number → NULL
+        // (honest no-signal, never a bogus bucket).
+        pay_type: canonical?.claimNumber ? "insurance" : null,
       };
     }
     return record;

@@ -103,3 +103,16 @@ from (
 where ro.id = norm.id
   and ro.pay_type is null
   and norm.bucket is not null;
+
+-- 4. Backfill — pay type from the CCC/BMS claim number ----------------------
+-- PSG-352 (Ada review, divergence #2): mirrors the importer rule — a CCC/DRP
+-- estimate carrying a claim number IS an insurance job (derivation from recorded
+-- bms.claim.number, not a fabrication; same insurer-signal pattern as PSG-48).
+-- The commit route sets no insurance linkage on the RO, so pay_type is the only
+-- channel by which CCC/BMS insurance dollars reach the Volume pay-type breakdown.
+-- Placed AFTER the Advantage2 CASE and gated on `pay_type is null` so an explicit
+-- Advantage2 pay-type always wins. Only where currently NULL (idempotent).
+update public.repair_orders
+set pay_type = 'insurance'
+where pay_type is null
+  and coalesce(btrim(payload_jsonb->>'bms.claim.number'), '') <> '';

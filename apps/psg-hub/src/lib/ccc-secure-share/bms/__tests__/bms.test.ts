@@ -219,16 +219,18 @@ describe("ccc_estimate import kind — parse -> suggest -> validate -> normalize
       "EST-2025-0001",
     );
 
-    // PSG-352 — canonical invoiced-$ from the BMS grand total (773.7 → 77370c).
-    // CCC/BMS carries no pay type, so pay_type stays NULL (no claim-based
-    // inference — honest sourcing, per PSG-358).
+    // PSG-352 — canonical invoiced-$ from the BMS grand total (773.7 → 77370c),
+    // and pay_type=insurance because the estimate carries a claim number
+    // (CLM-553201): a CCC/DRP estimate with a claim IS an insurance job
+    // (derivation from bms.claim.number, not fabrication — Ada review).
     expect(rec.ro?.repair_amount_cents).toBe(77370);
-    expect(rec.ro?.pay_type).toBeNull();
+    expect(rec.ro?.pay_type).toBe("insurance");
   });
 
   // PSG-352 — honest sourcing on the CCC builder: a BMS estimate with no grand
-  // total yields a null amount (never 0); pay_type is always null for CCC.
-  it("leaves CCC repair_amount_cents + pay_type null when grand total absent", () => {
+  // total yields a null amount (never 0); with no claim number, pay_type is null
+  // (no inference, no bogus bucket).
+  it("leaves CCC repair_amount_cents + pay_type null when grand total + claim absent", () => {
     const canonical = {
       estimateNumber: "EST-NULLS",
       roNumber: "RO-NULLS",
