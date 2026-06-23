@@ -49,6 +49,7 @@ export default defineConfig({
         "src/lib/bsm/content-drafts.ts", // PSG-194 idempotent draft persistence
         "src/lib/ops/mail/parse-production-batch.ts", // PSG-223 W0 send-batch parser
         "src/lib/ops/mail/send-history-import.ts", // PSG-223 W0 importer + reconciliation
+        "src/lib/ccc/connection-state.ts", // PSG-266 CCC Phase 3 connection-state contract (pure)
       ],
       // Excluded v0.2-adjacent surfaces (covered elsewhere / not unit-gateable
       // in env=node), with rationale:
