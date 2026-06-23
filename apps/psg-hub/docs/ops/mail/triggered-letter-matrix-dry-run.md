@@ -59,6 +59,32 @@ ops route: build `DryRunRecipient[]` from de-identified import rows (salted
 history), pass the 30-yr `suppressionRows`. It returns `{ audit, proofs, counts }` —
 render `proofs[].document.file` in the gate preview; persist `audit` rows.
 
+## Honest-claims go-live gates (PSG-316)
+
+The PSG-312 copy review of the matrix surfaced two claims that are only honest
+**per shop**, not universally. Both are now wired so no shop prints a claim it has
+not earned:
+
+- **C1 — warranty term is per-shop.** Warranty copy no longer hardcodes "for as
+  long as you own the vehicle." It tokenizes `{{program.warrantyTerm}}` (a new
+  `ProgramCustomizations` field, sourced from `company_programs.customizations_jsonb`).
+  Affects `thank_you` A/B, `warranty` A/B (matrix + the legacy `DEFAULT_TEMPLATES`
+  warranty fallback). **Fail-closed:** a shop with no `warrantyTerm` configured
+  leaves the token unresolved → the proof gate's missing-token report blocks the
+  piece, so a false term can never go out.
+- **C2 — agent-referral relationships are gated.** The `recommend_agent` piece
+  implies the shop keeps vetted independent agents ("an agent we trust"). The
+  trigger now requires a per-shop capability flag `offersAgentReferral`
+  (`CustomerAttributes`) and is **default-deny** — a shop that has not affirmed
+  those relationships never earns the piece.
+- **C3 (enhancement) — one-click review ask.** `perfect_score` uses
+  `{{#if program.reviewLink}}` so a configured `reviewLink` becomes a one-click ask;
+  unconfigured shops fall back to the generic "online" copy (never blocks a send).
+
+Tests for all three live in `letter-matrix-dryrun.test.ts` ("C1 …", "C3 …") and
+`triggers.test.ts` ("recommend_agent honest-claims capability gate"). Lee re-reviews
+final copy; this layer only makes the gates structural.
+
 ## Guardrails
 
 - `service_recovery` is relationship-only: the orchestrator runs

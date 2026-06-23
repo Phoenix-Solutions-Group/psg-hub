@@ -96,6 +96,9 @@ export const SAMPLE_MERGE_DATA: MailMergeData = {
   program: {
     greeting: "We truly appreciate your business.",
     footer: "Demo Body Works ·",
+    // Per-shop warranty TERM (PSG-316 C1) — warranty copy tokenizes this so the
+    // proof shows 0 missing tokens. Demo value; each shop sets its own term.
+    warrantyTerm: "for as long as you own the vehicle",
   },
 };
 

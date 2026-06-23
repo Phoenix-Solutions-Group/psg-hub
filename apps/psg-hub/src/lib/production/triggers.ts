@@ -110,6 +110,16 @@ export interface CustomerAttributes {
   agentIdentified?: boolean;
   /** Survey flagged dissatisfaction with the customer's current agent. */
   agentDissatisfied?: boolean;
+  /**
+   * Per-shop capability: this shop maintains genuine vetted independent-agent
+   * referral relationships. Honest-claims go-live gate (PSG-316 C2) — the
+   * `recommend_agent` piece implies the shop keeps agents "we trust"; it must
+   * only ship for shops that actually have such relationships. DEFAULT-DENY:
+   * absent/false suppresses the piece so no shop implies a relationship it lacks.
+   * Per-shop config (not per-recipient survey data); the batch service stamps the
+   * same value on every recipient in a shop's batch.
+   */
+  offersAgentReferral?: boolean;
   /** Vehicle was a total loss — not repaired at this shop. */
   totalLoss?: boolean;
   /** Repeat (vs first-time) customer. */
@@ -270,7 +280,10 @@ export const TRIGGER_RULES: readonly TriggerRule[] = [
     recipient: "customer",
     priority: 15,
     // Empathy letter for a customer unhappy with their current insurance agent.
-    when: (a) => a.agentDissatisfied === true,
+    // Honest-claims gate (PSG-316 C2): the copy implies the shop keeps vetted
+    // independent agents it can introduce. DEFAULT-DENY on `offersAgentReferral`
+    // so the piece only fires for shops that actually have those relationships.
+    when: (a) => a.agentDissatisfied === true && a.offersAgentReferral === true,
   },
   {
     id: "perfect_score",

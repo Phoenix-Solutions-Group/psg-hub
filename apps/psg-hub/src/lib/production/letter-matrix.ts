@@ -137,9 +137,13 @@ export function templateForVariant(def: LetterDefinition, variant: LetterVariant
 /* Shared copy fragments (kept honest-claims clean)                            */
 /* -------------------------------------------------------------------------- */
 
+// Warranty TERM is per-shop, NOT universal (honest-claims gate, PSG-316 C1):
+// `{{program.warrantyTerm}}` carries each shop's own duration clause (e.g. "for as
+// long as you own the vehicle"). Fail-closed — a shop without a configured term
+// leaves the token unresolved and the proof gate's missing-token report blocks it.
 const WARRANTY_PARA =
-  `<p>Your {{customer.vehicle}} is backed by our written workmanship warranty for as long ` +
-  `as you own the vehicle. If anything related to our work is ever less than right, call ` +
+  `<p>Your {{customer.vehicle}} is backed by our written workmanship warranty ` +
+  `{{program.warrantyTerm}}. If anything related to our work is ever less than right, call ` +
   `{{company.phone}} and we will make it right at no charge to you.</p>`;
 
 /** ACRB survey ask — uses the per-customer security code + survey id (PSG-219). */
@@ -211,7 +215,7 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
         id: "A",
         label: "Peace of Mind",
         blocks: {
-          headline: "Your repair is covered — for as long as you own the vehicle.",
+          headline: "Your repair is covered — {{program.warrantyTerm}}.",
           body:
             `<p>Your {{customer.vehicle}}, repaired on {{customer.serviceDate}}, is protected by our ` +
             `written workmanship warranty. We want you to drive with complete peace of mind.</p>`,
@@ -249,7 +253,8 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
           body:
             `<p>You rated your experience with {{company.name}} a perfect 100%. That means the ` +
             `world to our whole team, and we do not take it for granted.</p>` +
-            `<p>If you would be willing to share your experience with others online, it would help ` +
+            `<p>If you would be willing to share your experience with others` +
+            `{{#if program.reviewLink}} at {{program.reviewLink}}{{else}} online{{/if}}, it would help ` +
             `more of your neighbors find a shop they can trust.</p>`,
           surveyCta: SURVEY_CTA,
         },
@@ -262,7 +267,9 @@ export const LETTER_MATRIX: Readonly<Record<LetterPiece, LetterDefinition>> = {
           body:
             `<p>Thank you for rating your repair on your {{customer.vehicle}} a perfect 100%. ` +
             `Reviews from customers like you are the best compliment we can receive.</p>` +
-            `<p>A few words about your experience online would mean a great deal to us.</p>`,
+            `<p>A few words about your experience` +
+            `{{#if program.reviewLink}} at {{program.reviewLink}}{{else}} online{{/if}} would mean a ` +
+            `great deal to us.</p>`,
           surveyCta: SURVEY_CTA,
         },
       },

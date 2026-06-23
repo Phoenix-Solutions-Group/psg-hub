@@ -153,9 +153,32 @@ describe("selectLetters — trigger rules pick the right piece from fixtures", (
   });
 
   it("agent dissatisfaction → Recommend An Agent (recovery), not Call Your Agent", () => {
-    const got = pieces({ surveyReturned: true, emi: 0.8, agentIdentified: true, agentDissatisfied: true });
+    const got = pieces({ surveyReturned: true, emi: 0.8, agentIdentified: true, agentDissatisfied: true, offersAgentReferral: true });
     expect(got).toContain("recommend_agent");
     expect(got).not.toContain("call_your_agent");
+  });
+
+  describe("recommend_agent honest-claims capability gate (PSG-316 C2)", () => {
+    it("DEFAULT-DENY: agent dissatisfaction alone does NOT earn recommend_agent", () => {
+      // A shop with no vetted-agent relationships must never imply it has them.
+      expect(pieces({ agentDissatisfied: true })).not.toContain("recommend_agent");
+    });
+
+    it("an explicit offersAgentReferral=false also suppresses the piece", () => {
+      expect(
+        pieces({ agentDissatisfied: true, offersAgentReferral: false })
+      ).not.toContain("recommend_agent");
+    });
+
+    it("fires only when the shop affirms it keeps vetted agent relationships", () => {
+      expect(
+        pieces({ agentDissatisfied: true, offersAgentReferral: true })
+      ).toContain("recommend_agent");
+    });
+
+    it("the capability flag alone (no dissatisfaction) never triggers it", () => {
+      expect(pieces({ offersAgentReferral: true })).not.toContain("recommend_agent");
+    });
   });
 
   it("in-warranty completed repair → Warranty + Thank You", () => {
@@ -188,6 +211,7 @@ describe("suppression hard-rules (engine-enforced before batch — PSG-115d B3)"
       surveyReturned: true,
       emi: 0.4, // Disengaged
       agentDissatisfied: true, // earns recommend_agent (recovery) + service_recovery
+      offersAgentReferral: true, // shop keeps vetted agents → recommend_agent allowed (PSG-316 C2)
       inWarranty: true, // would earn warranty (relationship) — must be suppressed
     };
     const plan = buildLetterPlan(attrs);

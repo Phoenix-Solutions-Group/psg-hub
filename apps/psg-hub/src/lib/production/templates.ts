@@ -47,6 +47,23 @@ export interface ProgramCustomizations {
   footer?: string;
   /** Greeting line override (e.g. "Thank you, {{customer.firstName}}!"). */
   greeting?: string;
+  /**
+   * Per-shop workmanship-warranty TERM clause, e.g. "for as long as you own the
+   * vehicle" or "for 12 months or 12,000 miles, whichever comes first". Honest-
+   * claims go-live gate (PSG-316 C1): the warranty duration is NOT universal —
+   * each shop asserts only its own term. Warranty copy tokenizes this as
+   * `{{program.warrantyTerm}}` so no shop ever prints another shop's term.
+   * Fail-closed: unconfigured → the token resolves to nothing and the proof
+   * gate's missing-token report blocks the piece (never an invented term).
+   */
+  warrantyTerm?: string;
+  /**
+   * Per-shop review destination URL (Google/Yelp/etc.) for the post-fix review
+   * ask (PSG-316 C3, optional enhancement). When set, the review CTA becomes a
+   * one-click link; when unset, copy falls back to the generic "online" ask via a
+   * `{{#if program.reviewLink}}` block — so an unconfigured shop still sends.
+   */
+  reviewLink?: string;
   /** Free-form extra overrides referenced by bespoke templates. */
   [key: string]: string | undefined;
 }
@@ -488,8 +505,8 @@ export const DEFAULT_TEMPLATES: Record<MailProduct, MailTemplate> = {
         `<p class="greeting">Dear {{customer.firstName}},</p>` +
         `<p>{{program.greeting}}</p>` +
         `<p>Your {{customer.vehicle}}, repaired on {{customer.serviceDate}}, is covered by our written ` +
-        `workmanship warranty. We guarantee the quality of the repairs performed for as long as you own ` +
-        `the vehicle.</p>` +
+        `workmanship warranty. We guarantee the quality of the repairs performed ` +
+        `{{program.warrantyTerm}}.</p>` +
         `<p>If you notice any issue related to our work, contact us at {{company.phone}} and we will ` +
         `schedule an inspection at no charge to you.</p>` +
         `<p class="signoff">Sincerely,<br /><span class="company">{{company.name}}</span></p>` +

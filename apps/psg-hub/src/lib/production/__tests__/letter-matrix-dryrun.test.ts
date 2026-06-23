@@ -47,6 +47,10 @@ const SAMPLE_MERGE: MailMergeData = {
     ownerTitle: "Owner",
     jobNumber: "J-10293",
     offer: "$25 off",
+    // Per-shop warranty TERM (PSG-316 C1): warranty copy tokenizes this so the
+    // proof renders 0 missing tokens. (reviewLink intentionally omitted — the
+    // perfect_score CTA falls back to the generic "online" ask via {{#if}}.)
+    warrantyTerm: "for as long as you own the vehicle",
   },
 };
 
@@ -73,7 +77,9 @@ function attrsFor(piece: LetterPiece): CustomerAttributes {
     case "perfect_score":
       return { estimateOnly: false, surveyReturned: true, emi: 1, wouldRecommend: true };
     case "recommend_agent":
-      return { estimateOnly: false, agentDissatisfied: true };
+      // offersAgentReferral is the per-shop capability gate (PSG-316 C2): the
+      // piece only earns for a shop that actually keeps vetted agent relationships.
+      return { estimateOnly: false, agentDissatisfied: true, offersAgentReferral: true };
     case "agent_acknowledgement":
       return { estimateOnly: false, agentIdentified: true };
     case "call_your_agent":
@@ -332,5 +338,70 @@ describe("recovery is offer-free and variant selection is sound", () => {
     const b = selectVariant(def, { runId: "r1", recipientKey: "k1" });
     expect(isVariantSelected(a) && isVariantSelected(b)).toBe(true);
     if (isVariantSelected(a) && isVariantSelected(b)) expect(a.variant.id).toBe(b.variant.id);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Honest-claims go-live gates (PSG-316)                                       */
+/* -------------------------------------------------------------------------- */
+
+/** Render every previewed proof for one recipient with a given merge override. */
+function proofsWithMerge(piece: LetterPiece, program: MailMergeData["program"]) {
+  const merge: MailMergeData = { ...SAMPLE_MERGE, program };
+  const result = runLetterMatrixDryRun(
+    [recipientFor(piece, { merge })],
+    { runId: "run-honest" }
+  );
+  return result.proofs;
+}
+
+describe("C1: warranty term is per-shop, fail-closed when unconfigured", () => {
+  // The matrix source carries NO hardcoded duration phrase anymore — it is a token.
+  it("matrix warranty copy no longer hardcodes 'as long as you own the vehicle'", () => {
+    for (const def of LETTER_DEFINITIONS) {
+      for (const v of def.variants) {
+        const t = templateForVariant(def, v);
+        expect(t.bodyHtml).not.toMatch(/as long as you own the vehicle/i);
+      }
+    }
+  });
+
+  it("a shop with NO warrantyTerm leaves {{program.warrantyTerm}} unresolved (proof gate blocks)", () => {
+    // Drop the per-shop term; the warranty piece must surface the missing token.
+    const noTerm = { ...SAMPLE_MERGE.program };
+    delete noTerm.warrantyTerm;
+    const proof = proofsWithMerge("warranty", noTerm).find((p) => p.piece === "warranty");
+    expect(proof, "warranty still previews (it is the proof gate that blocks it)").toBeDefined();
+    expect(proof!.missingTokens).toContain("program.warrantyTerm");
+  });
+
+  it("renders the shop's own term when configured, with 0 missing tokens", () => {
+    const term = "for 12 months or 12,000 miles, whichever comes first";
+    const proof = proofsWithMerge("warranty", { ...SAMPLE_MERGE.program, warrantyTerm: term }).find(
+      (p) => p.piece === "warranty"
+    );
+    expect(proof!.missingTokens).toEqual([]);
+    expect(proof!.document.file).toContain(term);
+  });
+});
+
+describe("C3: perfect_score review ask uses a one-click link when configured", () => {
+  it("falls back to the generic 'online' ask when no reviewLink is set", () => {
+    // SAMPLE_MERGE.program carries no reviewLink — the generic fallback applies.
+    const proof = proofsWithMerge("perfect_score", SAMPLE_MERGE.program).find(
+      (p) => p.piece === "perfect_score"
+    );
+    expect(proof!.missingTokens).toEqual([]); // optional — never blocks the send
+    expect(proof!.document.file).toMatch(/\bonline\b/);
+  });
+
+  it("renders the configured review link as a one-click ask", () => {
+    const reviewLink = "https://g.page/r/abc-collision/review";
+    const proof = proofsWithMerge("perfect_score", {
+      ...SAMPLE_MERGE.program,
+      reviewLink,
+    }).find((p) => p.piece === "perfect_score");
+    expect(proof!.missingTokens).toEqual([]);
+    expect(proof!.document.file).toContain(reviewLink);
   });
 });
