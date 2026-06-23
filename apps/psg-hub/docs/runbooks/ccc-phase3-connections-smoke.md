@@ -142,17 +142,34 @@ acting superadmin as actor, and the target `shop_id`:
 > migration itself is additive + idempotent (safe). The **seed rows are synthetic test data written to a
 > prod table** — tag them and delete them after (§4e). Prefer a low-traffic window.
 
-### 4a. Apply the migration  (operator gate — `supabase db push`)
-The migration MCP tools are read-only inspection only here; schema changes go through the CLI so the review
-trail + history stay in sync:
+### 4a. Apply the migration  (operator gate)
+
+The project is **already linked** (`supabase/.temp/project-ref` = `gylkkzmcmbdftxieyabw`) — no `supabase link` needed.
+On a headless box `supabase login` (browser flow) won't work; supply an **access token** via env instead.
+
+**Auth (fixes "Access token not provided"):**
 ```bash
 cd apps/psg-hub
-supabase login                 # one-time; uses the OS keychain — never pass --password/--token inline
-supabase db push               # applies all pending migrations incl. 20260624130000_ccc_phase3_connection_status
-                               #   AND 20260624150000_ccc_accounts_shop_id_nullable (PSG-305)
-supabase migration list        # confirm BOTH 20260624130000 and 20260624150000 show as applied (remote)
+export SUPABASE_ACCESS_TOKEN=<personal access token>   # dashboard → Account → Access Tokens (https://supabase.com/dashboard/account/tokens)
+export SUPABASE_DB_PASSWORD=<project db password>       # dashboard → Project Settings → Database (if db push prompts)
+# ^ export in the ephemeral shell only — never write these to a tracked file (PROTOCOL §Secrets)
 ```
-After push, run `get_advisors(security)` (read-only MCP) and confirm **no new** ERROR/WARN vs the baseline.
+
+> ⚠️ **`db push` is NOT "apply one migration" here.** The remote migration ledger has known **out-of-band
+> drift** (PSG-279: a `≥160000` batch was applied manually; the ledger's latest *recorded* version lags the
+> repo). So `supabase db push` may try to (re)apply a **batch** of migrations to shared prod, not just the two
+> CCC Phase-3 migrations (`20260624130000` + `20260624150000`). **List first, then decide:**
+```bash
+supabase migration list     # compare LOCAL vs REMOTE columns
+```
+- **If `20260624130000` and `20260624150000` are the ONLY rows missing the REMOTE check** → `supabase db push` is fine (it applies just those two). Then re-run `supabase migration list` to confirm both registered.
+- **If other migrations also show unapplied remotely (drift)** → do **not** push a batch onto shared prod. Apply *only* these two migrations' DDL via the **dashboard SQL editor** (paste `supabase/migrations/20260624130000_ccc_phase3_connection_status.sql` then `supabase/migrations/20260624150000_ccc_accounts_shop_id_nullable.sql` — both are fully idempotent: `add column if not exists` / `create index if not exists` and `alter column ... drop not null`, safe to run as-is), then record them without re-applying anything else:
+  ```bash
+  supabase migration repair --status applied 20260624130000
+  supabase migration repair --status applied 20260624150000
+  ```
+
+After applying, run `get_advisors(security)` (read-only MCP) and confirm **no new** ERROR/WARN vs the baseline.
 Rollback if needed: `alter table public.ccc_accounts drop column connection_status, last_event_at, last_event_label, enabled_at, approved_by, approved_at, declined_reason, error_reason, data_scope;`
 and (PSG-305, only while no NULL-shop_id rows exist) `alter table public.ccc_accounts alter column shop_id set not null;`
 
