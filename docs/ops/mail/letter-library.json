@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "catalog": "psg-numbered-letter-library",
+  "version": "1.0",
+  "issue": "PSG-222 (PSG-216c / PSG-115e), parent PSG-216, spec docs/specs/002-mail-send-history-w0/spec.md §4",
+  "productized_by": "PSG-115a",
+  "sample_batch": {
+    "batch_date": "2021-09-07",
+    "source_dir": "docs/psg/production-center/production-files-sample/2021-09-07/",
+    "file_pattern": "<piece_code>-<variant>-09-07.md",
+    "file_count": 25
+  },
+  "program_source": {
+    "dir": "docs/psg/master-follow-up-program/",
+    "samples": [
+      "samples/001.md",
+      "samples/002.md",
+      "samples/front.md",
+      "samples/back.md"
+    ],
+    "note": "Master Follow-Up Program brochure: defines the 5-letter Master Follow-Up set, the 3-letter Referral/Agent set, estimate-follow-up, and the experience-management (CSI->EMI) framing the numbered pieces operationalize."
+  },
+  "trigger_tree": {
+    "perfect_score": "Customer rates the repair experience 100% on the ACRB survey. Appreciation + continued exposure; seeds referral development.",
+    "recommend_agent": "Survey identifies customer dissatisfaction with their insurance agent; shop offers assistance finding a new one. (Agent-Contact program letter set; not represented by a numbered piece in the 2021-09-07 batch.)",
+    "totaled_vehicle": "Insurer elected not to repair (total loss); customer never got to repair with the shop. Thank-you + vehicle-valuation assistance to retain loyalty and dealership relationships.",
+    "estimate_followup": "Customer-rights / estimate education follow-up (e.g. \"must I obtain three estimates?\"); keeps the shop top-of-mind on consumer-rights authority during the estimate phase."
+  },
+  "variant_legend": {
+    "letter": "Primary printed letter (the message body).",
+    "envelope": "Window/outer envelope carrier for the piece (often carries a teaser line, e.g. \"Your Repair Warranty Enclosed\").",
+    "warranty": "Enclosed repair/paint warranty certificate (ACRB-registered).",
+    "survey": "Enclosed ACRB satisfaction survey form with Online Security Code + Survey ID."
+  },
+  "pieces": [
+    {
+      "piece_code": "t",
+      "name": "Total-Loss Thank-You (Vehicle Valuation Assistance)",
+      "trigger": "Insurer declined to repair the vehicle (total loss); customer would have chosen this shop. Thank-you + vehicle valuation guidance.",
+      "program_trigger": "totaled_vehicle",
+      "variants": ["letter", "envelope"],
+      "sample_sources": {
+        "letter": "docs/psg/production-center/production-files-sample/2021-09-07/t-letter-09-07.md",
+        "envelope": "docs/psg/production-center/production-files-sample/2021-09-07/t-envelope-09-07.md"
+      },
+      "notes": "Letter body confirms total-loss framing (\"The insurance company elected not to repair your vehicle\") plus a Vehicle Valuation Assistance insert. No warranty/survey variant (no repair performed)."
+    },
+    {
+      "piece_code": "04",
+      "name": "Thank-You + Warranty Enclosed",
+      "trigger": "Repair completed. Personal thank-you, satisfaction assurance, and enclosed comprehensive repair warranty.",
+      "program_trigger": "base_repair_completed",
+      "variants": ["letter", "warranty"],
+      "sample_sources": {
+        "letter": "docs/psg/production-center/production-files-sample/2021-09-07/04-letter-09-07.md",
+        "warranty": "docs/psg/production-center/production-files-sample/2021-09-07/04-warranty-09-07.md"
+      },
+      "notes": "Base post-repair warranty/thank-you letter. Warranty cert is ACRB-registered (Registered ID ACRB####### - PS####). No envelope variant in this batch."
+    },
+    {
+      "piece_code": "04b",
+      "name": "Thank-You + Warranty Enclosed (variant B)",
+      "trigger": "Repair completed (alternate shop/branding variant of 04). Thank-you + enclosed warranty.",
+      "program_trigger": "base_repair_completed",
+      "variants": ["letter", "envelope", "warranty"],
+      "sample_sources": {
+        "letter": "docs/psg/production-center/production-files-sample/2021-09-07/04b-letter-09-07.md",
+        "envelope": "docs/psg/production-center/production-files-sample/2021-09-07/04b-envelope-09-07.md",
+        "warranty": "docs/psg/production-center/production-files-sample/2021-09-07/04b-warranty-09-07.md"
+      },
+      "notes": "Same trigger as 04 with an added envelope variant; sample shows multiple recipients/shops per batch page (e.g. Marina Auto Body). 'b' suffix = layout/branding variant, not a different trigger."
+    },
+    {
+      "piece_code": "07",
+      "name": "Thank-You + Warranty + Survey Notice (full mailing)",
+      "trigger": "Repair completed. Thank-you + enclosed warranty + notice that an ACRB satisfaction survey is coming (with online code). Initiates the survey cycle.",
+      "program_trigger": "base_repair_completed",
+      "variants": ["letter", "envelope", "survey", "warranty"],
+      "sample_sources": {
+        "letter": "docs/psg/production-center/production-files-sample/2021-09-07/07-letter-09-07.md",
+        "envelope": "docs/psg/production-center/production-files-sample/2021-09-07/07-envelope-09-07.md",
+        "survey": "docs/psg/production-center/production-files-sample/2021-09-07/07-survey-09-07.md",
+        "warranty": "docs/psg/production-center/production-files-sample/2021-09-07/07-warranty-09-07.md"
+      },
+      "notes": "Only piece in the batch with all four variants. Letter P.S. announces the ACRB survey; survey variant carries Online Security Code + Survey ID. This piece kicks off the survey -> (10 reminder | 10b responder) branch."
+    },
+    {
+      "piece_code": "10",
+      "name": "Survey Non-Responder Reminder",
+      "trigger": "ACRB survey was sent but not returned. Asks the customer again to complete it (online or by mail).",
+      "program_trigger": "survey_not_returned",
+      "variants": ["letter", "envelope"],
+      "sample_sources": {
+        "letter": "docs/psg/production-center/production-files-sample/2021-09-07/10-letter-09-07.md",
+        "envelope": "docs/psg/production-center/production-files-sample/2021-09-07/10-envelope-09-07.md"
+      },
+      "notes": "Body confirms non-responder framing (\"We noticed that you have not returned their survey\"). Branch sibling of 10b."
+    },
+    {
+      "piece_code": "10b",
+      "name": "Survey Responder Thank-You / Perfect-Score + Referral Ask",
+      "trigger": "Customer completed the ACRB survey (positive / perfect score). Thanks them, cites high satisfaction ranking, and asks for referrals.",
+      "program_trigger": "perfect_score",
+      "variants": ["letter", "envelope"],
+      "sample_sources": {
+        "letter": "docs/psg/production-center/production-files-sample/2021-09-07/10b-letter-09-07.md",
+        "envelope": "docs/psg/production-center/production-files-sample/2021-09-07/10b-envelope-09-07.md"
+      },
+      "notes": "Body confirms responder framing (\"Thank you for taking the time to complete the satisfaction survey...you can recommend us to your friends and family\"). This is the Perfect-Score / referral-development letter in the triggered tree."
+    },
+    {
+      "piece_code": "12",
+      "name": "Driver's License Renewal Reminder",
+      "trigger": "Time-based: customer's driver's license is near renewal (derived from repair records). Soft-touch loyalty contact.",
+      "program_trigger": "time_based_courtesy",
+      "variants": ["letter", "envelope"],
+      "sample_sources": {
+        "letter": "docs/psg/production-center/production-files-sample/2021-09-07/12-letter-09-07.md",
+        "envelope": "docs/psg/production-center/production-files-sample/2021-09-07/12-envelope-09-07.md"
+      },
+      "notes": "Courtesy reminder (\"your license is up for renewal this coming October\"). Keeps the shop visible between repairs."
+    },
+    {
+      "piece_code": "13",
+      "name": "Free Paint Maintenance Check-Up Offer",
+      "trigger": "Post-repair time-based: offers a free 6-month paint maintenance check-up (wash/wax/inspection) for 18 months, tied to the lifetime paint warranty.",
+      "program_trigger": "time_based_post_repair",
+      "variants": ["letter", "envelope"],
+      "sample_sources": {
+        "letter": "docs/psg/production-center/production-files-sample/2021-09-07/13-letter-09-07.md",
+        "envelope": "docs/psg/production-center/production-files-sample/2021-09-07/13-envelope-09-07.md"
+      },
+      "notes": "Drives re-visits and reinforces the paint warranty. Body: \"FREE paint maintenance check-up every 6 months for 18 months.\""
+    },
+    {
+      "piece_code": "14",
+      "name": "One-Year Anniversary Follow-Up",
+      "trigger": "Time-based: ~1 year after the repair. Reaffirms lifetime warranty and offers continued assistance.",
+      "program_trigger": "time_based_post_repair",
+      "variants": ["letter", "envelope"],
+      "sample_sources": {
+        "letter": "docs/psg/production-center/production-files-sample/2021-09-07/14-letter-09-07.md",
+        "envelope": "docs/psg/production-center/production-files-sample/2021-09-07/14-envelope-09-07.md"
+      },
+      "notes": "Body: \"it's been about a year since you brought your...in for repair.\" Retention / repeat-business contact."
+    },
+    {
+      "piece_code": "15",
+      "name": "Consumer Rights / Estimate-Followup Education",
+      "trigger": "Estimate-phase / consumer-rights education (three-estimates myth, drive-in claims, who guarantees the repair). Positions the shop as the consumer's advocate.",
+      "program_trigger": "estimate_followup",
+      "variants": ["letter", "envelope"],
+      "sample_sources": {
+        "letter": "docs/psg/production-center/production-files-sample/2021-09-07/15-letter-09-07.md",
+        "envelope": "docs/psg/production-center/production-files-sample/2021-09-07/15-envelope-09-07.md"
+      },
+      "notes": "Maps to the Estimate-Followup branch of the triggered tree. Body answers \"Must I obtain three estimates?\" and related consumer-rights questions."
+    },
+    {
+      "piece_code": "16",
+      "name": "Repeat / Referral Appreciation (Past Patronage)",
+      "trigger": "Time-based loyalty: acknowledges past patronage (e.g. 2 years prior), thanks for referrals, positions the shop as a vehicle-ownership resource.",
+      "program_trigger": "time_based_loyalty",
+      "variants": ["letter", "envelope"],
+      "sample_sources": {
+        "letter": "docs/psg/production-center/production-files-sample/2021-09-07/16-letter-09-07.md",
+        "envelope": "docs/psg/production-center/production-files-sample/2021-09-07/16-envelope-09-07.md"
+      },
+      "notes": "Body: \"Your past patronage in September of 2019 is remembered with appreciation...thank you...for any associates that you have referred.\" Repeat + referral nurture."
+    },
+    {
+      "piece_code": "b",
+      "name": "Birthday / Seasonal Greeting",
+      "trigger": "Calendar-based: birthday and seasonal/holiday greetings (multiple birthday greetings + seasonal contacts per the program brochure).",
+      "program_trigger": "calendar_birthday_seasonal",
+      "variants": [],
+      "sample_sources": {},
+      "notes": "Listed in spec §4 (the `b` piece) and described in the Master Follow-Up Program brochure (samples/001.md: \"multiple birthday greetings, seasonal contacts\"). NO sample file is present in the 2021-09-07 production batch; cataloged from the program definition only. Variants unknown until a sample batch is supplied (operator read-bridge)."
+    }
+  ],
+  "coverage": {
+    "pieces_with_samples": 11,
+    "pieces_from_program_only": 1,
+    "total_pieces": 12,
+    "sample_files_cataloged": 25,
+    "variants_present": {
+      "letter": 11,
+      "envelope": 10,
+      "warranty": 3,
+      "survey": 1
+    }
+  },
+  "gaps_and_notes": [
+    "The `b` (birthday/seasonal) piece has no sample in the 2021-09-07 batch; cataloged from program docs only.",
+    "Recommend-Agent / Customer-Call-Your-Agent / Agent-Customer-Acknowledgement triggers from the triggered-letter tree are Agent-Contact program letters and are NOT represented by a numbered piece in this batch; only the customer-facing numbered pieces are present.",
+    "Piece 04 has no envelope variant in this batch; 04b adds the envelope. All other repaired-customer pieces carry an envelope.",
+    "`program_trigger` values map each piece to the triggered-letter tree where a board-named trigger applies (perfect_score, recommend_agent, totaled_vehicle, estimate_followup); base/time-based/calendar pieces use descriptive trigger keys."
+  ]
+}
