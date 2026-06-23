@@ -588,13 +588,22 @@ function masterSignature(signoff: string, extra = ""): string {
   );
 }
 
-/** `footer` block — real tri-part convention: piece code · tagline · job number. */
+/**
+ * `footer` block — real tri-part convention: piece code · tagline · job number.
+ *
+ * The `job` slot binds the recipient's own repair-order number
+ * (`customer.roNumber`) when present, falling back to the shop-level
+ * `program.jobNumber` when absent (PSG-321, per Lee creative-fidelity ruling on
+ * PSG-310 Delta #2). This gives each piece its real per-recipient correlation
+ * while preserving the austere look — no separate "Re: RO#" line (Delta #1, the
+ * full postal recipient block, stays as-is for #10-window deliverability).
+ */
 const MASTER_FOOTER =
   `<!-- block:footer -->` +
   `<div class="footer">` +
   `<span class="code">{{program.pieceCode}}</span>` +
   `<span class="tagline">{{program.tagline}}</span>` +
-  `<span class="job">{{program.jobNumber}}</span>` +
+  `<span class="job">{{#if customer.roNumber}}{{customer.roNumber}}{{else}}{{program.jobNumber}}{{/if}}</span>` +
   `</div>` +
   `<!-- /block:footer -->`;
 

@@ -108,10 +108,27 @@ describe("W1 Piece 1 — Thank-You + ACRB survey (Faithful Letter)", () => {
     expect(file).toContain("www.theacrb.com");
     expect(file).toContain("ABC-7731"); // online security code
     expect(file).toContain("SID-44120"); // survey id
-    // Tri-part footer: piece code · tagline · job number.
+    // Tri-part footer: piece code · tagline · per-recipient RO# (PSG-321).
     expect(file).toContain("PS682");
     expect(file).toContain("We keep our customers by keeping our customers satisfied");
-    expect(file).toContain("5512.07");
+    expect(file).toContain("RO-55120"); // recipient RO# wins the footer job slot
+  });
+
+  it("binds the footer job slot to the recipient RO#, falling back to the shop job number (PSG-321)", () => {
+    // Recipient with an RO#: the footer shows their own repair-order number.
+    const withRo = renderMailContent(defaultTemplate("thank_you"), ABC);
+    expect(withRo.file).toContain('<span class="job">RO-55120</span>');
+    expect(withRo.file).not.toContain("5512.07"); // shop job number suppressed
+    expect(withRo.missing).toEqual([]);
+
+    // Recipient with no RO#: fall back to the shop-level job number, no leftover tokens.
+    const noRo = renderMailContent(defaultTemplate("thank_you"), {
+      ...ABC,
+      customer: { ...ABC.customer, roNumber: undefined },
+    });
+    expect(noRo.file).toContain('<span class="job">5512.07</span>');
+    expect(noRo.file).not.toContain("RO-55120");
+    expect(noRo.missing).toEqual([]);
   });
 
   it("shows the warranty variant block only when the shop offers a written warranty", () => {
@@ -208,6 +225,21 @@ describe("W1 Piece 2 — Owner service-recovery (The Owner's Direct Line)", () =
     });
     expect(noWarranty.file).not.toContain("written workmanship warranty");
     expect(noWarranty.missing).toEqual([]);
+  });
+
+  it("binds the footer job slot to the recipient RO#, falling back to the shop job number (PSG-321)", () => {
+    const withRo = renderMailContent(defaultTemplate("service_recovery"), ABC);
+    expect(withRo.file).toContain('<span class="job">RO-55120</span>');
+    expect(withRo.file).not.toContain("5512.07");
+    expect(withRo.missing).toEqual([]);
+
+    const noRo = renderMailContent(defaultTemplate("service_recovery"), {
+      ...ABC,
+      customer: { ...ABC.customer, roNumber: undefined },
+    });
+    expect(noRo.file).toContain('<span class="job">5512.07</span>');
+    expect(noRo.file).not.toContain("RO-55120");
+    expect(noRo.missing).toEqual([]);
   });
 
   it("flows through buildMailDocument as a single-asset color letter", () => {
