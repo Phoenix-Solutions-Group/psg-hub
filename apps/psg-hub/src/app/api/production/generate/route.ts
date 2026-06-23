@@ -107,6 +107,14 @@ export async function POST(request: NextRequest) {
     program = (prog?.customizations_jsonb as Record<string, string> | undefined) ?? null;
   }
 
+  // Stamp every piece in the batch with the same display month/year so the
+  // master letters' `{{customer.letterDate}}` resolves on the really-mailed
+  // piece (the builder stays pure — the route owns the clock).
+  const letterDate = new Date().toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+
   const built = buildBatchDocuments(
     {
       id: company.id,
@@ -116,7 +124,7 @@ export async function POST(request: NextRequest) {
       program,
     },
     (customers as GenerateCustomer[]),
-    { product, productId: product_id ?? null, vendor: vendor ?? null }
+    { product, productId: product_id ?? null, vendor: vendor ?? null, letterDate }
   );
 
   // Create the batch first (queued, with the resolved vendor + document count),
