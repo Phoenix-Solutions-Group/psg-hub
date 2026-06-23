@@ -735,8 +735,12 @@ export const DEFAULT_TEMPLATES: Record<MailProduct, MailTemplate> = {
         `more to me than anything else we do here. I would like the chance to understand exactly what ` +
         `happened and to make it right.</p>` +
         // block:warranty — reaffirm the guarantee when the shop offers a written warranty.
+        // Honest-claims C1 (PSG-331): the duration is tokenized as `{{program.warrantyTerm}}`
+        // (PSG-316's per-shop term clause, authored "for …") so a finite-term shop never
+        // prints a lifetime claim. Fail-closed: hasWarranty true + term unset → missing token
+        // → proof gate blocks. Renders byte-identical when warrantyTerm is the lifetime clause.
         `{{#if program.hasWarranty}}<!-- block:warranty --><p>Every repair we perform is backed by our ` +
-        `written workmanship warranty for as long as you own the vehicle. That guarantee still stands, ` +
+        `written workmanship warranty {{program.warrantyTerm}}. That guarantee still stands, ` +
         `and I stand behind it personally.</p><!-- /block:warranty -->{{/if}}` +
         `<p>Please call me directly at {{program.ownerDirectLine}}. If I am not in when you call, leave ` +
         `a message and I will personally call you back. There is no concern too small to bring to my ` +

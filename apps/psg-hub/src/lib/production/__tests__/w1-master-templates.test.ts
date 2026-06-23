@@ -64,6 +64,10 @@ const ABC: MailMergeData = {
     pieceCode: "PS682",
     jobNumber: "5512.07",
     hasWarranty: "true",
+    // Honest-claims C1 (PSG-316/PSG-331): per-shop warranty term clause, authored
+    // "for …". The lifetime clause keeps the approved service_recovery master
+    // byte-identical; a finite-term shop would supply its own real term here.
+    warrantyTerm: "for as long as you own the vehicle",
   },
 };
 
@@ -208,6 +212,30 @@ describe("W1 Piece 2 — Owner service-recovery (The Owner's Direct Line)", () =
     });
     expect(noWarranty.file).not.toContain("written workmanship warranty");
     expect(noWarranty.missing).toEqual([]);
+  });
+
+  it("honest-claims C1: prints the per-shop warranty term, never a hardcoded duration", () => {
+    // The duration is the per-shop `program.warrantyTerm` clause (PSG-331), not a
+    // baked-in lifetime promise. A finite-term shop prints its real term verbatim.
+    const finiteTerm = renderMailContent(defaultTemplate("service_recovery"), {
+      ...ABC,
+      program: { ...ABC.program, warrantyTerm: "for 12 months or 12,000 miles, whichever comes first" },
+    }).file!;
+    expect(finiteTerm).toContain(
+      "written workmanship warranty for 12 months or 12,000 miles, whichever comes first."
+    );
+
+    // Fail-closed: a shop that offers a warranty but has no term configured must
+    // NOT render an invented duration — the token goes missing and the proof gate
+    // blocks the piece. (No source template hardcodes "as long as you own".)
+    const tpl = defaultTemplate("service_recovery");
+    expect(tpl.bodyHtml).not.toContain("for as long as you own the vehicle");
+    const termless = renderMailContent(tpl, {
+      ...ABC,
+      program: { ...ABC.program, warrantyTerm: undefined },
+    });
+    expect(termless.missing).toContain("program.warrantyTerm");
+    expect(termless.file).not.toContain("for as long as you own the vehicle");
   });
 
   it("flows through buildMailDocument as a single-asset color letter", () => {
