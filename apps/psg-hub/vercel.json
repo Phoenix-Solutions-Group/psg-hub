@@ -54,6 +54,14 @@
     {
       "path": "/api/cron/competitor-monitor",
       "schedule": "0 10 * * 1"
+    },
+    {
+      "path": "/api/cron/orchestrator-generate",
+      "schedule": "0 11 * * 1"
+    },
+    {
+      "path": "/api/cron/orchestrator-publish",
+      "schedule": "0 13 * * *"
     }
   ]
 }
