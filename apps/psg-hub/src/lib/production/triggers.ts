@@ -7,6 +7,11 @@
  * by raw CSI. This module encodes that tree as named, marketing-tunable rules and
  * enforces the suppression hard-rules BEFORE a batch is built.
  *
+ * The engagement-tier model + suppression policy here implement the named rules
+ * in PSG-115d's W1 spec (docs/marketing/direct-mail/w1-copy-and-emi-segment-rules.md,
+ * Part B1–B3) and pass its B4 test cases. Thresholds are tunable params (defaults
+ * below) to be recalibrated against the 30-yr distribution in W0 (PSG-115e).
+ *
  * Grounded in PSG's real 6-letter Master Follow-Up Program
  * (docs/psg/master-follow-up-program):
  *   1. Recommend An Agent          — survey shows agent dissatisfaction
@@ -15,8 +20,8 @@
  *   4. Totaled Vehicle             — vehicle not repaired here (total loss)
  *   5. Perfect Score               — rated the experience 100%
  *   6. Estimate Follow Up          — unclosed estimate, shop-designated
- * plus the always-on Thank-You and Warranty relationship pieces and a
- * service-recovery letter for disengaged customers.
+ * plus the always-on Thank-You and Warranty relationship pieces and the
+ * Owner Service-Recovery letter for the Disengaged tier.
  *
  * This module is PURE: no DB, no clock, no network. The batch service assembles
  * `CustomerAttributes` from survey_responses + repair_orders rows and a
@@ -27,32 +32,37 @@
 import type { TemplateFlags } from "./templates";
 
 /* -------------------------------------------------------------------------- */
-/* Engagement tier (survey→EMI, NOT raw CSI)                                  */
+/* Engagement tier (survey→EMI, NOT raw CSI) — PSG-115d Part B1                */
 /* -------------------------------------------------------------------------- */
 
 /**
  * Engagement tier derived from EMI (Experience Management Index). PSG's thesis
  * is that CSI is a poor predictor of behaviour; EMI segments customers by true
- * engagement. "Disengaged" is the recovery-only segment.
+ * engagement. "Disengaged" is the recovery-only segment (PSG-115d §10.4).
  */
-export type EngagementTier = "Champion" | "Engaged" | "Passive" | "Disengaged";
+export type EngagementTier = "FullyEngaged" | "Engaged" | "NotEngaged" | "Disengaged";
 
 /** Powertrain class, used for EV/ICE block selection. */
 export type Powertrain = "EV" | "ICE";
 
 /**
- * Marketing-tunable EMI cut points (human percent, 0..100). A customer at or
- * above a threshold lands in that tier; below the lowest is "Disengaged".
- * `alert` mirrors the 88% survey-alert threshold used across the ops reports.
+ * Marketing-tunable EMI cut points, as 0..1 fractions matching
+ * `survey_responses.scale_emi_pct` (numeric(7,6)). Named params per PSG-115d
+ * B1; defaults below are to be recalibrated against the published 30-yr
+ * distribution in W0 (PSG-115e: Fully 6.88% / Engaged 9.32% / NotEngaged
+ * 82.59% / Disengaged 1.21%).
  */
 export const ENGAGEMENT_THRESHOLDS = {
-  /** >= → Champion (and Perfect Score at exactly 100). */
-  champion: 95,
-  /** >= → Engaged (also the survey-alert line). */
-  alert: 88,
-  /** >= → Passive; below → Disengaged. */
-  passive: 70,
+  /** `tier.fully_min` — >= AND would-refer AND no-unresolved → FullyEngaged. */
+  fullyMin: 0.95,
+  /** `tier.engaged_min` — >= AND would-refer AND no-unresolved → Engaged. */
+  engagedMin: 0.85,
+  /** `tier.notengaged_min` — below this (alone) forces Disengaged. */
+  notEngagedMin: 0.6,
 } as const;
+
+/** A "perfect score" is EMI = 100% (fraction 1.0). */
+export const PERFECT_SCORE_EMI = 1 as const;
 
 /**
  * Repair-dollar trigger thresholds (USD). PSG let each client pick a fixed
@@ -65,11 +75,26 @@ export const REPAIR_THRESHOLDS = [500, 750, 1000] as const;
 /* Attributes the engine reads                                                */
 /* -------------------------------------------------------------------------- */
 
-/** Per-recipient attributes assembled from survey + repair data. */
+/**
+ * Per-recipient attributes assembled from survey + repair data. Field sources
+ * (PSG-115d B0, verified in schema): `emi`←`survey_responses.scale_emi_pct`;
+ * `wouldRecommend`←`would_recommend`; `unresolvedIssue`←`unresolved_issue_flag`
+ * (mapped from `SQ_Unresolved_Shop = Yes`); `totalLoss`←`total_loss_flag`.
+ */
 export interface CustomerAttributes {
-  /** EMI as a human percent (0..100). Drives the engagement tier. */
-  emiPct?: number | null;
-  /** Explicit tier override; derived from `emiPct` when omitted. */
+  /**
+   * EMI as a 0..1 fraction (e.g. 0.9 = 90%), matching `scale_emi_pct`. Drives
+   * the engagement tier. `null`/undefined = no survey response yet.
+   */
+  emi?: number | null;
+  /** Survey "would refer this facility?" — `would_recommend`. */
+  wouldRecommend?: boolean;
+  /**
+   * Customer reported an unresolved issue — `unresolved_issue_flag`
+   * (`SQ_Unresolved_Shop = Yes`). THE recovery trigger (PSG-115d B1).
+   */
+  unresolvedIssue?: boolean;
+  /** Explicit tier override; derived from the above when omitted. */
   engagementTier?: EngagementTier;
   /** A survey was returned / completed. */
   surveyReturned?: boolean;
@@ -101,17 +126,40 @@ export interface NormalizedAttributes extends CustomerAttributes {
 }
 
 /**
- * Derive the engagement tier from EMI. Exactly-100 and >= champion both map to
- * Champion; an explicit `engagementTier` always wins.
+ * Derive the engagement tier (PSG-115d B1). Precedence matters:
+ *
+ *   1. An explicit `engagementTier` always wins.
+ *   2. **Disengaged is the override** — fires on `unresolvedIssue`, an explicit
+ *      `wouldRecommend === false`, OR EMI below `notEngagedMin`. This is the
+ *      recovery trigger.
+ *   3. Otherwise band by EMI. FullyEngaged / Engaged additionally require the
+ *      customer is not an explicit detractor and reported no unresolved issue.
+ *
+ * Misfire ≠ Disengaged guard: a merely-imperfect score where the customer would
+ * still refer and flagged no unresolved issue lands in Engaged/NotEngaged — NOT
+ * Disengaged — so the recovery letter never over-fires at happy-but-sub-100
+ * customers (PSG-115d B1, evidence-grounded).
  */
 export function deriveEngagementTier(attrs: CustomerAttributes): EngagementTier {
   if (attrs.engagementTier) return attrs.engagementTier;
-  const emi = attrs.emiPct;
-  if (emi == null) return "Passive"; // no signal yet → neutral, not punished
-  if (emi >= ENGAGEMENT_THRESHOLDS.champion) return "Champion";
-  if (emi >= ENGAGEMENT_THRESHOLDS.alert) return "Engaged";
-  if (emi >= ENGAGEMENT_THRESHOLDS.passive) return "Passive";
-  return "Disengaged";
+
+  const { fullyMin, engagedMin, notEngagedMin } = ENGAGEMENT_THRESHOLDS;
+  const emi = attrs.emi;
+  const detractor = attrs.wouldRecommend === false;
+  const unresolved = attrs.unresolvedIssue === true;
+
+  // 2. Disengaged override (the recovery trigger).
+  if (unresolved || detractor || (emi != null && emi < notEngagedMin)) {
+    return "Disengaged";
+  }
+
+  // No EMI signal yet and no negative flags → neutral middle (not punished).
+  if (emi == null) return "NotEngaged";
+
+  // 3. Positive bands — never apply to a detractor / unresolved (caught above).
+  if (emi >= fullyMin) return "FullyEngaged";
+  if (emi >= engagedMin) return "Engaged";
+  return "NotEngaged";
 }
 
 /** Resolve the derived fields the rules and flags depend on. */
@@ -171,12 +219,12 @@ export interface TriggerRule {
 export const TRIGGER_RULES: readonly TriggerRule[] = [
   {
     id: "service_recovery",
-    name: "Service Recovery",
+    name: "Owner Service-Recovery",
     piece: "service_recovery",
     category: "recovery",
     recipient: "customer",
     priority: 5,
-    // A returned survey that scores into the Disengaged tier earns recovery.
+    // PSG-115d B3: survey returned AND Disengaged → the recovery safety net.
     when: (a) => a.isRepairCustomer && a.surveyReturned === true && a.engagementTier === "Disengaged",
   },
   {
@@ -205,8 +253,8 @@ export const TRIGGER_RULES: readonly TriggerRule[] = [
     category: "relationship",
     recipient: "customer",
     priority: 20,
-    // Rated the experience 100%.
-    when: (a) => a.surveyReturned === true && a.emiPct === 100,
+    // Rated the experience 100% (EMI = 1.0).
+    when: (a) => a.surveyReturned === true && a.emi === PERFECT_SCORE_EMI,
   },
   {
     id: "agent_acknowledgement",
@@ -259,6 +307,7 @@ export const TRIGGER_RULES: readonly TriggerRule[] = [
     recipient: "customer",
     priority: 50,
     // Always-on relationship piece for a completed repair that is not a write-off.
+    // PSG-115d B3: universal at delivery, NOT tier-gated.
     when: (a) => a.isRepairCustomer && a.totalLoss !== true,
   },
 ] as const;
@@ -296,7 +345,7 @@ export function selectLetters(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Suppression engine (hard rules, enforced before batch)                     */
+/* Suppression engine (hard rules, enforced before batch) — PSG-115d B3       */
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -364,7 +413,8 @@ export interface BuildLetterPlanOptions {
  *                               (agent pieces survive).
  *   3. disengaged_recovery_only — a Disengaged customer receives `recovery`
  *                               consumer pieces ONLY; upsell/relationship are
- *                               dropped. Agent pieces are unaffected.
+ *                               dropped. Agent pieces are unaffected. (PSG-115d
+ *                               §10.4 — non-negotiable, enforced before batch.)
  *
  * Returns the cleared letters plus an audit of what was suppressed and why.
  */
@@ -410,6 +460,34 @@ export function buildLetterPlan(
 }
 
 /* -------------------------------------------------------------------------- */
+/* No-offer guard for the recovery template (PSG-115d B3 / §10.4)             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Offer / coupon / price language that must NEVER resolve into the Owner
+ * Service-Recovery letter — recovery is relationship-only. A render of the
+ * recovery piece is rejected if any of these surface (PSG-115d §10.4,
+ * Honest-claims lens).
+ */
+const RECOVERY_OFFER_PATTERN =
+  /\b(coupon|discount|\d+%\s*off|% off|save \$|\$\d|free (?:detail|wash|service|gift)|special offer|promo(?:tion|tional)?\b|deal\b|sale\b|redeem)/i;
+
+/**
+ * Validate that rendered recovery content carries no offer/coupon/price hook.
+ * Returns `{ ok, offenders }`; the batch service should refuse to queue a
+ * recovery piece when `ok` is false.
+ */
+export function validateRecoveryContent(html: string): { ok: boolean; offenders: string[] } {
+  const offenders: string[] = [];
+  const matcher = new RegExp(RECOVERY_OFFER_PATTERN.source, "ig");
+  let match: RegExpExecArray | null;
+  while ((match = matcher.exec(html)) !== null) {
+    if (!offenders.includes(match[0])) offenders.push(match[0]);
+  }
+  return { ok: offenders.length === 0, offenders };
+}
+
+/* -------------------------------------------------------------------------- */
 /* Flag builder for L2 conditional blocks                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -431,7 +509,7 @@ export function attributesToFlags(attrs: CustomerAttributes): TemplateFlags {
     totalLoss: normalized.totalLoss === true,
     agentIdentified: normalized.agentIdentified === true,
     agentDissatisfied: normalized.agentDissatisfied === true,
-    perfectScore: normalized.surveyReturned === true && normalized.emiPct === 100,
+    perfectScore: normalized.surveyReturned === true && normalized.emi === PERFECT_SCORE_EMI,
     disengaged: normalized.engagementTier === "Disengaged",
     tier: normalized.engagementTier,
   };
