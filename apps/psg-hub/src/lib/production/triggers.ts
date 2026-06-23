@@ -521,8 +521,12 @@ export function buildLetterPlan(
  * recovery piece is rejected if any of these surface (PSG-115d §10.4,
  * Honest-claims lens).
  */
+// NOTE (PSG-311 QA): the dollar-amount branch must live OUTSIDE the leading `\b`
+// group — `$` is a non-word char, so `\b\$\d` never fires when the offer is
+// preceded by a space / `>` (real copy), letting bare "$25 off" slip through.
+// `\$\s?\d` as its own top-level alternative catches it; word offers keep `\b`.
 const RECOVERY_OFFER_PATTERN =
-  /\b(coupon|discount|\d+%\s*off|% off|save \$|\$\d|free (?:detail|wash|service|gift)|special offer|promo(?:tion|tional)?\b|deal\b|sale\b|redeem)/i;
+  /\b(?:coupon|discount|\d+%\s*off|% off|save \$|free (?:detail|wash|service|gift)|special offer|promo(?:tion|tional)?\b|deal\b|sale\b|redeem)|\$\s?\d/i;
 
 /**
  * Validate that rendered recovery content carries no offer/coupon/price hook.

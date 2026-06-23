@@ -12,7 +12,7 @@ import {
   type DryRunRecipient,
 } from "@/lib/production/dry-run";
 import type { CustomerAttributes, LetterPiece } from "@/lib/production/triggers";
-import { TRIGGER_RULES } from "@/lib/production/triggers";
+import { TRIGGER_RULES, validateRecoveryContent } from "@/lib/production/triggers";
 import type { MailMergeData } from "@/lib/production/templates";
 import { SAMPLE_MERGE_DATA } from "@/lib/production/template-gate";
 import type { MailAddress } from "@/lib/production/types";
@@ -289,12 +289,30 @@ describe("AC4: dry-run only — zero live submits, audit per attempt", () => {
 /* -------------------------------------------------------------------------- */
 
 describe("recovery is offer-free and variant selection is sound", () => {
-  it("no recovery variant carries offer/coupon language", () => {
+  it("no recovery variant trips the LIVE offer guard (validateRecoveryContent)", () => {
     const def = definitionForPiece("service_recovery");
     for (const v of def.variants) {
       const t = templateForVariant(def, v);
-      expect(t.bodyHtml?.toLowerCase()).not.toMatch(/coupon|% off|\$\d|discount|save \$/);
+      expect(validateRecoveryContent(t.bodyHtml ?? "").ok, `${def.piece}/${v.id}`).toBe(true);
     }
+  });
+
+  // PSG-311 regression: the live guard must catch BARE dollar offers. The prior
+  // `\b\$\d` branch silently passed "$25 off" (the literal program.offer value).
+  it("validateRecoveryContent fails closed on bare dollar offers", () => {
+    for (const bad of ["Present this letter for $25 off.", "save $50 today", "$5 off your visit"]) {
+      const res = validateRecoveryContent(`<p>${bad}</p>`);
+      expect(res.ok, `should reject: ${bad}`).toBe(false);
+      expect(res.offenders.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("validateRecoveryContent also still catches word offers and passes clean copy", () => {
+    expect(validateRecoveryContent("<p>here is a coupon</p>").ok).toBe(false);
+    expect(validateRecoveryContent("<p>20% off</p>").ok).toBe(false);
+    expect(validateRecoveryContent("<p>Please call me directly. I will make it right.</p>").ok).toBe(
+      true
+    );
   });
 
   it("selectVariant skips when all variants are exhausted", () => {
