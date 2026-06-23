@@ -47,6 +47,12 @@ export const AUDIT_ACTIONS = [
   "production.template.approve",
   "production.template.release",
   "production.template.revoke",
+  // sitemap & content-architecture run (PSG-258 / Wave 1A) — a superadmin runs the
+  // gated sitemap pipeline for a shop from /ops/sitemap. The run is metered (G5-gated
+  // content-gap / cluster-refine) and persists a client deliverable, so each run is
+  // attributable to an actor + shop. The payload's `outcome` records complete vs.
+  // awaiting a checkpoint approval.
+  "sitemap.run",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
