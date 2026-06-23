@@ -12,6 +12,14 @@ only adds the things a sandbox cannot prove: a real DB with the Phase-3 migratio
 *"The CCC connection store is unavailable — the Phase-3 migration may not be applied in this environment."*
 So this runbook is **not a merge blocker**; it is the live click-through after the migration is applied.
 
+> **STATUS 2026-06-23 (Tess, operator-authorized by Nick):** all three migrations (`190000` + `130000` +
+> `150000`) and the 5 `SMOKE-*` rows are **already applied + seeded in prod** (`gylkkzmcmbdftxieyabw`) via the
+> Supabase MCP — `supabase db push` was unusable here (sibling-app ledger drift). Verified: `ccc_accounts`
+> exists, `shop_id` nullable, RLS policy intact, tab counts **Pending 2 / Connected 1 / Errors 1 / All 5**,
+> `nick@` + `tina@` are `psg_superadmin`. **§1a/§4a apply steps are no longer needed** — the only remaining
+> step is the human browser click-through (AC1–AC5 + screenshots). Teardown: `delete from public.ccc_accounts
+> where ccc_account_id like 'SMOKE-%';`.
+
 All facts below were verified by QA against the merged source (2026-06-23):
 - route + superadmin gate: `src/app/ops/admin/integrations/ccc/page.tsx`
 - state machine: `src/lib/ccc/approval-queue.ts`
