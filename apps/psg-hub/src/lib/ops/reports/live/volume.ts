@@ -35,6 +35,7 @@
 // every call today (the route passes null), so this is forward-compatible.
 
 import type { ReportContext, ReportParams, ReportRow } from "../types";
+import { fetchAllRows } from "./paginate";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -99,19 +100,16 @@ export async function reprintRecapRun(
 ): Promise<ReportRow[]> {
   if (!ctx.db) throw new Error("reprintRecapRun requires a db context");
 
-  let query = ctx.db.from("production_reprint_log").select(REPRINT_SELECT);
-  if (params.start && YMD.test(params.start)) {
-    query = query.gte("reprinted_at", params.start);
-  }
-  if (params.end && YMD.test(params.end)) {
-    query = query.lte("reprinted_at", `${params.end}T23:59:59.999Z`);
-  }
-
-  const { data, error } = (await query) as {
-    data: ReprintLogRow[] | null;
-    error: { message: string } | null;
-  };
-  if (error) throw new Error(error.message);
+  const data = await fetchAllRows<ReprintLogRow>(() => {
+    let query = ctx.db!.from("production_reprint_log").select(REPRINT_SELECT);
+    if (params.start && YMD.test(params.start)) {
+      query = query.gte("reprinted_at", params.start);
+    }
+    if (params.end && YMD.test(params.end)) {
+      query = query.lte("reprinted_at", `${params.end}T23:59:59.999Z`);
+    }
+    return query;
+  });
 
   const shopFilter = params.filters.shopId?.trim();
   const scope = ctx.shopIds; // company_id allow-list, or null for all shops
@@ -125,7 +123,7 @@ export async function reprintRecapRun(
   };
   const groups = new Map<string, Group>();
 
-  for (const r of data ?? []) {
+  for (const r of data) {
     const doc = first(r.production_documents);
     if (scope && !scope.includes(doc?.company_id ?? "")) continue;
     const shop = (first(doc?.companies)?.name ?? "—").trim() || "—";
@@ -230,28 +228,25 @@ export async function auditRun(
 ): Promise<ReportRow[]> {
   if (!ctx.db) throw new Error("auditRun requires a db context");
 
-  let query = ctx.db.from("repair_orders").select(AUDIT_SELECT);
-  if (params.start && YMD.test(params.start)) {
-    query = query.gte("created_at", params.start);
-  }
-  if (params.end && YMD.test(params.end)) {
-    query = query.lte("created_at", `${params.end}T23:59:59.999Z`);
-  }
-  if (ctx.shopIds) {
-    query = query.in("company_id", ctx.shopIds);
-  }
-
-  const { data, error } = (await query) as {
-    data: AuditRoRow[] | null;
-    error: { message: string } | null;
-  };
-  if (error) throw new Error(error.message);
+  const data = await fetchAllRows<AuditRoRow>(() => {
+    let query = ctx.db!.from("repair_orders").select(AUDIT_SELECT);
+    if (params.start && YMD.test(params.start)) {
+      query = query.gte("created_at", params.start);
+    }
+    if (params.end && YMD.test(params.end)) {
+      query = query.lte("created_at", `${params.end}T23:59:59.999Z`);
+    }
+    if (ctx.shopIds) {
+      query = query.in("company_id", ctx.shopIds);
+    }
+    return query;
+  });
 
   const shopFilter = params.filters.shopId?.trim();
   const payFilter = params.filters.payType?.trim().toLowerCase();
 
   const rows: (ReportRow & { _date: string; _ro: string })[] = [];
-  for (const r of data ?? []) {
+  for (const r of data) {
     const shop = (first(r.companies)?.name ?? "—").trim() || "—";
     if (shopFilter && !shopMatches(shop, shopFilter)) continue;
 

@@ -31,6 +31,10 @@ function multiDb(
         calls.eq[col] = v;
         return b;
       },
+      // PSG-354: live run()s paginate via fetchAllRows, which calls .range();
+      // PostgREST's .range() returns the same builder, so a stub that returns
+      // its (sub-1000-row) data on the first page short-circuits the loop.
+      range: () => b,
       then: (
         resolve: (r: { data: unknown[] | null; error: unknown }) => unknown,
       ) => {
@@ -97,6 +101,7 @@ function stubDb(rows: StubRow[], error: { message: string } | null = null) {
       calls.ilike = v;
       return builder;
     },
+    range: () => builder, // PSG-354: see fetchAllRows note in multiDb above.
     then(resolve: (r: { data: StubRow[] | null; error: unknown }) => unknown) {
       return Promise.resolve(resolve({ data: error ? null : rows, error }));
     },
@@ -483,6 +488,7 @@ function rentalDb(rows: unknown[], error: { message: string } | null = null) {
       calls.lte = v;
       return builder;
     },
+    range: () => builder, // PSG-354: see fetchAllRows note in multiDb above.
     then(resolve: (r: { data: unknown[] | null; error: unknown }) => unknown) {
       return Promise.resolve(resolve({ data: error ? null : rows, error }));
     },
@@ -593,5 +599,50 @@ describe("rentalCarAnalysisRun", () => {
     await expect(rentalCarAnalysisRun(params(), ctx(null))).rejects.toThrow(
       /requires a db context/,
     );
+  });
+});
+
+// ───────────────────── PSG-354: pagination past the 1000-row cap ─────────────
+//
+// Proves the live run() wiring (not just the helper in isolation) actually
+// paginates: a PostgREST stub that caps each .range() at 1000 rows must NOT
+// truncate a >1000-row period. monthlyCsiDisplayRun stands in for every survey
+// run() (they all fetch through the same fetchAllRows helper now).
+
+/** Single-table stub that honours .range(from,to) against `total` rows, capped
+ *  at the PostgREST default of 1000 per page — exactly what the server does. */
+function pagingDb(total: number) {
+  let pages = 0;
+  // All rows in one month/shop so the report collapses to a single group whose
+  // `surveys` count == the number of rows actually fetched.
+  const rows: StubRow[] = Array.from({ length: total }, () => ({
+    shop_name: "Mega Collision",
+    survey_date: "2026-05-15",
+    scale_emi_pct: 0.9,
+  }));
+  const builder: Record<string, unknown> = {
+    from: () => builder,
+    select: () => builder,
+    gte: () => builder,
+    lte: () => builder,
+    ilike: () => builder,
+    range(from: number, to: number) {
+      pages += 1;
+      const want = to - from + 1;
+      const slice = rows.slice(from, from + Math.min(want, 1000));
+      return Promise.resolve({ data: slice, error: null });
+    },
+  };
+  return { db: builder as unknown as ReportContext["db"], pages: () => pages };
+}
+
+describe("live run() pagination (PSG-354)", () => {
+  it("monthlyCsiDisplayRun accumulates >1000 survey rows instead of truncating", async () => {
+    const db = pagingDb(2300);
+    const out = await monthlyCsiDisplayRun(params(), ctx(db.db));
+    // One (month, shop) group; its survey count proves nothing was lost at 1000.
+    expect(out).toHaveLength(1);
+    expect(out[0].surveys).toBe(2300);
+    expect(db.pages()).toBe(3); // 1000 + 1000 + 300(short→stop)
   });
 });
