@@ -303,7 +303,12 @@ export async function reprintDocument(
 // ---------------------------------------------------------------------------
 
 /** Mail product (template) a batch is generated for. Mirrors MailProduct. */
-export const MAIL_PRODUCTS = ["thank_you", "warranty", "envelope"] as const;
+export const MAIL_PRODUCTS = [
+  "thank_you",
+  "warranty",
+  "envelope",
+  "service_recovery",
+] as const;
 
 export const generateBatchSchema = z.object({
   name: z.string().trim().min(1, "name is required").max(200),

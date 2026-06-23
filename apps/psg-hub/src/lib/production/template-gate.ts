@@ -32,7 +32,12 @@ import {
 import type { MailPieceType } from "./types";
 
 /** The catalog of templates that can be proofed / approved. Mirrors MailProduct. */
-export const TEMPLATE_KEYS = ["thank_you", "warranty", "envelope"] as const;
+export const TEMPLATE_KEYS = [
+  "thank_you",
+  "warranty",
+  "envelope",
+  "service_recovery",
+] as const;
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
 
 /** Narrow an arbitrary string to a known template key. */
@@ -42,9 +47,10 @@ export function isTemplateKey(value: string): value is TemplateKey {
 
 /** Human label for a template key (UI / audit payloads). */
 export const TEMPLATE_LABELS: Record<TemplateKey, string> = {
-  thank_you: "Thank-you postcard",
+  thank_you: "Thank-you + ACRB survey letter",
   warranty: "Warranty letter",
   envelope: "Envelope",
+  service_recovery: "Owner service-recovery letter",
 };
 
 /**
@@ -83,7 +89,16 @@ export const SAMPLE_MERGE_DATA: MailMergeData = {
     firstName: "Jordan",
     lastName: "Rivera",
     vehicle: "2021 Honda CR-V",
+    vehicleShort: "CR-V",
     serviceDate: "2026-05-14",
+    letterDate: "May 2026",
+    addressLine1: "742 Evergreen Terrace",
+    city: "Lincoln",
+    state: "NE",
+    zip: "68508",
+    surveySecurityCode: "DEMO-4821",
+    surveyId: "SID-90042",
+    roNumber: "RO-10042",
   },
   company: {
     name: "Demo Body Works",
@@ -96,6 +111,19 @@ export const SAMPLE_MERGE_DATA: MailMergeData = {
   program: {
     greeting: "We truly appreciate your business.",
     footer: "Demo Body Works ·",
+    logo: "https://cdn.example/demo-body-works.png",
+    addressLine1: "1200 Industrial Pkwy",
+    addressLine2: "Lincoln, NE 68508",
+    ownerName: "Pat Morgan",
+    ownerFirstName: "Pat",
+    ownerTitle: "Owner",
+    ownerSignatureUrl: "https://cdn.example/pat-morgan-sig.png",
+    ownerDirectLine: "(555) 014-2201",
+    surveyUrl: "www.theacrb.com",
+    tagline: "We keep our customers by keeping our customers satisfied",
+    pieceCode: "PS682",
+    jobNumber: "1042.07",
+    hasWarranty: "true",
   },
 };
 
