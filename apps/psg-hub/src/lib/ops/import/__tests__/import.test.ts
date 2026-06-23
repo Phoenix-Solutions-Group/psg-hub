@@ -262,4 +262,50 @@ describe("previewImport + toCommitRecord", () => {
     expect(rec.estimate?.estimate_number).toBe("E-9");
     expect(rec.estimate?.payload_jsonb.total).toBe(1250.5);
   });
+
+  // PSG-352 — canonical invoiced-$ + pay-type on the generic RO builder.
+  // validateRecords reads records keyed by canonical field key (the mapping only
+  // gates required-field presence), so records below use canonical keys.
+  it("populates repair_amount_cents + pay_type from generic RO columns", () => {
+    const summary = validateRecords(
+      "ro",
+      { ro_number: "RO #", customer_last_name: "Last", repair_amount: "Amount", pay_type: "Pay Type" },
+      [{ ro_number: "2002", customer_last_name: "Smith", repair_amount: "$3,400.00", pay_type: "Insurance" }],
+    );
+    const rec = toCommitRecord("ro", summary.rows[0]);
+    expect(rec.ro?.repair_amount_cents).toBe(340000);
+    expect(rec.ro?.pay_type).toBe("insurance");
+    // Raw token retained on the audit path the PSG-46 report reads.
+    expect((rec.ro?.payload_jsonb as { advantage2?: { payType?: string } }).advantage2?.payType).toBe(
+      "Insurance",
+    );
+  });
+
+  it("leaves repair_amount_cents + pay_type null when the RO source omits them", () => {
+    const summary = validateRecords(
+      "ro",
+      { ro_number: "RO #", customer_last_name: "Last" },
+      [{ ro_number: "2003", customer_last_name: "Doe" }],
+    );
+    const rec = toCommitRecord("ro", summary.rows[0]);
+    // Honest sourcing — absent amount is null, never 0.
+    expect(rec.ro?.repair_amount_cents).toBeNull();
+    expect(rec.ro?.pay_type).toBeNull();
+  });
+
+  it("auto-resolves Advantage2.0 column names through the generic RO path", async () => {
+    // A real Advantage2.0/CCI export header set imported end-to-end (parse →
+    // suggestMapping → applyMapping → validate → builder); GrossAmount +
+    // Cust_Demo_Pay_Type must resolve onto the new repair_amount / pay_type
+    // fields and normalize.
+    const csv =
+      "RepairOrderNumber,LastName,GrossAmount,Cust_Demo_Pay_Type\n9001,Vega,1875.25,Customer Pay\n";
+    const res = await previewImport({ kind: "ro", filename: "adv2.csv", buffer: Buffer.from(csv) });
+    expect(res.mapping.repair_amount).toBe("GrossAmount");
+    expect(res.mapping.pay_type).toBe("Cust_Demo_Pay_Type");
+
+    const rec = toCommitRecord("ro", res.validation.rows[0]);
+    expect(rec.ro?.repair_amount_cents).toBe(187525);
+    expect(rec.ro?.pay_type).toBe("customer");
+  });
 });

@@ -148,6 +148,10 @@ export async function POST(request: NextRequest) {
         ro_number: rec.ro!.ro_number,
         total_loss_flag: rec.ro!.total_loss_flag,
         dates_json: rec.ro!.dates_json,
+        // PSG-352: canonical invoiced-$ + pay-type. null when the source didn't
+        // record them (honest sourcing — never written as 0 / a bogus bucket).
+        repair_amount_cents: rec.ro!.repair_amount_cents,
+        pay_type: rec.ro!.pay_type,
         payload_jsonb: { ...rec.ro!.payload_jsonb, vehicle: { make: rec.ro!.vehicle_make, model: rec.ro!.vehicle_model } },
       });
       insertErr = error?.message ?? null;

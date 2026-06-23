@@ -13,6 +13,7 @@ import {
   canonicalToRawTable,
   parseCarriedEstimate,
 } from "@/lib/ccc-secure-share/bms";
+import { dollarsToCents, normalizePayType, type PayType } from "./amounts";
 import { parseFile } from "./parse";
 import { applyMapping, suggestMapping } from "./template";
 import { validateRecords } from "./validate";
@@ -109,6 +110,14 @@ export type CommitRecord = {
     payload_jsonb: Record<string, unknown>;
     vehicle_make: string | null;
     vehicle_model: string | null;
+    /**
+     * Canonical invoiced amount in integer cents (PSG-352). null = not sourced
+     * from this importer — never coerced to 0 (honest sourcing). The raw
+     * per-source figure is also retained in payload_jsonb for audit.
+     */
+    repair_amount_cents: number | null;
+    /** Canonical normalized pay type (PSG-352); null when none/unrecognized. */
+    pay_type: PayType | null;
   };
   /** Estimate fields when kind=estimate. */
   estimate?: {
@@ -164,6 +173,13 @@ export function toCommitRecord(kind: ImportKind, row: ValidatedRow): CommitRecor
         payload_jsonb: canonical
           ? bmsRepairOrderPayloadJsonb(canonical)
           : { source: "ccc_secure_share_bms" },
+        // PSG-352: canonical invoiced-$ from the BMS grand total (null when the
+        // estimate carries none — never 0). bms.totals.grandTotal also stays in
+        // payload_jsonb (bmsRepairOrderPayloadJsonb) for audit/back-compat.
+        repair_amount_cents: dollarsToCents(canonical?.totals.grandTotal ?? null),
+        // PSG-352: CCC/BMS carries NO pay type, so leave it NULL — we do not
+        // infer a bucket from the claim number (honest sourcing; per PSG-358).
+        pay_type: null,
       };
     }
     return record;
@@ -173,6 +189,19 @@ export function toCommitRecord(kind: ImportKind, row: ValidatedRow): CommitRecor
     const dates: Record<string, string> = {};
     if (v.date_in) dates.date_in = String(v.date_in);
     if (v.date_out) dates.date_out = String(v.date_out);
+    // PSG-352: optional generic-RO amount + pay-type. repair_amount is a number
+    // field (validate already coerces "$1,234.56" → 1234.56); pay_type is a free
+    // string normalized onto the canonical bucket. Both null when absent. Real
+    // Advantage2.0 exports imported through the generic RO path resolve here:
+    // GrossAmount/Repair_Total → repair_amount, Cust_Demo_Pay_Type/RC_PayType →
+    // pay_type (see fields.ts aliases).
+    const repairAmount = typeof v.repair_amount === "number" ? v.repair_amount : null;
+    const rawPayType = str(v.pay_type);
+    // PSG-352: keep the RAW pay-type token in payload_jsonb.advantage2.payType
+    // (the path the PSG-46 `audit` report reads) so that path stays truthful for
+    // newly-imported rows, alongside the normalized canonical column below.
+    const payload: Record<string, unknown> = { source: "import" };
+    if (rawPayType) payload.advantage2 = { payType: rawPayType };
     return {
       index: row.index,
       customer,
@@ -182,7 +211,9 @@ export function toCommitRecord(kind: ImportKind, row: ValidatedRow): CommitRecor
         dates_json: dates,
         vehicle_make: str(v.vehicle_make),
         vehicle_model: str(v.vehicle_model),
-        payload_jsonb: { source: "import" },
+        payload_jsonb: payload,
+        repair_amount_cents: dollarsToCents(repairAmount),
+        pay_type: normalizePayType(rawPayType),
       },
     };
   }

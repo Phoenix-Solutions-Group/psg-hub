@@ -218,6 +218,51 @@ describe("ccc_estimate import kind — parse -> suggest -> validate -> normalize
     expect((rec.ro?.payload_jsonb as Record<string, unknown>)["bms.estimate.number"]).toBe(
       "EST-2025-0001",
     );
+
+    // PSG-352 — canonical invoiced-$ from the BMS grand total (773.7 → 77370c).
+    // CCC/BMS carries no pay type, so pay_type stays NULL (no claim-based
+    // inference — honest sourcing, per PSG-358).
+    expect(rec.ro?.repair_amount_cents).toBe(77370);
+    expect(rec.ro?.pay_type).toBeNull();
+  });
+
+  // PSG-352 — honest sourcing on the CCC builder: a BMS estimate with no grand
+  // total yields a null amount (never 0); pay_type is always null for CCC.
+  it("leaves CCC repair_amount_cents + pay_type null when grand total absent", () => {
+    const canonical = {
+      estimateNumber: "EST-NULLS",
+      roNumber: "RO-NULLS",
+      claimNumber: null,
+      status: "open",
+      facilityId: "PS1042",
+      facilityName: "Test Shop",
+      vehicle: { vin: null, year: null, make: "Ford", model: "F-150" },
+      owner: {
+        firstName: null, lastName: "Fleet Co", phone: null, email: null,
+        address1: null, address2: null, city: null, state: null, zip: null,
+      },
+      totals: { parts: null, labor: null, paint: null, tax: null, grandTotal: null },
+      lineItems: [],
+      supplements: [],
+      overflow: {},
+    };
+    const row = {
+      index: 1,
+      values: {
+        estimate_number: "EST-NULLS",
+        ro_number: "RO-NULLS",
+        customer_last_name: "Fleet Co",
+        vehicle_make: "Ford",
+        vehicle_model: "F-150",
+        [CCC_BMS_PAYLOAD_FIELD]: JSON.stringify(canonical),
+      },
+      errors: [],
+      warnings: [],
+    };
+    const rec = toCommitRecord("ccc_estimate", row);
+    expect(rec.ro?.ro_number).toBe("RO-NULLS");
+    expect(rec.ro?.repair_amount_cents).toBeNull();
+    expect(rec.ro?.pay_type).toBeNull();
   });
 
   it("verifies bmsEstimatePayloadJsonb keys directly", () => {

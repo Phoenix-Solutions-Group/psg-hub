@@ -117,6 +117,47 @@ const RO_FIELDS: FieldDef[] = [
     aliases: ["total loss", "tl", "totaled", "total_loss", "totalloss"],
   },
   {
+    // PSG-352 — optional canonical invoiced amount. Aliases include the
+    // Advantage2.0/CCI source names (GrossAmount / Repair_Total / RC_Repair_Dlz)
+    // so a real Advantage2 export imported through the generic RO path resolves
+    // here; coerced to cents (dollarsToCents) at commit. Absent → null, never 0.
+    key: "repair_amount",
+    label: "Repair amount",
+    required: false,
+    type: "number",
+    aliases: [
+      "repair amount",
+      "amount",
+      "gross amount",
+      "grossamount",
+      "repair total",
+      "repair_total",
+      "rc repair dlz",
+      "rc_repair_dlz",
+      "invoice total",
+      "invoiced amount",
+    ],
+  },
+  {
+    // PSG-352 — optional pay type, normalized onto the canonical bucket
+    // (insurance/customer/internal/warranty) at commit. Aliases cover the
+    // Advantage2.0 source names (Cust_Demo_Pay_Type / RC_PayType / String4).
+    key: "pay_type",
+    label: "Pay type",
+    required: false,
+    type: "string",
+    aliases: [
+      "pay type",
+      "paytype",
+      "pay_type",
+      "cust demo pay type",
+      "cust_demo_pay_type",
+      "rc paytype",
+      "rc_paytype",
+      "payment type",
+    ],
+  },
+  {
     key: "date_in",
     label: "Date in",
     required: false,
