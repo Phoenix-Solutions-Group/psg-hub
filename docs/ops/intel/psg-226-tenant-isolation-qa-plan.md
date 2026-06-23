@@ -21,7 +21,8 @@ prove **per-shop RLS isolation** before the monitor cron runs across real custom
 
 ## Pre-req for QA
 
-1. Apply the migration to the QA/prod DB (operator/Ada gate): `20260623130000_competitor_monitor_runs.sql`.
+1. Apply the migration to the QA/prod DB (operator/Ada gate): `20260623150000_competitor_monitor_runs.sql`
+   (renamed from `20260623130000_*` in PSG-265 to clear a duplicate-version collision; SQL byte-identical).
 2. Pick a **real (non-Demo) shop** as the test tenant. Today only Demo has competitors, so seed
    the real shop with ≥2 manual competitor rows (zero-spend; discovery is the separate G5-gated
    step and is out of scope here):
