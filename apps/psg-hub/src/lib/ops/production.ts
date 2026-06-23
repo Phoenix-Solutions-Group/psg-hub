@@ -392,7 +392,18 @@ function toStoredAddress(name: string, address: StoredAddressInput): ProductionA
 export function buildBatchDocuments(
   company: GenerateCompany,
   customers: GenerateCustomer[],
-  opts: { product: MailProduct; productId?: string | null; vendor?: MailVendor | null }
+  opts: {
+    product: MailProduct;
+    productId?: string | null;
+    vendor?: MailVendor | null;
+    /**
+     * Display month/year stamped on every piece in the batch (e.g. "June 2026").
+     * The master letters reference `{{customer.letterDate}}`; the route supplies
+     * the batch's date so this function stays pure (no clock). Omit to leave the
+     * token unresolved (it is then surfaced in `missingByCustomer`).
+     */
+    letterDate?: string | null;
+  }
 ): BuildBatchDocumentsResult {
   const template = defaultTemplate(opts.product);
   const vendor = selectVendor({ batchVendor: opts.vendor ?? null });
@@ -408,6 +419,16 @@ export function buildBatchDocuments(
         lastName: c.last_name,
         vehicle: c.vehicle ?? undefined,
         serviceDate: c.service_date ?? undefined,
+        // The inside-address block on the master letters reads these from the
+        // customer's stored address — the same jsonb snapshotted into to_address
+        // below. Without mapping them, a really-mailed piece renders literal
+        // `{{customer.addressLine1}}` tokens: the proof path fills them from
+        // SAMPLE_MERGE_DATA so proofs look clean while live batches would not.
+        addressLine1: c.address?.line1 || undefined,
+        city: c.address?.city || undefined,
+        state: c.address?.state || undefined,
+        zip: c.address?.postal_code || undefined,
+        letterDate: opts.letterDate ?? undefined,
       },
       company: {
         name: company.name,

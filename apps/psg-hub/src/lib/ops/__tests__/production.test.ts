@@ -333,4 +333,44 @@ describe("buildBatchDocuments", () => {
     expect(built.documentCount).toBe(0);
     expect(built.documents).toEqual([]);
   });
+
+  // PSG-333: the really-mailed piece must resolve the inside-address block from
+  // the customer's stored address (not just the envelope) and the batch date,
+  // so a live batch reads as cleanly as the proof path (which fills everything
+  // from SAMPLE_MERGE_DATA). Before this, those tokens rendered literally.
+  it("maps the customer's stored address + batch letterDate into the letter body", () => {
+    const built = buildBatchDocuments(company, [customers[0]], {
+      product: "thank_you",
+      letterDate: "June 2026",
+    });
+    const doc = built.documents[0];
+    // The inside-address block resolves from the same jsonb used for to_address.
+    expect(doc.rendered_url).toContain("9 Elm St");
+    expect(doc.rendered_url).toContain("June 2026");
+    // ...and the engine no longer reports them as unresolved.
+    const missing = built.missingByCustomer.find((m) => m.repairCustomerId === "cust-1")?.tokens ?? [];
+    expect(missing).not.toContain("customer.addressLine1");
+    expect(missing).not.toContain("customer.city");
+    expect(missing).not.toContain("customer.state");
+    expect(missing).not.toContain("customer.zip");
+    expect(missing).not.toContain("customer.letterDate");
+  });
+
+  it("leaves letterDate unresolved (and surfaced) when the route omits it", () => {
+    const built = buildBatchDocuments(company, [customers[0]], { product: "thank_you" });
+    const missing = built.missingByCustomer.find((m) => m.repairCustomerId === "cust-1")?.tokens ?? [];
+    // Stays pure: no clock inside the builder — an omitted date is reported, not invented.
+    expect(missing).toContain("customer.letterDate");
+  });
+
+  it("surfaces address tokens as missing when the customer's address is blank", () => {
+    const built = buildBatchDocuments(
+      company,
+      [{ id: "cust-3", first_name: "Sam", last_name: "Vale", address: {} }],
+      { product: "thank_you", letterDate: "June 2026" }
+    );
+    const missing = built.missingByCustomer.find((m) => m.repairCustomerId === "cust-3")?.tokens ?? [];
+    // Empty-string address parts must not masquerade as filled (fail-closed reporting).
+    expect(missing).toContain("customer.addressLine1");
+  });
 });
