@@ -8,48 +8,35 @@ source_type: "pdf"
 
 PS900
 
-
-
-
 Mr. John Sample
 123 Main St
 Springfield, Illinois 62704
-                              PS900
 
-
-
+PS900
 
 John Sample
 123 Main Street
 Springfield, Illinois 62704
-                              PS900
 
+PS901
 
+Mr. John Sample
+123 Main St
+Springfield, Illinois 62704
 
+PS901
 
 Jane Sample
 456 Oak Avenue
 Apt 7
 Springfield, Illinois 62704
-                              PS901
 
-
-
-
-Mr. John Sample
-123 Main St
-Springfield, Illinois 62704
-                              PS902
-
-
-
+PS902
 
 No Street Person
 Chicago, Illinois 60601
-                              PS902
 
-
-
+PS902
 
 Bad Csz
 Nowhere Land

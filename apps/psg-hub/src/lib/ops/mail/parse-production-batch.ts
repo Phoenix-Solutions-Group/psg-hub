@@ -4,18 +4,29 @@
 // production-files-sample/<YYYY-MM-DD>/) is the per-recipient send record for that
 // mailing: one markdown file per (piece, component), e.g. `13-envelope-09-07.md`.
 // The *envelope* component is the addressed artifact — it lists every recipient
-// the piece was mailed to. Each recipient block is page-break (form-feed)
-// delimited and shaped:
+// the piece was mailed to. Recipients are delimited by the PSGID (shop code),
+// which is printed both as a leading marker and as a page-break (form-feed)
+// footer. A recipient block runs from one PSGID marker to the next.
 //
-//   PS218                         <- PSGID (shop key), possibly indented after \f
+// Two real layouts (both observed in the 2021-09-07 batch) are handled:
 //
-//   Mr. Stephen Moore             <- name
-//   2930 North Swan Road          <- street line(s) (0..2; unit on its own line)
-//   Tucson, Arizona 85712         <- City, State ZIP
+//   col-0 (most pieces — t, 13, 16, 10b, …):     warranty pieces (07, 04b — a
+//     PS218                                       marketing line shares the name's
+//                                                 row, left-aligned):
+//     Mr. Stephen Moore                             PS760
+//     2930 North Swan Road
+//     Tucson, Arizona 85712                         Your Repair Warranty Enclosed   Smsgt. Warren Weakley
+//                                                                                   425 Southwest B B Highway
+//                                                                                   Warrensburg, Missouri 64093
 //
-// This module is pure string parsing (no PII normalization/hashing — that is the
-// importer's job). It returns the raw blocks plus the piece metadata read from
-// the filename.
+// The address lines are aligned in a column; the name sits in that same column on
+// its row, with any marketing prefix to its left. So the name is recovered by
+// slicing the name row at the address column (the indent of the first address
+// line). For col-0 pieces the indent is 0 and the whole row is the name.
+//
+// This module is pure string parsing — NO PII normalization/hashing (that is the
+// importer's job, via the injected MailHasher). It returns raw blocks + the piece
+// metadata read from the filename.
 
 import type { ParsedRecipient, PieceVariant } from "./types";
 
@@ -47,58 +58,89 @@ export function parseEnvelopeFilename(filename: string): EnvelopeFileMeta | null
   };
 }
 
+/** Leading whitespace width of a line. */
+function indentOf(line: string): number {
+  const m = line.match(/^(\s*)/);
+  return m ? m[1].length : 0;
+}
+
+/**
+ * Build one ParsedRecipient from the raw (leading-space-preserving) content lines
+ * of a block. The name is recovered from the address-column alignment so a
+ * left-column marketing prefix on warranty pieces is dropped, not hashed.
+ */
+function buildRecipient(
+  psgid: string,
+  rawLines: string[],
+  index: number,
+): ParsedRecipient {
+  const nameRow = rawLines[0] ?? "";
+  // Address column = indent of the first address row (the line after the name).
+  const addrIndent = rawLines.length > 1 ? indentOf(rawLines[1]) : 0;
+  const rawName =
+    addrIndent > 0 && nameRow.length > addrIndent
+      ? nameRow.slice(addrIndent).trim()
+      : nameRow.trim();
+
+  // Remaining rows, trimmed of the alignment column, are street(s) + city/state/zip.
+  const rest = rawLines
+    .slice(1)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  // The city/state/zip is the last line that matches; everything before it (still
+  // within the block) is street/unit.
+  let cszIdx = -1;
+  for (let i = rest.length - 1; i >= 0; i -= 1) {
+    if (CITY_STATE_ZIP_RE.test(rest[i])) {
+      cszIdx = i;
+      break;
+    }
+  }
+  const rawCityStateZip = cszIdx >= 0 ? rest[cszIdx] : null;
+  const rawStreetLines = cszIdx >= 0 ? rest.slice(0, cszIdx) : rest;
+
+  return { psgid, rawName, rawStreetLines, rawCityStateZip, index };
+}
+
 /**
  * Split an envelope artifact's markdown into raw recipient blocks. Each block
- * begins at a PSGID marker and runs until the next marker (or EOF). The first
- * non-empty line after the address lines start is the name; the last line that
- * looks like 'City, State ZIP' ends the address; lines between are street/unit.
+ * opens at a PSGID marker and runs until the next marker (leading-marker rule:
+ * every recipient inherits the shop of the marker above it). The trailing
+ * page-footer marker at EOF opens an empty block, which is dropped (not a reject).
  */
 export function parseEnvelopeMarkdown(content: string): ParsedRecipient[] {
-  // Drop YAML frontmatter, then normalize page-break (\f / \x0c) to newlines so
-  // indented "(\f)PSxxx" markers stand alone.
+  // Drop YAML frontmatter, then turn page-breaks (\f / \x0c) into newlines so an
+  // indented "(\f)PSxxx" footer marker stands alone on its own line.
   const body = content.replace(FRONTMATTER_RE, "").replace(/\f/g, "\n");
 
-  const lines = body
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0 && !HEADING_RE.test(l));
-
   const blocks: ParsedRecipient[] = [];
-  let current: { psgid: string; lines: string[] } | null = null;
+  let psgid = "";
+  let current: string[] | null = null;
   let index = 0;
 
   const flush = () => {
-    if (!current) return;
-    const addrLines = current.lines;
+    if (current === null) return;
+    const lines = current;
+    current = null;
+    // Empty block = the trailing page-footer marker at EOF (structural, not data).
+    if (lines.length === 0) return;
     index += 1;
-    const rawName = addrLines[0] ?? "";
-    // Find the City/State/ZIP line scanning from the end.
-    let cszIdx = -1;
-    for (let i = addrLines.length - 1; i >= 1; i -= 1) {
-      if (CITY_STATE_ZIP_RE.test(addrLines[i])) {
-        cszIdx = i;
-        break;
-      }
-    }
-    const rawCityStateZip = cszIdx >= 0 ? addrLines[cszIdx] : null;
-    const rawStreetLines =
-      cszIdx >= 1 ? addrLines.slice(1, cszIdx) : addrLines.slice(1);
-    blocks.push({
-      psgid: current.psgid,
-      rawName,
-      rawStreetLines,
-      rawCityStateZip,
-      index,
-    });
+    blocks.push(buildRecipient(psgid, lines, index));
   };
 
-  for (const line of lines) {
-    if (PSGID_RE.test(line)) {
+  for (const raw of body.split(/\r?\n/)) {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) continue; // blank padding between blocks
+    if (HEADING_RE.test(trimmed)) continue; // '# 07_Envelope_09-07'
+    if (PSGID_RE.test(trimmed)) {
       flush();
-      current = { psgid: line, lines: [] };
+      psgid = trimmed;
+      current = [];
       continue;
     }
-    if (current) current.lines.push(line);
+    // Keep the raw line (with leading spaces) so the name column can be recovered.
+    if (current) current.push(raw);
   }
   flush();
 

@@ -4,26 +4,24 @@
 // persistable public.mail_send_history records and emits a reconciliation report:
 // source-rows-in vs persisted vs deduplicated vs rejected-with-reason.
 //
-// The importer is a pure function: file contents in, records + report out. It
-// performs NO DB I/O — live wiring (service-client upsert ON CONFLICT (send_ref))
-// is a later, G4-gated step, exactly as the RO importer (PSG-132/139) is shipped
+// The importer is a pure function: file contents + a MailHasher in, records +
+// report out. It performs NO DB I/O and defines NO hashing of its own — the
+// caller injects the ONE shared MailHasher (src/lib/ops/mail/household.ts,
+// PSG-221) so mail_send_history keys match mail_suppression's exactly (spec
+// §3.1/§3.2). Live wiring (service-client upsert ON CONFLICT (send_ref)) is a
+// later, G4-gated step, exactly as the RO importer (PSG-132/139) shipped
 // additive-and-unwired. Raw PII is consumed here and dropped: only salted hashes
 // survive onto MailSendHistoryRecord (AC4).
 
+import type { AddressInput } from "../import/address";
 import {
   parseEnvelopeFilename,
   parseEnvelopeMarkdown,
   splitCityStateZip,
 } from "./parse-production-batch";
-import {
-  householdKey,
-  mailHashSalt,
-  normalizeMailAddress,
-  normalizeRecipientName,
-  recipientHash,
-} from "./recipient-hash";
 import type {
   FileReconciliation,
+  MailHasher,
   MailSendHistoryRecord,
   ParsedRecipient,
   RejectReason,
@@ -45,8 +43,6 @@ export type ImportOptions = {
   sentDate: string;
   /** Production-center batch id, e.g. '2021-09-07'. Defaults to sentDate. */
   batchRef?: string;
-  /** Hash salt override (tests). Defaults to MAIL_HASH_SALT / documented default. */
-  salt?: string;
   source?: string;
 };
 
@@ -57,38 +53,47 @@ const EMPTY_REASON_COUNTS = (): Record<RejectReason, number> => ({
   unparseable_city_state_zip: 0,
 });
 
+type ResolvedOptions = Required<Pick<ImportOptions, "sentDate" | "batchRef" | "source">>;
+
 /**
  * Build a persistable record from one parsed recipient block, or a rejection.
  * Validation order mirrors what a human would check on an envelope: a shop code,
- * a name, a street, and a parseable city/state/zip.
+ * a name, a street, and a parseable city/state/zip. The injected hasher turns the
+ * raw name+address into the salted keys; the raw values never leave this function.
  */
 function buildRecord(
   block: ParsedRecipient,
   meta: { pieceCode: string; pieceVariant: MailSendHistoryRecord["piece_variant"] },
-  opts: Required<Pick<ImportOptions, "sentDate" | "batchRef" | "salt" | "source">>,
+  opts: ResolvedOptions,
+  hasher: MailHasher,
 ): { record: MailSendHistoryRecord } | { reason: RejectReason } {
   if (!block.psgid) return { reason: "missing_psgid" };
-
-  const name = normalizeRecipientName(block.rawName);
-  if (!name) return { reason: "missing_name" };
-
+  if (!block.rawName.trim()) return { reason: "missing_name" };
   if (block.rawStreetLines.length === 0) return { reason: "missing_street" };
 
   const csz = splitCityStateZip(block.rawCityStateZip);
   if (!csz) return { reason: "unparseable_city_state_zip" };
 
-  const address = normalizeMailAddress({
-    street: block.rawStreetLines.join(" "),
+  // Raw address parts handed to the shared hasher, which owns USPS normalization
+  // (so "123 Main St" === "123 Main Street" collapse to one household). line2
+  // carries any unit line; line1 is the street.
+  const address: AddressInput = {
+    line1: block.rawStreetLines[0] ?? null,
+    line2: block.rawStreetLines.slice(1).join(" ") || null,
     city: csz.city,
     state: csz.state,
     zip: csz.zip,
-  });
-  if (!address.street) return { reason: "missing_street" };
+  };
+
+  const recipientHash = hasher.recipientHash(block.rawName, address);
+  const householdKey = hasher.householdKey(address);
+  // A hasher returns "" for an unusable address; treat as an unparseable address.
+  if (!recipientHash || !householdKey) {
+    return { reason: "unparseable_city_state_zip" };
+  }
 
   const shopName = block.psgid;
-  const rHash = recipientHash(name, address, opts.salt);
-  const hKey = householdKey(address, opts.salt);
-  const sendRef = `${shopName}:${rHash}:${meta.pieceCode}:${opts.sentDate}`;
+  const sendRef = `${shopName}:${recipientHash}:${meta.pieceCode}:${opts.sentDate}`;
 
   return {
     record: {
@@ -97,8 +102,8 @@ function buildRecord(
       piece_code: meta.pieceCode,
       piece_variant: meta.pieceVariant,
       sent_date: opts.sentDate,
-      recipient_hash: rHash,
-      household_key: hKey,
+      recipient_hash: recipientHash,
+      household_key: householdKey,
       batch_ref: opts.batchRef,
       send_ref: sendRef,
       source: opts.source,
@@ -110,15 +115,18 @@ function buildRecord(
  * Import a whole production-center send batch (multiple envelope artifacts) into
  * mail_send_history records + a reconciliation report. send_ref-duplicate blocks
  * are collapsed (idempotency, not an error) and counted separately from rejects.
+ *
+ * @param hasher the shared salted-key contract — production passes household.ts
+ *   (PSG-221) so keys match mail_suppression; tests pass a deterministic stand-in.
  */
 export function importSendBatch(
   sources: EnvelopeSource[],
   options: ImportOptions,
+  hasher: MailHasher,
 ): SendHistoryImportResult {
-  const opts = {
+  const opts: ResolvedOptions = {
     sentDate: options.sentDate,
     batchRef: options.batchRef ?? options.sentDate,
-    salt: options.salt ?? mailHashSalt(),
     source: options.source ?? "filemaker",
   };
 
@@ -143,7 +151,7 @@ export function importSendBatch(
 
     for (const block of blocks) {
       sourceRowsIn += 1;
-      const out = buildRecord(block, meta, opts);
+      const out = buildRecord(block, meta, opts, hasher);
       if ("reason" in out) {
         rejected += 1;
         fileRejected += 1;

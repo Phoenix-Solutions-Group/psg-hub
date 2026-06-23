@@ -9,8 +9,26 @@
 // shape) and are dropped once the persistable MailSendHistoryRecord — which
 // carries only salted hashes — is built.
 
+import type { AddressInput } from "../import/address";
+
 /** The numbered legacy pieces PSG's Master Follow-Up Program mails. */
 export type PieceVariant = "letter" | "envelope" | "warranty" | "survey";
+
+/**
+ * The salted-key contract the importer hashes through. Deliberately the exact
+ * shape of src/lib/ops/mail/household.ts (PSG-221) — `householdKey(address)` and
+ * `recipientHash(name, address)` — so the live wiring binds that ONE shared
+ * module and mail_send_history.household_key matches mail_suppression's keys
+ * (spec §3.1/§3.2: the "already_mailed (piece, household)" suppression join). The
+ * importer never defines its own hashing, so the two tables can never diverge.
+ * Tests inject a deterministic stand-in; production injects household.ts.
+ */
+export interface MailHasher {
+  /** Address-derived household dedup key. */
+  householdKey(address: AddressInput): string;
+  /** Recipient-level key (name + address). */
+  recipientHash(name: string, address: AddressInput): string;
+}
 
 /**
  * A recipient block parsed out of a production-center envelope artifact, BEFORE
