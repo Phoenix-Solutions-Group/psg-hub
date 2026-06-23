@@ -23,13 +23,12 @@ All facts below were verified by QA against the merged source (2026-06-23):
 
 ## 1. Setup (operator)
 
-### 1a. Apply the migration (operator gate — PROTOCOL-migration-safety)
+### 1a. Apply the migrations (operator gate — PROTOCOL-migration-safety)
 
-Apply `20260624130000_ccc_phase3_connection_status.sql` in the target **test/pilot** env. It is additive +
-idempotent (`add column if not exists` on `ccc_accounts`; one partial index; no data written; existing RLS
-unchanged). Rollback = drop the eight added columns (see the migration header).
-
-> ⚠️ Do **not** apply against shared/prod without an explicit go-ahead. Test/pilot only.
+> ⚠️ **Verified 2026-06-23: `ccc_accounts` does not exist in prod yet**, so you must apply **both** the Phase 1A
+> foundation (`20260623190000`) *and* Phase 3 (`20260624130000`), in that order — not just Phase 3 as originally
+> worded. **And do NOT use `supabase db push` / `migration repair --reverted` / `db pull` here** — see **§4a** for
+> the verified state, why those CLI commands are unsafe on this shared DB, and the correct dashboard-SQL apply path.
 
 ### 1b. Seed `ccc_accounts` rows spanning statuses
 
@@ -135,34 +134,36 @@ acting superadmin as actor, and the target `shop_id`:
 > migration itself is additive + idempotent (safe). The **seed rows are synthetic test data written to a
 > prod table** — tag them and delete them after (§4e). Prefer a low-traffic window.
 
-### 4a. Apply the migration  (operator gate)
+### 4a. Apply the migrations  (operator gate)  — **DO NOT use `supabase db push` here**
 
-The project is **already linked** (`supabase/.temp/project-ref` = `gylkkzmcmbdftxieyabw`) — no `supabase link` needed.
-On a headless box `supabase login` (browser flow) won't work; supply an **access token** via env instead.
+**Verified prod state (2026-06-23, read-only `execute_sql` on `gylkkzmcmbdftxieyabw`):**
+- `public.ccc_accounts` **does not exist** (0 `ccc_*` tables). So **both** CCC migrations are unapplied:
+  - `20260623190000_ccc_secure_share_foundation.sql` — **Phase 1A**, *creates* `ccc_accounts` + `ccc_api_call_log` + the `manage_ccc_integration` capability + RLS. **Not recorded applied.**
+  - `20260624130000_ccc_phase3_connection_status.sql` — **Phase 3**, *adds* `connection_status` etc. **Has a phantom "applied" ledger row** even though its target table never existed (the remote `schema_migrations` table is unreliable here).
+- Everything else the smoke needs already exists: `access_audit`, `app_user_roles` (already has **2** `psg_superadmin`s), `shops`, `public.user_shop_ids()`, `private.current_user_has_fn`. So Phase 1A's RLS policy will create cleanly.
 
-**Auth (fixes "Access token not provided"):**
-```bash
-cd apps/psg-hub
-export SUPABASE_ACCESS_TOKEN=<personal access token>   # dashboard → Account → Access Tokens (https://supabase.com/dashboard/account/tokens)
-export SUPABASE_DB_PASSWORD=<project db password>       # dashboard → Project Settings → Database (if db push prompts)
-# ^ export in the ephemeral shell only — never write these to a tracked file (PROTOCOL §Secrets)
+> ⛔ **Do NOT run `supabase db push`, `supabase migration repair --status reverted …`, or `supabase db pull`.**
+> The CLI's own error suggests these, but they are **wrong on this shared DB**: the ~30 "remote-only" versions
+> it complains about (`20260610145915`, `20260611162332`, … `20260623095228`) are **sibling apps'** migrations
+> (psg-advantage-portal / market-intelligence) that legitimately live on the same project and are **not** in this
+> repo (PSG-252 / PSG-269 cross-app mirror). `repair --reverted` would mark those real migrations reverted, and
+> `db pull` would suck their schema into our repo — both corrupt the shared ledger. `db push` would also skip
+> Phase 3 (phantom row) while batch-applying a large backlog of local-only versions to prod. Avoid all of it.
+
+**Apply path — dashboard SQL editor (no CLI auth needed):** open the Supabase dashboard → SQL editor for project
+`gylkkzmcmbdftxieyabw`, and run the two migration files **in order**. Both are fully idempotent
+(`create table if not exists` / `add column if not exists`), so they are safe even if partially present:
+1. paste the contents of `apps/psg-hub/supabase/migrations/20260623190000_ccc_secure_share_foundation.sql`, run;
+2. paste the contents of `apps/psg-hub/supabase/migrations/20260624130000_ccc_phase3_connection_status.sql`, run.
+
+(`cat apps/psg-hub/supabase/migrations/20260623190000_*.sql` to copy them — you're already in the repo.) No
+ledger surgery needed; the phantom `20260624130000` row is harmless once the table actually exists. Then verify:
+```sql
+select column_name from information_schema.columns
+ where table_schema='public' and table_name='ccc_accounts' order by 1;   -- expect connection_status, declined_reason, error_reason, …
 ```
-
-> ⚠️ **`db push` is NOT "apply one migration" here.** The remote migration ledger has known **out-of-band
-> drift** (PSG-279: a `≥160000` batch was applied manually; the ledger's latest *recorded* version lags the
-> repo). So `supabase db push` may try to (re)apply a **batch** of migrations to shared prod, not just
-> `20260624130000`. **List first, then decide:**
-```bash
-supabase migration list     # compare LOCAL vs REMOTE columns
-```
-- **If `20260624130000` is the ONLY row missing the REMOTE check** → `supabase db push` is fine (it applies just that one). Then re-run `supabase migration list` to confirm it registered.
-- **If other migrations also show unapplied remotely (drift)** → do **not** push a batch onto shared prod. Apply *only* this migration's DDL via the **dashboard SQL editor** (paste `supabase/migrations/20260624130000_ccc_phase3_connection_status.sql` — it's fully `add column if not exists` / `create index if not exists`, so 100% idempotent and safe to run as-is), then record it without re-applying anything else:
-  ```bash
-  supabase migration repair --status applied 20260624130000
-  ```
-
-After applying, run `get_advisors(security)` (read-only MCP) and confirm **no new** ERROR/WARN vs the baseline.
-Rollback if needed: `alter table public.ccc_accounts drop column connection_status, last_event_at, last_event_label, enabled_at, approved_by, approved_at, declined_reason, error_reason, data_scope;`
+After applying, `get_advisors(security)` should show **no new** ERROR/WARN vs baseline.
+Rollback if needed: `drop table public.ccc_api_call_log, public.ccc_accounts;` (also removes the Phase-3 columns).
 
 ### 4b. Pick real shop UUIDs  (Supabase dashboard → SQL editor, read-only)
 ```sql
