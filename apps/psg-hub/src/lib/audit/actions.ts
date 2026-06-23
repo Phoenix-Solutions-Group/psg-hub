@@ -68,6 +68,12 @@ export const AUDIT_ACTIONS = [
   "ccc.connection.approve",
   "ccc.connection.decline",
   "ccc.connection.revoke",
+  // Google Business Profile connection (PSG-247 / Wave 2 G-b) — a shop owner
+  // disconnects (revokes) the per-shop GBP OAuth grant. The refresh token is
+  // revoked at Google and the linked-account row flipped to `revoked`; the action
+  // is audited so a credential teardown is attributable to an actor + shop.
+  // (Connect runs through the OAuth consent flow, recorded by the linked-account row.)
+  "gbp.disconnect",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

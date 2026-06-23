@@ -17,10 +17,16 @@ import {
   approveApproval,
   supabaseApprovalQueueStore,
 } from "@/lib/ops/approval-queue";
-// Server publisher registry (PSG-248): action_type → publisher. Approving an
-// action publishes through its registered publisher (e.g. review_solicitation
-// sends the SMS/email solicitation). Publish is attempted ONLY on this path.
+// Server publisher registries (action_type → publisher). The pure gate keeps an
+// empty default; the route injects the real publishers so an approved action
+// publishes to its downstream. Two capability registries are merged here:
+//  - buildServerPublishers() (PSG-248): gate defaults + review_solicitation
+//    (lazy — builds the service client only when a publish runs).
+//  - serverPublishers (PSG-247): gbp_post → GBP local post.
+// They cover disjoint action_types; merged so every Wave-2 capability publishes
+// through the one approve gate.
 import { buildServerPublishers } from "@/lib/ops/approval-queue/registry.server";
+import { serverPublishers } from "@/lib/ops/approval-queue/publishers";
 
 const bodySchema = z.object({
   decidedByName: z.string().trim().min(1).max(200).nullish(),
@@ -93,7 +99,7 @@ export async function POST(
         notes: parsed.data.notes ?? null,
         now: new Date().toISOString(),
       },
-      { publishers: buildServerPublishers() }
+      { publishers: { ...buildServerPublishers(), ...serverPublishers } }
     );
 
     await recordAuditEvent({
