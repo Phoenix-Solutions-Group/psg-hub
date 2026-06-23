@@ -17,6 +17,10 @@ import {
   approveApproval,
   supabaseApprovalQueueStore,
 } from "@/lib/ops/approval-queue";
+// Server publisher registry (PSG-248): action_type → publisher. Approving an
+// action publishes through its registered publisher (e.g. review_solicitation
+// sends the SMS/email solicitation). Publish is attempted ONLY on this path.
+import { buildServerPublishers } from "@/lib/ops/approval-queue/registry.server";
 
 const bodySchema = z.object({
   decidedByName: z.string().trim().min(1).max(200).nullish(),
@@ -80,13 +84,17 @@ export async function POST(
 
   const store = supabaseApprovalQueueStore(createServiceClient());
   try {
-    const final = await approveApproval(store, {
-      id,
-      actorProfileId: user.id,
-      actorName: parsed.data.decidedByName ?? null,
-      notes: parsed.data.notes ?? null,
-      now: new Date().toISOString(),
-    });
+    const final = await approveApproval(
+      store,
+      {
+        id,
+        actorProfileId: user.id,
+        actorName: parsed.data.decidedByName ?? null,
+        notes: parsed.data.notes ?? null,
+        now: new Date().toISOString(),
+      },
+      { publishers: buildServerPublishers() }
+    );
 
     await recordAuditEvent({
       actorProfileId: user.id,

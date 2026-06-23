@@ -50,6 +50,16 @@ export default defineConfig({
         "src/lib/ops/mail/parse-production-batch.ts", // PSG-223 W0 send-batch parser
         "src/lib/ops/mail/send-history-import.ts", // PSG-223 W0 importer + reconciliation
         "src/lib/ccc/connection-state.ts", // PSG-266 CCC Phase 3 connection-state contract (pure)
+        // PSG-248 / Wave 2 (G-c) — proactive review solicitation (SMS + email).
+        "src/lib/ops/solicitation/contact.ts", // PII-min contact normalization + hashing
+        "src/lib/ops/solicitation/optout.ts", // STOP/START/HELP classification + status fold
+        "src/lib/ops/solicitation/token.ts", // signed unsubscribe token
+        "src/lib/ops/solicitation/draft.ts", // copy builder + CAN-SPAM/TCPA validator
+        "src/lib/ops/solicitation/plan.ts", // per-channel send-plan gate
+        "src/lib/ops/solicitation/enqueue.ts", // draft + govern: build, validate, queue
+        "src/lib/ops/solicitation/publisher.ts", // approval-queue publisher (send on approve)
+        "src/app/api/sms/webhook/route.ts", // Twilio inbound STOP/START/HELP
+        "src/app/api/unsubscribe/route.ts", // CAN-SPAM unsubscribe
       ],
       // Excluded v0.2-adjacent surfaces (covered elsewhere / not unit-gateable
       // in env=node), with rationale:
