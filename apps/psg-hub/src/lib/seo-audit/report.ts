@@ -12,7 +12,7 @@
 // the "greenfield degrades cleanly" acceptance path.
 
 import { auditCrawledSite, deriveKeywordTargets } from "./auditor";
-import { GRADE_THRESHOLDS, SEVERITY_PENALTY } from "./constants";
+import { GRADE_THRESHOLDS, GREENFIELD_FOUNDATION_PAGES, SEVERITY_PENALTY } from "./constants";
 import type {
   AuditFinding,
   AuditGrade,
@@ -91,9 +91,9 @@ function recommendationsFor(mode: "audited" | "greenfield", findings: AuditFindi
   }
   const recs: string[] = [];
   const sev = countBySeverity(findings);
-  if (sev.critical > 0) recs.push("Fix broken pages (4xx/5xx) first — they waste crawl budget and lose customers.");
-  if (sev.high > 0) recs.push("Restore missing titles and indexability so your key pages can rank at all.");
-  if (sev.medium > 0) recs.push("Add meta descriptions, single H1s, and richer content to thin or unoptimized pages.");
+  if (sev.critical > 0) recs.push("Fix broken pages first — they turn customers away and hold back the rest of your site.");
+  if (sev.high > 0) recs.push("Give every key page a clear title and make sure Google can find it, so your pages can show up in search.");
+  if (sev.medium > 0) recs.push("Add a short search summary, one clear headline, and more content to your thin pages.");
   recs.push("Prioritize the keyword opportunities below into your content calendar.");
   if (brief.locations.length > 1) recs.push("Ensure every city you serve has a dedicated, distinct service-area page.");
   return recs;
@@ -131,6 +131,12 @@ export function buildShopAuditReport(brief: ShopBrief, opts: BuildAuditOptions):
         improveCount: 0,
         findingsBySeverity: countBySeverity(findings),
         keywordOpportunities: keywordTargets.length,
+        plan: {
+          servicePages: brief.services.length,
+          citiesToCover: brief.locations.length,
+          pagesToBuild:
+            GREENFIELD_FOUNDATION_PAGES + brief.services.length + brief.locations.length,
+        },
       },
       findings,
       recommendations: recommendationsFor("greenfield", findings, brief),
@@ -158,6 +164,7 @@ export function buildShopAuditReport(brief: ShopBrief, opts: BuildAuditOptions):
       improveCount,
       findingsBySeverity: countBySeverity(findings),
       keywordOpportunities: keywordTargets.length,
+      plan: null,
     },
     findings,
     recommendations: recommendationsFor("audited", findings, brief),
