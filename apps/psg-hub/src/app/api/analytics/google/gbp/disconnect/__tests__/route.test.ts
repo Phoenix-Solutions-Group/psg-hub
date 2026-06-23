@@ -57,8 +57,8 @@ vi.mock("@/lib/supabase/service", () => ({
     }),
   })),
 }));
-vi.mock("@/lib/google-ads/crypto", () => ({ decryptRefreshToken: (...a: unknown[]) => decryptSpy(...a) }));
-vi.mock("@/lib/google-ads/oauth", () => ({ revokeAtGoogle: (...a: unknown[]) => revokeSpy(...a) }));
+vi.mock("@/lib/google-ads/crypto", () => ({ decryptRefreshToken: () => decryptSpy() }));
+vi.mock("@/lib/google-ads/oauth", () => ({ revokeAtGoogle: () => revokeSpy() }));
 vi.mock("@/lib/audit/access-audit", () => ({
   recordAuditEvent: vi.fn(async (e: Record<string, unknown>) => {
     auditEvents.push(e);
