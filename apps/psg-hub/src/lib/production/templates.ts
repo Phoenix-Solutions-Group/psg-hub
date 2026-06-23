@@ -60,6 +60,12 @@ export interface MailCustomer {
   vehicle?: string;
   /** ISO date (yyyy-mm-dd) the work / repair completed, for warranty copy. */
   serviceDate?: string;
+  /**
+   * Per-customer ACRB survey credentials (PSG-219): the Online Security Code and
+   * Survey ID printed on survey-ask pieces. Per-customer data, not per-shop skin.
+   */
+  surveySecurityCode?: string;
+  surveyId?: string;
 }
 
 /** The body shop (PSG's client) the piece is sent on behalf of. */
@@ -411,7 +417,7 @@ html, body { margin: 0; padding: 0; }
 }
 
 /** Wrap a postcard side body in a self-contained HTML document. */
-function postcardDoc(klass: string, inner: string): string {
+export function postcardDoc(klass: string, inner: string): string {
   return (
     `<!doctype html><html lang="en"><head><meta charset="UTF-8" />` +
     postcardStyle() +
@@ -436,7 +442,7 @@ p { margin: 0 0 0.16in; }
 }
 
 /** Wrap a letter body in a self-contained HTML document. */
-function letterDoc(inner: string): string {
+export function letterDoc(inner: string): string {
   return (
     `<!doctype html><html lang="en"><head><meta charset="UTF-8" />` +
     letterStyle() +

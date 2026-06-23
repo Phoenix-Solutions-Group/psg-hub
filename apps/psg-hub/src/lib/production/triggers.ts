@@ -71,6 +71,14 @@ export const PERFECT_SCORE_EMI = 1 as const;
  */
 export const REPAIR_THRESHOLDS = [500, 750, 1000] as const;
 
+/**
+ * Cycle-anniversary win-back threshold (days). PSG's legacy "16"-letter re-engages
+ * a repeat customer who has lapsed past the typical buying cycle — set just under
+ * a year so the piece lands before the customer's next likely repair decision.
+ * Marketing-tunable; recalibrate against the 30-yr return-interval distribution.
+ */
+export const ANNIVERSARY_WINBACK_DAYS = 330 as const;
+
 /* -------------------------------------------------------------------------- */
 /* Attributes the engine reads                                                */
 /* -------------------------------------------------------------------------- */
@@ -116,6 +124,20 @@ export interface CustomerAttributes {
   estimateOnly?: boolean;
   /** Fleet / no mailable consumer contact — consumer pieces are suppressed. */
   fleet?: boolean;
+  /**
+   * Days since the customer's last completed service here. Drives the
+   * cycle-anniversary win-back (the legacy "16"-letter): a lapsed repeat
+   * customer who has not returned within the buying cycle. `null`/undefined =
+   * never serviced / unknown → no win-back.
+   */
+  daysSinceService?: number | null;
+  /**
+   * A dated goodwill occasion that has come due for this recipient — birthday
+   * or a seasonal/holiday greeting. Drives the seasonal-greeting piece. The
+   * batch service sets this from the customer's birthday / the campaign season;
+   * the engine only reads which occasion (if any) is live.
+   */
+  greetingOccasion?: "birthday" | "seasonal" | null;
 }
 
 /** Attributes with the tier resolved — what rules actually evaluate against. */
@@ -185,7 +207,11 @@ export type LetterPiece =
   | "totaled_vehicle"
   | "estimate_followup"
   | "warranty"
-  | "thank_you";
+  | "thank_you"
+  // W2 additions (PSG-304): the time-driven lifecycle pieces that complete the
+  // full triggered-letter matrix beyond the survey/repair-driven core above.
+  | "cycle_anniversary"
+  | "seasonal_greeting";
 
 /**
  * Piece category. Suppression operates on these: a Disengaged customer receives
@@ -298,6 +324,32 @@ export const TRIGGER_RULES: readonly TriggerRule[] = [
     priority: 40,
     // Acquisition coupon for an unclosed, shop-designated estimate.
     when: (a) => a.estimateOnly === true,
+  },
+  {
+    id: "cycle_anniversary",
+    name: "Cycle Anniversary Win-Back",
+    piece: "cycle_anniversary",
+    category: "upsell",
+    recipient: "customer",
+    priority: 45,
+    // The legacy "16"-letter: a past repair customer who has lapsed beyond the
+    // buying cycle. Re-engagement/offer → upsell, so it is correctly withheld
+    // from the Disengaged (recovery-only) by the suppression engine.
+    when: (a) =>
+      a.isRepairCustomer &&
+      a.totalLoss !== true &&
+      a.daysSinceService != null &&
+      a.daysSinceService >= ANNIVERSARY_WINBACK_DAYS,
+  },
+  {
+    id: "seasonal_greeting",
+    name: "Birthday / Seasonal Greeting",
+    piece: "seasonal_greeting",
+    category: "relationship",
+    recipient: "customer",
+    priority: 48,
+    // Pure goodwill — no offer. Fires only when a dated occasion is live.
+    when: (a) => a.greetingOccasion === "birthday" || a.greetingOccasion === "seasonal",
   },
   {
     id: "thank_you",
@@ -512,6 +564,11 @@ export function attributesToFlags(attrs: CustomerAttributes): TemplateFlags {
     perfectScore: normalized.surveyReturned === true && normalized.emi === PERFECT_SCORE_EMI,
     disengaged: normalized.engagementTier === "Disengaged",
     tier: normalized.engagementTier,
+    anniversaryDue:
+      normalized.daysSinceService != null &&
+      normalized.daysSinceService >= ANNIVERSARY_WINBACK_DAYS,
+    isBirthday: normalized.greetingOccasion === "birthday",
+    isSeasonal: normalized.greetingOccasion === "seasonal",
   };
   for (const threshold of REPAIR_THRESHOLDS) {
     flags[`repairOver${threshold}`] = repairTotal > threshold;
