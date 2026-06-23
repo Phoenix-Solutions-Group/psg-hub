@@ -47,6 +47,8 @@ export default defineConfig({
         "src/app/api/content/[id]/publish/route.ts", // PSG-194 approved->published gate
         "src/app/api/content/[id]/reject/route.ts", // PSG-194 reject-bug regression
         "src/lib/bsm/content-drafts.ts", // PSG-194 idempotent draft persistence
+        "src/lib/ops/mail/parse-production-batch.ts", // PSG-223 W0 send-batch parser
+        "src/lib/ops/mail/send-history-import.ts", // PSG-223 W0 importer + reconciliation
       ],
       // Excluded v0.2-adjacent surfaces (covered elsewhere / not unit-gateable
       // in env=node), with rationale:
