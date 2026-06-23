@@ -17,6 +17,10 @@ import {
   approveApproval,
   supabaseApprovalQueueStore,
 } from "@/lib/ops/approval-queue";
+// PSG-247 — the live server-side publisher registry (gbp_post → GBP local post,
+// + future G-a/c). The pure gate keeps an empty default; the route injects the
+// real publishers so an approved action actually publishes to its downstream.
+import { serverPublishers } from "@/lib/ops/approval-queue/publishers";
 
 const bodySchema = z.object({
   decidedByName: z.string().trim().min(1).max(200).nullish(),
@@ -80,13 +84,17 @@ export async function POST(
 
   const store = supabaseApprovalQueueStore(createServiceClient());
   try {
-    const final = await approveApproval(store, {
-      id,
-      actorProfileId: user.id,
-      actorName: parsed.data.decidedByName ?? null,
-      notes: parsed.data.notes ?? null,
-      now: new Date().toISOString(),
-    });
+    const final = await approveApproval(
+      store,
+      {
+        id,
+        actorProfileId: user.id,
+        actorName: parsed.data.decidedByName ?? null,
+        notes: parsed.data.notes ?? null,
+        now: new Date().toISOString(),
+      },
+      { publishers: serverPublishers }
+    );
 
     await recordAuditEvent({
       actorProfileId: user.id,

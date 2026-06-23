@@ -91,6 +91,12 @@ vi.mock("@/lib/ops/approval-queue", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/ops/approval-queue")>();
   return { ...actual, supabaseApprovalQueueStore: vi.fn(() => store) };
 });
+// PSG-247 — these PSG-245 route tests assert the gate's "no registered publisher →
+// approved" invariant. The approve route now injects the live serverPublishers
+// (gbp_post → GBP local post); stub it EMPTY here so this suite keeps testing the
+// generic gating/orchestration in isolation. The live publish wiring is covered in
+// approve-publish.test.ts (controllable fake) + the publisher/client unit tests.
+vi.mock("@/lib/ops/approval-queue/publishers", () => ({ serverPublishers: {} }));
 
 import { POST as approve } from "../[id]/approve/route";
 import { POST as reject } from "../[id]/reject/route";
