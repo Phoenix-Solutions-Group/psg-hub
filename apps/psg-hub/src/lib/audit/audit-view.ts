@@ -19,6 +19,7 @@ export type AuditCategory =
   | "superadmin"
   | "intel"
   | "production"
+  | "approvals"
   | "other";
 
 const ACTION_LABELS: Record<AuditAction, string> = {
@@ -44,6 +45,8 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "production.template.approve": "Approved mail template",
   "production.template.release": "Released mail template",
   "production.template.revoke": "Revoked mail template",
+  "approval.approve": "Approved queued action",
+  "approval.reject": "Rejected queued action",
 };
 
 /** Human label for an action; falls back to the raw key for forward-compat. */
@@ -61,6 +64,7 @@ export function auditCategory(action: string): AuditCategory {
   if (action.startsWith("superadmin")) return "superadmin";
   if (action.startsWith("intel")) return "intel";
   if (action.startsWith("production")) return "production";
+  if (action.startsWith("approval")) return "approvals";
   return "other";
 }
 
@@ -71,6 +75,7 @@ export const AUDIT_CATEGORY_LABELS: Record<AuditCategory, string> = {
   superadmin: "Superadmin allowlist",
   intel: "Intel reports",
   production: "Mail production",
+  approvals: "Approval queue",
   other: "Other",
 };
 

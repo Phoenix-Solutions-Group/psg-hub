@@ -47,6 +47,13 @@ export const AUDIT_ACTIONS = [
   "production.template.approve",
   "production.template.release",
   "production.template.revoke",
+  // generic agent→approve→publish approval queue (PSG-245 / Wave 2 G-d) — an
+  // agent-proposed action (content / gbp_post / review_reply / …) is queued, then
+  // approved or rejected by a role-gated human; the action publishes ONLY on
+  // approve. Each decision is attributable to an actor + shop so the human gate is
+  // provable. Generic over action_type so G-a/b/c all publish through one gate.
+  "approval.approve",
+  "approval.reject",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
