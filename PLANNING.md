@@ -1,5 +1,11 @@
 # psg-hub
 
+> ⚠️ **NON-AUTHORITATIVE (not a system of record).** This file is a PAUL planning
+> artifact retained project-local to `psg-hub`. It is a draft/input only — **Paperclip is
+> the system of record** for scope, status, priority, and ownership. Where this file and
+> Paperclip disagree, Paperclip wins. See `docs/governance/track-c-framework-containment.md`
+> (PSG-346 / Track C PSG-328).
+
 > Unified PSG platform: customer-facing portal (analytics, AI agents, invoicing, payments) + internal operational backbone (Companies, Repair Customers, ROs, Estimates, Surveys, Production, 26 operational reports, master data) + PSG-internal agentic market intelligence. Replaces fragmented tooling and the legacy FileMaker Advantage Program.
 
 **Created:** 2026-05-28 (last revised: 2026-05-29, v7 — Critical Qs 1–8 + Important Qs 9–22 + Discovery Qs 23–25 resolved (Q15 deferred), 71 decisions)

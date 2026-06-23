@@ -15,6 +15,16 @@
 // are frozen by PLANNING.md and are the public report ids; do not rename them.
 
 import {
+  agentCaptureRun,
+  agentSalesRun,
+  claimsReviewRun,
+  nameRecapByShopRun,
+  payTypeAnalysisRun,
+  referralDirectoryRun,
+  vehicleAnalysisMakeRun,
+  vehicleAnalysisModelRun,
+} from "./live/customer-insurance";
+import {
   bodyTechPerformanceRun,
   estimatorCsiRun,
   marketDashboardRun,
@@ -469,7 +479,10 @@ const definitions: ReportDefinition[] = [
       col("amount", "Amount", "currency"),
       col("share", "Share", "percent"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: pay type spine-derived (insurer present → Insurance, else
+    // Customer Pay); ROs = count, amount = Σ payload grandTotal, share of total $.
+    dataStatus: "available",
+    run: payTypeAnalysisRun,
     sampleRows: () => {
       const base = build(4, (i) => ({
         payType: payType(i),
@@ -494,7 +507,10 @@ const definitions: ReportDefinition[] = [
       col("ros", "ROs", "number"),
       col("avgSeverity", "Avg Severity", "currency"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: repair_orders → vehicles(make); ROs = count, avgSeverity =
+    // avg payload grandTotal. ROs with no decoded vehicle group under "—".
+    dataStatus: "available",
+    run: vehicleAnalysisMakeRun,
     sampleRows: () =>
       build(6, (i) => ({
         make: make(i),
@@ -514,7 +530,9 @@ const definitions: ReportDefinition[] = [
       col("ros", "ROs", "number"),
       col("avgSeverity", "Avg Severity", "currency"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: repair_orders → vehicles(make, model); grouped by make+model.
+    dataStatus: "available",
+    run: vehicleAnalysisModelRun,
     sampleRows: () =>
       build(6, (i) => ({
         make: make(i),
@@ -536,7 +554,11 @@ const definitions: ReportDefinition[] = [
       col("ros", "ROs", "number"),
       col("amount", "Captured", "currency"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: referral category/source spine-derived from the insurer/agent
+    // edges (Insurance Agent → agent, Insurance Company → insurer, else Direct);
+    // ROs = count, amount = Σ payload grandTotal.
+    dataStatus: "available",
+    run: referralDirectoryRun,
     sampleRows: () =>
       build(N, (i) => ({
         category: category(i),
@@ -558,7 +580,10 @@ const definitions: ReportDefinition[] = [
       col("ros", "ROs Referred", "number"),
       col("firstSeen", "First Seen", "date"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: repair_orders with an insurance_agent_id, grouped by agent;
+    // ROs = count, firstSeen = earliest created_at (date).
+    dataStatus: "available",
+    run: agentCaptureRun,
     sampleRows: (p) =>
       build(N, (i) => ({
         agent: customerName(i + 4),
@@ -580,7 +605,10 @@ const definitions: ReportDefinition[] = [
       col("ros", "ROs", "number"),
       col("sales", "Sales", "currency"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: same agent grouping as agent-capture; sales = Σ payload
+    // grandTotal, ranked by sales desc.
+    dataStatus: "available",
+    run: agentSalesRun,
     sampleRows: () =>
       build(N, (i) => ({
         agent: customerName(i + 4),
@@ -603,7 +631,11 @@ const definitions: ReportDefinition[] = [
       col("supplements", "Supplements", "number"),
       col("amount", "Claim $", "currency"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: repair_orders with an insurer, grouped by insurer; claims =
+    // count, totalLoss = total_loss_flag count, amount = Σ payload grandTotal.
+    // Supplements have no per-insurer source on the spine yet → null.
+    dataStatus: "available",
+    run: claimsReviewRun,
     sampleRows: () =>
       build(6, (i) => ({
         insurer: insurer(i),
@@ -626,7 +658,11 @@ const definitions: ReportDefinition[] = [
       col("ros", "ROs", "number"),
       col("amount", "Amount", "currency"),
     ],
-    dataStatus: "pending-data",
+    // PSG-48 live: repair_orders → companies(shop) + repair_customers(name),
+    // grouped by shop+customer; ROs = count, amount = Σ payload grandTotal. Only
+    // the customer name (this report's business field) is output — no other PII.
+    dataStatus: "available",
+    run: nameRecapByShopRun,
     sampleRows: () =>
       build(N, (i) => ({
         shop: shopName(i),
