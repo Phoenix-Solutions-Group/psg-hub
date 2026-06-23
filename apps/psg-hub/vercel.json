@@ -50,6 +50,10 @@
     {
       "path": "/api/cron/competitor-scoring",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/competitor-monitor",
+      "schedule": "0 10 * * 1"
     }
   ]
 }
