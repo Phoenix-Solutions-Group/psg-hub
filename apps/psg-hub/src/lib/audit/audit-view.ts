@@ -21,6 +21,7 @@ export type AuditCategory =
   | "production"
   | "approvals"
   | "sitemap"
+  | "ccc"
   | "other";
 
 const ACTION_LABELS: Record<AuditAction, string> = {
@@ -49,6 +50,9 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "approval.approve": "Approved queued action",
   "approval.reject": "Rejected queued action",
   "sitemap.run": "Ran sitemap pipeline",
+  "ccc.connection.approve": "Approved CCC connection",
+  "ccc.connection.decline": "Declined CCC connection",
+  "ccc.connection.revoke": "Revoked CCC connection",
 };
 
 /** Human label for an action; falls back to the raw key for forward-compat. */
@@ -68,6 +72,7 @@ export function auditCategory(action: string): AuditCategory {
   if (action.startsWith("production")) return "production";
   if (action.startsWith("approval")) return "approvals";
   if (action.startsWith("sitemap")) return "sitemap";
+  if (action.startsWith("ccc.")) return "ccc";
   return "other";
 }
 
@@ -80,6 +85,7 @@ export const AUDIT_CATEGORY_LABELS: Record<AuditCategory, string> = {
   production: "Mail production",
   approvals: "Approval queue",
   sitemap: "Sitemap runs",
+  ccc: "CCC connections",
   other: "Other",
 };
 
