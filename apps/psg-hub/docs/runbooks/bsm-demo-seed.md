@@ -12,16 +12,24 @@ one customer (**Maria Alvarez / 2021 Honda Civic**).
 
 ## Status as of this runbook
 
-`bsm_demo.sql` sections 1–7 have been **applied to the shared DB and verified** by Ravi (PSG-335):
-Riverside shop + primary location; 4 reviews with mixed sentiment (1 actionable 1-star);
-1 owner-voice service-recovery draft reply; 2 content items; 1 organic (Semrush) analytics
-snapshot; Maria Alvarez closed RO (`RO-77001`) on a 2021 Civic; 2 CSI surveys (one high → thank-you
-eligible, one low → service-recovery eligible); 3 CCC connections (pending / connected / error);
-`thank_you` (released) + `service_recovery` (approved) template approvals at the **current
-origin/main content hashes** (`a419851a…` / `d1846f2d…`, commit `cd4c500`).
+**FULLY APPLIED to the shared DB (`gylkkzmcmbdftxieyabw`) and verified** by Ravi (PSG-335), 2026-06-25,
+after Nick authorized agent-applied DB work ("you have the Supabase CLI/MCP installed, do it
+yourself, similar to Nora"). This includes the two previously-pending migrations and the demo login:
 
-The two **fenced sections** at the end of the seed file are NOT yet applied — they have operator
-prerequisites (below).
+- **Sections 1–7:** Riverside shop + primary location; 4 reviews with mixed sentiment (1 actionable
+  1-star); 1 owner-voice service-recovery draft reply; 2 content items; 1 organic (Semrush) analytics
+  snapshot; Maria Alvarez closed RO (`RO-77001`) on a 2021 Civic; 2 CSI surveys (high/low);
+  3 CCC connections (pending / connected / error); `thank_you` (released) + `service_recovery`
+  (approved) template approvals at the current content hashes (`a419851a…` / `d1846f2d…`, `cd4c500`).
+- **Migrations applied** (via Supabase MCP, recorded in `supabase_migrations.schema_migrations`):
+  `20260624120000_approval_queue`, `20260624140000_review_solicitation`.
+- **Section A:** 2 pending `approval_queue` items (review request + service-recovery) for §3 C1/C2/C4.
+- **Section B (shop login):** `riverside.demo@phoenixsolutionsgroup.net` / `BSMDemo2026!` —
+  auth.users + identity + profile + `customer` role + `shop_users` owner membership for Riverside.
+  RLS verified: this user sees ONLY Riverside's rows, and all §3 dashboards are non-empty.
+
+**Both personas are now runnable.** The only residual items are deployment ENV secrets (below) — they
+are non-blocking for the click-through (the inline HTML proof + approve/release work without them).
 
 ---
 
@@ -33,13 +41,15 @@ prerequisites (below).
 | 2. `thank_you` + `service_recovery` approved in the gate | ✅ Seeded (released / approved) at current hash | Ravi |
 | 4. CCC connection in each state (connected / pending / error) | ✅ Seeded & verified | Ravi |
 | 6. Reviews + sentiment on the dashboard | ✅ Seeded (mixed, 1 actionable) | Ravi |
-| 3. **Lob in TEST mode** (`LOB_API_KEY=test_*`) | ⛔ Operator secret | **Nick** |
-| 5. **Shop-scoped login** (auth.users + password) | ⛔ Agents can't create auth users | **Nick** |
-| — **`db push` 2 pending migrations** (approval_queue, review_solicitation) | ⛔ Shared-prod DDL | **Nick** |
+| 5. **Shop-scoped login** (`riverside.demo@…` / `BSMDemo2026!`) | ✅ Created (auth.users + membership) | Ravi |
+| — **2 pending migrations** (approval_queue, review_solicitation) | ✅ Applied via MCP | Ravi |
+| — Approval-queue items (Section A) for §3 C1/C2/C4 | ✅ Seeded & RLS-verified | Ravi |
+| 3. **Lob in TEST mode** (`LOB_API_KEY=test_*`) | ⛔ ENV secret (Lob key value is Nick's) | **Nick** |
 | — **Proof PDF render env** (`MAIL_RENDER_URL`, `RENDER_TOKEN`) for §2 S4 | ⛔ Operator env | **Nick** (confirm) |
 
-> Superadmin login already exists: `nick@` and `tina@` are `psg_superadmin`. §1 item 5's *superadmin*
-> half is done; only the *shop-scoped* login is outstanding.
+> Superadmin login already exists: `nick@` and `tina@` are `psg_superadmin`. The shop-scoped login
+> is now created too. The only outstanding items are the two deployment ENV secrets above — they are
+> not DB rows, so they need Nick to set them in the demo deployment's environment.
 
 ---
 

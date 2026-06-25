@@ -9,14 +9,17 @@
 -- Fully idempotent — fixed demo UUIDs + ON CONFLICT. Safe to re-run.
 -- Teardown block at the bottom (commented) removes every demo row.
 --
--- PREREQUISITES handled by the operator BEFORE the fenced sections at the end work:
---   * `supabase db push` of 20260624120000_approval_queue.sql AND
---     20260624140000_review_solicitation.sql (not yet in the shared DB) — needed
---     for the §3 approvals inbox (C1/C2/C4).
---   * A real auth.users login for the Riverside shop (agents cannot create auth
---     users / passwords) — needed to attach shop_users membership so /dashboard/*
---     renders the seeded rows.
--- The two fenced sections at the end stay commented until those prereqs land.
+-- STATUS 2026-06-25: FULLY APPLIED to the shared DB (`gylkkzmcmbdftxieyabw`) by
+-- Ravi after Nick authorized agent-applied DB work ("similar to Nora"). All
+-- sections incl. A + B below are live. Prereqs that were operator-gated and are
+-- now done:
+--   * migrations 20260624120000_approval_queue + 20260624140000_review_solicitation
+--     applied via Supabase MCP (recorded in supabase_migrations.schema_migrations).
+--   * Riverside shop login created in auth.users (Section B) + shop_users membership.
+-- Remaining (deployment ENV secrets only Nick can set, NOT DB — non-blocking for
+-- the click-through; the inline HTML proof + approve/release work without them):
+--   * LOB_API_KEY=test_*  (only needed for §2 S4's "Seed test" Lob submission)
+--   * MAIL_RENDER_URL + RENDER_TOKEN  (only needed for the downloadable PDF proof)
 
 begin;
 
@@ -178,41 +181,71 @@ on conflict (id) do nothing;
 commit;
 
 -- ===========================================================================
--- FENCED SECTION A — APPROVAL QUEUE (§3 C1/C2/C4). REQUIRES the two pending
--- migrations to be db-pushed first (approval_queue, review_solicitation).
--- Uncomment and run after the operator applies them.
+-- SECTION A — APPROVAL QUEUE (§3 C1/C2/C4). APPLIED. (Needs the approval_queue +
+-- review_solicitation migrations, which are now in the shared DB.)
 -- ===========================================================================
--- begin;
--- insert into public.approval_queue (id, shop_id, action_type, title, summary, status, proposed_by, payload_jsonb) values
---   ('d5e00000-0000-4000-8000-000000000071','d5e00000-0000-4000-8000-000000000010',
---    'review_solicitation','Review request for Maria Alvarez (SMS + email)',
---    'Drafted in Riverside Collision''s voice, ready to send after pickup.', 'pending', 'agent:solicitation',
---    '{"channels":["email","sms"],"recipient_first_name":"Maria",
---      "email":{"subject":"How did we do, Maria?","text":"Hi Maria, thanks for trusting Riverside Collision with your Civic. If you have a moment, we''d be grateful for a quick review.","html":"<p>Hi Maria,</p><p>Thanks for trusting Riverside Collision with your Civic. If you have a moment, we''d be grateful for a quick review.</p>"},
---      "sms":"Hi Maria, thanks for choosing Riverside Collision! Mind leaving a quick review? [link] Reply STOP to opt out."}'::jsonb),
---   ('d5e00000-0000-4000-8000-000000000072','d5e00000-0000-4000-8000-000000000010',
---    'review_reply','Service-recovery reply to a 1-star review',
---    'Owner-voice apology + direct line for Karen Boyd''s 1-star. Approve to publish.', 'pending', 'agent:review-responder',
---    '{"review_item_id":"d5e00000-0000-4000-8000-000000000024","tone":"apologetic",
---      "draft":"Karen, this is the owner — I''m sorry we let you down. Please call me at (555) 014-7701 and I''ll make this right."}'::jsonb)
--- on conflict (id) do nothing;
--- commit;
+begin;
+insert into public.approval_queue (id, shop_id, action_type, title, summary, status, proposed_by, payload_jsonb) values
+  ('d5e00000-0000-4000-8000-000000000071','d5e00000-0000-4000-8000-000000000010',
+   'review_solicitation','Review request for Maria Alvarez (SMS + email)',
+   'Drafted in Riverside Collision''s voice, ready to send after pickup.', 'pending', 'agent:solicitation',
+   '{"channels":["email","sms"],"recipient_first_name":"Maria",
+     "email":{"subject":"How did we do, Maria?","text":"Hi Maria, thanks for trusting Riverside Collision with your Civic. If you have a moment, we''d be grateful for a quick review.","html":"<p>Hi Maria,</p><p>Thanks for trusting Riverside Collision with your Civic. If you have a moment, we''d be grateful for a quick review.</p>"},
+     "sms":"Hi Maria, thanks for choosing Riverside Collision! Mind leaving a quick review? [link] Reply STOP to opt out."}'::jsonb),
+  ('d5e00000-0000-4000-8000-000000000072','d5e00000-0000-4000-8000-000000000010',
+   'review_reply','Service-recovery reply to a 1-star review',
+   'Owner-voice apology + direct line for Karen Boyd''s 1-star. Approve to publish.', 'pending', 'agent:review-responder',
+   '{"review_item_id":"d5e00000-0000-4000-8000-000000000024","tone":"apologetic",
+     "draft":"Karen, this is the owner — I''m sorry we let you down. Please call me at (555) 014-7701 and I''ll make this right."}'::jsonb)
+on conflict (id) do nothing;
+commit;
 
 -- ===========================================================================
--- FENCED SECTION B — SHOP-SCOPED LOGIN MEMBERSHIP (§1 item 5, §3). REQUIRES the
--- operator to create the Riverside auth.users login first, then paste its UUID.
+-- SECTION B — SHOP-SCOPED LOGIN (§1 item 5, §3). APPLIED.
+-- Demo login: riverside.demo@phoenixsolutionsgroup.net / BSMDemo2026!  (demo-only,
+-- confirmed email). Created in auth.users + auth.identities (GoTrue needs both),
+-- profile + customer role, and the shop_users owner membership for Riverside.
+-- Empty token strings avoid GoTrue's NULL-scan login bug; auth.identities.email
+-- is a generated column (do not insert it).
 -- ===========================================================================
--- begin;
--- insert into public.shop_users (user_id, shop_id, role) values
---   ('<RIVERSIDE_AUTH_USER_UUID>','d5e00000-0000-4000-8000-000000000010','owner')
--- on conflict do nothing;
--- commit;
+begin;
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  email_change_token_current, reauthentication_token, phone_change, phone_change_token,
+  email_change_confirm_status, is_sso_user, is_anonymous
+) values (
+  '00000000-0000-0000-0000-000000000000','d5e00000-0000-4000-8000-0000000000a0',
+  'authenticated','authenticated','riverside.demo@phoenixsolutionsgroup.net',
+  crypt('BSMDemo2026!', gen_salt('bf')), now(),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{"sub":"d5e00000-0000-4000-8000-0000000000a0","email":"riverside.demo@phoenixsolutionsgroup.net","email_verified":true,"phone_verified":false}'::jsonb,
+  now(), now(), '', '', '', '', '', '', '', '', 0, false, false
+) on conflict (id) do nothing;
+insert into auth.identities (id, provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+values (
+  'd5e00000-0000-4000-8000-0000000000a1','d5e00000-0000-4000-8000-0000000000a0','d5e00000-0000-4000-8000-0000000000a0',
+  '{"sub":"d5e00000-0000-4000-8000-0000000000a0","email":"riverside.demo@phoenixsolutionsgroup.net","email_verified":true,"phone_verified":false}'::jsonb,
+  'email', now(), now(), now()
+) on conflict (provider_id, provider) do nothing;
+insert into public.profiles (id, display_name)
+  values ('d5e00000-0000-4000-8000-0000000000a0','Riverside Collision (demo shop)') on conflict (id) do nothing;
+insert into public.app_user_roles (profile_id, role)
+  values ('d5e00000-0000-4000-8000-0000000000a0','customer') on conflict (profile_id) do nothing;
+insert into public.shop_users (user_id, shop_id, role)
+  values ('d5e00000-0000-4000-8000-0000000000a0','d5e00000-0000-4000-8000-000000000010','owner') on conflict do nothing;
+commit;
 
 -- ===========================================================================
 -- TEARDOWN — removes every BSM demo row. Run to clean up after the demo.
 -- ===========================================================================
 -- begin;
 -- delete from public.shop_users where shop_id = 'd5e00000-0000-4000-8000-000000000010';
+-- delete from public.app_user_roles where profile_id = 'd5e00000-0000-4000-8000-0000000000a0';
+-- delete from auth.identities where user_id = 'd5e00000-0000-4000-8000-0000000000a0';
+-- delete from auth.users where id = 'd5e00000-0000-4000-8000-0000000000a0';
+-- delete from public.profiles where id = 'd5e00000-0000-4000-8000-0000000000a0';
 -- delete from public.approval_queue where shop_id = 'd5e00000-0000-4000-8000-000000000010';
 -- delete from public.survey_responses where id in (99000001, 99000002);
 -- delete from public.repair_orders where id = 'd5e00000-0000-4000-8000-000000000063';
