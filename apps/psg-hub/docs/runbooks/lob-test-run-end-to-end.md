@@ -39,14 +39,22 @@ way to prove the really-mailed piece is correct before a customer ever receives 
 
 | # | Item | How to verify |
 |---|------|---------------|
-| 1 | Demo tenant seeded (Riverside Collision company + ≥1 repair customer with a **stored address**) — owned by `192135da` | `companies` + `repair_customers` rows exist; `repair_customers.address` has `line1/city/state/postal_code` |
-| 2 | `thank_you` **and** `service_recovery` templates have a **released** approval at the **current** content hash | `/ops/production/templates` shows each as released; gate uses `(template_key, content_hash)` |
-| 3 | `LOB_API_KEY` is a **`test_*`** key | seed-test route returns `403 LiveLobKeyError` for `live_*`; a `test_*` key is required for any real submit |
-| 4 | `LOB_WEBHOOK_SECRET` set (so status events flow back) | `/api/webhooks/lob` returns `500` if the secret is unset (fail-closed) — set it |
-| 5 | Operator has `manage_production` capability | `/api/production/generate` returns `403` otherwise |
+| 1 | Demo tenant seeded — `survey_attribution_pilot.sql` → `bsm_demo.sql` → **`demo_business_program.sql`** (this last one completes the production path: company address + program skin) | run `demo_business_program_verify.sql` — all four queries return the expected rows |
+| 2 | The ops company the batch generates for (`…089000`, now "Riverside Collision") has an `address` jsonb with `postal_code`, and a `company_programs` row with a full `customizations_jsonb` skin | `demo_business_program_verify.sql` §A + §B |
+| 3 | `thank_you` has a **released** approval at the current hash (gate passes). `service_recovery` is seeded **approved** — release it only if you also run that batch | `/ops/production/templates`; `demo_business_program_verify.sql` §D |
+| 4 | `LOB_API_KEY` is a **`test_*`** key | seed-test route returns `403 LiveLobKeyError` for `live_*`; a `test_*` key is required for any real submit |
+| 5 | `LOB_WEBHOOK_SECRET` set (so status events flow back) | `/api/webhooks/lob` returns `500` if the secret is unset (fail-closed) — set it |
+| 6 | Operator has `manage_production` capability | `/api/production/generate` returns `403` otherwise |
 
-If (2) fails for `service_recovery` after PSG-331 (warranty-term tokenization changed its
-bytes), re-proof → approve → release the new hash before generating that template's batch.
+Without `demo_business_program.sql` the pipeline still runs, but the letter renders a **blank
+return address and a blank shop skin** (greeting/owner/survey/footer) — the board demo hides
+this by using the Proof path (SAMPLE_MERGE_DATA); the real batch path does not. After PSG-331,
+`service_recovery`'s content hash changed (warranty-term tokenization) — re-proof → approve →
+release the new hash before generating that template's batch.
+
+The concrete IDs for the generate call (below): `company_id =
+00000000-0000-4000-8000-000000089000`, `product_id = 00000000-0000-4000-8000-000000033310`,
+Maria's `repair_customer_id = d5e00000-0000-4000-8000-000000000061`.
 
 ---
 
@@ -60,10 +68,10 @@ All calls are authenticated as a `manage_production` operator.
    POST /api/production/generate
    {
      "name": "DEMO Riverside thank-you (test run)",
-     "company_id": "<Riverside Collision company id>",
+     "company_id": "00000000-0000-4000-8000-000000089000",
      "product": "thank_you",
-     "product_id": "<company_programs.product_id for this program>",
-     "repair_customer_ids": ["<one or two demo customer ids>"]   // omit = every customer
+     "product_id": "00000000-0000-4000-8000-000000033310",
+     "repair_customer_ids": ["d5e00000-0000-4000-8000-000000000061"]   // Maria; omit = every customer
    }
    ```
 
