@@ -9,6 +9,7 @@ import {
   readGate1Summary,
   readGate2Summary,
   pageTypeLabel,
+  pageTypeVariant,
   type SitemapShopOption,
 } from "@/components/ops/sitemap-studio";
 
@@ -158,8 +159,8 @@ describe("readGate1Summary (pure — KPI chips + table view, NO raw JSON)", () =
       proposedPages: 2,
       inventoryCount: 12,
       rows: [
-        { label: "Collision Repair", pageType: "Service", keywords: 29 },
-        { label: "Lincoln Collision", pageType: "Local (city)", keywords: 4 },
+        { label: "Collision Repair", pageType: "Service", pageTypeKey: "service", keywords: 29 },
+        { label: "Lincoln Collision", pageType: "Local (city)", pageTypeKey: "local", keywords: 4 },
       ],
     });
   });
@@ -168,7 +169,23 @@ describe("readGate1Summary (pure — KPI chips + table view, NO raw JSON)", () =
     const view = readGate1Summary({ clusters: [{ keywords: "x" }] });
     expect(view.clusterCount).toBe(0);
     expect(view.inventoryCount).toBe(0);
-    expect(view.rows[0]).toEqual({ label: "—", pageType: "—", keywords: 0 });
+    expect(view.rows[0]).toEqual({ label: "—", pageType: "—", pageTypeKey: "", keywords: 0 });
+  });
+});
+
+describe("pageTypeVariant (pure — intent-hierarchy tint, Lee PSG-381 CR-1)", () => {
+  it("maps page types to in-system semantic Badge variants by intent", () => {
+    expect(pageTypeVariant("transactional")).toBe("default"); // Convert — flagship, pops
+    expect(pageTypeVariant("service")).toBe("secondary");
+    expect(pageTypeVariant("home")).toBe("secondary");
+    expect(pageTypeVariant("local")).toBe("secondary");
+    expect(pageTypeVariant("informational")).toBe("outline"); // Inform — recedes
+  });
+
+  it("unknown/blank types fall back to the quiet outline pill", () => {
+    expect(pageTypeVariant("product_listing")).toBe("outline");
+    expect(pageTypeVariant("")).toBe("outline");
+    expect(pageTypeVariant(undefined)).toBe("outline");
   });
 });
 

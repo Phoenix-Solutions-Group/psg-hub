@@ -108,6 +108,34 @@ export function pageTypeLabel(raw: unknown): string {
     .join(" ");
 }
 
+/**
+ * Tint the page-type pill by commercial-intent hierarchy so the Type column reads as a
+ * hierarchy instead of a wall of identical `outline` pills (Lee's PSG-381 CR-1).
+ *
+ * We deliberately map to the *existing* semantic Badge tokens — not a new hex palette — so the
+ * studio stays "one system" with the rest of /ops (the very thing the §6 sign-off praised). The
+ * deliverable's literal `.pill` palette colors *disposition* (new/keep/improve), which the gate-1
+ * summary doesn't carry, so mirroring it 1:1 would be semantically wrong here. The ordering echoes
+ * the seo-audit opportunity ranking (transactional closest-to-booked → informational lowest):
+ *   • Convert  (transactional) — solid `default`  → flagship intent, pops
+ *   • Service / Home           — `secondary`      → core, neutral fill
+ *   • Local (city)             — `secondary`
+ *   • Inform   (informational) — quiet `outline`  → lowest intent, recedes
+ * Unknown types fall back to `outline`.
+ */
+const PAGE_TYPE_VARIANT: Record<string, React.ComponentProps<typeof Badge>["variant"]> = {
+  transactional: "default",
+  service: "secondary",
+  home: "secondary",
+  local: "secondary",
+  informational: "outline",
+};
+
+export function pageTypeVariant(raw: unknown): React.ComponentProps<typeof Badge>["variant"] {
+  const key = String(raw ?? "").trim();
+  return PAGE_TYPE_VARIANT[key] ?? "outline";
+}
+
 /** The 3 fixed stepper nodes, mapping the engine's two gate phases + the terminal complete. */
 export type StepKey = "clusters_page_types" | "package_handoff" | "complete";
 export type StepStatus =
@@ -227,6 +255,8 @@ export function decisionErrorMessage(status: number, body: Record<string, unknow
 export interface Gate1Row {
   label: string;
   pageType: string;
+  /** Raw page-type enum kept alongside the friendly label so the pill can be tinted by intent. */
+  pageTypeKey: string;
   keywords: number;
 }
 export interface Gate1View {
@@ -242,6 +272,7 @@ export function readGate1Summary(summary: CheckpointSummary): Gate1View {
     return {
       label: typeof o.label === "string" && o.label.trim() ? o.label : "—",
       pageType: pageTypeLabel(o.pageType),
+      pageTypeKey: String(o.pageType ?? "").trim(),
       keywords: typeof o.keywords === "number" ? o.keywords : Number(o.keywords) || 0,
     };
   });
@@ -672,7 +703,7 @@ function Gate1Card({ view, ...decide }: { view: Gate1View } & DecideProps) {
                   <TableRow key={`${r.label}-${i}`}>
                     <TableCell className="font-medium">{r.label}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{r.pageType}</Badge>
+                      <Badge variant={pageTypeVariant(r.pageTypeKey)}>{r.pageType}</Badge>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{r.keywords}</TableCell>
                   </TableRow>
@@ -704,9 +735,15 @@ function Gate2Card({ view, ...decide }: { view: Gate2View } & DecideProps) {
         <p className="font-semibold">Step 2 · Final package</p>
         <Badge variant="warning">In review</Badge>
       </div>
+      {/* Standalone "which shop am I signing off" anchor (Lee's PSG-381 CR-2) — surfaced as a
+          labeled trust-check line rather than buried in prose. */}
+      <div className="rounded-md border border-border bg-background px-3 py-2">
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">Signing off for</span>
+        <p className="text-sm font-semibold leading-tight">{view.businessName}</p>
+      </div>
       <p className="text-sm text-muted-foreground">
-        The full site plan for {view.businessName} is ready. Review the shape, then approve to
-        generate the client deliverable.
+        The full site plan is ready. Review the shape, then approve to generate the client
+        deliverable.
       </p>
 
       <div className="flex flex-wrap gap-3">
