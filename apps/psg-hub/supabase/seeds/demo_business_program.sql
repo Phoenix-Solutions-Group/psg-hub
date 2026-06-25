@@ -22,19 +22,23 @@
 -- NOT auto-run (config.toml [db.seed] -> ./seed.sql only). Fully idempotent —
 -- fixed UUIDs + ON CONFLICT + UPDATE-by-id — so re-applying backfills, never dupes.
 --
--- IDENTITY NOTE (@Lee — please confirm): this renames company …089000 to
---   "Riverside Collision" so the letter, Maria's survey rows, the reviews, the
---   approvals queue and the shop login all read the SAME shop (they already say
---   "Riverside Collision" everywhere except this reused ops-company row). The one
---   consequence: the *older* survey_attribution_pilot rows ("Dana Driver", RO-8900x)
---   carry a denormalized text `survey_responses.shop_name = 'PSG Pilot Body Shop'`,
---   so those legacy report rows keep the old name. Trivially reversible — drop the
---   `name =` line below to keep "PSG Pilot Body Shop".
+-- IDENTITY NOTE (RATIFIED by Lee, PSG-375): the rename of company …089000 to
+--   "Riverside Collision" STAYS. One demo shop, one name everywhere — the letter,
+--   Maria's survey rows, the reviews, the approvals queue and the shop login all
+--   already read "Riverside Collision"; renaming this reused ops-company row makes
+--   the mailed piece match. Accepted consequence: the *older*
+--   survey_attribution_pilot rows ("Dana Driver", RO-8900x) keep a denormalized
+--   `survey_responses.shop_name = 'PSG Pilot Body Shop'`, so those legacy report
+--   rows show the old name. That is a separate, historical demo dataset and is fine
+--   to leave as-is. (Still trivially reversible — drop the `name =` line below.)
 --
--- BRAND NOTE (@Lee): the skin copy + the logo / owner-signature URLs below are
---   functional placeholders so the letter renders clean today. Swap them for the
---   real Riverside Collision brand assets/voice when ready (changing them does not
---   change the released `thank_you` content hash — the skin is data, not template).
+-- BRAND NOTE (FINALIZED by Lee, PSG-375): skin voice tuned for differentiation +
+--   honest claims (see the footer `tagline` + `greeting`). The `logo` /
+--   `ownerSignatureUrl` placeholder URLs were REMOVED, not swapped: Riverside
+--   Collision is a fictional demo shop with no real raster assets, and the prior
+--   cdn.example URLs were unreachable (would print broken images). The W1 masters'
+--   typeset fallbacks render the piece clean without them. Changing this skin does
+--   NOT change the released `thank_you` content hash — it is data, not template.
 --
 -- SERVICE-RECOVERY NOTE: bsm_demo.sql seeds `service_recovery` as `approved` (not
 --   `released`). To also run the service_recovery batch, release it first (the
@@ -74,18 +78,28 @@ values
    '00000000-0000-4000-8000-000000033310',
    1, 0,
    jsonb_build_object(
-     'greeting',          'Thank you for trusting Riverside Collision with your vehicle.',
+     'greeting',          'Thank you for trusting Riverside Collision to restore your vehicle to pre-accident condition — and for the chance to back that work in writing.',
      'footer',            'Riverside Collision ·',
-     'logo',              'https://cdn.example/riverside-collision-logo.png',
+     -- BRAND ASSETS (@Lee, PSG-375): `logo` and `ownerSignatureUrl` are intentionally
+     -- OMITTED. Riverside Collision is a fictional demo shop with no real raster brand
+     -- assets, and the prior `https://cdn.example/...` placeholders are unreachable —
+     -- the live render would print broken-image boxes. The W1 masters carry typeset
+     -- fallbacks built so "the piece always mails" (templates.ts MASTER_MASTHEAD ->
+     -- typeset shop name; masterSignature() -> display-italic owner name), so dropping
+     -- these keys renders a clean, professional letter today. To skin with raster art,
+     -- add `logo`/`ownerSignatureUrl` as ABSOLUTE URLs the prod render service can fetch
+     -- (e.g. a public Supabase Storage object) — do NOT reintroduce cdn.example.
      'addressLine1',      '1450 O Street',
      'addressLine2',      'Lincoln, NE 68508',
      'ownerName',         'Sam Rivera',
      'ownerFirstName',    'Sam',
      'ownerTitle',        'Owner',
-     'ownerSignatureUrl', 'https://cdn.example/sam-rivera-signature.png',
      'ownerDirectLine',   '(555) 014-7701',
      'surveyUrl',         'www.theacrb.com',
-     'tagline',           'We keep our customers by keeping our customers satisfied',
+     -- tagline prints in the released thank_you footer — the one real brand-voice
+     -- surface on the mailed piece. Differentiated + proof-forward (ties the lifetime
+     -- workmanship warranty below into the printed promise), not a generic maxim.
+     'tagline',           'Collision repair done right — and guaranteed for life',
      'pieceCode',         'RC-W1',
      'jobNumber',         'RC.0001',
      'certifications',    'I-CAR Gold Class · ASE Certified',
