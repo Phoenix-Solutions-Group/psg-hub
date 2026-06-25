@@ -63,7 +63,7 @@ type RunState =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "complete"; html: string }
-  | { kind: "awaiting"; phase: string; summary: CheckpointSummary }
+  | { kind: "awaiting"; phase: string; summary: CheckpointSummary; contentHash: string }
   | { kind: "changes"; phase: string; notes: string | null }
   | { kind: "error"; message: string };
 
@@ -72,12 +72,75 @@ const PHASE_LABEL: Record<string, string> = {
   package_handoff: "Final package hand-off",
 };
 
+/**
+ * Map a POST /api/ops/sitemap response to the next RunState (pure, unit-tested). `complete`
+ * is signalled separately because the caller must then fetch the rendered HTML; every other
+ * outcome maps directly. Mirrors competitor-intel's runStateFromResponse.
+ */
+export type RunResponseResult =
+  | { kind: "complete" } // caller fetches &format=html, then sets { kind: "complete", html }
+  | { kind: "awaiting"; phase: string; summary: CheckpointSummary; contentHash: string }
+  | { kind: "changes"; phase: string; notes: string | null }
+  | { kind: "error"; message: string };
+
+export function parseRunResponse(
+  status: number,
+  ok: boolean,
+  body: Record<string, unknown> | null,
+): RunResponseResult {
+  if (ok && body?.status === "complete") return { kind: "complete" };
+  if (status === 202 && body?.status === "awaiting_approval") {
+    return {
+      kind: "awaiting",
+      phase: String(body.phase ?? ""),
+      summary: (body.summary as CheckpointSummary) ?? {},
+      contentHash: String(body.contentHash ?? ""),
+    };
+  }
+  if (status === 409 && body?.status === "changes_requested") {
+    return { kind: "changes", phase: String(body.phase ?? ""), notes: (body.notes as string | null) ?? null };
+  }
+  return { kind: "error", message: (body?.error as string) ?? `Run failed (HTTP ${status}).` };
+}
+
+/** Request body for POST /api/ops/sitemap/checkpoints (pure). Notes only ride a change request. */
+export function buildDecisionPayload(opts: {
+  shopId: string;
+  phase: string;
+  contentHash: string;
+  decision: "approved" | "changes_requested";
+  changeNotes: string;
+}): { shopId: string; phase: string; contentHash: string; decision: string; notes: string | null } {
+  return {
+    shopId: opts.shopId,
+    phase: opts.phase,
+    contentHash: opts.contentHash,
+    decision: opts.decision,
+    notes: opts.decision === "changes_requested" ? opts.changeNotes.trim() || null : null,
+  };
+}
+
+/** Plain-language failure line for a non-OK decision response (pure). */
+export function decisionErrorMessage(status: number, body: Record<string, unknown> | null): string {
+  return (
+    (body?.message as string) ??
+    (body?.error as string) ??
+    `Couldn’t record the decision (HTTP ${status}).`
+  );
+}
+
 export function SitemapStudio({ shops }: { shops: SitemapShopOption[] }) {
   const [shopId, setShopId] = useState<string>(shops[0]?.id ?? "");
   const [state, setState] = useState<RunState>({ kind: "idle" });
+  // In-UI checkpoint decision (PSG-376): which decision is in flight (drives button spinners),
+  // any decision-specific error, and the optional note attached to a "request changes".
+  const [deciding, setDeciding] = useState<null | "approved" | "changes_requested">(null);
+  const [decideError, setDecideError] = useState<string | null>(null);
+  const [changeNotes, setChangeNotes] = useState("");
 
   const run = useCallback(async () => {
     if (!shopId) return;
+    setDecideError(null);
     setState({ kind: "loading" });
     try {
       const res = await fetch("/api/ops/sitemap", {
@@ -92,7 +155,8 @@ export function SitemapStudio({ shops }: { shops: SitemapShopOption[] }) {
         body = null;
       }
 
-      if (res.ok && body?.status === "complete") {
+      const result = parseRunResponse(res.status, res.ok, body);
+      if (result.kind === "complete") {
         // Fetch the persisted deliverable for inline preview.
         const html = await fetch(
           `/api/ops/sitemap?shopId=${encodeURIComponent(shopId)}&format=html`,
@@ -100,30 +164,58 @@ export function SitemapStudio({ shops }: { shops: SitemapShopOption[] }) {
         setState({ kind: "complete", html });
         return;
       }
-      if (res.status === 202 && body?.status === "awaiting_approval") {
-        setState({
-          kind: "awaiting",
-          phase: String(body.phase ?? ""),
-          summary: (body.summary as CheckpointSummary) ?? {},
-        });
-        return;
-      }
-      if (res.status === 409 && body?.status === "changes_requested") {
-        setState({
-          kind: "changes",
-          phase: String(body.phase ?? ""),
-          notes: (body.notes as string | null) ?? null,
-        });
-        return;
-      }
-      setState({
-        kind: "error",
-        message: (body?.error as string) ?? `Run failed (HTTP ${res.status}).`,
-      });
+      if (result.kind === "awaiting") setChangeNotes("");
+      setState(result);
     } catch {
       setState({ kind: "error", message: "Network error running the sitemap pipeline." });
     }
   }, [shopId]);
+
+  // Decide the queued checkpoint in-UI, then auto-advance: an APPROVE re-runs the pipeline so
+  // it moves to the next gate (clusters → package → complete) without a manual second "Run";
+  // a REQUEST-CHANGES records the note and hands the partial back (re-running would just stop
+  // at the same gate again). The contentHash anchors the decision to the queued plan.
+  const decide = useCallback(
+    async (decision: "approved" | "changes_requested") => {
+      if (state.kind !== "awaiting" || !shopId) return;
+      setDeciding(decision);
+      setDecideError(null);
+      const payload = buildDecisionPayload({
+        shopId,
+        phase: state.phase,
+        contentHash: state.contentHash,
+        decision,
+        changeNotes,
+      });
+      try {
+        const res = await fetch("/api/ops/sitemap/checkpoints", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        let body: Record<string, unknown> | null = null;
+        try {
+          body = await res.json();
+        } catch {
+          body = null;
+        }
+        if (!res.ok) {
+          setDecideError(decisionErrorMessage(res.status, body));
+          return;
+        }
+        if (decision === "approved") {
+          await run(); // auto-advance to the next gate (or complete)
+        } else {
+          setState({ kind: "changes", phase: state.phase, notes: payload.notes });
+        }
+      } catch {
+        setDecideError("Network error recording the decision.");
+      } finally {
+        setDeciding(null);
+      }
+    },
+    [shopId, state, changeNotes, run],
+  );
 
   if (shops.length === 0) {
     return (
@@ -181,12 +273,48 @@ export function SitemapStudio({ shops }: { shops: SitemapShopOption[] }) {
             Checkpoint queued — {PHASE_LABEL[state.phase] ?? state.phase}
           </p>
           <p className="mt-1 text-muted-foreground">
-            This gate is waiting for a superadmin to approve it. Once approved, run the pipeline
-            again to advance to the next stage.
+            Review the plan below, then approve to advance — the pipeline re-runs automatically
+            and moves to the next stage. Request changes to hand the partial back with a note.
           </p>
           <pre className="mt-2 overflow-x-auto rounded bg-background p-2 text-xs text-muted-foreground">
             {JSON.stringify(state.summary, null, 2)}
           </pre>
+
+          <div className="mt-3 space-y-2">
+            <div>
+              <Label htmlFor="sitemap-change-notes" className="text-xs">
+                Notes (required context for a change request)
+              </Label>
+              <textarea
+                id="sitemap-change-notes"
+                aria-label="Decision notes"
+                value={changeNotes}
+                onChange={(e) => setChangeNotes(e.target.value)}
+                rows={2}
+                disabled={deciding !== null}
+                className="mt-1 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                placeholder="Optional on approve; describe what to change when requesting changes."
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="button" onClick={() => decide("approved")} disabled={deciding !== null}>
+                {deciding === "approved" ? "Approving…" : "Approve"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => decide("changes_requested")}
+                disabled={deciding !== null}
+              >
+                {deciding === "changes_requested" ? "Submitting…" : "Request changes"}
+              </Button>
+            </div>
+            {decideError && (
+              <p className="text-sm text-destructive" role="alert">
+                {decideError}
+              </p>
+            )}
+          </div>
         </div>
       )}
 

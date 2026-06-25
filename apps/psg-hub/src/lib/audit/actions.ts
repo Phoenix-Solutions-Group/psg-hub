@@ -60,6 +60,12 @@ export const AUDIT_ACTIONS = [
   // attributable to an actor + shop. The payload's `outcome` records complete vs.
   // awaiting a checkpoint approval.
   "sitemap.run",
+  // sitemap checkpoint decision (PSG-376 / Wave 1A) — a superadmin approves or requests
+  // changes on one of the pipeline's two human gates IN-UI (no SQL) via
+  // POST /api/ops/sitemap/checkpoints. Each decision flips the queued row and is audited
+  // with the real actor so the hand-off sign-off is provable. Payload records phase,
+  // decision, and the content_hash that was signed off.
+  "sitemap.checkpoint",
   // CCC Secure Share connection approval queue (PSG-267 / Phase 3) — a superadmin drives the
   // per-shop connection state machine from /ops/admin/integrations/ccc: approve a pending
   // request (→ connected), decline it with a reason (→ declined), or revoke an active/errored

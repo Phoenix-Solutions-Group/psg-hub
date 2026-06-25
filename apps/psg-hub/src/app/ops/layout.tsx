@@ -19,6 +19,7 @@ const OPS_NAV: { href: string; label: string; superadminOnly?: boolean }[] = [
   { href: "/ops/surveys", label: "Surveys" },
   { href: "/ops/production/templates", label: "Mail Templates" },
   { href: "/ops/ads-mutations", label: "Ads Mutations" },
+  { href: "/ops/sitemap", label: "Sitemap", superadminOnly: true },
   { href: "/ops/intel", label: "Competitor Intel", superadminOnly: true },
   { href: "/ops/admin/integrations/ccc", label: "CCC Connections", superadminOnly: true },
   { href: "/ops/sys-config", label: "System Config" },

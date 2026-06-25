@@ -63,6 +63,34 @@ export interface CheckpointStore {
   upsertPending(rec: CheckpointRecord): Promise<CheckpointRecord>;
 }
 
+/** Fields a superadmin's in-UI decision stamps onto a still-pending checkpoint row. */
+export interface CheckpointDecisionPatch {
+  status: "approved" | "changes_requested";
+  decided_by_profile_id: string;
+  /** The ACTUAL superadmin (resolved server-side), never the literal "operator". */
+  decided_by_name: string | null;
+  decided_at: string;
+  notes: string | null;
+}
+
+/**
+ * Decision surface for the in-UI approve / request-changes route (PSG-376) — kept SEPARATE
+ * from {@link CheckpointStore} so the run path's faked stores need not implement it. The
+ * supabase-backed store satisfies both.
+ */
+export interface CheckpointDecisionStore {
+  get(
+    shopId: string,
+    phase: CheckpointPhase,
+    contentHash: string,
+  ): Promise<CheckpointRecord | null>;
+  /**
+   * Flip a still-PENDING row to a decision (optimistic on status='pending'). Returns the
+   * updated row, or null when the row was no longer pending (lost a concurrent decision race).
+   */
+  applyDecision(id: string, patch: CheckpointDecisionPatch): Promise<CheckpointRecord | null>;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Content hashing                                                            */
 /* -------------------------------------------------------------------------- */
@@ -237,6 +265,74 @@ function countNodes(node: { children: unknown[] }): number {
 }
 
 /* -------------------------------------------------------------------------- */
+/* In-UI decision (PSG-376 — approve / request-changes, no SQL)               */
+/* -------------------------------------------------------------------------- */
+
+export type DecideCheckpointInput = {
+  shopId: string;
+  phase: CheckpointPhase;
+  /** The hash the approver is signing off — must match a queued row (stale-guard). */
+  contentHash: string;
+  decision: "approved" | "changes_requested";
+  decidedByProfileId: string;
+  /** The ACTUAL superadmin name (resolved server-side from the profile / auth email). */
+  decidedByName: string | null;
+  notes: string | null;
+  now: string;
+};
+
+export type DecideCheckpointResult =
+  /** The pending row was flipped to the requested decision. */
+  | { status: "decided"; record: CheckpointRecord }
+  /** The row was ALREADY at the requested decision — replayed safely (no double-write). */
+  | { status: "idempotent"; record: CheckpointRecord }
+  /** No queued row matches (shop, phase, contentHash) — the plan likely drifted. */
+  | { status: "stale" }
+  /** The row is already decided the OTHER way — a settled gate can't be flipped. */
+  | { status: "conflict"; record: CheckpointRecord };
+
+/**
+ * Apply a superadmin's in-UI decision to a single queued checkpoint. Pure over the injected
+ * {@link CheckpointDecisionStore} (faked in tests, supabase-backed in the route).
+ *
+ * The `contentHash` is the stale-guard: it must match a row queued for (shop, phase) or the
+ * decision is rejected as `stale` — a re-run that produced a different plan enqueues a new
+ * hash, so an approval aimed at the superseded plan can never silently advance the pipeline.
+ * Re-deciding an already-decided gate is idempotent when the decision matches, and a
+ * `conflict` when it differs (a settled gate is not re-openable here).
+ */
+export async function decideCheckpoint(
+  store: CheckpointDecisionStore,
+  input: DecideCheckpointInput,
+): Promise<DecideCheckpointResult> {
+  const existing = await store.get(input.shopId, input.phase, input.contentHash);
+  if (!existing) return { status: "stale" };
+  if (existing.status !== "pending") {
+    return existing.status === input.decision
+      ? { status: "idempotent", record: existing }
+      : { status: "conflict", record: existing };
+  }
+
+  const updated = await store.applyDecision(existing.id as string, {
+    status: input.decision,
+    decided_by_profile_id: input.decidedByProfileId,
+    decided_by_name: input.decidedByName,
+    decided_at: input.now,
+    notes: input.notes,
+  });
+  if (updated) return { status: "decided", record: updated };
+
+  // Lost a concurrent race (row no longer pending) — re-read and classify deterministically.
+  const after = await store.get(input.shopId, input.phase, input.contentHash);
+  if (after && after.status !== "pending") {
+    return after.status === input.decision
+      ? { status: "idempotent", record: after }
+      : { status: "conflict", record: after };
+  }
+  return { status: "stale" };
+}
+
+/* -------------------------------------------------------------------------- */
 /* Supabase-backed store                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -266,7 +362,9 @@ function rowToRecord(row: Record<string, unknown>): CheckpointRecord {
  * Supabase-backed CheckpointStore (service-role client; RLS bypassed by design — the
  * sitemap_checkpoints table is default-deny and the /ops/sitemap route is superadmin-gated).
  */
-export function supabaseCheckpointStore(service: SupabaseClient): CheckpointStore {
+export function supabaseCheckpointStore(
+  service: SupabaseClient,
+): CheckpointStore & CheckpointDecisionStore {
   return {
     async get(shopId, phase, contentHash) {
       const { data, error } = await service
@@ -297,6 +395,27 @@ export function supabaseCheckpointStore(service: SupabaseClient): CheckpointStor
       if (error) throw new Error(`sitemap_checkpoints.upsertPending failed: ${error.message}`);
       const stored = await this.get(rec.shop_id, rec.phase, rec.content_hash);
       return stored ?? rec;
+    },
+    async applyDecision(id, patch) {
+      // Optimistic concurrency: only flip a row that is STILL pending. A row already
+      // decided (by a concurrent request) matches `.eq("status","pending")` zero times →
+      // null, which decideCheckpoint() re-reads and classifies as idempotent/conflict.
+      const { data, error } = await service
+        .from(TABLE)
+        .update({
+          status: patch.status,
+          decided_by_profile_id: patch.decided_by_profile_id,
+          decided_by_name: patch.decided_by_name,
+          decided_at: patch.decided_at,
+          notes: patch.notes,
+          updated_at: patch.decided_at,
+        })
+        .eq("id", id)
+        .eq("status", "pending")
+        .select(COLUMNS)
+        .maybeSingle();
+      if (error) throw new Error(`sitemap_checkpoints.applyDecision failed: ${error.message}`);
+      return data ? rowToRecord(data as unknown as Record<string, unknown>) : null;
     },
   };
 }

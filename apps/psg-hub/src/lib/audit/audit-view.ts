@@ -51,6 +51,7 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "approval.approve": "Approved queued action",
   "approval.reject": "Rejected queued action",
   "sitemap.run": "Ran sitemap pipeline",
+  "sitemap.checkpoint": "Decided sitemap checkpoint",
   "ccc.connection.approve": "Approved CCC connection",
   "ccc.connection.decline": "Declined CCC connection",
   "ccc.connection.revoke": "Revoked CCC connection",
