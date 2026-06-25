@@ -26,14 +26,16 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 
 let decideOutcome: Record<string, unknown> = { status: "decided", record: {} };
-const decideMock = vi.fn(async () => decideOutcome);
+const decideMock = vi.fn<(...args: unknown[]) => Promise<Record<string, unknown>>>(
+  async () => decideOutcome,
+);
 vi.mock("@/lib/sitemap/checkpoint", () => ({
-  decideCheckpoint: (...args: unknown[]) => decideMock(...(args as [])),
+  decideCheckpoint: (...args: unknown[]) => decideMock(...args),
   supabaseCheckpointStore: () => ({}),
 }));
 
-const auditMock = vi.fn(async () => "audit-1");
-vi.mock("@/lib/audit/access-audit", () => ({ recordAuditEvent: (...a: unknown[]) => auditMock(...(a as [])) }));
+const auditMock = vi.fn<(...args: unknown[]) => Promise<string>>(async () => "audit-1");
+vi.mock("@/lib/audit/access-audit", () => ({ recordAuditEvent: (...a: unknown[]) => auditMock(...a) }));
 
 const { POST } = await import("@/app/api/ops/sitemap/checkpoints/route");
 
