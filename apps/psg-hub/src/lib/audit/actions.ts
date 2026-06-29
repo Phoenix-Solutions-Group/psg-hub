@@ -80,6 +80,12 @@ export const AUDIT_ACTIONS = [
   // is audited so a credential teardown is attributable to an actor + shop.
   // (Connect runs through the OAuth consent flow, recorded by the linked-account row.)
   "gbp.disconnect",
+  // Pilot-intake signed-upload mint (PSG-394 / Track A) — a superadmin mints a
+  // time-limited signed-upload URL for a caller-named object in the private
+  // "pilot-intake" bucket so Nick can drop the real RO/Estimate export for the
+  // PSG-387 E2E. No file contents pass through the audit row — only the target
+  // object path — so the mint is attributable to an actor + shop without leaking PII.
+  "intake.signed_upload.mint",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

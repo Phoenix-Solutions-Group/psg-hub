@@ -23,6 +23,7 @@ export type AuditCategory =
   | "sitemap"
   | "ccc"
   | "integrations"
+  | "intake"
   | "other";
 
 const ACTION_LABELS: Record<AuditAction, string> = {
@@ -56,6 +57,7 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "ccc.connection.decline": "Declined CCC connection",
   "ccc.connection.revoke": "Revoked CCC connection",
   "gbp.disconnect": "Disconnected Google Business Profile",
+  "intake.signed_upload.mint": "Minted pilot-intake upload link",
 };
 
 /** Human label for an action; falls back to the raw key for forward-compat. */
@@ -77,6 +79,7 @@ export function auditCategory(action: string): AuditCategory {
   if (action.startsWith("sitemap")) return "sitemap";
   if (action.startsWith("ccc.")) return "ccc";
   if (action.startsWith("gbp")) return "integrations";
+  if (action.startsWith("intake")) return "intake";
   return "other";
 }
 
@@ -91,6 +94,7 @@ export const AUDIT_CATEGORY_LABELS: Record<AuditCategory, string> = {
   sitemap: "Sitemap runs",
   ccc: "CCC connections",
   integrations: "Integrations",
+  intake: "Pilot intake",
   other: "Other",
 };
 
@@ -121,6 +125,7 @@ export function summarizePayload(payload: unknown): string {
   pick("tier");
   pick("toTier", "tier");
   pick("visibility");
+  pick("path");
   if (parts.length === 0 && typeof p.action === "string") parts.push(String(p.action));
   return parts.join(" · ");
 }
@@ -134,6 +139,7 @@ const SUMMARIZED_KEYS = new Set([
   "tier",
   "toTier",
   "visibility",
+  "path",
   "action",
 ]);
 
