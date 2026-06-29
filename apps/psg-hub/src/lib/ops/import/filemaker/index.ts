@@ -56,3 +56,7 @@ export {
 // PSG-138 — canonical-38 standardization pipeline (wires the PSG-132 helpers).
 export { standardizeCanonicalRows } from "./standardize";
 export type { StandardizeOptions, StandardizeResult } from "./standardize";
+// PSG-395 (Track B) — FileMaker full-DB → staging → canonical dedup ingest.
+// (The live supabase store stays out of this barrel so importing the FM module
+// never pulls `server-only`; import it directly from ./staging/supabase-store.)
+export * from "./staging";
