@@ -36,6 +36,13 @@ const DOMAIN_ENV_CANDIDATES = [
   "PIPEDRIVE_SUBDOMAIN",
 ] as const;
 
+/**
+ * Read-only env source for the loader. `process.env` (NodeJS.ProcessEnv) satisfies
+ * this structurally, so callers can pass it directly; tests can pass plain object
+ * literals without an `as NodeJS.ProcessEnv` cast (which would require NODE_ENV).
+ */
+export type PipedriveEnv = Record<string, string | undefined>;
+
 export type PipedriveConfig = {
   /** Personal API token (secret — never log or echo). */
   apiToken: string;
@@ -63,10 +70,7 @@ export class PipedriveConfigError extends Error {
 }
 
 /** First non-empty (trimmed) env value among `names`, else null. */
-function firstEnv(
-  names: readonly string[],
-  env: NodeJS.ProcessEnv,
-): string | null {
+function firstEnv(names: readonly string[], env: PipedriveEnv): string | null {
   for (const name of names) {
     const raw = env[name];
     if (typeof raw === "string" && raw.trim() !== "") return raw.trim();
@@ -94,7 +98,7 @@ export function normalizeCompanyDomain(value: string): string | null {
  * absent. Never logs or includes the token value in any message.
  */
 export function loadPipedriveConfig(
-  env: NodeJS.ProcessEnv = process.env,
+  env: PipedriveEnv = process.env,
 ): PipedriveConfig {
   const apiToken = firstEnv(TOKEN_ENV_CANDIDATES, env);
   const rawDomain = firstEnv(DOMAIN_ENV_CANDIDATES, env);
@@ -120,7 +124,7 @@ export function loadPipedriveConfig(
  * exact var name(s) the operator configured, without Vercel CLI access.
  */
 export function presentPipedriveEnvKeys(
-  env: NodeJS.ProcessEnv = process.env,
+  env: PipedriveEnv = process.env,
 ): string[] {
   return Object.keys(env)
     .filter((k) => k.toUpperCase().includes("PIPEDRIVE"))

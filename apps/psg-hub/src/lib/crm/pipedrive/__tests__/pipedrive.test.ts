@@ -46,7 +46,7 @@ describe("loadPipedriveConfig", () => {
     const cfg = loadPipedriveConfig({
       [PIPEDRIVE_TOKEN_ENV]: "tok_abc",
       [PIPEDRIVE_DOMAIN_ENV]: "acme",
-    } as NodeJS.ProcessEnv);
+    });
     expect(cfg.apiToken).toBe("tok_abc");
     expect(cfg.companyDomain).toBe("acme");
     expect(cfg.baseUrl).toBe("https://acme.pipedrive.com/api/v1");
@@ -56,7 +56,7 @@ describe("loadPipedriveConfig", () => {
     const cfg = loadPipedriveConfig({
       PIPEDRIVE_TOKEN: "tok_alias",
       PIPEDRIVE_DOMAIN: "beta",
-    } as NodeJS.ProcessEnv);
+    });
     expect(cfg.apiToken).toBe("tok_alias");
     expect(cfg.companyDomain).toBe("beta");
   });
@@ -65,7 +65,7 @@ describe("loadPipedriveConfig", () => {
     const cfg = loadPipedriveConfig({
       [PIPEDRIVE_TOKEN_ENV]: "  tok_padded  ",
       [PIPEDRIVE_DOMAIN_ENV]: " https://Acme.pipedrive.com/ ",
-    } as NodeJS.ProcessEnv);
+    });
     expect(cfg.apiToken).toBe("tok_padded");
     expect(cfg.companyDomain).toBe("acme");
     expect(cfg.baseUrl).toBe("https://acme.pipedrive.com/api/v1");
@@ -73,22 +73,24 @@ describe("loadPipedriveConfig", () => {
 
   it("throws PipedriveConfigError listing candidate names when token is missing", () => {
     expect(() =>
-      loadPipedriveConfig({ [PIPEDRIVE_DOMAIN_ENV]: "acme" } as NodeJS.ProcessEnv),
+      loadPipedriveConfig({ [PIPEDRIVE_DOMAIN_ENV]: "acme" }),
     ).toThrow(PipedriveConfigError);
     try {
-      loadPipedriveConfig({ [PIPEDRIVE_DOMAIN_ENV]: "acme" } as NodeJS.ProcessEnv);
+      loadPipedriveConfig({ [PIPEDRIVE_DOMAIN_ENV]: "acme" });
     } catch (e) {
       expect(e).toBeInstanceOf(PipedriveConfigError);
-      expect((e as PipedriveConfigError).missing).toContain(PIPEDRIVE_TOKEN_ENV);
+      expect((e as PipedriveConfigError).missing).toContain(
+        PIPEDRIVE_TOKEN_ENV,
+      );
       // never leaks any value — only names
       expect((e as Error).message).not.toContain("acme");
     }
   });
 
   it("throws when domain is missing", () => {
-    expect(() =>
-      loadPipedriveConfig({ [PIPEDRIVE_TOKEN_ENV]: "tok" } as NodeJS.ProcessEnv),
-    ).toThrow(PipedriveConfigError);
+    expect(() => loadPipedriveConfig({ [PIPEDRIVE_TOKEN_ENV]: "tok" })).toThrow(
+      PipedriveConfigError,
+    );
   });
 });
 
@@ -111,7 +113,7 @@ describe("presentPipedriveEnvKeys", () => {
       PIPEDRIVE_COMPANY_DOMAIN: "acme",
       PIPEDRIVE_API_TOKEN: "tok_secret",
       OTHER: "x",
-    } as NodeJS.ProcessEnv);
+    });
     expect(keys).toEqual(["PIPEDRIVE_API_TOKEN", "PIPEDRIVE_COMPANY_DOMAIN"]);
     expect(keys.join()).not.toContain("tok_secret");
   });
