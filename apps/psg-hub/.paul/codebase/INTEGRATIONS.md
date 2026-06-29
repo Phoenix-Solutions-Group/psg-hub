@@ -51,3 +51,49 @@ Deployed: authenticate as a `psg_superadmin` and `GET /api/ops/crm/pipedrive/pin
 Green ⇒ token + domain reach the account (response carries the authenticated user +
 company). The `presentEnvNames` field in a red `config_missing` response confirms
 which `PIPEDRIVE_*` var names are actually set.
+Catalog of third-party services the BSM app talks to, their env vars, and where the
+adapter code lives. Keep secrets OUT of this file — names and procedures only.
+
+## Invoiced.app (external billing) — PSG-422
+
+Status: **read-only connection test only.** No mirror table, no webhook yet. The
+`invoices` mirror + `/api/webhooks/invoiced` are anticipated in `PLANNING.md` but
+deliberately NOT implemented here (spun out of planning PSG-420).
+
+- **Auth:** HTTP Basic — the API key is the **username**, password is **empty**.
+- **Environments:** sandbox (`https://api.sandbox.invoiced.com`, default, no spend)
+  vs live (`https://api.invoiced.com`). Selected by `INVOICED_ENV` (`live` opts in;
+  anything else stays sandbox).
+- **Code:** `apps/psg-hub/src/lib/billing/invoiced/` — `config.ts` (env loader),
+  `client.ts` (`pingInvoiced()` read-only probe, one shared circuit breaker like
+  `stripe.ts`). Connection-test route: `GET /api/ops/admin/integrations/invoiced/ping`
+  (superadmin-gated, no DB write, no audit row — nothing mutates).
+
+### Env vars
+
+| Var | Required | Notes |
+| --- | --- | --- |
+| `INVOICED_API_KEY` | yes | Invoiced REST API key (secret). **The exact name Nick set in Vercel (`psg-digital/psg-hub`) is UNCONFIRMED** — the agent could not run `vercel env ls`. The loader resolves the key from the first match of, in order: `INVOICED_API_KEY`, `INVOICED_SANDBOX_API_KEY`, `INVOICED_SECRET_KEY`, `INVOICED_KEY`. |
+| `INVOICED_ENV` | no | `live` → live API; unset/other → sandbox (fail-safe, no spend). |
+
+### Confirming the real Vercel var name (PSG-422 step 1)
+
+Because the agent has no Vercel CLI/token, the deployed ping is the confirmation tool:
+run `GET /api/ops/admin/integrations/invoiced/ping` as a superadmin against the
+sandbox deploy. The JSON response includes `keySource` — the env var **name** the key
+resolved from (never the value). Record that name here and in `.env.example`, then
+prune `KEY_ENV_CANDIDATES` in `config.ts` to the single confirmed name.
+
+Green result: `{ reachable: true, environment: "sandbox", keySource: "<name>",
+httpStatus: 200, account: {...} }`. Red surfaces a reason (e.g. HTTP 401 → key
+rejected; config error → naming the vars checked).
+
+## Stripe (billing of record)
+
+Mirror logic in `src/lib/billing/stripe-mirror.ts`; webhook at `/api/webhooks/stripe`.
+Keys: `STRIPE_SECRET_KEY`, price ids `STRIPE_{ESSENTIALS,GROWTH,PERFORMANCE}_PRICE_ID`.
+
+## Lob.com (mail) — v1.3
+
+Keys: `LOB_API_KEY` (test_* vs live_* gated by board gate G4), `LOB_WEBHOOK_SECRET`.
+Webhook at `/api/webhooks/lob` (HMAC-SHA256 signature, fails closed).
