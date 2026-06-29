@@ -14,6 +14,7 @@ const OPS_NAV: { href: string; label: string; superadminOnly?: boolean }[] = [
   { href: "/ops/repair-customers", label: "Repair Customers" },
   { href: "/ops/repair-orders", label: "Repair Orders" },
   { href: "/ops/estimates", label: "Estimates" },
+  { href: "/ops/intake", label: "Pilot Intake", superadminOnly: true },
   { href: "/ops/data-import/ros", label: "Import ROs" },
   { href: "/ops/data-import/estimates", label: "Import Estimates" },
   { href: "/ops/surveys", label: "Surveys" },
