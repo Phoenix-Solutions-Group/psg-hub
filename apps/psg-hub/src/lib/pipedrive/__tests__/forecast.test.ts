@@ -42,7 +42,7 @@ describe("resolveProbability", () => {
 });
 
 describe("buildForecast", () => {
-  it("counts open deals and totals best-case vs committed pipeline", () => {
+  it("counts open deals and totals best-case / weighted / committed lines", () => {
     const deals: PipedriveDeal[] = [
       deal({ dealId: 1, value: 10_000, stageId: 1, stageName: "S1" }),
       deal({ dealId: 2, value: 20_000, stageId: 2, stageName: "S2" }),
@@ -53,9 +53,47 @@ describe("buildForecast", () => {
     const f = buildForecast(deals, { stageProbability: { 1: 0.2, 2: 0.5 } });
 
     expect(f.openDealCount).toBe(2);
-    expect(f.bestCaseValue).toBe(30_000);
-    // 10k*0.2 + 20k*0.5 = 2k + 10k = 12k committed
-    expect(f.committedValue).toBe(12_000);
+    expect(f.bestCaseValue).toBe(30_000); // ceiling: 10k + 20k
+    // weighted/expected: 10k*0.2 + 20k*0.5 = 2k + 10k = 12k
+    expect(f.weightedValue).toBe(12_000);
+    // committed floor: neither stage clears the 0.95 (S6) gate → 0
+    expect(f.committedValue).toBe(0);
+    expect(f.committedWeightedValue).toBe(0);
+    expect(f.committedDealCount).toBe(0);
+  });
+
+  it("committed = face-$ of open deals at ≥ S6, via the probability gate", () => {
+    const deals: PipedriveDeal[] = [
+      deal({ dealId: 1, value: 10_000, stageId: 1 }), // S1 0.25 → not committed
+      deal({ dealId: 2, value: 40_000, stageId: 6 }), // S6 0.95 → committed
+      deal({ dealId: 3, value: 30_000, stageId: 7 }), // S7 0.99 → committed
+    ];
+    // Map stage_id → probability mirroring the S0–S8 ramp.
+    const f = buildForecast(deals, {
+      stageProbability: { 1: 0.25, 6: 0.95, 7: 0.99 },
+    });
+
+    expect(f.bestCaseValue).toBe(80_000);
+    expect(f.committedDealCount).toBe(2);
+    expect(f.committedValue).toBe(70_000); // 40k + 30k face
+    // 40k*0.95 + 30k*0.99 = 38k + 29.7k = 67.7k
+    expect(f.committedWeightedValue).toBe(67_700);
+    // weighted over all open: 10k*0.25 + 67.7k = 70.2k
+    expect(f.weightedValue).toBe(70_200);
+  });
+
+  it("honors an explicit committedStageIds set over the probability gate", () => {
+    const deals: PipedriveDeal[] = [
+      deal({ dealId: 1, value: 10_000, stageId: 5, winProbability: 99 }),
+      deal({ dealId: 2, value: 20_000, stageId: 9, winProbability: 50 }),
+    ];
+    // stage 9 is the committed stage even though its prob (0.5) is below 0.95;
+    // stage 5 is excluded even though its prob (0.99) clears the gate.
+    const f = buildForecast(deals, { committedStageIds: new Set([9]) });
+
+    expect(f.committedDealCount).toBe(1);
+    expect(f.committedValue).toBe(20_000);
+    expect(f.committedWeightedValue).toBe(10_000); // 20k*0.5
   });
 
   it("produces a per-stage breakdown ordered by stageId with effective probability", () => {
@@ -83,7 +121,10 @@ describe("buildForecast", () => {
     ];
     const f = buildForecast(deals);
     expect(f.bestCaseValue).toBe(2_500);
+    // winProbability 100 → prob 1.0 ≥ 0.95 gate → committed; value is finite 2_500
+    expect(f.weightedValue).toBe(2_500);
     expect(f.committedValue).toBe(2_500);
+    expect(Number.isNaN(f.weightedValue)).toBe(false);
     expect(Number.isNaN(f.committedValue)).toBe(false);
   });
 

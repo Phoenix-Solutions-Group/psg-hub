@@ -33,6 +33,16 @@ export const PSG_LIFECYCLE_STAGES: readonly LifecycleStage[] = [
 export const COMMITTED_FROM_STAGE_INDEX = 6;
 
 /**
+ * Probability gate for the committed line when the live Pipedrive stage_id → Sn map
+ * is not yet wired (PSG-445/PSG-446): a deal counts as committed if its resolved
+ * win-probability ≥ this threshold. Derived from S6 (Contract) so it tracks the
+ * lifecycle, not a magic number. Once `committedStageIds` is supplied, that explicit
+ * set takes precedence over this fallback.
+ */
+export const COMMITTED_PROBABILITY_THRESHOLD =
+  PSG_LIFECYCLE_STAGES[COMMITTED_FROM_STAGE_INDEX].probability; // 0.95 (S6)
+
+/**
  * Build a StageProbabilityMap (Pipedrive stage_id → probability) from a mapping of
  * Pipedrive stage_id → Sn code. Supply `stageIdToCode` once the live Pipedrive
  * stages are known (PSG-445/PSG-446); until then `forecast.ts` falls back to each

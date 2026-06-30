@@ -11,12 +11,41 @@ import type {
   StageBreakdown,
   StageProbabilityMap,
 } from "./types";
+import { COMMITTED_PROBABILITY_THRESHOLD } from "./stages";
 
 export interface ForecastOptions {
   /** Stage_id → probability in [0,1]. Overrides the deal's own win_probability. */
   stageProbability?: StageProbabilityMap;
   /** Reported currency for the forecast totals. Default "USD". */
   currency?: string;
+  /**
+   * Pipedrive stage_ids that count as "committed" (≥ S6 / Contract). Supply this once
+   * the live stage_id → Sn mapping is known (PSG-446). When omitted, a deal counts as
+   * committed via the probability fallback below.
+   */
+  committedStageIds?: ReadonlySet<number>;
+  /**
+   * Probability gate for the committed line when `committedStageIds` is not supplied.
+   * A deal is committed if its resolved win-probability ≥ this value.
+   * Defaults to COMMITTED_PROBABILITY_THRESHOLD (S6 = 0.95).
+   */
+  committedProbabilityThreshold?: number;
+}
+
+/**
+ * Is this open deal part of the committed (≥ S6) floor?
+ * Precedence: explicit `committedStageIds` set → probability ≥ threshold.
+ */
+export function isCommitted(
+  deal: PipedriveDeal,
+  probability: number,
+  opts: ForecastOptions = {}
+): boolean {
+  if (opts.committedStageIds && deal.stageId != null) {
+    return opts.committedStageIds.has(deal.stageId);
+  }
+  const threshold = opts.committedProbabilityThreshold ?? COMMITTED_PROBABILITY_THRESHOLD;
+  return probability >= threshold;
 }
 
 /**
@@ -56,8 +85,11 @@ export function buildForecast(
 
   // Group by stage, accumulating count / value / weighted value.
   const byStage = new Map<string, StageBreakdown>();
-  let bestCaseValue = 0;
-  let committedValue = 0;
+  let bestCaseValue = 0; // Σ value, all open (ceiling)
+  let weightedValue = 0; // Σ value × prob, all open (expected midpoint)
+  let committedValue = 0; // Σ value, ≥ S6 only (floor, face $)
+  let committedWeightedValue = 0; // Σ value × prob, ≥ S6 only
+  let committedDealCount = 0;
 
   for (const deal of open) {
     const value = Number.isFinite(deal.value) ? deal.value : 0;
@@ -65,7 +97,12 @@ export function buildForecast(
     const weighted = value * probability;
 
     bestCaseValue += value;
-    committedValue += weighted;
+    weightedValue += weighted;
+    if (isCommitted(deal, probability, opts)) {
+      committedValue += value;
+      committedWeightedValue += weighted;
+      committedDealCount += 1;
+    }
 
     const key = deal.stageId == null ? "null" : String(deal.stageId);
     const existing = byStage.get(key);
@@ -101,8 +138,11 @@ export function buildForecast(
 
   return {
     openDealCount: open.length,
-    bestCaseValue: round(bestCaseValue, 2),
     committedValue: round(committedValue, 2),
+    committedWeightedValue: round(committedWeightedValue, 2),
+    committedDealCount,
+    weightedValue: round(weightedValue, 2),
+    bestCaseValue: round(bestCaseValue, 2),
     currency,
     perStage,
   };

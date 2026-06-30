@@ -39,18 +39,35 @@ export interface StageBreakdown {
   value: number;
   /** Probability applied (the resolved weight, [0,1]). */
   probability: number;
-  /** value × probability — the committed contribution of this stage. */
+  /** value × probability — the probability-weighted (expected) contribution of this stage. */
   weightedValue: number;
 }
 
-/** The pipeline-weighted forecast Reese hands to John (committed vs. best-case). */
+/**
+ * The pipeline-weighted forecast Reese hands to John (PSG-432 §2.1). Three named
+ * lines per Reese's CRO sign-off (PSG-435), low → high confidence:
+ *   committed  ≤  weighted/expected  ≤  best-case
+ */
 export interface PipelineForecast {
   /** Total count of open deals. */
   openDealCount: number;
-  /** Σ value over all open deals — the best-case (un-weighted) pipeline. */
-  bestCaseValue: number;
-  /** Σ (value × probability) over all open deals — the committed (weighted) pipeline. */
+  /**
+   * COMMITTED (floor): Σ value of open deals at ≥ S6 (Contract) — the face-$ pipeline
+   * we'd stake the quarter on. NOT probability-weighted. This is the "downside floor".
+   */
   committedValue: number;
+  /** Σ (value × probability) over the committed (≥ S6) deals only. */
+  committedWeightedValue: number;
+  /** Count of open deals meeting the committed (≥ S6) gate. */
+  committedDealCount: number;
+  /**
+   * WEIGHTED / EXPECTED (base): Σ (value × probability) over ALL open deals — the
+   * probability-weighted midpoint that feeds John's §2.1 forecast. (Formerly mislabeled
+   * `committedValue`; renamed per PSG-435.)
+   */
+  weightedValue: number;
+  /** BEST CASE (ceiling): Σ value over all open deals — un-weighted upside. */
+  bestCaseValue: number;
   currency: string;
   /** Per-stage breakdown (S0–S8), ordered by stageId ascending. */
   perStage: StageBreakdown[];
