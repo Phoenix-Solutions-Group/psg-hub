@@ -40,6 +40,11 @@ create table if not exists public.pipedrive_deals (
   -- Last logged activity (call/email/meeting), distinct from update_time (any field
   -- change). Drives the 14-day "stale / no-movement" flag in the forecast.
   last_activity_date  date,
+  -- Revenue character of a WON deal for John's §2.1 Invoiced tie-out (PSG-435):
+  -- 'recurring' nets out vs MRR, 'one_time' is additive net-new. NULL = source not
+  -- yet mapped; the export surfaces NULL as 'unclassified' (loud, never silently
+  -- netted). Honest-null: the sync only writes a bucket on a real Pipedrive signal.
+  revenue_type        text check (revenue_type in ('recurring','one_time')),
   pipedrive_add_time  timestamptz,
   pipedrive_update_time timestamptz,
   -- Full raw deal payload for any field not promoted to a column (audit + future use).

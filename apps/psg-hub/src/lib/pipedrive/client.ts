@@ -9,7 +9,7 @@
 // logged and never returned. Base URL prefers the company domain
 // (`https://<company>.pipedrive.com`) and falls back to `https://api.pipedrive.com`.
 
-import type { DealStatus, PipedriveDeal } from "./types";
+import type { DealStatus, PipedriveDeal, RevenueType } from "./types";
 
 /** Raw Pipedrive deal payload — intentionally loose; we map defensively (v1/v2). */
 export type RawPipedriveDeal = Record<string, unknown>;
@@ -86,6 +86,39 @@ const VALID_STATUS: ReadonlySet<string> = new Set([
   "deleted",
 ]);
 
+/**
+ * Derive a won deal's revenue character (PSG-435 / John's §2.1 tie-out) from the raw
+ * Pipedrive payload. HONEST-NULL rule (Tess asserts it on PSG-447): only classify on
+ * a real signal — never silently bucket. Precedence:
+ *   1. native recurring signals — a `recurring` flag, an attached `subscription_id`,
+ *      or a positive `mrr`/`recurring_revenue` → `recurring`;
+ *   2. a documented deal-type / product-category marker (`revenue_type` custom field)
+ *      → `recurring` | `one_time`;
+ *   3. no signal → `null`, which the export surfaces LOUDLY as `unclassified`
+ *      (never netted against MRR until resolved).
+ */
+export function deriveRevenueType(raw: RawPipedriveDeal): RevenueType | null {
+  if (raw.recurring === true) return "recurring";
+  if (relId(raw.subscription_id) != null) return "recurring";
+  const mrr = asNumber(raw.mrr ?? raw.recurring_revenue);
+  if (mrr != null && mrr > 0) return "recurring";
+
+  const marker =
+    typeof raw.revenue_type === "string" ? raw.revenue_type.toLowerCase().trim() : null;
+  if (marker === "recurring" || marker === "mrr" || marker === "subscription") {
+    return "recurring";
+  }
+  if (
+    marker === "one_time" ||
+    marker === "one-time" ||
+    marker === "onetime" ||
+    marker === "project"
+  ) {
+    return "one_time";
+  }
+  return null; // honest-null: unmapped → reported as `unclassified` at the export
+}
+
 /** Map a raw Pipedrive deal onto the mirror's `PipedriveDeal`. */
 export function mapRawDeal(raw: RawPipedriveDeal): PipedriveDeal {
   const status = String(raw.status ?? "open");
@@ -112,6 +145,8 @@ export function mapRawDeal(raw: RawPipedriveDeal): PipedriveDeal {
     // ACTUAL close: `close_time` (won/lost) — distinct from the forecasted date.
     closeDate: isoDate(raw.close_time ?? raw.close_date),
     lastActivityDate: isoDate(raw.last_activity_date),
+    // Revenue character for the won/booked §2.1 tie-out; honest-null when unmapped.
+    revenueType: deriveRevenueType(raw),
   };
 }
 

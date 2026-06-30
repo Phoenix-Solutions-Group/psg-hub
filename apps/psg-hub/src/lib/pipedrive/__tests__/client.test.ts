@@ -1,10 +1,30 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   createPipedriveClient,
+  deriveRevenueType,
   mapRawDeal,
   pipedriveBaseUrl,
   PipedriveError,
 } from "../client";
+
+describe("deriveRevenueType (honest-null — never silently bucket)", () => {
+  it("classifies native recurring signals as recurring", () => {
+    expect(deriveRevenueType({ recurring: true })).toBe("recurring");
+    expect(deriveRevenueType({ subscription_id: 88 })).toBe("recurring");
+    expect(deriveRevenueType({ mrr: 1500 })).toBe("recurring");
+    expect(deriveRevenueType({ recurring_revenue: 900 })).toBe("recurring");
+  });
+  it("maps documented deal-type/category markers", () => {
+    expect(deriveRevenueType({ revenue_type: "Subscription" })).toBe("recurring");
+    expect(deriveRevenueType({ revenue_type: "one-time" })).toBe("one_time");
+    expect(deriveRevenueType({ revenue_type: "project" })).toBe("one_time");
+  });
+  it("returns null when there is no signal (→ surfaced as unclassified, never netted)", () => {
+    expect(deriveRevenueType({ value: 5000, status: "won" })).toBeNull();
+    expect(deriveRevenueType({ revenue_type: "??" })).toBeNull();
+    expect(deriveRevenueType({ mrr: 0 })).toBeNull();
+  });
+});
 
 describe("pipedriveBaseUrl", () => {
   it("uses the company subdomain when provided", () => {
