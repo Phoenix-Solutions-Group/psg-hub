@@ -6,6 +6,7 @@ import {
   monthBounds,
   wonBookedTieOutGap,
 } from "../export";
+import { mapRawDeal } from "../client";
 import type { PipedriveDeal } from "../types";
 
 function deal(p: Partial<PipedriveDeal>): PipedriveDeal {
@@ -183,6 +184,33 @@ describe("buildDealsExport", () => {
     expect(byId.get(71)!.monthlyValue).toBeNull(); // gated on the RESOLVED revenue_type
     expect(exp.wonBookedRecurringMonthlyTotal).toBe(2_000);
     expect(exp.wonBookedRecurringMonthlyNullCount).toBe(0);
+  });
+
+  it("preserves monthlyValue null through the raw mirror → mapRawDeal → export round-trip (PSG-446 #4 / John invariant)", () => {
+    // John's hard correctness constraint: a recurring deal with no derivable basis must
+    // surface as monthlyValue=null verbatim — NEVER coerced to 0, annualized, or folded into
+    // wonBookedRecurringMonthlyTotal — and must increment the caveat denominator. Drive it
+    // from RAW mirror rows through the real read surface, not pre-mapped fixtures.
+    const raw = [
+      // recurring w/ a native monthly figure → derivable basis survives
+      { id: 90, status: "won", close_time: "2026-06-10", recurring: true, mrr: 1_500, value: 18_000 },
+      // recurring but basis underivable upstream → honest-null (the row John caveats)
+      { id: 91, status: "won", close_time: "2026-06-11", recurring: true, value: 9_000 },
+      // recurring w/ amount but no interval → still null (can't normalize to monthly)
+      { id: 92, status: "won", close_time: "2026-06-12", recurring: true, recurring_amount: 12_000, value: 12_000 },
+    ];
+    const deals: PipedriveDeal[] = raw.map(mapRawDeal);
+    const exp = buildDealsExport(deals, { asOf: ASOF });
+    const byId = new Map(exp.wonBooked.map((d) => [d.dealId, d.monthlyValue]));
+    expect(byId.get(90)).toBe(1_500);
+    expect(byId.get(91)).toBeNull(); // never 0 — that would read the MRR floor too high
+    expect(byId.get(92)).toBeNull();
+    // the un-nettable recurring rows are counted, not summed; only the derivable basis nets
+    expect(exp.wonBookedRecurringMonthlyTotal).toBe(1_500);
+    expect(exp.wonBookedRecurringMonthlyNullCount).toBe(2);
+    // and the face-$ partition still ties out exactly (no row dropped by the null handling)
+    expect(wonBookedTieOutGap(exp.wonBookedTotal, exp.wonBookedByType)).toBe(0);
+    expect(exp.wonBookedByType.recurring).toBe(39_000); // all 3 are recurring at face value
   });
 
   it("bounds won/booked to an explicit half-open calendar range [from, to) (PSG-471 / John C1)", () => {
