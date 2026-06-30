@@ -20,7 +20,7 @@ describe("deriveRevenueType (honest-null — never silently bucket)", () => {
     expect(deriveRevenueType({ revenue_type: "one-time" })).toBe("one_time");
     expect(deriveRevenueType({ revenue_type: "project" })).toBe("one_time");
   });
-  it("returns null when there is no signal (→ surfaced as unclassified, never netted)", () => {
+  it("returns null when there is no signal (→ surfaced as unknown, never netted)", () => {
     expect(deriveRevenueType({ value: 5000, status: "won" })).toBeNull();
     expect(deriveRevenueType({ revenue_type: "??" })).toBeNull();
     expect(deriveRevenueType({ mrr: 0 })).toBeNull();
