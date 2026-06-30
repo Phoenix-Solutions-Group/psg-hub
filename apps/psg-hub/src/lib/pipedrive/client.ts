@@ -94,7 +94,7 @@ const VALID_STATUS: ReadonlySet<string> = new Set([
  *      or a positive `mrr`/`recurring_revenue` → `recurring`;
  *   2. a documented deal-type / product-category marker (`revenue_type` custom field)
  *      → `recurring` | `one_time`;
- *   3. no signal → `null`, which the export surfaces LOUDLY as `unclassified`
+ *   3. no signal → `null`, which the export surfaces LOUDLY as `unknown`
  *      (never netted against MRR until resolved).
  */
 export function deriveRevenueType(raw: RawPipedriveDeal): RevenueType | null {
@@ -116,7 +116,7 @@ export function deriveRevenueType(raw: RawPipedriveDeal): RevenueType | null {
   ) {
     return "one_time";
   }
-  return null; // honest-null: unmapped → reported as `unclassified` at the export
+  return null; // honest-null: unmapped → reported as `unknown` at the export
 }
 
 /** Map a raw Pipedrive deal onto the mirror's `PipedriveDeal`. */

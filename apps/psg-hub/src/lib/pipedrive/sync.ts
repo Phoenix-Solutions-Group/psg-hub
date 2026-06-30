@@ -68,8 +68,8 @@ export function toDealRow(
     expected_close_date: deal.expectedCloseDate,
     close_date: deal.closeDate,
     last_activity_date: deal.lastActivityDate,
-    // 'recurring' | 'one_time' | null (unmapped). NULL surfaces as `unclassified` at
-    // the export — the DB column itself never stores the sentinel (CHECK enforces it).
+    // 'recurring' | 'one_time' | null (unmapped). NULL surfaces as `unknown` at
+    // the export — the DB column itself never stores a sentinel (CHECK enforces it).
     revenue_type: deal.revenueType ?? null,
     raw: deal,
     synced_at: syncedAt,
