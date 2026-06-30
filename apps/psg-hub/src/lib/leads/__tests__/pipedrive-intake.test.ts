@@ -1,9 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   bucketChannel,
   resolveChannelId,
   captureInboundLead,
   createPipedriveIntakeClient,
+  clearChannelOptionsCache,
   ChannelOptionError,
   CHANNEL_KEY,
   UTM_KEYS,
@@ -215,6 +216,10 @@ describe("captureInboundLead", () => {
 });
 
 describe("createPipedriveIntakeClient — token hygiene", () => {
+  // The Channel-options cache (PSG-503) is module-level; reset it between tests so a
+  // memoized result from one test never leaks into another's fetch expectations.
+  beforeEach(() => clearChannelOptionsCache());
+
   it("fails closed with no token, and the error carries no token material", () => {
     expect(() => createPipedriveIntakeClient({ apiKey: "" })).toThrow(PipedriveError);
     try {
@@ -337,5 +342,26 @@ describe("createPipedriveIntakeClient — token hygiene", () => {
       { id: 311, label: "Paid Search" },
       { id: 320, label: "Web Form (Direct)" },
     ]);
+  });
+
+  it("memoizes Channel options within the TTL (one dealFields fetch under load) — PSG-503", async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        success: true,
+        data: [{ key: CHANNEL_KEY, options: [{ id: 320, label: "Web Form (Direct)" }] }],
+      }),
+    ) as unknown as typeof fetch;
+    const client = createPipedriveIntakeClient({ apiKey: "t", fetchImpl });
+
+    const a = await client.getChannelOptions();
+    const b = await client.getChannelOptions();
+    expect(a).toEqual(b);
+    // Second call served from cache — quota-saving under load.
+    expect((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+
+    // A cleared cache forces a fresh fetch.
+    clearChannelOptionsCache();
+    await client.getChannelOptions();
+    expect((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
   });
 });

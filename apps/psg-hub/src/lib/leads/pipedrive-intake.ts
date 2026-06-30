@@ -301,6 +301,21 @@ export interface PipedriveIntakeConfig {
   fetchImpl?: typeof fetch;
 }
 
+// ── channel-options cache (PSG-503) ─────────────────────────────────────────────────
+// getChannelOptions re-fetches every deal field (`dealFields?limit=500`) on each
+// submission, which compounds Pipedrive read-quota burn under load. The Channel enum
+// rarely changes, so the default HTTP client memoizes it per process for a short TTL.
+// A per-process cache is the RIGHT tool here (unlike the rate-limit COUNTER, which must
+// be durable): a stale cache costs at most a brief attribution lag, and each warm Vercel
+// instance refreshes independently. Tests that inject a client never touch this path.
+const CHANNEL_OPTIONS_TTL_MS = 5 * 60 * 1000;
+let channelOptionsCache: { at: number; value: ChannelOption[] } | null = null;
+
+/** Test seam: drop the memoized Channel options so each test starts cold. */
+export function clearChannelOptionsCache(): void {
+  channelOptionsCache = null;
+}
+
 export function createPipedriveIntakeClient(
   config: PipedriveIntakeConfig = {},
 ): PipedriveIntakeClient {
@@ -346,6 +361,10 @@ export function createPipedriveIntakeClient(
 
   return {
     async getChannelOptions() {
+      const now = Date.now();
+      if (channelOptionsCache && now - channelOptionsCache.at < CHANNEL_OPTIONS_TTL_MS) {
+        return channelOptionsCache.value;
+      }
       const fields = await call<Array<Record<string, unknown>>>(
         "GET",
         "dealFields",
@@ -353,9 +372,11 @@ export function createPipedriveIntakeClient(
       );
       const field = (fields ?? []).find((f) => f.key === CHANNEL_KEY);
       const options = (field?.options as Array<Record<string, unknown>> | undefined) ?? [];
-      return options
+      const parsed = options
         .map((o) => ({ id: Number(o.id), label: String(o.label ?? "") }))
         .filter((o) => Number.isFinite(o.id) && o.label !== "");
+      channelOptionsCache = { at: now, value: parsed };
+      return parsed;
     },
 
     async findDealByTitle(title, pipelineId) {
