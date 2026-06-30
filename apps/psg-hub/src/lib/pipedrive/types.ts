@@ -38,6 +38,13 @@ export interface PipedriveDeal {
    * source is wired once PSG-434 exposes the field; until then won deals carry `null`
    * and the export surfaces them as `unknown` (never netted). Irrelevant for open deals. */
   revenueType?: RevenueType | null;
+  /**
+   * Raw Pipedrive custom-field values, keyed by field key/hash (the deal's bag of
+   * org-specific fields). Pipedrive has no native recurring flag, so when a recurring/
+   * one-time signal lives in a custom field, the export reads it via the caller's
+   * `revenueTypeFieldKey` (PSG-463) and maps it deterministically. Optional/absent
+   * until such a field is wired; irrelevant for open deals. */
+  customFields?: Record<string, unknown> | null;
 }
 
 export type DealStatus = "open" | "won" | "lost" | "deleted";

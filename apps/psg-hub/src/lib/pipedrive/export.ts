@@ -18,7 +18,33 @@ export interface DealsExportOptions extends ForecastOptions {
   staleDays?: number;
   /** Stage_ids that are "won" stages (S7 signed / S8) — for the open-in-won warning. */
   wonStageIds?: ReadonlySet<number>;
+  /**
+   * Recently-closed reconcile window (PSG-463): won/booked deals are kept only when
+   * their `closeDate` falls in `[asOf - closedWithinDays, asOf]` (inclusive). Bounds the
+   * tie-out to a defined range vs the Invoiced MRR base instead of every won deal ever.
+   * Default 90 days. Won deals with a null `closeDate` cannot be windowed and are excluded.
+   */
+  closedWithinDays?: number;
+  /**
+   * Optional Pipedrive custom-field key holding the recurring/one-time signal (PSG-463).
+   * When set and the deal's `customFields[key]` resolves a value, the export maps it
+   * deterministically to `revenue_type`; otherwise the row is `unknown` (Pipedrive has no
+   * native recurring flag — never a guessed default).
+   */
+  revenueTypeFieldKey?: string;
+  /**
+   * Optional deterministic map from a raw custom-field value → revenue_type, used with
+   * `revenueTypeFieldKey`. When omitted, a built-in normalization recognizes `recurring`
+   * and `one_time`/`one-time` (case/spacing-insensitive); anything else stays `unknown`.
+   */
+  revenueTypeMap?: Record<string, RevenueType>;
 }
+
+/** Emitted revenue_type on a won/booked row — always a value, `unknown` when unmapped. */
+export type WonBookedRevenueType = RevenueType | "unknown";
+
+const DEFAULT_CLOSED_WITHIN_DAYS = 90;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** A single open-pipeline deal row in the export (Reese's PSG-435 field list). */
 export interface OpenDealRow {
@@ -46,33 +72,46 @@ export interface WonBookedRow {
   currency: string;
   closeDate: string | null;
   /**
-   * REQUIRED column (PSG-435 / John's §2.1). Always carried (value or explicit null):
-   * `recurring` → netted out vs Invoiced MRR; `one_time` → additive net-new; `null`
-   * (unknown) → source not yet mapped, NEVER netted by default — surfaced as a distinct
+   * REQUIRED column (PSG-435 / John's §2.1). Always carried as a value (never null):
+   * `recurring` → netted out vs Invoiced MRR; `one_time` → additive net-new; `unknown`
+   * → no custom-field source resolved it, NEVER netted by default — surfaced as a distinct
    * subtotal so the gap is resolved before the tie-out.
    */
-  revenueType: RevenueType | null;
+  revenueType: WonBookedRevenueType;
 }
 
 /** Σ face-$ of the won/booked set split by revenue_type, for John's reconciliation. */
 export interface WonBookedByType {
   recurring: number;
   oneTime: number;
-  /** Σ value of won deals whose revenue_type is still unknown (null) — must be resolved. */
+  /** Σ value of won deals whose revenue_type is still `unknown` — must be resolved. */
   unknown: number;
-  /** Count of won deals whose revenue_type is still unknown (null). */
+  /** Count of won deals whose revenue_type is still `unknown`. */
   unknownCount: number;
+}
+
+/** The recently-closed reconcile window the won/booked set is bounded to (PSG-463). */
+export interface WonBookedWindow {
+  /** Width of the window in days (the `closedWithinDays` option, default 90). */
+  days: number;
+  /** Inclusive lower bound — ISO date (`asOf - days`). */
+  start: string;
+  /** Inclusive upper bound — ISO date (`asOf`). */
+  end: string;
 }
 
 export interface DealsExport {
   generatedAt: string; // ISO (the `asOf` the caller passed)
   forecast: PipelineForecast; // open-only rollups (committed/weighted/best-case + perStage)
   openDeals: OpenDealRow[];
-  /** Disjoint from `openDeals` — realized revenue, reconciled vs Invoiced MRR. */
+  /** Disjoint from `openDeals` — realized revenue in the recently-closed window,
+   *  reconciled vs Invoiced MRR. */
   wonBooked: WonBookedRow[];
   wonBookedTotal: number;
   /** wonBookedTotal split by revenue_type — recurring nets vs MRR, one_time is additive. */
   wonBookedByType: WonBookedByType;
+  /** The recently-closed window `wonBooked` is bounded to (PSG-463). */
+  wonBookedWindow: WonBookedWindow;
   diagnostics: DealDiagnostics;
 }
 
@@ -106,8 +145,20 @@ export function buildDealsExport(
       stale: stale.has(d.dealId),
     }));
 
+  // PSG-463 — recently-closed reconcile window. A won deal counts only when its
+  // ACTUAL closeDate is in [asOf - closedWithinDays, asOf]; a null closeDate cannot be
+  // placed in the window and is excluded (it can't be reconciled by date).
+  const windowDays = opts.closedWithinDays ?? DEFAULT_CLOSED_WITHIN_DAYS;
+  const endMs = opts.asOf.getTime();
+  const startMs = endMs - windowDays * MS_PER_DAY;
+  const wonBookedWindow: WonBookedWindow = {
+    days: windowDays,
+    start: new Date(startMs).toISOString().slice(0, 10),
+    end: new Date(endMs).toISOString().slice(0, 10),
+  };
+
   const wonBooked: WonBookedRow[] = deals
-    .filter((d) => d.status === "won")
+    .filter((d) => d.status === "won" && inWindow(d.closeDate, startMs, endMs))
     .map((d) => ({
       dealId: d.dealId,
       orgName: d.orgName,
@@ -115,8 +166,9 @@ export function buildDealsExport(
       value: Number.isFinite(d.value) ? d.value : 0,
       currency: d.currency,
       closeDate: d.closeDate,
-      // Honest-null rule: an unmapped source carries null, never a silent bucket.
-      revenueType: d.revenueType ?? null,
+      // Honest-not-guessed: resolve from a custom-field key when configured, else the
+      // sync-populated mirror value, else `unknown` — never a silently-defaulted bucket.
+      revenueType: resolveRevenueType(d, opts),
     }));
 
   const wonBookedTotal = round2(
@@ -128,8 +180,8 @@ export function buildDealsExport(
   const wonBookedByType: WonBookedByType = {
     recurring: sumWhere((d) => d.revenueType === "recurring"),
     oneTime: sumWhere((d) => d.revenueType === "one_time"),
-    unknown: sumWhere((d) => d.revenueType === null),
-    unknownCount: wonBooked.filter((d) => d.revenueType === null).length,
+    unknown: sumWhere((d) => d.revenueType === "unknown"),
+    unknownCount: wonBooked.filter((d) => d.revenueType === "unknown").length,
   };
 
   return {
@@ -139,8 +191,57 @@ export function buildDealsExport(
     wonBooked,
     wonBookedTotal,
     wonBookedByType,
+    wonBookedWindow,
     diagnostics,
   };
+}
+
+/** True when an ISO `closeDate` (date-only) falls inclusively within [startMs, endMs]. */
+function inWindow(closeDate: string | null, startMs: number, endMs: number): boolean {
+  if (!closeDate) return false;
+  const t = Date.parse(closeDate);
+  if (Number.isNaN(t)) return false;
+  return t >= startMs && t <= endMs;
+}
+
+/**
+ * Resolve a won deal's `revenue_type` (PSG-463). Precedence: (1) an options-supplied
+ * custom-field key, mapped deterministically; (2) the sync-populated mirror value; else
+ * `unknown`. Pipedrive carries no native recurring flag, so an unmapped deal is honestly
+ * `unknown` and never netted against MRR by default.
+ */
+function resolveRevenueType(
+  deal: PipedriveDeal,
+  opts: DealsExportOptions,
+): WonBookedRevenueType {
+  if (opts.revenueTypeFieldKey) {
+    const mapped = mapRevenueTypeValue(
+      deal.customFields?.[opts.revenueTypeFieldKey],
+      opts.revenueTypeMap,
+    );
+    if (mapped) return mapped;
+  }
+  if (deal.revenueType === "recurring" || deal.revenueType === "one_time") {
+    return deal.revenueType;
+  }
+  return "unknown";
+}
+
+/** Deterministically map a raw custom-field value to a revenue_type, or null if unrecognized. */
+function mapRevenueTypeValue(
+  raw: unknown,
+  map?: Record<string, RevenueType>,
+): RevenueType | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  const key = String(raw);
+  if (map) {
+    const m = map[key];
+    return m === "recurring" || m === "one_time" ? m : null;
+  }
+  const norm = key.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (norm === "recurring") return "recurring";
+  if (norm === "one_time" || norm === "onetime") return "one_time";
+  return null;
 }
 
 // ── serializers ──────────────────────────────────────────────────────────────────
@@ -163,6 +264,9 @@ export function dealsExportToJSON(
       staleValue: exp.diagnostics.staleValue,
       wonBookedCount: exp.wonBooked.length,
       wonBookedTotal: exp.wonBookedTotal,
+      wonBookedWindowDays: exp.wonBookedWindow.days,
+      wonBookedWindowStart: exp.wonBookedWindow.start,
+      wonBookedWindowEnd: exp.wonBookedWindow.end,
       wonBookedRecurringTotal: exp.wonBookedByType.recurring,
       wonBookedOneTimeTotal: exp.wonBookedByType.oneTime,
       wonBookedUnknownTotal: exp.wonBookedByType.unknown,
@@ -214,6 +318,9 @@ export function dealsExportToCSV(exp: DealsExport): string {
   lines.push(row(["stale_value", exp.diagnostics.staleValue]));
   lines.push(row(["won_booked_count", exp.wonBooked.length]));
   lines.push(row(["won_booked_total", exp.wonBookedTotal]));
+  lines.push(row(["won_booked_window_days", exp.wonBookedWindow.days]));
+  lines.push(row(["won_booked_window_start", exp.wonBookedWindow.start]));
+  lines.push(row(["won_booked_window_end", exp.wonBookedWindow.end]));
   lines.push(row(["won_booked_recurring_total", exp.wonBookedByType.recurring]));
   lines.push(row(["won_booked_one_time_total", exp.wonBookedByType.oneTime]));
   lines.push(row(["won_booked_unknown_total", exp.wonBookedByType.unknown]));
@@ -246,10 +353,13 @@ export function dealsExportToCSV(exp: DealsExport): string {
   }
   lines.push("");
 
-  lines.push(row(["SECTION", "WON-BOOKED (DISTINCT — reconcile vs Invoiced MRR, do NOT sum into pipeline)"]));
+  lines.push(row([
+    "SECTION",
+    `WON-BOOKED (DISTINCT — closed ${exp.wonBookedWindow.start}..${exp.wonBookedWindow.end} (${exp.wonBookedWindow.days}d); reconcile vs Invoiced MRR, do NOT sum into pipeline)`,
+  ]));
   lines.push(row(["deal_id", "org_name", "title", "value", "currency", "close_date", "revenue_type"]));
   for (const d of exp.wonBooked) {
-    lines.push(row([d.dealId, d.orgName, d.title, d.value, d.currency, d.closeDate, d.revenueType ?? "unknown"]));
+    lines.push(row([d.dealId, d.orgName, d.title, d.value, d.currency, d.closeDate, d.revenueType]));
   }
   lines.push(row(["TOTAL", "", "", exp.wonBookedTotal, f.currency, "", ""]));
   lines.push(row(["RECURRING (net vs MRR)", "", "", exp.wonBookedByType.recurring, f.currency, "", "recurring"]));

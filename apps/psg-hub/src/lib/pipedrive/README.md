@@ -81,18 +81,31 @@ TODO (engineer — see PSG-434 child issue):
    change (`buildForecast` already filters to `status === "open"`); it's an additional
    export section. QA on [PSG-447] asserts the won/booked set is present and disjoint
    from the open set.
-   - **`revenueType` (recurring | one_time) — REQUIRED on the won/booked line (Reese
-     → John, PSG-435 spec rev `4bd80aec`).** It is the decisive §2.1 field: `recurring`
-     won deals become Invoiced subs → **netted out** against MRR; `one_time` (project/
-     setup fees) are **additive net-new**, never netted. Mirror it as a nullable column
-     `revenue_type text check (revenue_type in ('recurring','one_time'))` + a
-     `PipedriveDeal.revenueType: RevenueType | null` field. **Honest-null rule:** the
-     sync must NOT silently default a bucket — derive from a native Pipedrive recurring
-     flag, else a documented deal-type/product-category mapping, else leave `null`
-     (unknown/unmapped). The export must always *carry* the field (value or explicit
-     null) so QA can assert present-and-honest. Recommend splitting the won/booked
-     summary total into `recurring` vs `one_time` (vs `unknown`) subtotals so John gets
-     the netted-vs-additive split directly.
+   - **`revenue_type` (`recurring` | `one_time` | `unknown`) — REQUIRED on every won/
+     booked row (Reese → John, PSG-435 spec rev `4bd80aec`; shipped PSG-463).** It is the
+     decisive §2.1 field: `recurring` won deals become Invoiced subs → **netted out**
+     against MRR; `one_time` (project/setup fees) are **additive net-new**, never netted.
+     **Honest-not-guessed:** Pipedrive carries no native recurring flag, so the export
+     defaults each row to **`unknown`** and only classifies it when a source resolves a
+     value — never a silently-defaulted bucket, and `unknown` is never netted. Resolution
+     precedence (`buildDealsExport`): (1) an options-supplied `revenueTypeFieldKey` read
+     from the deal's `customFields` and mapped deterministically (built-in normalization
+     recognizes `recurring` and `one_time`/`one-time`; or pass an explicit
+     `revenueTypeMap`); (2) the sync-populated mirror column
+     `revenue_type text check (revenue_type in ('recurring','one_time'))` →
+     `PipedriveDeal.revenueType`; else (3) `unknown`. The field is emitted as a value
+     (never null) in **both** the JSON and CSV won-booked rows, and the summary total is
+     split into `recurring` / `one_time` / `unknown` subtotals so John gets the
+     netted-vs-additive split directly.
+   - **Recently-closed reconcile window (PSG-463).** `wonBooked` is bounded to deals whose
+     actual `closeDate` falls in `[asOf - closedWithinDays, asOf]` (inclusive; default
+     **90** days; a null `closeDate` can't be windowed and is excluded). This makes the
+     set a defined reconcile range vs the Invoiced MRR base rather than every won deal
+     ever. `wonBookedCount` / `wonBookedTotal` and the by-type subtotals recompute over
+     the windowed set only — the single reconcile-vs-Invoiced number. The resolved bounds
+     are surfaced in the JSON `summary` (`wonBookedWindowDays` / `wonBookedWindowStart` /
+     `wonBookedWindowEnd`), the CSV SUMMARY (`won_booked_window_*`), and the CSV
+     WON-BOOKED section header, so John sees exactly what range the tie-out covers.
 
 ## Refresh path (operational)
 
