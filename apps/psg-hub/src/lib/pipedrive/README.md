@@ -41,6 +41,8 @@ TODO (engineer — see PSG-434 child issue):
    write a `pipedrive_sync_runs` row. Idempotent; safe to re-run.
 3. **Cadence** — invoke `sync.ts` on a schedule (Vercel cron route
    `/api/cron/pipedrive-sync`, or a Paperclip routine). Daily is sufficient for a forecast.
+   Wire the canonical S0–S8 weights from `stages.ts` (`buildStageProbabilityMap`)
+   once you have the Pipedrive `stage_id → Sn` mapping; "committed" = stages ≥ S6.
 4. **Query/export surface** — expose `buildForecast` output: a server query helper +
    a CSV/JSON export (open-deal count + total open-pipeline-$ + per-stage breakdown)
    for Reese. Reuse the `ops/reports` export conventions.
