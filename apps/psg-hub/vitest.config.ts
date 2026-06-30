@@ -60,6 +60,7 @@ export default defineConfig({
         "src/lib/ops/solicitation/publisher.ts", // approval-queue publisher (send on approve)
         "src/app/api/sms/webhook/route.ts", // Twilio inbound STOP/START/HELP
         "src/app/api/unsubscribe/route.ts", // CAN-SPAM unsubscribe
+        "src/lib/leads/first-touch.ts", // PSG-500 first-touch UTM capture (pure core)
       ],
       // Excluded v0.2-adjacent surfaces (covered elsewhere / not unit-gateable
       // in env=node), with rationale:
