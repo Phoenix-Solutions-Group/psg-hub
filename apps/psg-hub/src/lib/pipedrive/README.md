@@ -23,10 +23,19 @@ Pipedrive REST API ──(cadenced sync, service role)──► public.pipedrive
   payload. Default-deny RLS; reads gated on `view_sales_pipeline`; service-role
   ingestion bypasses RLS. A `pipedrive_sync_runs` log records cadence health/staleness.
 - **Forecast core** (`forecast.ts`) — pure, dependency-free, fully unit-tested:
-  `buildForecast(deals, { stageProbability })` → `{ openDealCount, bestCaseValue,
-  committedValue, perStage[] }`. **The S0–S8 stage→probability map is owned by
-  Reese/CRO (PSG-433).** When a stage isn't in the map it falls back to the deal's
-  own Pipedrive `win_probability/100`, so the per-stage breakdown + totals are
+  `buildForecast(deals, { stageProbability, committedStageIds })` → three named
+  confidence lines (low → high) plus the per-stage breakdown:
+  `{ openDealCount, committedValue, committedWeightedValue, committedDealCount,
+  weightedValue, bestCaseValue, perStage[] }`.
+  - **committed** = Σ value of open deals at **≥ S6** (face floor) — the downside line.
+  - **weighted/expected** = Σ(value × prob) over **all** open deals — the midpoint that
+    feeds John's PSG-432 §2.1 forecast.
+  - **best case** = Σ value over **all** open deals — the unweighted ceiling.
+  The committed gate uses an explicit `committedStageIds` set once the live
+  `stage_id → Sn` map is known; until then it falls back to resolved win-probability
+  ≥ `COMMITTED_PROBABILITY_THRESHOLD` (S6 = 0.95). **The S0–S8 stage→probability map is
+  owned by Reese/CRO (PSG-433).** When a stage isn't in the map it falls back to the
+  deal's own Pipedrive `win_probability/100`, so the per-stage breakdown + totals are
   available even before the final weights are locked.
 
 ## What is built vs. TODO (delegated)
@@ -46,6 +55,15 @@ TODO (engineer — see PSG-434 child issue):
 4. **Query/export surface** — expose `buildForecast` output: a server query helper +
    a CSV/JSON export (open-deal count + total open-pipeline-$ + per-stage breakdown)
    for Reese. Reuse the `ops/reports` export conventions.
+5. **Open/closed mapping (Reese, PSG-435):** when the live stages are known, confirm
+   which `stage_id`s carry Pipedrive `status=open`. S8 Won — and S7 Commercial once
+   signed — must come back `status=won` so they are excluded from the forecast (they
+   are realized revenue, not pipeline). If any S7/S8 deal returns `status=open` it
+   would inflate the committed line — surface a warning row and flag it to Reese.
+6. **Stale-deal flag (Reese, PSG-435):** carry Pipedrive `update_time` onto
+   `PipedriveDeal` (add the field + column) and mark any open deal with no movement in
+   **14 days** as stale, so stale pipeline is visible and discountable rather than
+   silently summed into the forecast.
 
 ## Refresh path (operational)
 
