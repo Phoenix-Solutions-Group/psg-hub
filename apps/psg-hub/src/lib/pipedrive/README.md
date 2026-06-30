@@ -74,12 +74,25 @@ TODO (engineer — see PSG-434 child issue):
    discountable rather than silently summed into the forecast.
 7. **Won/booked as a DISTINCT reconciled set (John's CFO guard, PSG-435):** export
    won/booked deals (S8, or S7 once signed) as a **separate** line — `orgName` +
-   face `value` + `closeDate` + a summary total — kept apart from the open pipeline.
-   They overlap the Invoiced recurring base (~67 subs · $75.2K MRR), so John reconciles
-   them against Invoiced MRR before §2.1; summing them into the forecast would
-   double-count. This is surfacing-only — **not** a `buildForecast` change (`buildForecast`
-   already filters to `status === "open"`); it's an additional export section. QA on
-   [PSG-447] asserts the won/booked set is present and disjoint from the open set.
+   face `value` + `closeDate` + **`revenueType`** + a summary total — kept apart from
+   the open pipeline. They overlap the Invoiced recurring base (~67 subs · $75.2K MRR),
+   so John reconciles them against Invoiced MRR before §2.1; summing them into the
+   forecast would double-count. This is surfacing-only — **not** a `buildForecast`
+   change (`buildForecast` already filters to `status === "open"`); it's an additional
+   export section. QA on [PSG-447] asserts the won/booked set is present and disjoint
+   from the open set.
+   - **`revenueType` (recurring | one_time) — REQUIRED on the won/booked line (Reese
+     → John, PSG-435 spec rev `4bd80aec`).** It is the decisive §2.1 field: `recurring`
+     won deals become Invoiced subs → **netted out** against MRR; `one_time` (project/
+     setup fees) are **additive net-new**, never netted. Mirror it as a nullable column
+     `revenue_type text check (revenue_type in ('recurring','one_time'))` + a
+     `PipedriveDeal.revenueType: RevenueType | null` field. **Honest-null rule:** the
+     sync must NOT silently default a bucket — derive from a native Pipedrive recurring
+     flag, else a documented deal-type/product-category mapping, else leave `null`
+     (unknown/unmapped). The export must always *carry* the field (value or explicit
+     null) so QA can assert present-and-honest. Recommend splitting the won/booked
+     summary total into `recurring` vs `one_time` (vs `unknown`) subtotals so John gets
+     the netted-vs-additive split directly.
 
 ## Refresh path (operational)
 
