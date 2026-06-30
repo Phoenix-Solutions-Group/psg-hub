@@ -119,6 +119,104 @@ export function deriveRevenueType(raw: RawPipedriveDeal): RevenueType | null {
   return null; // honest-null: unmapped → reported as `unknown` at the export
 }
 
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+// ── recurring monthly-MRR basis (PSG-468 / John's §2.1 tightening B) ──────────────
+// `value` is face `$` with no period; Invoiced MRR is monthly. To net a recurring deal
+// against MRR we need its normalized MONTHLY contribution — derived from the same raw
+// recurring metadata as `deriveRevenueType`, honest-null when no basis is derivable.
+
+/** Months in one unit of a recurring interval (canonical units). */
+const UNIT_MONTHS: Record<string, number> = {
+  day: 12 / 365,
+  week: 12 / 52,
+  month: 1,
+  quarter: 3,
+  year: 12,
+};
+
+/** Keyword cadences carry a full period themselves (an `interval_count` is ignored). */
+const CADENCE: Record<string, { unit: keyof typeof UNIT_MONTHS; count: number }> = {
+  daily: { unit: "day", count: 1 },
+  weekly: { unit: "week", count: 1 },
+  biweekly: { unit: "week", count: 2 },
+  fortnightly: { unit: "week", count: 2 },
+  monthly: { unit: "month", count: 1 },
+  quarterly: { unit: "quarter", count: 1 },
+  semiannual: { unit: "month", count: 6 },
+  "semi-annual": { unit: "month", count: 6 },
+  semiannually: { unit: "month", count: 6 },
+  biannual: { unit: "month", count: 6 },
+  "half-yearly": { unit: "month", count: 6 },
+  annual: { unit: "year", count: 1 },
+  annually: { unit: "year", count: 1 },
+  yearly: { unit: "year", count: 1 },
+};
+
+/** Bare interval units (Stripe-style) — pair with an optional `interval_count`. */
+const BARE_UNIT: Record<string, keyof typeof UNIT_MONTHS> = {
+  day: "day",
+  week: "week",
+  month: "month",
+  quarter: "quarter",
+  year: "year",
+};
+
+/**
+ * Resolve a recurring deal's billing period to a number of MONTHS, or `null` when the
+ * interval can't be derived. Accepts a keyword cadence (`cadence_type: "monthly"`/
+ * `"yearly"`) or a bare unit + count (`interval: "month"`, `interval_count: 3`).
+ */
+function monthsPerPeriod(raw: RawPipedriveDeal): number | null {
+  const rawUnit =
+    raw.cadence_type ??
+    raw.recurring_interval ??
+    raw.billing_frequency ??
+    raw.recurring_period ??
+    raw.interval;
+  if (typeof rawUnit !== "string") return null;
+  const u = rawUnit.trim().toLowerCase();
+  if (u === "") return null;
+
+  const cadence = CADENCE[u];
+  if (cadence) return UNIT_MONTHS[cadence.unit] * cadence.count;
+
+  const unit = BARE_UNIT[u];
+  if (!unit) return null;
+  const count =
+    asNumber(raw.recurring_interval_count ?? raw.interval_count ?? raw.cadence_count) ??
+    1;
+  const months = UNIT_MONTHS[unit] * (count > 0 ? count : 1);
+  return months > 0 ? months : null;
+}
+
+/**
+ * Derive a WON `recurring` deal's normalized **monthly** MRR contribution (PSG-468).
+ * Precedence:
+ *   1. a native monthly figure (`mrr` / `recurring_revenue`) — already normalized;
+ *   2. a recurring amount (`recurring_amount` / `cycle_amount`) ÷ its interval-in-months.
+ * HONEST-NULL: a non-recurring deal, or a recurring deal with no derivable amount/interval,
+ * returns `null` — never silently annualized or assumed monthly (it is flagged for manual
+ * reconcile downstream, counted but never mechanically netted against Invoiced MRR).
+ */
+export function deriveMonthlyValue(raw: RawPipedriveDeal): number | null {
+  if (deriveRevenueType(raw) !== "recurring") return null;
+
+  const mrr = asNumber(raw.mrr ?? raw.recurring_revenue);
+  if (mrr != null && mrr > 0) return round2(mrr);
+
+  const amount = asNumber(
+    raw.recurring_amount ?? raw.cycle_amount ?? raw.subscription_amount,
+  );
+  if (amount == null || amount <= 0) return null;
+
+  const months = monthsPerPeriod(raw);
+  if (months == null) return null; // interval/basis not derivable → honest-null
+  return round2(amount / months);
+}
+
 /** Map a raw Pipedrive deal onto the mirror's `PipedriveDeal`. */
 export function mapRawDeal(raw: RawPipedriveDeal): PipedriveDeal {
   const status = String(raw.status ?? "open");
@@ -147,6 +245,8 @@ export function mapRawDeal(raw: RawPipedriveDeal): PipedriveDeal {
     lastActivityDate: isoDate(raw.last_activity_date),
     // Revenue character for the won/booked §2.1 tie-out; honest-null when unmapped.
     revenueType: deriveRevenueType(raw),
+    // Normalized monthly MRR basis for recurring deals; honest-null when underivable.
+    monthlyValue: deriveMonthlyValue(raw),
   };
 }
 

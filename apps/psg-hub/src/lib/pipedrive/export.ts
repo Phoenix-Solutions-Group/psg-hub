@@ -78,6 +78,14 @@ export interface WonBookedRow {
    * subtotal so the gap is resolved before the tie-out.
    */
   revenueType: WonBookedRevenueType;
+  /**
+   * Normalized **monthly** MRR basis (PSG-468 / John's §2.1 tightening B). For
+   * `revenueType === 'recurring'`: the deal's monthly MRR contribution — face `value` is
+   * total-contract/annual `$` with no period, and this is what John nets against Invoiced
+   * monthly MRR. `null` for `one_time`/`unknown`, AND for a recurring deal whose
+   * interval/basis can't be derived (honest-null — counted for manual reconcile, never
+   * silently annualized or netted). Never an MRR figure for a non-recurring row. */
+  monthlyValue: number | null;
 }
 
 /** Σ face-$ of the won/booked set split by revenue_type, for John's reconciliation. */
@@ -112,6 +120,15 @@ export interface DealsExport {
   wonBookedByType: WonBookedByType;
   /** The recently-closed window `wonBooked` is bounded to (PSG-463). */
   wonBookedWindow: WonBookedWindow;
+  /**
+   * Σ `monthlyValue` over recurring rows with a NON-null `monthlyValue` (PSG-468) — the
+   * normalized monthly figure John subtracts from Invoiced MRR (~$75.2K). Recurring rows
+   * with a null basis are NOT in this sum; they are flagged below for manual reconcile. */
+  wonBookedRecurringMonthlyTotal: number;
+  /**
+   * Count of recurring rows whose `monthlyValue` is null (basis underivable). These are
+   * counted, never mechanically netted — they must be resolved by hand before the tie-out. */
+  wonBookedRecurringMonthlyNullCount: number;
   diagnostics: DealDiagnostics;
 }
 
@@ -159,17 +176,26 @@ export function buildDealsExport(
 
   const wonBooked: WonBookedRow[] = deals
     .filter((d) => d.status === "won" && inWindow(d.closeDate, startMs, endMs))
-    .map((d) => ({
-      dealId: d.dealId,
-      orgName: d.orgName,
-      title: d.title,
-      value: Number.isFinite(d.value) ? d.value : 0,
-      currency: d.currency,
-      closeDate: d.closeDate,
+    .map((d) => {
       // Honest-not-guessed: resolve from a custom-field key when configured, else the
       // sync-populated mirror value, else `unknown` — never a silently-defaulted bucket.
-      revenueType: resolveRevenueType(d, opts),
-    }));
+      const revenueType = resolveRevenueType(d, opts);
+      return {
+        dealId: d.dealId,
+        orgName: d.orgName,
+        title: d.title,
+        value: Number.isFinite(d.value) ? d.value : 0,
+        currency: d.currency,
+        closeDate: d.closeDate,
+        revenueType,
+        // PSG-468 — monthly MRR basis only for recurring rows; honest-null otherwise (and
+        // null too when the recurring deal's basis was underivable upstream).
+        monthlyValue:
+          revenueType === "recurring" && Number.isFinite(d.monthlyValue ?? NaN)
+            ? (d.monthlyValue as number)
+            : null,
+      };
+    });
 
   // John's §2.1 hard tie-out (elevated from "recommend" → REQUIRED): the three
   // revenue_type subtotals MUST reconcile EXACTLY to wonBookedTotal. revenue_type is an
@@ -193,6 +219,17 @@ export function buildDealsExport(
   );
   assertTieOut(wonBookedTotal, wonBookedByType);
 
+  // PSG-468 — netting-ready monthly basis. Σ monthlyValue over recurring rows that HAVE a
+  // non-null basis (the figure John subtracts from Invoiced MRR); recurring rows with a
+  // null basis are counted separately for manual reconcile, never folded into the sum.
+  const recurringRows = wonBooked.filter((r) => r.revenueType === "recurring");
+  const wonBookedRecurringMonthlyTotal = round2(
+    recurringRows.reduce((s, r) => s + (r.monthlyValue ?? 0), 0),
+  );
+  const wonBookedRecurringMonthlyNullCount = recurringRows.filter(
+    (r) => r.monthlyValue === null,
+  ).length;
+
   return {
     generatedAt: opts.asOf.toISOString(),
     forecast,
@@ -201,6 +238,8 @@ export function buildDealsExport(
     wonBookedTotal,
     wonBookedByType,
     wonBookedWindow,
+    wonBookedRecurringMonthlyTotal,
+    wonBookedRecurringMonthlyNullCount,
     diagnostics,
   };
 }
@@ -308,6 +347,9 @@ export function dealsExportToJSON(
       wonBookedOneTimeTotal: exp.wonBookedByType.oneTime,
       wonBookedUnknownTotal: exp.wonBookedByType.unknown,
       wonBookedUnknownCount: exp.wonBookedByType.unknownCount,
+      // PSG-468 — monthly MRR basis John nets vs Invoiced MRR, + unresolved-basis count.
+      wonBookedRecurringMonthlyTotal: exp.wonBookedRecurringMonthlyTotal,
+      wonBookedRecurringMonthlyNullCount: exp.wonBookedRecurringMonthlyNullCount,
       warningCount: exp.diagnostics.warnings.length,
     },
     perStage: exp.forecast.perStage,
@@ -362,6 +404,8 @@ export function dealsExportToCSV(exp: DealsExport): string {
   lines.push(row(["won_booked_one_time_total", exp.wonBookedByType.oneTime]));
   lines.push(row(["won_booked_unknown_total", exp.wonBookedByType.unknown]));
   lines.push(row(["won_booked_unknown_count", exp.wonBookedByType.unknownCount]));
+  lines.push(row(["won_booked_recurring_monthly_total", exp.wonBookedRecurringMonthlyTotal]));
+  lines.push(row(["won_booked_recurring_monthly_null_count", exp.wonBookedRecurringMonthlyNullCount]));
   lines.push("");
 
   lines.push(row(["SECTION", "PER-STAGE"]));
@@ -394,14 +438,20 @@ export function dealsExportToCSV(exp: DealsExport): string {
     "SECTION",
     `WON-BOOKED (DISTINCT — closed ${exp.wonBookedWindow.start}..${exp.wonBookedWindow.end} (${exp.wonBookedWindow.days}d); reconcile vs Invoiced MRR, do NOT sum into pipeline)`,
   ]));
-  lines.push(row(["deal_id", "org_name", "title", "value", "currency", "close_date", "revenue_type"]));
+  lines.push(row(["deal_id", "org_name", "title", "value", "currency", "close_date", "revenue_type", "monthly_value"]));
   for (const d of exp.wonBooked) {
-    lines.push(row([d.dealId, d.orgName, d.title, d.value, d.currency, d.closeDate, d.revenueType]));
+    lines.push(row([d.dealId, d.orgName, d.title, d.value, d.currency, d.closeDate, d.revenueType, d.monthlyValue]));
   }
-  lines.push(row(["TOTAL", "", "", exp.wonBookedTotal, f.currency, "", ""]));
-  lines.push(row(["RECURRING (net vs MRR)", "", "", exp.wonBookedByType.recurring, f.currency, "", "recurring"]));
-  lines.push(row(["ONE-TIME (additive)", "", "", exp.wonBookedByType.oneTime, f.currency, "", "one_time"]));
-  lines.push(row(["UNKNOWN (resolve before tie-out)", "", "", exp.wonBookedByType.unknown, f.currency, "", "unknown"]));
+  lines.push(row(["TOTAL", "", "", exp.wonBookedTotal, f.currency, "", "", ""]));
+  lines.push(row(["RECURRING (face $)", "", "", exp.wonBookedByType.recurring, f.currency, "", "recurring", ""]));
+  // PSG-468 — the normalized monthly basis John nets vs Invoiced MRR (NOT the face-$ above);
+  // monthly_value carries the Σ, and the label flags how many recurring rows are unresolved.
+  lines.push(row([
+    `RECURRING MONTHLY (Σ vs Invoiced MRR; ${exp.wonBookedRecurringMonthlyNullCount} unresolved/manual)`,
+    "", "", "", f.currency, "", "recurring", exp.wonBookedRecurringMonthlyTotal,
+  ]));
+  lines.push(row(["ONE-TIME (additive)", "", "", exp.wonBookedByType.oneTime, f.currency, "", "one_time", ""]));
+  lines.push(row(["UNKNOWN (resolve before tie-out)", "", "", exp.wonBookedByType.unknown, f.currency, "", "unknown", ""]));
   lines.push("");
 
   if (exp.diagnostics.warnings.length > 0) {

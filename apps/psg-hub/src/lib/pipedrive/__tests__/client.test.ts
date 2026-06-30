@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   createPipedriveClient,
+  deriveMonthlyValue,
   deriveRevenueType,
   mapRawDeal,
   pipedriveBaseUrl,
@@ -23,6 +24,48 @@ describe("deriveRevenueType (honest-null — never silently bucket)", () => {
     expect(deriveRevenueType({ value: 5000, status: "won" })).toBeNull();
     expect(deriveRevenueType({ revenue_type: "??" })).toBeNull();
     expect(deriveRevenueType({ mrr: 0 })).toBeNull();
+  });
+});
+
+describe("deriveMonthlyValue (PSG-468 — normalized monthly MRR basis, honest-null)", () => {
+  it("uses a native monthly figure directly (mrr / recurring_revenue)", () => {
+    expect(deriveMonthlyValue({ mrr: 1500 })).toBe(1500);
+    expect(deriveMonthlyValue({ recurring_revenue: 900 })).toBe(900);
+  });
+  it("normalizes a recurring amount by its interval to a monthly basis", () => {
+    // annual contract of $12,000 → $1,000/mo
+    expect(deriveMonthlyValue({ recurring: true, recurring_amount: 12000, cadence_type: "yearly" })).toBe(1000);
+    // quarterly $3,000 → $1,000/mo
+    expect(deriveMonthlyValue({ recurring: true, cycle_amount: 3000, cadence_type: "quarterly" })).toBe(1000);
+    // monthly amount passes through
+    expect(deriveMonthlyValue({ recurring: true, recurring_amount: 2000, cadence_type: "monthly" })).toBe(2000);
+    // weekly $100 → 100 * 52/12 ≈ 433.33
+    expect(deriveMonthlyValue({ recurring: true, recurring_amount: 100, cadence_type: "weekly" })).toBe(433.33);
+    // Stripe-style bare unit + count: every 3 months, $3,000 → $1,000/mo
+    expect(deriveMonthlyValue({ recurring: true, recurring_amount: 3000, interval: "month", interval_count: 3 })).toBe(1000);
+  });
+  it("is honest-null when the deal is recurring but the basis can't be derived", () => {
+    // recurring flag, but no amount and no interval
+    expect(deriveMonthlyValue({ recurring: true })).toBeNull();
+    // amount present but interval missing → can't normalize
+    expect(deriveMonthlyValue({ recurring: true, recurring_amount: 12000 })).toBeNull();
+    // interval present but no amount and no native mrr
+    expect(deriveMonthlyValue({ recurring: true, cadence_type: "yearly" })).toBeNull();
+    // unrecognized interval keyword
+    expect(deriveMonthlyValue({ recurring: true, recurring_amount: 1200, cadence_type: "whenever" })).toBeNull();
+  });
+  it("is null for non-recurring deals (one_time / unknown)", () => {
+    expect(deriveMonthlyValue({ revenue_type: "one_time", value: 5000 })).toBeNull();
+    expect(deriveMonthlyValue({ value: 5000 })).toBeNull(); // unknown
+    // an amount/interval on a NON-recurring deal must not be netted as MRR
+    expect(deriveMonthlyValue({ revenue_type: "project", recurring_amount: 12000, cadence_type: "yearly" })).toBeNull();
+  });
+  it("is carried onto PipedriveDeal by mapRawDeal", () => {
+    const d = mapRawDeal({ id: 7, status: "won", recurring: true, recurring_amount: 12000, cadence_type: "yearly" });
+    expect(d.revenueType).toBe("recurring");
+    expect(d.monthlyValue).toBe(1000);
+    const oneTime = mapRawDeal({ id: 8, status: "won", revenue_type: "project", value: 9000 });
+    expect(oneTime.monthlyValue).toBeNull();
   });
 });
 

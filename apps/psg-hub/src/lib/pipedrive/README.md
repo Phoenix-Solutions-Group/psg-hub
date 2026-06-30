@@ -97,6 +97,25 @@ TODO (engineer — see PSG-434 child issue):
      (never null) in **both** the JSON and CSV won-booked rows, and the summary total is
      split into `recurring` / `one_time` / `unknown` subtotals so John gets the
      netted-vs-additive split directly.
+   - **`monthlyValue` — normalized monthly MRR basis on every won/booked row (PSG-468 /
+     §2.1 tightening B).** `value` is face `$` with no period, but Invoiced MRR is
+     **monthly** — netting a recurring deal's total-contract/annual face-$ 1:1 against
+     monthly MRR is wrong by the term (often 12×). For `revenueType === 'recurring'`,
+     `monthlyValue` is the deal's normalized monthly contribution, derived alongside
+     `revenueType` from the same raw recurring metadata (`deriveMonthlyValue` in
+     `client.ts`): a native monthly `mrr`/`recurring_revenue`, else a recurring amount
+     (`recurring_amount`/`cycle_amount`) ÷ its interval-in-months (keyword cadences —
+     `monthly`/`quarterly`/`yearly`/`weekly` — or a Stripe-style bare unit + count). For
+     `one_time`/`unknown` it is `null` (additive at face `value`, never an MRR figure).
+     **Honest-null (same rule as `revenue_type`):** a recurring deal whose interval/basis
+     can't be derived stays `null` — never silently annualized or assumed monthly — and is
+     counted for manual reconcile, never mechanically netted. It is emitted in **both** the
+     JSON and CSV won-booked rows. The summary adds `wonBookedRecurringMonthlyTotal`
+     (Σ `monthlyValue` over recurring rows with a non-null basis — the figure John
+     subtracts from Invoiced MRR) and `wonBookedRecurringMonthlyNullCount` (recurring rows
+     with a null basis, unresolved/manual), in the JSON `summary`, the CSV SUMMARY
+     (`won_booked_recurring_monthly_total` / `…_null_count`), and a dedicated CSV
+     `RECURRING MONTHLY (Σ vs Invoiced MRR …)` subtotal row.
    - **Recently-closed reconcile window (PSG-463).** `wonBooked` is bounded to deals whose
      actual `closeDate` falls in `[asOf - closedWithinDays, asOf]` (inclusive; default
      **90** days; a null `closeDate` can't be windowed and is excluded). This makes the

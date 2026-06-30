@@ -27,6 +27,7 @@ function deal(p: Partial<PipedriveDeal>): PipedriveDeal {
     closeDate: p.closeDate ?? null,
     lastActivityDate: p.lastActivityDate ?? "2026-06-29",
     revenueType: p.revenueType ?? null,
+    monthlyValue: p.monthlyValue ?? null,
     customFields: p.customFields ?? null,
   };
 }
@@ -143,6 +144,46 @@ describe("buildDealsExport", () => {
     expect(wonBookedTieOutGap(exp.wonBookedTotal, exp.wonBookedByType)).toBe(0);
   });
 
+  it("carries monthlyValue on recurring rows, honest-null otherwise (PSG-468 tightening B)", () => {
+    const deals = [
+      // recurring with a derived monthly basis → carried onto the row
+      deal({ dealId: 60, value: 12_000, status: "won", closeDate: "2026-06-10", revenueType: "recurring", monthlyValue: 1_000 }),
+      // recurring but the upstream basis was underivable → null + flagged for manual reconcile
+      deal({ dealId: 61, value: 9_000, status: "won", closeDate: "2026-06-11", revenueType: "recurring", monthlyValue: null }),
+      // one_time is never an MRR figure → null even if a stray monthlyValue is present
+      deal({ dealId: 62, value: 5_000, status: "won", closeDate: "2026-06-12", revenueType: "one_time", monthlyValue: 999 }),
+      // unknown → null
+      deal({ dealId: 63, value: 4_000, status: "won", closeDate: "2026-06-13" }),
+    ];
+    const exp = buildDealsExport(deals, { asOf: ASOF });
+    const byId = new Map(exp.wonBooked.map((d) => [d.dealId, d.monthlyValue]));
+    expect(byId.get(60)).toBe(1_000);
+    expect(byId.get(61)).toBeNull(); // honest-null, never a silent annual→monthly guess
+    expect(byId.get(62)).toBeNull(); // one_time additive at face value, never an MRR figure
+    expect(byId.get(63)).toBeNull();
+    // Netting-ready summary: Σ over recurring rows WITH a non-null basis; the underivable
+    // recurring row is counted, not folded in.
+    expect(exp.wonBookedRecurringMonthlyTotal).toBe(1_000);
+    expect(exp.wonBookedRecurringMonthlyNullCount).toBe(1);
+  });
+
+  it("a custom-field key can reclassify a deal to recurring and gate monthlyValue (PSG-468)", () => {
+    const deals = [
+      // mirror says recurring + has a monthly basis; custom-field override agrees → kept
+      deal({ dealId: 70, value: 24_000, status: "won", closeDate: "2026-06-10", revenueType: "recurring", monthlyValue: 2_000, customFields: { rt: "recurring" } }),
+      // mirror recurring w/ basis, but the override reclassifies to one_time → monthlyValue dropped to null
+      deal({ dealId: 71, value: 12_000, status: "won", closeDate: "2026-06-11", revenueType: "recurring", monthlyValue: 1_000, customFields: { rt: "one-time" } }),
+    ];
+    const exp = buildDealsExport(deals, { asOf: ASOF, revenueTypeFieldKey: "rt" });
+    const byId = new Map(exp.wonBooked.map((d) => [d.dealId, d]));
+    expect(byId.get(70)!.revenueType).toBe("recurring");
+    expect(byId.get(70)!.monthlyValue).toBe(2_000);
+    expect(byId.get(71)!.revenueType).toBe("one_time");
+    expect(byId.get(71)!.monthlyValue).toBeNull(); // gated on the RESOLVED revenue_type
+    expect(exp.wonBookedRecurringMonthlyTotal).toBe(2_000);
+    expect(exp.wonBookedRecurringMonthlyNullCount).toBe(0);
+  });
+
   it("bounds won/booked to the recently-closed window (inclusive at the boundary)", () => {
     const deals = [
       deal({ dealId: 30, value: 1_000, status: "won", closeDate: "2026-06-29" }), // 1d ago — in
@@ -205,7 +246,26 @@ describe("serializers", () => {
     expect(json.summary.wonBookedUnknownTotal).toBe(75_000);
     expect(json.summary.wonBookedUnknownCount).toBe(1);
     expect(json.summary.wonBookedRecurringTotal).toBe(0);
+    // PSG-468 — monthly MRR basis + unresolved-basis count in the summary
+    expect(json.summary.wonBookedRecurringMonthlyTotal).toBe(0);
+    expect(json.summary.wonBookedRecurringMonthlyNullCount).toBe(0);
     expect(json.perStage.length).toBeGreaterThan(0);
+  });
+
+  it("JSON summary + rows surface the monthly MRR basis John nets vs Invoiced (PSG-468)", () => {
+    const deals = [
+      deal({ dealId: 80, value: 24_000, status: "won", closeDate: "2026-06-10", revenueType: "recurring", monthlyValue: 2_000 }),
+      deal({ dealId: 81, value: 9_000, status: "won", closeDate: "2026-06-11", revenueType: "recurring", monthlyValue: null }),
+    ];
+    const json = dealsExportToJSON(buildDealsExport(deals, { asOf: ASOF })) as {
+      summary: Record<string, number>;
+      wonBooked: Array<{ dealId: number; monthlyValue: number | null }>;
+    };
+    expect(json.summary.wonBookedRecurringMonthlyTotal).toBe(2_000);
+    expect(json.summary.wonBookedRecurringMonthlyNullCount).toBe(1);
+    const rowById = new Map(json.wonBooked.map((r) => [r.dealId, r.monthlyValue]));
+    expect(rowById.get(80)).toBe(2_000);
+    expect(rowById.get(81)).toBeNull();
   });
 
   it("CSV is RFC-4180 (CRLF) with named sections incl. the disjoint won-booked block", () => {
@@ -227,5 +287,19 @@ describe("serializers", () => {
     expect(csv).toContain("won_booked_window_days");
     expect(csv).toContain("won_booked_window_start");
     expect(csv).toContain("closed 2026-04-01..2026-06-30");
+  });
+
+  it("CSV surfaces the monthly MRR basis column + summary/subtotal rows (PSG-468)", () => {
+    const deals = [
+      deal({ dealId: 90, value: 24_000, status: "won", orgName: "Bodyshop B", closeDate: "2026-06-10", revenueType: "recurring", monthlyValue: 2_000 }),
+      deal({ dealId: 91, value: 9_000, status: "won", closeDate: "2026-06-11", revenueType: "recurring", monthlyValue: null }),
+    ];
+    const csv = dealsExportToCSV(buildDealsExport(deals, { asOf: ASOF }));
+    // SUMMARY rows
+    expect(csv).toContain("won_booked_recurring_monthly_total");
+    expect(csv).toContain("won_booked_recurring_monthly_null_count");
+    // WON-BOOKED block: the new monthly_value column + the dedicated MRR-basis subtotal row
+    expect(csv).toContain("monthly_value");
+    expect(csv).toContain("RECURRING MONTHLY (Σ vs Invoiced MRR; 1 unresolved/manual)");
   });
 });

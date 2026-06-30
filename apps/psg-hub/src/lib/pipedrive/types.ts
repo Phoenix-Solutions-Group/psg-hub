@@ -39,6 +39,18 @@ export interface PipedriveDeal {
    * and the export surfaces them as `unknown` (never netted). Irrelevant for open deals. */
   revenueType?: RevenueType | null;
   /**
+   * Normalized **monthly** MRR contribution of a WON `recurring` deal (PSG-468 /
+   * John's §2.1 tightening B). `WonBookedRow.value` is face `$` with no period, but
+   * Invoiced MRR is monthly — so a recurring deal's total-contract/annual face-$ must
+   * be normalized to a monthly basis before it is netted against Invoiced MRR (often a
+   * 12× error otherwise). Derived alongside `revenueType` from the same raw Pipedrive
+   * recurring metadata (a native monthly `mrr`, else a recurring amount ÷ derivable
+   * interval). **Honest-null rule:** when the interval/basis can't be derived it stays
+   * `null` — never silently annualized or assumed monthly; such a recurring deal is
+   * counted for manual reconcile, never mechanically netted. `null` for `one_time`,
+   * `unknown`, and open deals. */
+  monthlyValue?: number | null;
+  /**
    * Raw Pipedrive custom-field values, keyed by field key/hash (the deal's bag of
    * org-specific fields). Pipedrive has no native recurring flag, so when a recurring/
    * one-time signal lives in a custom field, the export reads it via the caller's
