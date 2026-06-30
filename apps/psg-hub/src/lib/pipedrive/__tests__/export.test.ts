@@ -185,7 +185,7 @@ describe("buildDealsExport", () => {
     expect(exp.wonBookedRecurringMonthlyNullCount).toBe(0);
   });
 
-  it("bounds won/booked to an explicit half-open calendar range [from, to) (PSG-469 / John C1)", () => {
+  it("bounds won/booked to an explicit half-open calendar range [from, to) (PSG-471 / John C1)", () => {
     const deals = [
       deal({ dealId: 60, value: 1_000, status: "won", closeDate: "2026-05-31" }), // day before — out
       deal({ dealId: 61, value: 1_000, status: "won", closeDate: "2026-06-01" }), // start inclusive — in
@@ -209,7 +209,7 @@ describe("buildDealsExport", () => {
     });
   });
 
-  it("explicit calendar bounds WIN over the rolling closedWithinDays fallback (PSG-469)", () => {
+  it("explicit calendar bounds WIN over the rolling closedWithinDays fallback (PSG-471)", () => {
     const deals = [
       deal({ dealId: 70, value: 5_000, status: "won", closeDate: "2026-06-10" }), // in June
       deal({ dealId: 71, value: 5_000, status: "won", closeDate: "2026-05-20" }), // in rolling 90d, NOT in June
@@ -224,7 +224,7 @@ describe("buildDealsExport", () => {
     expect(exp.wonBookedWindow.endExclusive).toBe(true);
   });
 
-  it("accepts Date bounds and an MTD default via monthBounds() (PSG-469)", () => {
+  it("accepts Date bounds and an MTD default via monthBounds() (PSG-471)", () => {
     const { closedAfter, closedBefore } = monthBounds(ASOF); // America/Chicago default
     expect(closedAfter).toBe("2026-06-01");
     expect(closedBefore).toBe("2026-07-01");
@@ -242,7 +242,7 @@ describe("buildDealsExport", () => {
     expect(exp.wonBookedWindow.timeZone).toBe("America/Chicago");
   });
 
-  it("derives the MTD month from asOf in the boundary tz, not UTC (PSG-469)", () => {
+  it("derives the MTD month from asOf in the boundary tz, not UTC (PSG-471)", () => {
     // 2026-07-01T02:00Z is still 2026-06-30 in America/Chicago → MTD is still June.
     const lateNightUtc = new Date("2026-07-01T02:00:00.000Z");
     expect(monthBounds(lateNightUtc, "America/Chicago")).toEqual({
