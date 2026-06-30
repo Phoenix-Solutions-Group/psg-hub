@@ -171,10 +171,15 @@ export function buildDealsExport(
       revenueType: resolveRevenueType(d, opts),
     }));
 
-  const wonBookedTotal = round2(
-    wonBooked.reduce((sum, d) => sum + d.value, 0),
-  );
-
+  // John's §2.1 hard tie-out (elevated from "recommend" → REQUIRED): the three
+  // revenue_type subtotals MUST reconcile EXACTLY to wonBookedTotal. revenue_type is an
+  // exhaustive partition of the row set ({recurring, one_time, unknown} — resolveRevenueType
+  // never returns anything else), so the raw subset sums add up to the raw total with no
+  // gap. To keep the tie exact at the *rounded* (cents) level too — independently rounding
+  // each subtotal can drift ~1¢ from a separately-rounded grand total on sub-cent inputs —
+  // we round each part once and DEFINE the headline as the sum of those parts. The headline
+  // therefore always equals the sum of its disclosed parts, which is the honest contract for
+  // a reconciliation artifact. assertTieOut() below fails loud if this invariant ever breaks.
   const sumWhere = (pred: (r: WonBookedRow) => boolean) =>
     round2(wonBooked.filter(pred).reduce((s, d) => s + d.value, 0));
   const wonBookedByType: WonBookedByType = {
@@ -183,6 +188,10 @@ export function buildDealsExport(
     unknown: sumWhere((d) => d.revenueType === "unknown"),
     unknownCount: wonBooked.filter((d) => d.revenueType === "unknown").length,
   };
+  const wonBookedTotal = round2(
+    wonBookedByType.recurring + wonBookedByType.oneTime + wonBookedByType.unknown,
+  );
+  assertTieOut(wonBookedTotal, wonBookedByType);
 
   return {
     generatedAt: opts.asOf.toISOString(),
@@ -194,6 +203,34 @@ export function buildDealsExport(
     wonBookedWindow,
     diagnostics,
   };
+}
+
+/**
+ * The §2.1 reconciliation invariant John depends on: the three revenue_type subtotals
+ * tie EXACTLY to the headline. Pure + exported so the same check backs both the
+ * build-time guard (in `buildDealsExport`) and Tess's QA assertion (PSG-447) — one
+ * definition of "ties out", not two that can drift. Returns the (signed) cent gap;
+ * `0` means an exact tie.
+ */
+export function wonBookedTieOutGap(
+  wonBookedTotal: number,
+  byType: WonBookedByType,
+): number {
+  return round2(
+    wonBookedTotal - (byType.recurring + byType.oneTime + byType.unknown),
+  );
+}
+
+/** Fail loud if the revenue_type split ever stops reconciling to the headline. */
+function assertTieOut(wonBookedTotal: number, byType: WonBookedByType): void {
+  const gap = wonBookedTieOutGap(wonBookedTotal, byType);
+  if (gap !== 0) {
+    throw new Error(
+      `won/booked revenue_type subtotals do not tie out to wonBookedTotal ` +
+        `(recurring ${byType.recurring} + one_time ${byType.oneTime} + ` +
+        `unknown ${byType.unknown} != ${wonBookedTotal}; gap ${gap})`,
+    );
+  }
 }
 
 /** True when an ISO `closeDate` (date-only) falls inclusively within [startMs, endMs]. */

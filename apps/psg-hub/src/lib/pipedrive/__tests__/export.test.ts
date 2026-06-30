@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildDealsExport, dealsExportToCSV, dealsExportToJSON } from "../export";
+import {
+  buildDealsExport,
+  dealsExportToCSV,
+  dealsExportToJSON,
+  wonBookedTieOutGap,
+} from "../export";
 import type { PipedriveDeal } from "../types";
 
 function deal(p: Partial<PipedriveDeal>): PipedriveDeal {
@@ -106,6 +111,36 @@ describe("buildDealsExport", () => {
     expect(exp.wonBookedByType.oneTime).toBe(12_000);
     expect(exp.wonBookedByType.unknown).toBe(8_000);
     expect(exp.wonBookedByType.unknownCount).toBe(1);
+  });
+
+  it("ties the three revenue_type subtotals EXACTLY to wonBookedTotal (John's §2.1 hard tie-out)", () => {
+    // Mixed buckets incl. an unmapped (unknown) row — the partition must be exhaustive
+    // and reconcile with no dropped rows and no double-count.
+    const deals = [
+      deal({ dealId: 40, value: 60_000, status: "won", closeDate: "2026-06-15", revenueType: "recurring" }),
+      deal({ dealId: 41, value: 25_000, status: "won", closeDate: "2026-06-16", revenueType: "recurring" }),
+      deal({ dealId: 42, value: 12_000, status: "won", closeDate: "2026-06-17", revenueType: "one_time" }),
+      deal({ dealId: 43, value: 8_000, status: "won", closeDate: "2026-06-18" }), // unknown
+    ];
+    const exp = buildDealsExport(deals, { asOf: ASOF });
+    const { recurring, oneTime, unknown } = exp.wonBookedByType;
+    expect(recurring + oneTime + unknown).toBe(exp.wonBookedTotal);
+    expect(wonBookedTieOutGap(exp.wonBookedTotal, exp.wonBookedByType)).toBe(0);
+  });
+
+  it("ties out exactly even on sub-cent deal values (no per-subtotal rounding drift)", () => {
+    // Values that each carry a third decimal: independently rounding each subtotal AND a
+    // separately-rounded grand total would drift a cent — the headline is defined as the
+    // sum of the rounded parts, so the tie is exact by construction.
+    const deals = [
+      deal({ dealId: 50, value: 10.005, status: "won", closeDate: "2026-06-15", revenueType: "recurring" }),
+      deal({ dealId: 51, value: 10.005, status: "won", closeDate: "2026-06-16", revenueType: "one_time" }),
+      deal({ dealId: 52, value: 10.005, status: "won", closeDate: "2026-06-17" }), // unknown
+    ];
+    const exp = buildDealsExport(deals, { asOf: ASOF });
+    const { recurring, oneTime, unknown } = exp.wonBookedByType;
+    expect(recurring + oneTime + unknown).toBe(exp.wonBookedTotal);
+    expect(wonBookedTieOutGap(exp.wonBookedTotal, exp.wonBookedByType)).toBe(0);
   });
 
   it("bounds won/booked to the recently-closed window (inclusive at the boundary)", () => {
