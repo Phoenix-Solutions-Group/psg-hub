@@ -3,6 +3,7 @@ import {
   buildDealsExport,
   dealsExportToCSV,
   dealsExportToJSON,
+  monthBounds,
   wonBookedTieOutGap,
 } from "../export";
 import type { PipedriveDeal } from "../types";
@@ -184,6 +185,77 @@ describe("buildDealsExport", () => {
     expect(exp.wonBookedRecurringMonthlyNullCount).toBe(0);
   });
 
+  it("bounds won/booked to an explicit half-open calendar range [from, to) (PSG-469 / John C1)", () => {
+    const deals = [
+      deal({ dealId: 60, value: 1_000, status: "won", closeDate: "2026-05-31" }), // day before — out
+      deal({ dealId: 61, value: 1_000, status: "won", closeDate: "2026-06-01" }), // start inclusive — in
+      deal({ dealId: 62, value: 1_000, status: "won", closeDate: "2026-06-30" }), // last day of June — in
+      deal({ dealId: 63, value: 1_000, status: "won", closeDate: "2026-07-01" }), // end exclusive — OUT (lands in July, not June)
+    ];
+    const exp = buildDealsExport(deals, {
+      asOf: ASOF,
+      closedAfter: "2026-06-01",
+      closedBefore: "2026-07-01",
+    });
+    // boundary-day deals land in exactly one period: no double-count, no gap
+    expect(exp.wonBooked.map((d) => d.dealId).sort()).toEqual([61, 62]);
+    expect(exp.wonBookedTotal).toBe(2_000);
+    expect(exp.wonBookedWindow).toEqual({
+      days: 30,
+      start: "2026-06-01",
+      end: "2026-07-01",
+      endExclusive: true,
+      timeZone: "America/Chicago",
+    });
+  });
+
+  it("explicit calendar bounds WIN over the rolling closedWithinDays fallback (PSG-469)", () => {
+    const deals = [
+      deal({ dealId: 70, value: 5_000, status: "won", closeDate: "2026-06-10" }), // in June
+      deal({ dealId: 71, value: 5_000, status: "won", closeDate: "2026-05-20" }), // in rolling 90d, NOT in June
+    ];
+    const exp = buildDealsExport(deals, {
+      asOf: ASOF,
+      closedWithinDays: 90, // would include both…
+      closedAfter: "2026-06-01",
+      closedBefore: "2026-07-01", // …but explicit June window wins
+    });
+    expect(exp.wonBooked.map((d) => d.dealId)).toEqual([70]);
+    expect(exp.wonBookedWindow.endExclusive).toBe(true);
+  });
+
+  it("accepts Date bounds and an MTD default via monthBounds() (PSG-469)", () => {
+    const { closedAfter, closedBefore } = monthBounds(ASOF); // America/Chicago default
+    expect(closedAfter).toBe("2026-06-01");
+    expect(closedBefore).toBe("2026-07-01");
+    const deals = [
+      deal({ dealId: 80, value: 3_000, status: "won", closeDate: "2026-06-15" }),
+      deal({ dealId: 81, value: 3_000, status: "won", closeDate: "2026-07-02" }), // next month — out
+    ];
+    const exp = buildDealsExport(deals, {
+      asOf: ASOF,
+      closedAfter: new Date("2026-06-01T05:00:00.000Z"), // 00:00 America/Chicago
+      closedBefore: new Date("2026-07-01T05:00:00.000Z"),
+      boundaryTimeZone: "America/Chicago",
+    });
+    expect(exp.wonBooked.map((d) => d.dealId)).toEqual([80]);
+    expect(exp.wonBookedWindow.timeZone).toBe("America/Chicago");
+  });
+
+  it("derives the MTD month from asOf in the boundary tz, not UTC (PSG-469)", () => {
+    // 2026-07-01T02:00Z is still 2026-06-30 in America/Chicago → MTD is still June.
+    const lateNightUtc = new Date("2026-07-01T02:00:00.000Z");
+    expect(monthBounds(lateNightUtc, "America/Chicago")).toEqual({
+      closedAfter: "2026-06-01",
+      closedBefore: "2026-07-01",
+    });
+    // Same instant in UTC rolls into July.
+    expect(monthBounds(lateNightUtc, "UTC")).toEqual({
+      closedAfter: "2026-07-01",
+      closedBefore: "2026-08-01",
+    });
+  });
+
   it("bounds won/booked to the recently-closed window (inclusive at the boundary)", () => {
     const deals = [
       deal({ dealId: 30, value: 1_000, status: "won", closeDate: "2026-06-29" }), // 1d ago — in
@@ -195,7 +267,13 @@ describe("buildDealsExport", () => {
     const exp = buildDealsExport(deals, { asOf: ASOF }); // default 90d
     expect(exp.wonBooked.map((d) => d.dealId).sort()).toEqual([30, 31]);
     expect(exp.wonBookedTotal).toBe(2_000);
-    expect(exp.wonBookedWindow).toEqual({ days: 90, start: "2026-04-01", end: "2026-06-30" });
+    expect(exp.wonBookedWindow).toEqual({
+      days: 90,
+      start: "2026-04-01",
+      end: "2026-06-30",
+      endExclusive: false,
+      timeZone: "America/Chicago",
+    });
     // a tighter window drops the 90d-old deal
     const tight = buildDealsExport(deals, { asOf: ASOF, closedWithinDays: 7 });
     expect(tight.wonBooked.map((d) => d.dealId)).toEqual([30]);

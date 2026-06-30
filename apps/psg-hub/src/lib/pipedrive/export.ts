@@ -23,8 +23,29 @@ export interface DealsExportOptions extends ForecastOptions {
    * their `closeDate` falls in `[asOf - closedWithinDays, asOf]` (inclusive). Bounds the
    * tie-out to a defined range vs the Invoiced MRR base instead of every won deal ever.
    * Default 90 days. Won deals with a null `closeDate` cannot be windowed and are excluded.
+   * FALLBACK ONLY — `closedAfter`/`closedBefore` win when either is passed (PSG-469).
    */
   closedWithinDays?: number;
+  /**
+   * Explicit calendar reconcile bounds (PSG-469 — John's C1 §2.1 decision). Half-open
+   * `[closedAfter, closedBefore)`: a won deal is kept when its close calendar date is
+   * `>= closedAfter` AND `< closedBefore`, so a boundary-day deal lands in EXACTLY one
+   * period — no double-count, no gap. Accept a `Date` or a `YYYY-MM-DD` string. When EITHER
+   * bound is set, this explicit calendar window WINS over the rolling `closedWithinDays`
+   * (a missing side defaults to the corresponding month-to-date edge). John's single-month
+   * MRR tie-out always passes BOTH, set to the Invoiced billing-period edges. Leave both
+   * unset for the rolling default; use `monthBounds()` for the MTD convenience case.
+   */
+  closedAfter?: Date | string;
+  closedBefore?: Date | string;
+  /**
+   * IANA timezone the calendar bounds are anchored to (PSG-469). Month edges and any deal
+   * close *timestamp* are resolved in this zone so they match the Invoiced billing-period
+   * tz and a boundary-day deal can't silently shift periods (the UTC-vs-Central trap John
+   * flagged). Default `America/Chicago` (PSG is an IL corp); override once Invoiced's period
+   * tz is confirmed. Date-only `closeDate`s compare by calendar date and are tz-independent.
+   */
+  boundaryTimeZone?: string;
   /**
    * Optional Pipedrive custom-field key holding the recurring/one-time signal (PSG-463).
    * When set and the deal's `customFields[key]` resolves a value, the export maps it
@@ -45,6 +66,8 @@ export type WonBookedRevenueType = RevenueType | "unknown";
 
 const DEFAULT_CLOSED_WITHIN_DAYS = 90;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+/** PSG-469 — PSG is an IL corp; default reconcile anchor until Invoiced's period tz is confirmed. */
+const DEFAULT_BOUNDARY_TZ = "America/Chicago";
 
 /** A single open-pipeline deal row in the export (Reese's PSG-435 field list). */
 export interface OpenDealRow {
@@ -98,14 +121,23 @@ export interface WonBookedByType {
   unknownCount: number;
 }
 
-/** The recently-closed reconcile window the won/booked set is bounded to (PSG-463). */
+/** The recently-closed reconcile window the won/booked set is bounded to (PSG-463/PSG-469). */
 export interface WonBookedWindow {
-  /** Width of the window in days (the `closedWithinDays` option, default 90). */
+  /** Span of the window in days (the `closedWithinDays` value, or the calendar-range width). */
   days: number;
-  /** Inclusive lower bound — ISO date (`asOf - days`). */
+  /** Inclusive lower bound — `YYYY-MM-DD`. */
   start: string;
-  /** Inclusive upper bound — ISO date (`asOf`). */
+  /**
+   * Upper bound — `YYYY-MM-DD`. EXCLUSIVE for the explicit calendar range
+   * (`endExclusive: true`, PSG-469 — `start <= close < end`); inclusive for the rolling
+   * window (`endExclusive: false`, PSG-463 — `start <= close <= end`). Read `endExclusive`
+   * to interpret it correctly when tying out to an Invoiced period boundary.
+   */
   end: string;
+  /** True = half-open `[start, end)` calendar range (PSG-469); false = rolling inclusive (PSG-463). */
+  endExclusive: boolean;
+  /** IANA tz the bounds (and any close timestamp) are anchored to (PSG-469). */
+  timeZone: string;
 }
 
 export interface DealsExport {
@@ -162,20 +194,43 @@ export function buildDealsExport(
       stale: stale.has(d.dealId),
     }));
 
-  // PSG-463 — recently-closed reconcile window. A won deal counts only when its
-  // ACTUAL closeDate is in [asOf - closedWithinDays, asOf]; a null closeDate cannot be
-  // placed in the window and is excluded (it can't be reconciled by date).
-  const windowDays = opts.closedWithinDays ?? DEFAULT_CLOSED_WITHIN_DAYS;
-  const endMs = opts.asOf.getTime();
-  const startMs = endMs - windowDays * MS_PER_DAY;
-  const wonBookedWindow: WonBookedWindow = {
-    days: windowDays,
-    start: new Date(startMs).toISOString().slice(0, 10),
-    end: new Date(endMs).toISOString().slice(0, 10),
-  };
+  // Recently-closed reconcile window. A null closeDate can't be placed in any window and is
+  // always excluded. Two modes, explicit-bounds-win (PSG-469):
+  //   • EXPLICIT calendar range [closedAfter, closedBefore) — half-open, tz-anchored, so a
+  //     boundary-day deal lands in exactly one Invoiced billing period (John's C1 tie-out);
+  //   • ROLLING [asOf - closedWithinDays, asOf] inclusive — the PSG-463 default, unchanged.
+  const tz = opts.boundaryTimeZone ?? DEFAULT_BOUNDARY_TZ;
+  const explicit = opts.closedAfter !== undefined || opts.closedBefore !== undefined;
+  let wonBookedWindow: WonBookedWindow;
+  let inReconcileWindow: (closeDate: string | null) => boolean;
+  if (explicit) {
+    const mtd = monthBounds(opts.asOf, tz);
+    const startDate = toCalendarDate(opts.closedAfter, tz) ?? mtd.closedAfter;
+    const endDate = toCalendarDate(opts.closedBefore, tz) ?? mtd.closedBefore;
+    inReconcileWindow = (cd) => inCalendarRange(cd, startDate, endDate, tz);
+    wonBookedWindow = {
+      days: daysBetween(startDate, endDate),
+      start: startDate,
+      end: endDate,
+      endExclusive: true,
+      timeZone: tz,
+    };
+  } else {
+    const windowDays = opts.closedWithinDays ?? DEFAULT_CLOSED_WITHIN_DAYS;
+    const endMs = opts.asOf.getTime();
+    const startMs = endMs - windowDays * MS_PER_DAY;
+    inReconcileWindow = (cd) => inWindow(cd, startMs, endMs);
+    wonBookedWindow = {
+      days: windowDays,
+      start: new Date(startMs).toISOString().slice(0, 10),
+      end: new Date(endMs).toISOString().slice(0, 10),
+      endExclusive: false,
+      timeZone: tz,
+    };
+  }
 
   const wonBooked: WonBookedRow[] = deals
-    .filter((d) => d.status === "won" && inWindow(d.closeDate, startMs, endMs))
+    .filter((d) => d.status === "won" && inReconcileWindow(d.closeDate))
     .map((d) => {
       // Honest-not-guessed: resolve from a custom-field key when configured, else the
       // sync-populated mirror value, else `unknown` — never a silently-defaulted bucket.
@@ -281,6 +336,74 @@ function inWindow(closeDate: string | null, startMs: number, endMs: number): boo
 }
 
 /**
+ * Month-to-date calendar bounds (PSG-469) — first-of-this-month (inclusive) and
+ * first-of-next-month (exclusive), as `YYYY-MM-DD` in `timeZone`. The convenience default
+ * for the no-arg / dashboard case; John's reconcile path passes explicit bounds instead.
+ * Anchored to `timeZone` so "which month is it" follows the Invoiced billing tz, not UTC.
+ */
+export function monthBounds(
+  asOf: Date,
+  timeZone: string = DEFAULT_BOUNDARY_TZ,
+): { closedAfter: string; closedBefore: string } {
+  const [y, m] = tzCalendarDate(asOf, timeZone).split("-").map(Number);
+  const ny = m === 12 ? y + 1 : y;
+  const nm = m === 12 ? 1 : m + 1;
+  return {
+    closedAfter: `${y}-${pad2(m)}-01`,
+    closedBefore: `${ny}-${pad2(nm)}-01`,
+  };
+}
+
+/** The `YYYY-MM-DD` calendar date of an instant in `timeZone` (en-CA → ISO-ordered). */
+function tzCalendarDate(instant: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(instant);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/**
+ * Normalize a bound/close value to a `YYYY-MM-DD` calendar date in `timeZone`. A `Date` or
+ * an ISO *datetime* is resolved in-zone (so the boundary-tz matters); a date-only string is
+ * already a calendar date and is returned as-is (tz-independent). `undefined`/empty → undefined.
+ */
+function toCalendarDate(
+  v: Date | string | undefined | null,
+  timeZone: string,
+): string | undefined {
+  if (v === undefined || v === null || v === "") return undefined;
+  if (v instanceof Date) return tzCalendarDate(v, timeZone);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? undefined : tzCalendarDate(d, timeZone);
+}
+
+/** Half-open calendar membership (PSG-469): `startDate <= close < endDate`, close normalized in tz. */
+function inCalendarRange(
+  closeDate: string | null,
+  startDate: string,
+  endDate: string,
+  timeZone: string,
+): boolean {
+  const cd = toCalendarDate(closeDate, timeZone);
+  if (!cd) return false;
+  return cd >= startDate && cd < endDate; // lexicographic === chronological for YYYY-MM-DD
+}
+
+/** Whole-day span between two `YYYY-MM-DD` calendar dates (UTC-midnight diff; DST-immune). */
+function daysBetween(startDate: string, endDate: string): number {
+  return Math.round((Date.parse(endDate) - Date.parse(startDate)) / MS_PER_DAY);
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/**
  * Resolve a won deal's `revenue_type` (PSG-463). Precedence: (1) an options-supplied
  * custom-field key, mapped deterministically; (2) the sync-populated mirror value; else
  * `unknown`. Pipedrive carries no native recurring flag, so an unmapped deal is honestly
@@ -343,6 +466,9 @@ export function dealsExportToJSON(
       wonBookedWindowDays: exp.wonBookedWindow.days,
       wonBookedWindowStart: exp.wonBookedWindow.start,
       wonBookedWindowEnd: exp.wonBookedWindow.end,
+      // PSG-469 — read these to interpret the window edge for a single-period MRR tie-out.
+      wonBookedWindowEndExclusive: exp.wonBookedWindow.endExclusive,
+      wonBookedWindowTimeZone: exp.wonBookedWindow.timeZone,
       wonBookedRecurringTotal: exp.wonBookedByType.recurring,
       wonBookedOneTimeTotal: exp.wonBookedByType.oneTime,
       wonBookedUnknownTotal: exp.wonBookedByType.unknown,
@@ -400,6 +526,8 @@ export function dealsExportToCSV(exp: DealsExport): string {
   lines.push(row(["won_booked_window_days", exp.wonBookedWindow.days]));
   lines.push(row(["won_booked_window_start", exp.wonBookedWindow.start]));
   lines.push(row(["won_booked_window_end", exp.wonBookedWindow.end]));
+  lines.push(row(["won_booked_window_end_exclusive", exp.wonBookedWindow.endExclusive]));
+  lines.push(row(["won_booked_window_timezone", exp.wonBookedWindow.timeZone]));
   lines.push(row(["won_booked_recurring_total", exp.wonBookedByType.recurring]));
   lines.push(row(["won_booked_one_time_total", exp.wonBookedByType.oneTime]));
   lines.push(row(["won_booked_unknown_total", exp.wonBookedByType.unknown]));
@@ -434,9 +562,13 @@ export function dealsExportToCSV(exp: DealsExport): string {
   }
   lines.push("");
 
+  const w = exp.wonBookedWindow;
+  const windowDesc = w.endExclusive
+    ? `closed [${w.start}, ${w.end}) ${w.timeZone} (${w.days}d, end-exclusive)`
+    : `closed ${w.start}..${w.end} (${w.days}d)`;
   lines.push(row([
     "SECTION",
-    `WON-BOOKED (DISTINCT — closed ${exp.wonBookedWindow.start}..${exp.wonBookedWindow.end} (${exp.wonBookedWindow.days}d); reconcile vs Invoiced MRR, do NOT sum into pipeline)`,
+    `WON-BOOKED (DISTINCT — ${windowDesc}; reconcile vs Invoiced MRR, do NOT sum into pipeline)`,
   ]));
   lines.push(row(["deal_id", "org_name", "title", "value", "currency", "close_date", "revenue_type", "monthly_value"]));
   for (const d of exp.wonBooked) {
