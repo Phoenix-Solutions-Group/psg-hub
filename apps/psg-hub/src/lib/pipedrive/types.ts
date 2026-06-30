@@ -28,9 +28,26 @@ export interface PipedriveDeal {
   /** Last logged activity (call/email/meeting) — distinct from update_time. Drives
    *  the 14-day stale / no-movement flag. Null when Pipedrive omits it. */
   lastActivityDate: string | null; // ISO date
+  /**
+   * Revenue character of a WON deal (PSG-435 / John's §2.1 tie-out): `recurring`
+   * deals become Invoiced subscriptions and are netted OUT against MRR; `one_time`
+   * (project/setup fees) are additive net-new. Carrier for the export's required
+   * `revenue_type` column. **Honest-null rule:** the sync derives this from a native
+   * Pipedrive recurring flag, else a documented deal-type/product-category mapping,
+   * else leaves it `null` (unknown/unmapped) — it is NEVER silently bucketed. The live
+   * source is wired once PSG-434 exposes the field; until then won deals carry `null`
+   * and the export surfaces them as `unknown` (never netted). Irrelevant for open deals. */
+  revenueType?: RevenueType | null;
 }
 
 export type DealStatus = "open" | "won" | "lost" | "deleted";
+
+/**
+ * Revenue character of a won/booked deal for the §2.1 Invoiced reconciliation
+ * (PSG-435 spec rev 4bd80aec). `null` (unknown) is the honest default when no source
+ * maps the deal — it is never netted against MRR by default (CFO double-count guard).
+ */
+export type RevenueType = "recurring" | "one_time";
 
 /**
  * Stage win-probability map, keyed by Pipedrive stage_id, value in [0,1].

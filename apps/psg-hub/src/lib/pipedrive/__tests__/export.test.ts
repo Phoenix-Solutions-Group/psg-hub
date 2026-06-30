@@ -21,6 +21,7 @@ function deal(p: Partial<PipedriveDeal>): PipedriveDeal {
     expectedCloseDate: p.expectedCloseDate ?? null,
     closeDate: p.closeDate ?? null,
     lastActivityDate: p.lastActivityDate ?? "2026-06-29",
+    revenueType: p.revenueType ?? null,
   };
 }
 
@@ -60,6 +61,33 @@ describe("buildDealsExport", () => {
     expect(openIds.filter((id) => wonIds.includes(id))).toEqual([]);
   });
 
+  it("carries revenue_type on every won/booked row; unmapped deals stay honest-null", () => {
+    const deals = [
+      deal({ dealId: 10, value: 60_000, status: "won", closeDate: "2026-06-01", revenueType: "recurring" }),
+      deal({ dealId: 11, value: 12_000, status: "won", closeDate: "2026-06-02", revenueType: "one_time" }),
+      deal({ dealId: 12, value: 8_000, status: "won", closeDate: "2026-06-03" }), // no source → null (unknown)
+    ];
+    const exp = buildDealsExport(deals, { asOf: ASOF });
+    const byId = new Map(exp.wonBooked.map((d) => [d.dealId, d.revenueType]));
+    expect(byId.get(10)).toBe("recurring");
+    expect(byId.get(11)).toBe("one_time");
+    expect(byId.get(12)).toBeNull(); // CFO guard: never silently netted
+  });
+
+  it("splits the won/booked total by revenue_type for John's §2.1 tie-out", () => {
+    const deals = [
+      deal({ dealId: 10, value: 60_000, status: "won", revenueType: "recurring" }),
+      deal({ dealId: 11, value: 12_000, status: "won", revenueType: "one_time" }),
+      deal({ dealId: 12, value: 8_000, status: "won" }), // unknown
+    ];
+    const exp = buildDealsExport(deals, { asOf: ASOF });
+    expect(exp.wonBookedTotal).toBe(80_000);
+    expect(exp.wonBookedByType.recurring).toBe(60_000);
+    expect(exp.wonBookedByType.oneTime).toBe(12_000);
+    expect(exp.wonBookedByType.unknown).toBe(8_000);
+    expect(exp.wonBookedByType.unknownCount).toBe(1);
+  });
+
   it("marks the stale open deal in the per-deal rows + diagnostics", () => {
     const exp = buildDealsExport(DEALS, { asOf: ASOF });
     const staleRow = exp.openDeals.find((d) => d.dealId === 4)!;
@@ -82,6 +110,10 @@ describe("serializers", () => {
     expect(json.summary.totalOpenPipeline).toBe(55_000);
     expect(json.summary.wonBookedCount).toBe(1);
     expect(json.summary.wonBookedTotal).toBe(75_000);
+    // deal 3 has no revenue_type source → surfaced as unknown, not silently netted
+    expect(json.summary.wonBookedUnknownTotal).toBe(75_000);
+    expect(json.summary.wonBookedUnknownCount).toBe(1);
+    expect(json.summary.wonBookedRecurringTotal).toBe(0);
     expect(json.perStage.length).toBeGreaterThan(0);
   });
 
@@ -96,5 +128,9 @@ describe("serializers", () => {
     expect(csv).toContain("do NOT sum into pipeline");
     // the won deal's org appears only in the won-booked section
     expect(csv).toContain("Bodyshop A");
+    // the won/booked block carries the required revenue_type column + split subtotals
+    expect(csv).toContain("revenue_type");
+    expect(csv).toContain("won_booked_recurring_total");
+    expect(csv).toContain("won_booked_one_time_total");
   });
 });

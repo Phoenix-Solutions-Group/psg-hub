@@ -11,7 +11,7 @@
 
 import { buildForecast, type ForecastOptions } from "./forecast";
 import { diagnoseDeals, type DealDiagnostics } from "./analysis";
-import type { PipedriveDeal, PipelineForecast } from "./types";
+import type { PipedriveDeal, PipelineForecast, RevenueType } from "./types";
 
 export interface DealsExportOptions extends ForecastOptions {
   asOf: Date;
@@ -45,6 +45,23 @@ export interface WonBookedRow {
   value: number;
   currency: string;
   closeDate: string | null;
+  /**
+   * REQUIRED column (PSG-435 / John's §2.1). Always carried (value or explicit null):
+   * `recurring` → netted out vs Invoiced MRR; `one_time` → additive net-new; `null`
+   * (unknown) → source not yet mapped, NEVER netted by default — surfaced as a distinct
+   * subtotal so the gap is resolved before the tie-out.
+   */
+  revenueType: RevenueType | null;
+}
+
+/** Σ face-$ of the won/booked set split by revenue_type, for John's reconciliation. */
+export interface WonBookedByType {
+  recurring: number;
+  oneTime: number;
+  /** Σ value of won deals whose revenue_type is still unknown (null) — must be resolved. */
+  unknown: number;
+  /** Count of won deals whose revenue_type is still unknown (null). */
+  unknownCount: number;
 }
 
 export interface DealsExport {
@@ -54,6 +71,8 @@ export interface DealsExport {
   /** Disjoint from `openDeals` — realized revenue, reconciled vs Invoiced MRR. */
   wonBooked: WonBookedRow[];
   wonBookedTotal: number;
+  /** wonBookedTotal split by revenue_type — recurring nets vs MRR, one_time is additive. */
+  wonBookedByType: WonBookedByType;
   diagnostics: DealDiagnostics;
 }
 
@@ -96,11 +115,22 @@ export function buildDealsExport(
       value: Number.isFinite(d.value) ? d.value : 0,
       currency: d.currency,
       closeDate: d.closeDate,
+      // Honest-null rule: an unmapped source carries null, never a silent bucket.
+      revenueType: d.revenueType ?? null,
     }));
 
   const wonBookedTotal = round2(
     wonBooked.reduce((sum, d) => sum + d.value, 0),
   );
+
+  const sumWhere = (pred: (r: WonBookedRow) => boolean) =>
+    round2(wonBooked.filter(pred).reduce((s, d) => s + d.value, 0));
+  const wonBookedByType: WonBookedByType = {
+    recurring: sumWhere((d) => d.revenueType === "recurring"),
+    oneTime: sumWhere((d) => d.revenueType === "one_time"),
+    unknown: sumWhere((d) => d.revenueType === null),
+    unknownCount: wonBooked.filter((d) => d.revenueType === null).length,
+  };
 
   return {
     generatedAt: opts.asOf.toISOString(),
@@ -108,6 +138,7 @@ export function buildDealsExport(
     openDeals,
     wonBooked,
     wonBookedTotal,
+    wonBookedByType,
     diagnostics,
   };
 }
@@ -132,6 +163,10 @@ export function dealsExportToJSON(
       staleValue: exp.diagnostics.staleValue,
       wonBookedCount: exp.wonBooked.length,
       wonBookedTotal: exp.wonBookedTotal,
+      wonBookedRecurringTotal: exp.wonBookedByType.recurring,
+      wonBookedOneTimeTotal: exp.wonBookedByType.oneTime,
+      wonBookedUnknownTotal: exp.wonBookedByType.unknown,
+      wonBookedUnknownCount: exp.wonBookedByType.unknownCount,
       warningCount: exp.diagnostics.warnings.length,
     },
     perStage: exp.forecast.perStage,
@@ -179,6 +214,10 @@ export function dealsExportToCSV(exp: DealsExport): string {
   lines.push(row(["stale_value", exp.diagnostics.staleValue]));
   lines.push(row(["won_booked_count", exp.wonBooked.length]));
   lines.push(row(["won_booked_total", exp.wonBookedTotal]));
+  lines.push(row(["won_booked_recurring_total", exp.wonBookedByType.recurring]));
+  lines.push(row(["won_booked_one_time_total", exp.wonBookedByType.oneTime]));
+  lines.push(row(["won_booked_unknown_total", exp.wonBookedByType.unknown]));
+  lines.push(row(["won_booked_unknown_count", exp.wonBookedByType.unknownCount]));
   lines.push("");
 
   lines.push(row(["SECTION", "PER-STAGE"]));
@@ -208,11 +247,14 @@ export function dealsExportToCSV(exp: DealsExport): string {
   lines.push("");
 
   lines.push(row(["SECTION", "WON-BOOKED (DISTINCT — reconcile vs Invoiced MRR, do NOT sum into pipeline)"]));
-  lines.push(row(["deal_id", "org_name", "title", "value", "currency", "close_date"]));
+  lines.push(row(["deal_id", "org_name", "title", "value", "currency", "close_date", "revenue_type"]));
   for (const d of exp.wonBooked) {
-    lines.push(row([d.dealId, d.orgName, d.title, d.value, d.currency, d.closeDate]));
+    lines.push(row([d.dealId, d.orgName, d.title, d.value, d.currency, d.closeDate, d.revenueType ?? "unknown"]));
   }
-  lines.push(row(["TOTAL", "", "", exp.wonBookedTotal, f.currency, ""]));
+  lines.push(row(["TOTAL", "", "", exp.wonBookedTotal, f.currency, "", ""]));
+  lines.push(row(["RECURRING (net vs MRR)", "", "", exp.wonBookedByType.recurring, f.currency, "", "recurring"]));
+  lines.push(row(["ONE-TIME (additive)", "", "", exp.wonBookedByType.oneTime, f.currency, "", "one_time"]));
+  lines.push(row(["UNKNOWN (resolve before tie-out)", "", "", exp.wonBookedByType.unknown, f.currency, "", "unknown"]));
   lines.push("");
 
   if (exp.diagnostics.warnings.length > 0) {
