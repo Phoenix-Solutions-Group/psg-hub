@@ -188,6 +188,63 @@ describe("template mapping (smart column resolution)", () => {
     expect(m.total_loss_flag).toBeUndefined();
   });
 
+  // PSG-461 — REAL pilot export (Shelton Collision; FileMaker "RC" layout; header
+  // shapes only, no PII). The old resolver tied RC_Cust_* against the parallel
+  // RC_Agent_* columns on the shared trailing word and the agent column (listed
+  // first) won, so customer_last_name resolved to RC_Agent_Last — blank for 93%
+  // of rows -> all rejected, and the rest imported the agent AS the customer.
+  // The customer-identity fields must lock onto the RC_Cust_* / RC_Phone1 columns
+  // and the RC_Agent_* columns must never win them.
+  it("maps the FileMaker RC export to the customer columns, never the agent columns", () => {
+    const headers = [
+      "RC_RONumber",
+      // Agent columns are listed BEFORE the customer columns — the order that
+      // used to make the agent win on a tie.
+      "RC_Agent_First", "RC_Agent_Last", "RC_Agent_Phone",
+      "RC_Agent_Address1", "RC_Agent_City", "RC_Agent_State", "RC_Agent_Zip",
+      "RC_Cust_First", "RC_Cust_Last", "RC_Phone1", "RC_EmailAddress",
+      "RC_Cust_Address1", "RC_Cust_Address2", "RC_Cust_City", "RC_Cust_State", "RC_Cust_Zip",
+      "RC_Vehicle_Make", "RC_Vehicle_Model", "RC_PayType", "RC_Date_In", "RC_Date_Out",
+    ];
+    const m = suggestMapping("ro", headers);
+    // Required identity anchors resolve to the CUSTOMER columns.
+    expect(m.ro_number).toBe("RC_RONumber");
+    expect(m.customer_last_name).toBe("RC_Cust_Last");
+    expect(m.customer_first_name).toBe("RC_Cust_First");
+    // The agent columns must never be chosen for any customer-identity field.
+    const agentHeaders = headers.filter((h) => h.includes("Agent"));
+    for (const key of [
+      "customer_first_name", "customer_last_name", "customer_phone",
+      "address_line1", "address_line2", "address_city", "address_state", "address_zip",
+    ]) {
+      expect(agentHeaders).not.toContain(m[key]);
+    }
+    // Rest of the customer block resolves to RC_Cust_* / RC_Phone1 / RC_EmailAddress.
+    expect(m.customer_phone).toBe("RC_Phone1");
+    expect(m.customer_email).toBe("RC_EmailAddress");
+    expect(m.address_line1).toBe("RC_Cust_Address1");
+    expect(m.address_line2).toBe("RC_Cust_Address2");
+    expect(m.address_city).toBe("RC_Cust_City");
+    expect(m.address_state).toBe("RC_Cust_State");
+    expect(m.address_zip).toBe("RC_Cust_Zip");
+    // Vehicle / pay-type / dates resolve through the existing catalog.
+    expect(m.vehicle_make).toBe("RC_Vehicle_Make");
+    expect(m.vehicle_model).toBe("RC_Vehicle_Model");
+    expect(m.pay_type).toBe("RC_PayType");
+    expect(m.date_in).toBe("RC_Date_In");
+    expect(m.date_out).toBe("RC_Date_Out");
+  });
+
+  it("leaves a customer-identity field unmapped rather than importing the agent column", () => {
+    // When the export carries ONLY agent identity columns (no RC_Cust_*), the
+    // required customer_last_name must stay unmapped (surfaced to the operator),
+    // never silently filled from the agent — the silent-wrong-data failure mode.
+    const m = suggestMapping("ro", ["RC_RONumber", "RC_Agent_Last", "RC_Agent_First", "RC_Agent_Phone"]);
+    expect(m.ro_number).toBe("RC_RONumber");
+    expect(m.customer_last_name).toBeUndefined();
+    expect(missingRequiredMappings("ro", m)).toContain("customer_last_name");
+  });
+
   it("applies a mapping to produce canonical-keyed rows", () => {
     const table = { format: "csv" as const, headers: ["RO #", "First Name"], rows: [{ "RO #": "1", "First Name": "Jane" }] };
     const mapped = applyMapping(table, { ro_number: "RO #", customer_first_name: "First Name" });

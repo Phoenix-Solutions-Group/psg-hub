@@ -40,7 +40,10 @@ const CUSTOMER_FIELDS: FieldDef[] = [
     label: "Customer phone",
     required: false,
     type: "phone",
-    aliases: ["phone", "cell", "mobile", "telephone", "contact number", "ownercellphone", "owner cell phone"],
+    // "phone1" / "phone 1" cover the FileMaker RC primary-phone column
+    // (RC_Phone1) so the customer phone locks onto it over a secondary phone.
+    // (PSG-461.)
+    aliases: ["phone", "phone1", "phone 1", "cell", "mobile", "telephone", "contact number", "ownercellphone", "owner cell phone"],
   },
   {
     key: "customer_email",
@@ -54,14 +57,14 @@ const CUSTOMER_FIELDS: FieldDef[] = [
     label: "Address line 1",
     required: false,
     type: "string",
-    aliases: ["address", "street", "addr", "address 1", "address line 1", "line1", "owneraddress1", "owner address 1"],
+    aliases: ["address", "address1", "street", "addr", "address 1", "address line 1", "line1", "owneraddress1", "owner address 1"],
   },
   {
     key: "address_line2",
     label: "Address line 2",
     required: false,
     type: "string",
-    aliases: ["address 2", "address line 2", "line2", "unit", "apt", "suite", "owneraddress2", "owner address 2"],
+    aliases: ["address2", "address 2", "address line 2", "line2", "unit", "apt", "suite", "owneraddress2", "owner address 2"],
   },
   {
     key: "address_city",

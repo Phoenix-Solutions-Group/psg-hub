@@ -32,6 +32,38 @@ function fieldCandidates(field: FieldDefT): string[] {
 }
 
 /**
+ * Header tokens that name a NON-customer party — the insurance agent/agency,
+ * adjuster, or carrier. FileMaker "RC" exports ship parallel `RC_Agent_*`
+ * columns (agent name/phone/address) right beside the `RC_Cust_*` customer
+ * columns; because both share the trailing word ("Last","First","Phone","City"
+ * …) they tied on the single-word alias and the agent column — iterated first —
+ * silently won the customer-identity fields, blanking the required
+ * customer_last_name for every row whose agent fields were empty (93% of the
+ * real pilot export). The agent is never the customer on a body-shop RO, so a
+ * header carrying one of these tokens is disqualified from the customer-identity
+ * fields outright — it can never out-score (or even tie) the real `RC_Cust_*`
+ * column. (PSG-461.)
+ */
+const NON_CUSTOMER_PARTY_TOKENS = new Set([
+  "agent",
+  "agency",
+  "adjuster",
+  "insurer",
+  "insurance",
+  "broker",
+  "carrier",
+]);
+
+/**
+ * The customer-identity fields: the vehicle owner's name, contact, and address.
+ * These are the ones with a parallel non-customer-party column (agent/agency) in
+ * real exports, so they get the disqualification guard above. (PSG-461.)
+ */
+function isCustomerIdentityField(key: string): boolean {
+  return key.startsWith("customer_") || key.startsWith("address_");
+}
+
+/**
  * Confidence score that `header` is the source column for `field`. Higher is a
  * tighter match. The tiers, in order:
  *   100  whole header equals a candidate (raw or token-joined) — e.g. an exact
@@ -47,6 +79,11 @@ function fieldCandidates(field: FieldDefT): string[] {
 function scoreField(field: FieldDefT, rawHeader: string): number {
   const norm = rawHeader.toLowerCase().trim();
   const tokens = tokenize(rawHeader);
+  // A header that names the insurance agent/agency/adjuster/carrier is never the
+  // customer — disqualify it from the customer-identity fields so it cannot win
+  // (or tie) the real customer column on a shared trailing word. (PSG-461.)
+  if (isCustomerIdentityField(field.key) && tokens.some((t) => NON_CUSTOMER_PARTY_TOKENS.has(t)))
+    return 0;
   const joined = tokens.join(" ");
   let best = 0;
   for (const cand of fieldCandidates(field)) {
