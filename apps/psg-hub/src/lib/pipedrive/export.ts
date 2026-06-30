@@ -40,10 +40,13 @@ export interface DealsExportOptions extends ForecastOptions {
   closedBefore?: Date | string;
   /**
    * IANA timezone the calendar bounds are anchored to (PSG-471). Month edges and any deal
-   * close *timestamp* are resolved in this zone so they match the Invoiced billing-period
-   * tz and a boundary-day deal can't silently shift periods (the UTC-vs-Central trap John
-   * flagged). Default `America/Chicago` (PSG is an IL corp); override once Invoiced's period
-   * tz is confirmed. Date-only `closeDate`s compare by calendar date and are tz-independent.
+   * close *timestamp* are resolved in this zone so a boundary-day deal can't silently shift
+   * periods (the UTC-vs-Central trap John flagged). Default `America/Chicago` is the FINAL
+   * standing value, not a placeholder: the reconcile ties period totals to the GL (QBO)
+   * close-period edge, and PSG is an IL corp whose books report on Central — so the boundary
+   * is the GL close edge = Central, independent of how Invoiced stamps individual rows.
+   * (Invoiced's own account tz is separate config-hygiene, audited under PSG-443, not a
+   * reason to override here.) Date-only `closeDate`s compare by calendar date (tz-independent).
    */
   boundaryTimeZone?: string;
   /**
@@ -66,7 +69,7 @@ export type WonBookedRevenueType = RevenueType | "unknown";
 
 const DEFAULT_CLOSED_WITHIN_DAYS = 90;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-/** PSG-471 — PSG is an IL corp; default reconcile anchor until Invoiced's period tz is confirmed. */
+/** PSG-471 — GL (QBO) close-period anchor; PSG is an IL corp → Central. Confirmed FINAL by John. */
 const DEFAULT_BOUNDARY_TZ = "America/Chicago";
 
 /** A single open-pipeline deal row in the export (Reese's PSG-435 field list). */
@@ -339,7 +342,7 @@ function inWindow(closeDate: string | null, startMs: number, endMs: number): boo
  * Month-to-date calendar bounds (PSG-471) — first-of-this-month (inclusive) and
  * first-of-next-month (exclusive), as `YYYY-MM-DD` in `timeZone`. The convenience default
  * for the no-arg / dashboard case; John's reconcile path passes explicit bounds instead.
- * Anchored to `timeZone` so "which month is it" follows the Invoiced billing tz, not UTC.
+ * Anchored to `timeZone` so "which month is it" follows the GL close-period tz (Central), not UTC.
  */
 export function monthBounds(
   asOf: Date,
