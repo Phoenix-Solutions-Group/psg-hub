@@ -75,6 +75,16 @@ export function InboundLeadForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    // Mirror the server's "need a way to reach you" rule on the client so the
+    // visitor sees it instantly instead of after a round-trip (design review
+    // PSG-506, minor polish). The server still enforces it authoritatively.
+    if (email.trim() === "" && phone.trim() === "") {
+      setError("Add at least an email or a phone number so we can reach you.");
+      setStatus("error");
+      return;
+    }
+
     setStatus("submitting");
 
     const payload = buildInboundPayload(

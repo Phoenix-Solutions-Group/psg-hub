@@ -14,32 +14,43 @@ export const metadata: Metadata = {
     "See how Phoenix Solutions Group helps body shops win more local repair business. Request a demo.",
 };
 
+// Shop-specific, owner-facing, and honest (design review PSG-506, item 2).
+// On mobile only the first bullet shows so the form is reachable fast (item 3).
 const VALUE_PROPS = [
-  "More repair leads from local search & ads",
-  "Reviews, reputation, and follow-up on autopilot",
-  "One dashboard for your shop's marketing & ops",
+  "Show up first when local drivers search “collision repair near me”",
+  "Turn finished repairs into 5-star reviews that win the next customer",
+  "Keep your bays full — even in the slow weeks — with steady local demand",
 ];
 
 export default function GetStartedPage() {
   return (
     <main className="flex min-h-screen flex-col bg-background lg:flex-row">
-      {/* Brand / value panel */}
-      <section className="flex flex-col justify-center bg-primary px-6 py-12 text-primary-foreground lg:w-[45%] lg:px-12">
+      {/* Brand / value panel. Mobile padding is tighter and only the first bullet
+          shows so an ad visitor (mostly on phones) reaches the form fast — full
+          intro returns at lg (design review PSG-506, item 3). */}
+      <section className="flex flex-col justify-center bg-primary px-6 py-8 text-primary-foreground lg:w-[45%] lg:px-12 lg:py-12">
         <div className="mx-auto w-full max-w-md">
           <Logo variant="reverse" className="h-11 w-auto" />
-          <p className="mt-8 font-heading text-xs font-medium uppercase tracking-[0.18em] text-ember">
+          <p className="mt-6 font-heading text-xs font-medium uppercase tracking-[0.18em] text-ember lg:mt-8">
             Phoenix Solutions Group
           </p>
           <h1 className="mt-3 font-heading text-3xl font-bold tracking-tight sm:text-4xl">
             Grow your body shop&rsquo;s repair business.
           </h1>
+          {/* Our single biggest differentiator — true and trust-building (item 1). */}
+          <p className="mt-3 font-heading text-sm font-semibold text-ember">
+            Marketing built only for collision &amp; auto-body shops.
+          </p>
           <p className="mt-4 text-base text-primary-foreground/80">
             Tell us about your shop and we&rsquo;ll show you how PSG brings in
             more local repair customers — and keeps them coming back.
           </p>
-          <ul className="mt-8 space-y-3">
-            {VALUE_PROPS.map((prop) => (
-              <li key={prop} className="flex items-start gap-3 text-sm">
+          <ul className="mt-6 space-y-3 lg:mt-8">
+            {VALUE_PROPS.map((prop, i) => (
+              <li
+                key={prop}
+                className={`flex items-start gap-3 text-sm ${i === 0 ? "" : "hidden lg:flex"}`}
+              >
                 <span
                   aria-hidden="true"
                   className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-ember"
