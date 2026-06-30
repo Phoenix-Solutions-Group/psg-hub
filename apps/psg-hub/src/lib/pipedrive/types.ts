@@ -17,7 +17,17 @@ export interface PipedriveDeal {
   orgId: number | null;
   orgName: string | null;
   personId: number | null;
+  /** Deal owner (sales rep) — distinct from the contact (person/org). */
+  ownerId: number | null;
+  ownerName: string | null;
+  /** Forecasted close date. */
   expectedCloseDate: string | null; // ISO date
+  /** ACTUAL won/lost close date (set when status leaves "open"); anchors the
+   *  won/booked reconciled line + YoY. Null while the deal is still open. */
+  closeDate: string | null; // ISO date
+  /** Last logged activity (call/email/meeting) — distinct from update_time. Drives
+   *  the 14-day stale / no-movement flag. Null when Pipedrive omits it. */
+  lastActivityDate: string | null; // ISO date
 }
 
 export type DealStatus = "open" | "won" | "lost" | "deleted";

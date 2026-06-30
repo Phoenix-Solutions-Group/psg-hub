@@ -16,7 +16,11 @@ function deal(p: Partial<PipedriveDeal>): PipedriveDeal {
     orgId: p.orgId ?? null,
     orgName: p.orgName ?? null,
     personId: p.personId ?? null,
+    ownerId: p.ownerId ?? null,
+    ownerName: p.ownerName ?? null,
     expectedCloseDate: p.expectedCloseDate ?? null,
+    closeDate: p.closeDate ?? null,
+    lastActivityDate: p.lastActivityDate ?? null,
   };
 }
 

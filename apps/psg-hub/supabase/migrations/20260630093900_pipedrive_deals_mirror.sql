@@ -29,7 +29,17 @@ create table if not exists public.pipedrive_deals (
   org_id             bigint,
   org_name           text,
   person_id          bigint,
+  -- Deal owner (sales rep), distinct from the contact (person/org). Needed by the
+  -- forecast export so a pipeline line can be attributed to a rep (PSG-435/PSG-446).
+  owner_id           bigint,
+  owner_name         text,
   expected_close_date date,
+  -- ACTUAL won/lost close date (set when status leaves 'open'), distinct from the
+  -- forecasted expected_close_date. Anchors the won/booked reconciled line + YoY.
+  close_date          date,
+  -- Last logged activity (call/email/meeting), distinct from update_time (any field
+  -- change). Drives the 14-day "stale / no-movement" flag in the forecast.
+  last_activity_date  date,
   pipedrive_add_time  timestamptz,
   pipedrive_update_time timestamptz,
   -- Full raw deal payload for any field not promoted to a column (audit + future use).
@@ -44,6 +54,7 @@ comment on table public.pipedrive_deals is
 create index if not exists pipedrive_deals_status_idx       on public.pipedrive_deals (status);
 create index if not exists pipedrive_deals_stage_idx        on public.pipedrive_deals (stage_id);
 create index if not exists pipedrive_deals_pipeline_idx     on public.pipedrive_deals (pipeline_id);
+create index if not exists pipedrive_deals_owner_idx        on public.pipedrive_deals (owner_id);
 
 -- A run log so we can confirm the "documented refresh path" actually ran on cadence
 -- and surface staleness (last successful sync, deal counts, errors).

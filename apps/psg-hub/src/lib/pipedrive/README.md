@@ -19,8 +19,10 @@ Pipedrive REST API ──(cadenced sync, service role)──► public.pipedrive
 
 - **Mirror table** `public.pipedrive_deals` (migration `20260630093900_pipedrive_deals_mirror.sql`):
   one row per deal, keyed by Pipedrive `deal_id` (UPSERT target). Stores value,
-  currency, status, pipeline/stage, per-deal win probability, org, and the raw
-  payload. Default-deny RLS; reads gated on `view_sales_pipeline`; service-role
+  currency, status, pipeline/stage, per-deal win probability, org/person, **owner**
+  (sales rep), `expected_close_date` + **actual `close_date`**, `last_activity_date`
+  (stale-flag driver), add/update times, and the raw payload. Default-deny RLS;
+  reads gated on `view_sales_pipeline`; service-role
   ingestion bypasses RLS. A `pipedrive_sync_runs` log records cadence health/staleness.
 - **Forecast core** (`forecast.ts`) — pure, dependency-free, fully unit-tested:
   `buildForecast(deals, { stageProbability, committedStageIds })` → three named
@@ -53,17 +55,31 @@ TODO (engineer — see PSG-434 child issue):
    Wire the canonical S0–S8 weights from `stages.ts` (`buildStageProbabilityMap`)
    once you have the Pipedrive `stage_id → Sn` mapping; "committed" = stages ≥ S6.
 4. **Query/export surface** — expose `buildForecast` output: a server query helper +
-   a CSV/JSON export (open-deal count + total open-pipeline-$ + per-stage breakdown)
-   for Reese. Reuse the `ops/reports` export conventions.
+   a CSV/JSON export. Reuse the `ops/reports` export conventions. Carry these fields
+   per Reese's PSG-435 spec — all already present in `PipedriveDeal` + the mirror
+   table (just map them, no schema change needed):
+   - **Per open deal:** `dealId`, `title`, `value`, `stageId`/`stageName` (S0–S8),
+     `status`, `expectedCloseDate`, `lastActivityDate` (for the stale flag),
+     `ownerId`/`ownerName`.
+   - **Rollups:** open-deal count + total open-pipeline-$ + per-stage breakdown.
 5. **Open/closed mapping (Reese, PSG-435):** when the live stages are known, confirm
    which `stage_id`s carry Pipedrive `status=open`. S8 Won — and S7 Commercial once
    signed — must come back `status=won` so they are excluded from the forecast (they
    are realized revenue, not pipeline). If any S7/S8 deal returns `status=open` it
    would inflate the committed line — surface a warning row and flag it to Reese.
-6. **Stale-deal flag (Reese, PSG-435):** carry Pipedrive `update_time` onto
-   `PipedriveDeal` (add the field + column) and mark any open deal with no movement in
-   **14 days** as stale, so stale pipeline is visible and discountable rather than
-   silently summed into the forecast.
+   **S7 still `status=open` = committed-not-booked** (don't classify as won).
+6. **Stale-deal flag (Reese, PSG-435):** use the `lastActivityDate` column (now in the
+   schema — last logged activity, distinct from `pipedrive_update_time`) and mark any
+   open deal with no movement in **14 days** as stale, so stale pipeline is visible and
+   discountable rather than silently summed into the forecast.
+7. **Won/booked as a DISTINCT reconciled set (John's CFO guard, PSG-435):** export
+   won/booked deals (S8, or S7 once signed) as a **separate** line — `orgName` +
+   face `value` + `closeDate` + a summary total — kept apart from the open pipeline.
+   They overlap the Invoiced recurring base (~67 subs · $75.2K MRR), so John reconciles
+   them against Invoiced MRR before §2.1; summing them into the forecast would
+   double-count. This is surfacing-only — **not** a `buildForecast` change (`buildForecast`
+   already filters to `status === "open"`); it's an additional export section. QA on
+   [PSG-447] asserts the won/booked set is present and disjoint from the open set.
 
 ## Refresh path (operational)
 
