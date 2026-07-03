@@ -144,6 +144,52 @@ describe("syncSemrushSnapshots", () => {
     errSpy.mockRestore();
   });
 
+  it("every eligible shop fails (0 written) -> ledger ERROR, not silent success (PSG-534)", async () => {
+    // Regression: prod wrote `status=success, rows_written=0` for days after the
+    // SEMrush key went bad because per-shop failures never flipped the ledger.
+    const { client, calls } = makeService({
+      shops: [
+        { id: "s1", url: "a.com" },
+        { id: "s2", url: "b.com" },
+        { id: "s3", url: null }, // skipped, not a failure
+      ],
+    });
+    const fetchMetrics = vi.fn(async () => {
+      throw new Error("SEMrush API error 120: wrong key");
+    });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await syncSemrushSnapshots(client, { ...BASE, fetchMetrics });
+
+    expect(result).toEqual({ synced: 0, skipped: 1, failed: 2 });
+    const patch = calls.ledgerUpdates[0].patch as Record<string, unknown>;
+    expect(patch).toMatchObject({ status: "error", rows_written: 0 });
+    // Ledger names the count and the real upstream cause for the operator.
+    expect(patch.error).toMatch(/all 2 eligible shop\(s\) failed/);
+    expect(patch.error).toMatch(/first error: SEMrush API error 120/);
+    errSpy.mockRestore();
+  });
+
+  it("all shops skipped for no url stays SUCCESS (designed no-data state, not error)", async () => {
+    const { client, calls } = makeService({
+      shops: [
+        { id: "s1", url: null },
+        { id: "s2", url: "   " },
+      ],
+    });
+
+    const result = await syncSemrushSnapshots(client, {
+      ...BASE,
+      fetchMetrics: vi.fn(),
+    });
+
+    expect(result).toEqual({ synced: 0, skipped: 2, failed: 0 });
+    expect(calls.ledgerUpdates[0].patch).toMatchObject({
+      status: "success",
+      rows_written: 0,
+    });
+  });
+
   it("total failure (shops read) -> ledger error + rethrow", async () => {
     const { client, calls } = makeService({ shopsError: { message: "boom" } });
 

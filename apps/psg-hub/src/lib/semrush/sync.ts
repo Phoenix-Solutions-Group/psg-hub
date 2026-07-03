@@ -86,6 +86,10 @@ export async function syncSemrushSnapshots(
     }
 
     const rows: AnalyticsSnapshotInsert[] = [];
+    // First per-shop failure reason (redacted), surfaced in the ledger so a
+    // dark run names its own cause (e.g. an expired key's `ERROR 120`) instead
+    // of only whispering it to the function logs.
+    let firstShopError: string | undefined;
     for (const shop of shops ?? []) {
       const domain = normalizeDomain(shop.url as string | null);
       if (!domain) {
@@ -106,15 +110,34 @@ export async function syncSemrushSnapshots(
         result.failed += 1;
         // redactApiKey: an upstream fetch error could embed the request URL
         // (and SEMrush auth is query-param-only) — never log the key.
-        console.error(
-          `[semrush-sync] shop ${shop.id} (${domain}) failed: ${redactApiKey(
-            shopError instanceof Error ? shopError.message : String(shopError)
-          )}`
+        const redacted = redactApiKey(
+          shopError instanceof Error ? shopError.message : String(shopError)
         );
+        if (!firstShopError) firstShopError = redacted;
+        console.error(`[semrush-sync] shop ${shop.id} (${domain}) failed: ${redacted}`);
       }
     }
 
     result.synced = await upsertSnapshots(service, rows);
+
+    // Observability guard (PSG-534): a run where every eligible (url-bearing)
+    // shop failed and NOTHING was written must not masquerade as `success`.
+    // Before this, an invalid/expired/quota-exhausted API key produced a
+    // healthy-looking `status=success, rows_written=0` row — indistinguishable
+    // from the legitimate "no shops to sync" case — so the source went silently
+    // dark for days. Skips alone (no failures) stay success: that is the
+    // designed no-data state, not an error.
+    if (result.failed > 0 && result.synced === 0) {
+      await closeLedger(service, ledger, {
+        status: "error",
+        rows_written: 0,
+        error:
+          `all ${result.failed} eligible shop(s) failed; 0 snapshots written ` +
+          `(${result.skipped} skipped for no url). first error: ${firstShopError ?? "unknown"}`,
+      });
+      return result;
+    }
+
     await closeLedger(service, ledger, {
       status: "success",
       rows_written: result.synced,
