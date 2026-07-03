@@ -45,4 +45,17 @@ describe("mapGoogleAdsError — structured GoogleAdsFailure", () => {
     const e = mapGoogleAdsError(new Error("invalid_grant: token revoked"));
     expect(e.code).toBe("auth_failed");
   });
+
+  // PSG-533: an `invalid_client` OAuth token-refresh failure (wrong client
+  // id/secret in prod env) must classify as auth_failed so the orchestrator
+  // flips the account to status='error'. Before the fix it fell through to the
+  // generic `invalid` -> bad_request branch (the string contains "invalid"),
+  // leaving the account masked as 'linked' while every fetch silently threw —
+  // the exact 06-30 PSG-532 stall.
+  it("classifies an invalid_client refresh failure as auth_failed (not bad_request)", () => {
+    const e = mapGoogleAdsError(
+      new Error("invalid_client: The OAuth client was not found.")
+    );
+    expect(e.code).toBe("auth_failed");
+  });
 });

@@ -51,6 +51,14 @@ describe("mapGoogleApiError — OAuth / string fallbacks", () => {
       "auth_failed"
     );
   });
+  // PSG-533: `invalid_client` must NOT degrade to bad_request (it contains the
+  // substring "invalid"). This is the identical masking bug that hid the PSG-532
+  // stall for GA4/GSC/GBP — a wrong OAuth client secret at the refresh endpoint.
+  it("OAuth invalid_client -> auth_failed (not bad_request)", () => {
+    expect(
+      mapGoogleApiError(new Error("invalid_client: Unauthorized")).code
+    ).toBe("auth_failed");
+  });
   it("network ETIMEDOUT (string code) -> timeout", () => {
     const err = Object.assign(new Error("connect ETIMEDOUT"), {
       code: "ETIMEDOUT",

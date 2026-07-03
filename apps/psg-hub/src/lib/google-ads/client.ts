@@ -117,17 +117,24 @@ export function mapGoogleAdsError(err: unknown): AdsApiError {
   }
 
   // google-ads-api throws errors with varying shapes; normalize.
-  // Fallback for non-Failure throws (e.g. OAuth `invalid_grant` from the token
-  // refresh, network/timeout) — kept as the string-match path.
+  // Fallback for non-Failure throws (e.g. OAuth `invalid_grant` / `invalid_client`
+  // from the token refresh, network/timeout) — kept as the string-match path.
   const raw = err instanceof Error ? err.message : String(err);
   const lower = raw.toLowerCase();
   if (lower.includes("quota") || lower.includes("rate")) {
     return new AdsApiError("rate_limited", "Google rate limit");
   }
+  // PSG-533: `invalid_client` (a wrong OAuth client_id/secret at the token
+  // refresh endpoint) MUST classify as auth_failed so the orchestrator flips the
+  // account to status='error' ("needs re-link"). It is matched BEFORE the generic
+  // `invalid` -> bad_request branch below, which would otherwise swallow it (the
+  // string contains "invalid") and leave the account masked as 'linked' while
+  // every fetch silently throws — the exact 06-30 PSG-532 silent stall.
   if (
     lower.includes("unauth") ||
     lower.includes("permission") ||
     lower.includes("invalid_grant") ||
+    lower.includes("invalid_client") ||
     lower.includes("401")
   ) {
     return new AdsApiError("auth_failed", "Auth failed with Google");

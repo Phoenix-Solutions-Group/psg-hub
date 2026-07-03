@@ -166,8 +166,15 @@ export function mapGoogleApiError(err: unknown): GoogleApiError {
   const lower = `${typeof e?.code === "string" ? `${e.code} ` : ""}${
     typeof e?.message === "string" ? e.message.toLowerCase() : ""
   }`;
+  // PSG-533: `invalid_client` (wrong OAuth client_id/secret at the refresh
+  // endpoint) MUST classify as auth_failed — matched BEFORE the generic
+  // `invalid` -> bad_request branch below, which would otherwise swallow it and
+  // leave the GA4/GSC/GBP account masked as 'linked' while every fetch throws.
+  // This is the identical latent bug that hid the 06-30 PSG-532 stall across all
+  // four Google verticals (they share one OAuth client secret).
   if (
     lower.includes("invalid_grant") ||
+    lower.includes("invalid_client") ||
     lower.includes("unauth") ||
     lower.includes("permission") ||
     lower.includes("401") ||

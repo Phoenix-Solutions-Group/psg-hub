@@ -32,6 +32,10 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/cron/analytics-health",
+      "schedule": "30 8 * * *"
+    },
+    {
       "path": "/api/cron/ga4-dims-sync",
       "schedule": "0 2 1 * *"
     },
