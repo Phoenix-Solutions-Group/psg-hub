@@ -59,12 +59,30 @@ handler fires only on the transition **into** `won` (`isDealWonTransition`) — 
 already-won deal re-sent is a no-op, and provisioning itself is idempotent on a
 deterministic project title, so a webhook retry never double-creates.
 
-## Role assignment (follow-up)
+## Role assignment (PSG-587 — wired)
 
-Tasks are created **unassigned** with the accountable role in the title/description
-until PSG confirms which Pipedrive user fills each role (AS / Ads / Analytics / Web /
-CRO). Once that map exists, pass `roleUserMap` to `provisionOnboardingBoard` (or wire it
-from env) and tasks auto-assign. Tracked as a follow-on to PSG-584.
+The webhook now builds a `roleUserMap` from env on every deal-won and passes it to
+`provisionOnboardingBoard`, so tasks land on real people instead of being created
+unassigned. Config lives in `role-user-map.ts` (`loadRoleUserMap`).
+
+**One env var per role**, each holding that role owner's Pipedrive **user id**:
+
+| Var | Role |
+|---|---|
+| `PIPEDRIVE_ROLE_USER_AS` | Account Strategist |
+| `PIPEDRIVE_ROLE_USER_ADS` | Ads Engineer |
+| `PIPEDRIVE_ROLE_USER_ANALYTICS` | Analytics Engineer |
+| `PIPEDRIVE_ROLE_USER_WEB` | Web Engineer |
+| `PIPEDRIVE_ROLE_USER_CRO` | CRO Analyst |
+
+Behaviour: a role is assigned **only** when its var holds a positive integer user id.
+Any role left blank (or set to a malformed value) stays **unassigned** — the accountable
+role remains in the task title, and provisioning never fails on a missing/bad value. So
+partial rollout works: set the roles you have confirmed, add the rest later.
+
+**Finding the user IDs** (the "PSG team records" step): call the Projects client's
+`listUsers()` (or `curl -s "https://$DOMAIN.pipedrive.com/v1/users?api_token=$TOKEN"`),
+match each role owner to their `id`, and set the vars above in Vercel.
 
 ## D6/D7
 
