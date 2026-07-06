@@ -31,18 +31,22 @@ Replace `$TOKEN` with the write token and `$DOMAIN` with the subdomain (e.g. `ps
 **1. Discover the board + phase to drop projects into:**
 
 ```bash
-curl -s "https://$DOMAIN.pipedrive.com/v1/projects/boards?api_token=$TOKEN"
+curl -s "https://$DOMAIN.pipedrive.com/api/v2/boards?api_token=$TOKEN"
 # pick the delivery board id →  BOARD_ID
-curl -s "https://$DOMAIN.pipedrive.com/v1/projects/phases?board_id=$BOARD_ID&api_token=$TOKEN"
+curl -s "https://$DOMAIN.pipedrive.com/api/v2/phases?board_id=$BOARD_ID&api_token=$TOKEN"
 # pick the starting phase id →  PHASE_ID
 ```
+
+> **API base path (PSG-588):** the Projects API lives at `…/api/v2/{projects,boards,phases,tasks}`
+> — note the required `/api/` segment and FLAT resource names (not `…/v1/projects/boards`).
+> Pipedrive's legacy v1 `projects/*` endpoints are being removed on **2026-07-31**.
 
 Set `PIPEDRIVE_ONBOARDING_BOARD_ID=$BOARD_ID` and `PIPEDRIVE_ONBOARDING_PHASE_ID=$PHASE_ID` in Vercel.
 
 **2. Register the deal-won webhook (API-created — no UI):**
 
 ```bash
-curl -s -X POST "https://$DOMAIN.pipedrive.com/v1/webhooks?api_token=$TOKEN" \
+curl -s -X POST "https://$DOMAIN.pipedrive.com/api/v1/webhooks?api_token=$TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "subscription_url": "https://<prod-host>/api/webhooks/pipedrive",
@@ -81,7 +85,7 @@ role remains in the task title, and provisioning never fails on a missing/bad va
 partial rollout works: set the roles you have confirmed, add the rest later.
 
 **Finding the user IDs** (the "PSG team records" step): call the Projects client's
-`listUsers()` (or `curl -s "https://$DOMAIN.pipedrive.com/v1/users?api_token=$TOKEN"`),
+`listUsers()` (or `curl -s "https://$DOMAIN.pipedrive.com/api/v1/users?api_token=$TOKEN"`),
 match each role owner to their `id`, and set the vars above in Vercel.
 
 ## D6/D7

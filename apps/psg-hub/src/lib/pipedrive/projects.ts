@@ -7,8 +7,20 @@
 //
 // Auth: the write-capable personal API token — resolved via `resolvePipedriveToken()`
 // from `PIPEDRIVE_API_TOKEN` (canonical, same admin token the inbound-lead intake path
-// uses) with `PIPEDRIVE_API_KEY` accepted as an alias. v1 endpoints carry the token in
-// the query string; it is NEVER logged (errors never include the URL).
+// uses) with `PIPEDRIVE_API_KEY` accepted as an alias. Endpoints carry the token in the
+// query string (`api_token`, accepted by both API versions); it is NEVER logged (errors
+// never include the URL).
+//
+// API version / base path (PSG-588 — the go-live transport fix):
+//   Every request goes to `https://{domain}.pipedrive.com/api/{version}/{resource}`.
+//   The `/api/` segment is REQUIRED — omitting it 404s silently, which for a webhook
+//   means zero onboarding boards on real wins. Projects live in **API v2** under FLAT
+//   resource paths (`projects`, `boards`, `phases`, `tasks`) — NOT nested under
+//   `projects/…` and NOT v1. (Pipedrive shipped Projects API v2 on 2026-05-21; the
+//   legacy v1 `projects/*` endpoints are being removed on 2026-07-31, so v2 is both the
+//   correct and the future-proof target.) `users` has no v2 and stays on v1. Per-request
+//   version is explicit at each call site below and asserted by transport unit tests so
+//   this can never silently regress.
 //
 // Pipedrive data-model note (important, and the one non-obvious mapping):
 //   Pipedrive Projects has Boards → (kanban) Phases → Projects → Tasks. A *project*
@@ -75,6 +87,9 @@ export function pipedriveBaseUrl(companyDomain?: string | null): string {
 
 // ── low-level client ────────────────────────────────────────────────────────────────
 
+/** Pipedrive REST API version segment used in the `/api/{version}/` path. */
+export type ApiVersion = "v1" | "v2";
+
 export interface ProjectsClientConfig {
   /** Admin write token. Defaults to `resolvePipedriveToken()` (PIPEDRIVE_API_TOKEN, alias PIPEDRIVE_API_KEY). */
   apiKey?: string;
@@ -108,13 +123,17 @@ export interface CreateProjectInput {
   owner_id?: number;
   start_date?: string; // YYYY-MM-DD
   deal_ids?: number[];
-  org_id?: number;
-  person_id?: number;
+  // v2 relates orgs/persons as ARRAYS (`org_ids`/`person_ids`); the old singular
+  // `org_id`/`person_id` are silently dropped (or rejected under v2's stricter
+  // validation) — see PSG-588.
+  org_ids?: number[];
+  person_ids?: number[];
 }
 export interface CreateTaskInput {
   title: string;
   project_id: number;
-  phase_id?: number;
+  // NB: v2 `POST /tasks` has NO `phase_id` — D-phases are modelled as parent tasks
+  // (`parent_task_id`), so we never send one. (See file header + PSG-588.)
   parent_task_id?: number;
   assignee_id?: number;
   due_date?: string; // YYYY-MM-DD
@@ -133,7 +152,7 @@ export interface PipedriveProjectsClient {
 }
 
 /**
- * Default HTTP client for the Pipedrive Projects API (v1, personal-token auth).
+ * Default HTTP client for the Pipedrive Projects API (v2 flat paths, personal-token auth).
  * Self-contained on purpose so this module is independently mergeable to `main`
  * (and therefore deployable to production) without the unmerged read-sync client.
  */
@@ -150,9 +169,17 @@ export function createProjectsClient(
   const base = pipedriveBaseUrl(config.companyDomain);
   const doFetch = config.fetchImpl ?? fetch;
 
-  /** Build a v1 URL with the token in the query string (never logged). */
-  function url(path: string, params: Record<string, string> = {}): string {
-    const u = new URL(`${base}/v1/${path}`);
+  /**
+   * Build a fully-qualified Pipedrive URL: `{base}/api/{version}/{resource}` with the
+   * token in the query string (never logged). The `/api/` segment and the per-endpoint
+   * version are the whole point of PSG-588 — see the file header.
+   */
+  function url(
+    version: ApiVersion,
+    path: string,
+    params: Record<string, string> = {},
+  ): string {
+    const u = new URL(`${base}/api/${version}/${path}`);
     for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
     u.searchParams.set("api_token", apiKey);
     return u.toString();
@@ -160,11 +187,12 @@ export function createProjectsClient(
 
   async function call<T>(
     method: "GET" | "POST",
+    version: ApiVersion,
     path: string,
     params: Record<string, string> = {},
     jsonBody?: Record<string, unknown>,
   ): Promise<T> {
-    const res = await doFetch(url(path, params), {
+    const res = await doFetch(url(version, path, params), {
       method,
       headers: jsonBody
         ? { Accept: "application/json", "Content-Type": "application/json" }
@@ -174,24 +202,26 @@ export function createProjectsClient(
     if (!res.ok) {
       // NEVER include the URL (it carries the token) in the error.
       throw new PipedriveProjectsError(
-        `Pipedrive /${path} returned HTTP ${res.status}`,
+        `Pipedrive ${method} /api/${version}/${path} returned HTTP ${res.status}`,
         res.status,
       );
     }
     const payload = (await res.json()) as { success?: boolean; data?: unknown };
     if (payload.success === false) {
-      throw new PipedriveProjectsError(`Pipedrive /${path} returned success=false`);
+      throw new PipedriveProjectsError(
+        `Pipedrive ${method} /api/${version}/${path} returned success=false`,
+      );
     }
     return payload.data as T;
   }
 
   return {
     async listBoards() {
-      const data = await call<ProjectBoard[]>("GET", "projects/boards");
+      const data = await call<ProjectBoard[]>("GET", "v2", "boards");
       return (data ?? []).map((b) => ({ id: Number(b.id), name: String(b.name ?? "") }));
     },
     async listPhases(boardId) {
-      const data = await call<ProjectPhase[]>("GET", "projects/phases", {
+      const data = await call<ProjectPhase[]>("GET", "v2", "phases", {
         board_id: String(boardId),
       });
       return (data ?? []).map((p) => ({
@@ -201,9 +231,10 @@ export function createProjectsClient(
       }));
     },
     async listUsers() {
+      // Users has no v2 endpoint — stays on v1 (not part of the Projects v2 set).
       const data = await call<
         Array<{ id: number; name?: string; email?: string; active_flag?: boolean }>
-      >("GET", "users");
+      >("GET", "v1", "users");
       return (data ?? []).map((u) => ({
         id: Number(u.id),
         name: String(u.name ?? ""),
@@ -212,22 +243,129 @@ export function createProjectsClient(
       }));
     },
     async createProject(input) {
-      const proj = await call<{ id: number }>("POST", "projects", {}, {
+      const proj = await call<{ id: number }>("POST", "v2", "projects", {}, {
         ...input,
       });
       return { id: Number(proj.id) };
     },
     async createTask(input) {
-      const task = await call<{ id: number }>("POST", "tasks", {}, { ...input });
+      const task = await call<{ id: number }>("POST", "v2", "tasks", {}, { ...input });
       return { id: Number(task.id) };
     },
     async findProjectByTitle(title) {
       // Projects list is small for a single company; page defensively and match exact.
-      const data = await call<Array<{ id: number; title?: string }>>("GET", "projects", {
-        limit: "500",
-      });
+      const data = await call<Array<{ id: number; title?: string }>>(
+        "GET",
+        "v2",
+        "projects",
+        { limit: "500" },
+      );
       const hit = (data ?? []).find((p) => (p.title ?? "").trim() === title.trim());
       return hit ? { id: Number(hit.id) } : null;
+    },
+  };
+}
+
+// ── webhooks helper (Move 1 go-live: register the deal-won webhook) ───────────────────
+//
+// The Projects client above covers boards/phases/projects/tasks but NOT webhooks. The
+// go-live setup route (`/api/ops/pipedrive/onboarding-setup`) needs to (a) list existing
+// webhooks so registration is idempotent and (b) create the deal-won webhook. Webhooks
+// live on Pipedrive **v1** (`/api/v1/webhooks`), token in the query string — same auth +
+// URL-never-logged discipline as the Projects client. Kept as a small self-contained
+// factory so the Projects client interface (and its existing fake in tests) is untouched.
+
+export interface PipedriveWebhook {
+  id: number;
+  /** The endpoint Pipedrive calls — this is OUR app URL, never carries a token. */
+  subscription_url: string;
+}
+
+export interface RegisterWebhookInput {
+  /** Our public endpoint, e.g. `${NEXT_PUBLIC_APP_URL}/api/webhooks/pipedrive`. */
+  subscriptionUrl: string;
+  eventAction: string;
+  eventObject: string;
+  /** HTTP Basic pair Pipedrive sends on each call — NEVER logged/returned. */
+  httpAuthUser?: string | null;
+  httpAuthPass?: string | null;
+  version?: string;
+}
+
+export interface PipedriveWebhooksClient {
+  /** All webhooks on the account (id + subscription_url only). */
+  list(): Promise<PipedriveWebhook[]>;
+  /** Create a webhook. Returns its new id. */
+  create(input: RegisterWebhookInput): Promise<{ id: number }>;
+}
+
+/**
+ * Self-contained v1 webhooks client. Token resolved via `resolvePipedriveToken()` and
+ * carried ONLY in the query string; errors never include the URL (which carries the
+ * token) or the HTTP Basic password. Mirrors `createProjectsClient`'s hygiene.
+ */
+export function createWebhooksClient(
+  config: ProjectsClientConfig = {},
+): PipedriveWebhooksClient {
+  const apiKey = config.apiKey ?? resolvePipedriveToken();
+  if (!apiKey) {
+    throw new PipedriveProjectsError(
+      `Missing Pipedrive token (set one of: ${PIPEDRIVE_TOKEN_ENV_CANDIDATES.join(", ")})`,
+    );
+  }
+  const base = pipedriveBaseUrl(config.companyDomain);
+  const doFetch = config.fetchImpl ?? fetch;
+
+  function url(): string {
+    const u = new URL(`${base}/api/v1/webhooks`);
+    u.searchParams.set("api_token", apiKey);
+    return u.toString();
+  }
+
+  async function call<T>(
+    method: "GET" | "POST",
+    jsonBody?: Record<string, unknown>,
+  ): Promise<T> {
+    const res = await doFetch(url(), {
+      method,
+      headers: jsonBody
+        ? { Accept: "application/json", "Content-Type": "application/json" }
+        : { Accept: "application/json" },
+      body: jsonBody ? JSON.stringify(jsonBody) : undefined,
+    });
+    if (!res.ok) {
+      // NEVER include the URL (it carries the token) in the error.
+      throw new PipedriveProjectsError(
+        `Pipedrive ${method} /api/v1/webhooks returned HTTP ${res.status}`,
+        res.status,
+      );
+    }
+    const payload = (await res.json()) as { success?: boolean; data?: unknown };
+    if (payload.success === false) {
+      throw new PipedriveProjectsError("Pipedrive /api/v1/webhooks returned success=false");
+    }
+    return payload.data as T;
+  }
+
+  return {
+    async list() {
+      const data = await call<Array<{ id: number; subscription_url?: string }>>("GET");
+      return (data ?? []).map((w) => ({
+        id: Number(w.id),
+        subscription_url: String(w.subscription_url ?? ""),
+      }));
+    },
+    async create(input) {
+      const body: Record<string, unknown> = {
+        subscription_url: input.subscriptionUrl,
+        event_action: input.eventAction,
+        event_object: input.eventObject,
+        version: input.version ?? "1.0",
+      };
+      if (input.httpAuthUser) body.http_auth_user = input.httpAuthUser;
+      if (input.httpAuthPass) body.http_auth_password = input.httpAuthPass;
+      const created = await call<{ id: number }>("POST", body);
+      return { id: Number(created.id) };
     },
   };
 }
@@ -312,8 +450,9 @@ export async function provisionOnboardingBoard(
       `Auto-created on deal-won from deal #${deal.id}.`,
     start_date: deal.wonDate,
     deal_ids: [deal.id],
-    ...(deal.orgId != null ? { org_id: deal.orgId } : {}),
-    ...(deal.personId != null ? { person_id: deal.personId } : {}),
+    // v2 takes ARRAYS; omit entirely when absent (v2 rejects empty `[]`).
+    ...(deal.orgId != null ? { org_ids: [deal.orgId] } : {}),
+    ...(deal.personId != null ? { person_ids: [deal.personId] } : {}),
   });
 
   let taskCount = 0;

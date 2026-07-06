@@ -6,6 +6,8 @@ import {
   dealPipelineId,
   isDealPipelineInScope,
   resolvePipedriveToken,
+  createProjectsClient,
+  PipedriveProjectsError,
   type PipedriveProjectsClient,
   type CreateProjectInput,
   type CreateTaskInput,
@@ -67,8 +69,8 @@ describe("provisionOnboardingBoard", () => {
         phase_id: 9,
         start_date: "2026-07-06",
         deal_ids: [4242],
-        org_id: 77,
-        person_id: 12,
+        org_ids: [77],
+        person_ids: [12],
       }),
     );
   });
@@ -121,6 +123,106 @@ describe("provisionOnboardingBoard", () => {
     expect(res.created).toBe(false);
     expect(createProject).not.toHaveBeenCalled();
     expect(createTask).not.toHaveBeenCalled();
+  });
+});
+
+describe("createProjectsClient — transport (PSG-588: /api/ base path + v1/v2 per endpoint)", () => {
+  /** A fetch stub that records the URL/method it was called with and returns `data`. */
+  function recordingFetch(data: unknown = []) {
+    const calls: Array<{ url: string; method: string; body?: string }> = [];
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        method: String(init?.method ?? "GET"),
+        body: typeof init?.body === "string" ? init.body : undefined,
+      });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data }),
+      } as Response;
+    }) as unknown as typeof fetch;
+    return { fetchImpl, calls };
+  }
+
+  const TOKEN = "tok_secret_value";
+  function client(fetchImpl: typeof fetch) {
+    return createProjectsClient({ apiKey: TOKEN, companyDomain: "psg", fetchImpl });
+  }
+
+  it("hits /api/v2 FLAT paths for projects/boards/phases/tasks (never bare /v1/ and never /projects/boards)", async () => {
+    const cases: Array<[string, (c: PipedriveProjectsClient) => Promise<unknown>, string, string, unknown]> = [
+      ["boards", (c) => c.listBoards(), "GET", "https://psg.pipedrive.com/api/v2/boards", []],
+      ["phases", (c) => c.listPhases(3), "GET", "https://psg.pipedrive.com/api/v2/phases", []],
+      ["projects (find)", (c) => c.findProjectByTitle("x"), "GET", "https://psg.pipedrive.com/api/v2/projects", []],
+      ["projects (create)", (c) => c.createProject({ title: "x", board_id: 1, phase_id: 2 }), "POST", "https://psg.pipedrive.com/api/v2/projects", { id: 1 }],
+      ["tasks (create)", (c) => c.createTask({ title: "t", project_id: 9 }), "POST", "https://psg.pipedrive.com/api/v2/tasks", { id: 1 }],
+    ];
+    for (const [, run, method, prefix, data] of cases) {
+      const { fetchImpl, calls } = recordingFetch(data);
+      await run(client(fetchImpl));
+      const u = new URL(calls[0].url);
+      expect(calls[0].method).toBe(method);
+      expect(`${u.origin}${u.pathname}`).toBe(prefix);
+      expect(u.pathname.startsWith("/api/")).toBe(true); // the whole PSG-588 fix
+      expect(u.pathname).not.toContain("/projects/boards");
+      expect(u.pathname).not.toContain("/projects/phases");
+      expect(u.searchParams.get("api_token")).toBe(TOKEN); // token in query, not path
+    }
+  });
+
+  it("keeps users on /api/v1 (no v2 users endpoint) and passes board_id + limit params", async () => {
+    const { fetchImpl, calls } = recordingFetch([]);
+    const c = client(fetchImpl);
+    await c.listUsers();
+    expect(new URL(calls[0].url).pathname).toBe("/api/v1/users");
+
+    const phases = recordingFetch([]);
+    await client(phases.fetchImpl).listPhases(42);
+    expect(new URL(phases.calls[0].url).searchParams.get("board_id")).toBe("42");
+
+    const find = recordingFetch([]);
+    await client(find.fetchImpl).findProjectByTitle("x");
+    expect(new URL(find.calls[0].url).searchParams.get("limit")).toBe("500");
+  });
+
+  it("sends the v2 array shape (org_ids/person_ids), not the singular v1 fields", async () => {
+    const { fetchImpl, calls } = recordingFetch({ id: 1 });
+    await client(fetchImpl).createProject({
+      title: "x",
+      board_id: 1,
+      phase_id: 2,
+      deal_ids: [4242],
+      org_ids: [77],
+      person_ids: [12],
+    });
+    const body = JSON.parse(calls[0].body ?? "{}");
+    expect(body.org_ids).toEqual([77]);
+    expect(body.person_ids).toEqual([12]);
+    expect(body).not.toHaveProperty("org_id");
+    expect(body).not.toHaveProperty("person_id");
+  });
+
+  it("never leaks the token or URL in error messages on non-2xx", async () => {
+    const fetchImpl = (async () =>
+      ({ ok: false, status: 404, json: async () => ({}) }) as Response) as unknown as typeof fetch;
+    const c = createProjectsClient({ apiKey: TOKEN, companyDomain: "psg", fetchImpl });
+    let err: PipedriveProjectsError | undefined;
+    try {
+      await c.listBoards();
+    } catch (e) {
+      err = e as PipedriveProjectsError;
+    }
+    expect(err).toBeInstanceOf(PipedriveProjectsError);
+    expect(err?.status).toBe(404);
+    expect(err?.message).toContain("/api/v2/boards");
+    expect(err?.message).not.toContain(TOKEN); // token must never appear in the message
+  });
+
+  it("throws a secret-free error when no token is configured", () => {
+    expect(() => createProjectsClient({ apiKey: "", fetchImpl: fetch })).toThrow(
+      /Missing Pipedrive token/,
+    );
   });
 });
 
