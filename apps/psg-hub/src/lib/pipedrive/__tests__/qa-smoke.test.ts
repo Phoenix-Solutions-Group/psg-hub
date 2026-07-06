@@ -12,6 +12,7 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
   const projects = new Map<number, Record<string, unknown>>();
   const tasks = new Map<number, Record<string, unknown>>();
   const log: Array<{ method: string; path: string }> = [];
+  const projectCreateBodies: Array<Record<string, unknown>> = [];
 
   const ok = (data: unknown, additional: unknown = {}) =>
     new Response(JSON.stringify({ success: true, data, additional_data: additional }), {
@@ -31,6 +32,12 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
     log.push({ method, path: `/${version}/${parts.slice(2).join("/")}` });
 
+    // ── v1 organizations + persons (throwaway link records) ──
+    if (version === "v1" && (resource === "organizations" || resource === "persons")) {
+      if (method === "POST") return ok({ id: seq++, name: body.name });
+      if (id != null && method === "DELETE") return ok({ id });
+    }
+
     // ── v1 deals ──
     if (version === "v1" && resource === "deals") {
       if (method === "POST") {
@@ -39,6 +46,8 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
           id: dealId,
           title: body.title,
           pipeline_id: body.pipeline_id,
+          org_id: body.org_id ?? null,
+          person_id: body.person_id ?? null,
           status: "open",
         });
         return ok({ id: dealId, title: body.title, pipeline_id: body.pipeline_id });
@@ -62,6 +71,7 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
     // ── v2 projects ──
     if (version === "v2" && resource === "projects") {
       if (method === "POST") {
+        projectCreateBodies.push(body);
         const pid = seq++;
         projects.set(pid, {
           id: pid,
@@ -108,7 +118,7 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
     return notFound();
   }) as unknown as typeof fetch;
 
-  return { fetchImpl, deals, projects, tasks, log };
+  return { fetchImpl, deals, projects, tasks, log, projectCreateBodies };
 }
 
 const noSleep = async () => {};
@@ -137,6 +147,12 @@ describe("runQaSmoke — full write-path E2E against an in-memory Pipedrive", ()
     expect(ev.project.board_id).toBe(1);
     expect(ev.project.phase_id).toBe(1);
     expect(ev.project.start_date).toBe("2026-07-06");
+
+    // Org/person array body: the deal carried an org + person, so createProject sent
+    // the v2 org_ids/person_ids ARRAYS (the exact write-path body PSG-599 flagged).
+    expect(pd.projectCreateBodies.length).toBeGreaterThan(0);
+    expect(Array.isArray(pd.projectCreateBodies[0].org_ids)).toBe(true);
+    expect(Array.isArray(pd.projectCreateBodies[0].person_ids)).toBe(true);
 
     // Task tree: 5 parents + 25 leaves = 30, exactly 3 GATE tasks
     expect(ev.tree.parentTasks).toBe(WHM_ONBOARDING_TEMPLATE.length);
@@ -176,19 +192,23 @@ describe("runQaSmoke — full write-path E2E against an in-memory Pipedrive", ()
     const wrapped = (async (input: string | URL | Request, init?: RequestInit) => {
       const u = new URL(typeof input === "string" ? input : input.toString());
       const method = (init?.method ?? "GET").toUpperCase();
+      // Capture the project's real title BEFORE the delete removes it, so the injected
+      // late re-provision matches the deterministic projectTitle (which depends on the
+      // deal id — the org+person link records consume earlier sequence ids).
+      const parts = u.pathname.split("/").filter(Boolean);
+      let deletedTitle: string | null = null;
+      if (method === "DELETE" && parts[1] === "v2" && parts[2] === "projects" && parts[3]) {
+        deletedTitle = (pd.projects.get(Number(parts[3]))?.title as string) ?? null;
+      }
       const res = await originalFetch(input, init);
       // After the project is first deleted, inject exactly one re-provision so the
       // bounded cleanup re-scan has something to catch.
-      if (
-        !reprovisioned &&
-        method === "DELETE" &&
-        u.pathname.includes("/v2/projects/")
-      ) {
+      if (!reprovisioned && deletedTitle) {
         reprovisioned = true;
         const pid = 99999;
         pd.projects.set(pid, {
           id: pid,
-          title: `Onboarding — ${QA_TEST_MARKER} — Move1 E2E unit-2 (deal 1)`,
+          title: deletedTitle,
           board_id: 1,
           phase_id: 1,
           start_date: "2026-07-06",

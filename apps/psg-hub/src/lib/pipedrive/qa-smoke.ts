@@ -87,7 +87,15 @@ export interface QaTask {
 }
 
 export interface QaRestClient {
-  createDeal(title: string, pipelineId: number): Promise<QaDeal>;
+  createOrganization(name: string): Promise<{ id: number }>;
+  createPerson(name: string, orgId?: number | null): Promise<{ id: number }>;
+  deleteOrganization(orgId: number): Promise<void>;
+  deletePerson(personId: number): Promise<void>;
+  createDeal(
+    title: string,
+    pipelineId: number,
+    links?: { orgId?: number | null; personId?: number | null },
+  ): Promise<QaDeal>;
   winDeal(dealId: number): Promise<void>;
   getDeal(dealId: number): Promise<QaDeal>;
   deleteDeal(dealId: number): Promise<void>;
@@ -184,11 +192,29 @@ export function createQaRestClient(config: QaClientConfig = {}): QaRestClient {
   }
 
   return {
-    async createDeal(title, pipelineId) {
-      const { data } = await call<unknown>("POST", "v1", "deals", {}, {
-        title,
-        pipeline_id: pipelineId,
-      });
+    async createOrganization(name) {
+      const { data } = await call<{ id: number }>("POST", "v1", "organizations", {}, { name });
+      return { id: num(asRecord(data).id) ?? 0 };
+    },
+    async createPerson(name, orgId) {
+      const body: Record<string, unknown> = { name };
+      if (orgId != null) body.org_id = orgId;
+      const { data } = await call<{ id: number }>("POST", "v1", "persons", {}, body);
+      return { id: num(asRecord(data).id) ?? 0 };
+    },
+    async deleteOrganization(orgId) {
+      await call<unknown>("DELETE", "v1", `organizations/${orgId}`);
+    },
+    async deletePerson(personId) {
+      await call<unknown>("DELETE", "v1", `persons/${personId}`);
+    },
+    async createDeal(title, pipelineId, links) {
+      const body: Record<string, unknown> = { title, pipeline_id: pipelineId };
+      // Link an org + person so the v2 `createProject` org_ids/person_ids ARRAY path is
+      // exercised — the exact write-path body PSG-599 flagged as the likely failure point.
+      if (links?.orgId != null) body.org_id = links.orgId;
+      if (links?.personId != null) body.person_id = links.personId;
+      const { data } = await call<unknown>("POST", "v1", "deals", {}, body);
       return toDeal(data);
     },
     async winDeal(dealId) {
@@ -332,6 +358,8 @@ export async function runQaSmoke(
 
   const dealTitle = `${QA_TEST_MARKER} — Move1 E2E ${opts.runTag}`;
   let dealId = 0;
+  let orgId = 0;
+  let personId = 0;
   let projectTitle = "";
   // Shared by reference: embedded in `evidence.cleanup` and mutated in `finally`.
   const cleanup: QaSmokeEvidence["cleanup"] = {
@@ -343,8 +371,21 @@ export async function runQaSmoke(
   let evidence: QaSmokeEvidence | null = null;
 
   try {
-    // 1) Create + 2) win a real deal in the sales pipeline.
-    const created = await rest.createDeal(dealTitle, opts.salesPipelineId);
+    // 0) Create a throwaway org + person so the won deal carries an organization and
+    //    person — this makes provisionOnboardingBoard send the v2 `org_ids`/`person_ids`
+    //    ARRAY body (the exact path PSG-599 flagged), exercising a real win faithfully.
+    //    orgName is intentionally left null on the WonDeal below so the PROJECT title keeps
+    //    the QA marker (the delete guard keys off it) rather than the org's name.
+    const org = await rest.createOrganization(`${QA_TEST_MARKER} Org — ${opts.runTag}`);
+    orgId = org.id;
+    const person = await rest.createPerson(`${QA_TEST_MARKER} Person — ${opts.runTag}`, orgId);
+    personId = person.id;
+
+    // 1) Create + 2) win a real deal in the sales pipeline, linked to the org + person.
+    const created = await rest.createDeal(dealTitle, opts.salesPipelineId, {
+      orgId,
+      personId,
+    });
     dealId = created.id;
     await rest.winDeal(dealId);
     const won = await rest.getDeal(dealId);
@@ -488,6 +529,22 @@ export async function runQaSmoke(
         cleanup.dealDeleted = true;
       } catch {
         cleanup.dealDeleted = false;
+      }
+    }
+    // Delete the throwaway person + org (best-effort; ids are ones we created this run).
+    // Person before org (person belongs to the org).
+    if (personId) {
+      try {
+        await rest.deletePerson(personId);
+      } catch {
+        /* best-effort */
+      }
+    }
+    if (orgId) {
+      try {
+        await rest.deleteOrganization(orgId);
+      } catch {
+        /* best-effort */
       }
     }
     try {
