@@ -79,6 +79,9 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
           board_id: body.board_id,
           phase_id: body.phase_id,
           start_date: body.start_date,
+          // v2 stores + returns the org/person relations as arrays (PSG-604 read-back).
+          org_ids: body.org_ids ?? [],
+          person_ids: body.person_ids ?? [],
         });
         return ok({ id: pid });
       }
@@ -153,6 +156,15 @@ describe("runQaSmoke — full write-path E2E against an in-memory Pipedrive", ()
     expect(pd.projectCreateBodies.length).toBeGreaterThan(0);
     expect(Array.isArray(pd.projectCreateBodies[0].org_ids)).toBe(true);
     expect(Array.isArray(pd.projectCreateBodies[0].person_ids)).toBe(true);
+
+    // PSG-604: the array body round-trips — the created project reads back the exact
+    // org id + person id the won deal carried (populated, not empty).
+    expect(ev.linkedOrgId).not.toBeNull();
+    expect(ev.linkedPersonId).not.toBeNull();
+    expect(ev.project.org_ids).toEqual([ev.linkedOrgId]);
+    expect(ev.project.person_ids).toEqual([ev.linkedPersonId]);
+    expect(ev.checks.projectOrgIdsPopulated).toBe(true);
+    expect(ev.checks.projectPersonIdsPopulated).toBe(true);
 
     // Task tree: 5 parents + 25 leaves = 30, exactly 3 GATE tasks
     expect(ev.tree.parentTasks).toBe(WHM_ONBOARDING_TEMPLATE.length);

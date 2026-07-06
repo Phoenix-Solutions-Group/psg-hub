@@ -63,6 +63,19 @@ function num(v: unknown): number | null {
 function str(v: unknown): string | null {
   return typeof v === "string" && v !== "" ? v : null;
 }
+/** Coerce a v2 relation field to a number[] (handles arrays of ids or {id}/{value} objects). */
+function numArray(v: unknown): number[] {
+  if (!Array.isArray(v)) return [];
+  const out: number[] = [];
+  for (const item of v) {
+    const n =
+      item !== null && typeof item === "object"
+        ? num(asRecord(item).id) ?? num(asRecord(item).value)
+        : num(item);
+    if (n != null) out.push(n);
+  }
+  return out;
+}
 
 export interface QaDeal {
   id: number;
@@ -78,6 +91,10 @@ export interface QaProject {
   board_id: number | null;
   phase_id: number | null;
   start_date: string | null;
+  // v2 relates orgs/persons as ARRAYS. Read them back so the smoke can prove the
+  // org_ids/person_ids link body actually landed on the created project (PSG-604).
+  org_ids: number[];
+  person_ids: number[];
 }
 export interface QaTask {
   id: number;
@@ -177,6 +194,8 @@ export function createQaRestClient(config: QaClientConfig = {}): QaRestClient {
       board_id: num(r.board_id),
       phase_id: num(r.phase_id),
       start_date: str(r.start_date),
+      org_ids: numArray(r.org_ids),
+      person_ids: numArray(r.person_ids),
     };
   }
   function toTask(t: unknown): QaTask {
@@ -287,7 +306,13 @@ export interface QaSmokeEvidence {
     board_id: number | null;
     phase_id: number | null;
     start_date: string | null;
+    // The org/person links read back off the created project (PSG-604 completeness).
+    org_ids: number[];
+    person_ids: number[];
   };
+  /** The deal's org/person ids we linked, so the array-body round-trip is auditable. */
+  linkedOrgId: number | null;
+  linkedPersonId: number | null;
   tree: {
     totalTasks: number;
     parentTasks: number;
@@ -444,7 +469,11 @@ export async function runQaSmoke(
         board_id: project.board_id,
         phase_id: project.phase_id,
         start_date: project.start_date,
+        org_ids: project.org_ids,
+        person_ids: project.person_ids,
       },
+      linkedOrgId: won.orgId,
+      linkedPersonId: won.personId,
       tree: {
         totalTasks: tasks.length,
         parentTasks: parents.length,
@@ -491,6 +520,12 @@ export async function runQaSmoke(
     c.d5SignOffDue = evidence.dueDateSpotChecks.d5SignOff.ok;
     c.idempotentNoSecondProject =
       again.skippedExisting && again.projectId === prov.projectId;
+    // PSG-604: the org/person link ARRAY body round-tripped — the created project reads
+    // back the exact org id + person id the won deal carried (populated, not empty).
+    c.projectOrgIdsPopulated =
+      won.orgId != null && project.org_ids.includes(won.orgId);
+    c.projectPersonIdsPopulated =
+      won.personId != null && project.person_ids.includes(won.personId);
     evidence.allChecksPass = Object.values(c).every(Boolean);
 
     return evidence;
