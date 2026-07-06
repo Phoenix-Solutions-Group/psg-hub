@@ -7,6 +7,16 @@ import {
   PipedriveProjectsError,
 } from "@/lib/pipedrive/projects";
 import { runQaSmoke } from "@/lib/pipedrive/qa-smoke";
+import { runRecurringQaSmoke } from "@/lib/pipedrive/recurring-qa-smoke";
+import {
+  activeRecurringAccounts,
+  firstOfCurrentMonthUTC,
+  resolveRecurringBoardConfig,
+  runRecurringCycle,
+} from "@/lib/pipedrive/recurring-accounts";
+import { loadRoleUserMap } from "@/lib/pipedrive/role-user-map";
+import { createServiceClient } from "@/lib/supabase/service";
+import type { MirrorSupabase } from "@/lib/pipedrive/mirror";
 
 // PSG-591 Move 1 go-live helper — agent-runnable Pipedrive onboarding setup.
 //
@@ -73,6 +83,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     boardId?: number | string;
     phaseId?: number | string;
     runTag?: string;
+    /** recurring-run: the org id of the single account to spawn a cycle-1 board for. */
+    orgId?: number | string;
   };
   try {
     body = await request.json();
@@ -108,6 +120,67 @@ export async function POST(request: Request): Promise<NextResponse> {
         runTag,
       });
       return NextResponse.json({ ok: true, evidence });
+    }
+
+    if (body.action === "recurring-qa-smoke") {
+      // PSG-607 — live write-path smoke for the WHM monthly recurring board. Board/phase
+      // come from the recurring env pair, defaulting to the onboarding board (PSG-606).
+      const config = resolveRecurringBoardConfig();
+      if (!config) {
+        return NextResponse.json(
+          { ok: false, reason: "board_not_configured" },
+          { status: 503 },
+        );
+      }
+      const runTag =
+        (typeof body.runTag === "string" && body.runTag.trim()) || `run-${Date.now()}`;
+      const evidence = await runRecurringQaSmoke({
+        boardId: config.boardId,
+        phaseId: config.phaseId,
+        companyDomain,
+        runTag,
+      });
+      return NextResponse.json({ ok: true, evidence });
+    }
+
+    if (body.action === "recurring-run") {
+      // PSG-607 — manual cycle-1 spawn for ONE account by org id. Reads the active-accounts
+      // set from the durable mirror, provisions just the matched account's monthly board.
+      const orgId = Number(body.orgId);
+      if (!Number.isFinite(orgId)) {
+        return NextResponse.json(
+          { ok: false, reason: "orgId_required" },
+          { status: 400 },
+        );
+      }
+      const config = resolveRecurringBoardConfig();
+      if (!config) {
+        return NextResponse.json(
+          { ok: false, reason: "board_not_configured" },
+          { status: 503 },
+        );
+      }
+      const db = createServiceClient() as unknown as MirrorSupabase;
+      const account = (await activeRecurringAccounts(db)).find((a) => a.orgId === orgId);
+      if (!account) {
+        return NextResponse.json(
+          { ok: false, reason: "account_not_found" },
+          { status: 404 },
+        );
+      }
+      const client = createProjectsClient({ companyDomain });
+      const result = await runRecurringCycle({
+        client,
+        accounts: [account],
+        cycleStart: firstOfCurrentMonthUTC(),
+        boardId: config.boardId,
+        phaseId: config.phaseId,
+        roleUserMap: loadRoleUserMap(),
+      });
+      return NextResponse.json(
+        { ok: result.errored === 0, result },
+        { status: result.errored > 0 ? 502 : 200 },
+      );
     }
 
     if (body.action === "discover") {
