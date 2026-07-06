@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   createProjectsClient,
   createWebhooksClient,
+  provisionOnboardingBoard,
   resolvePipedriveToken,
   PipedriveProjectsError,
 } from "@/lib/pipedrive/projects";
@@ -22,11 +23,24 @@ import {
 // Pipedrive webhook route's HTTP Basic check. This is deliberately NOT `requireSuperadmin`
 // so an agent can trigger it by curl. The route does exactly this one onboarding setup.
 //
+//   3. "verify-e2e" (PSG-602) → the last QA sign-off step, run entirely server-side:
+//      create a clearly-labelled throwaway deal in the sales pipeline, mark it Won, build
+//      the onboarding board through the REAL Projects-v2 write path, prove idempotency,
+//      read the project + task tree back for evidence, then delete the throwaway project
+//      and deal. This is the one path that needs Pipedrive WRITE — only the in-env token
+//      can do it, and QA (Tess) can neither read the token nor open a Pipedrive UI session.
+//      It deletes ONLY the ids it just created in the same request (never an id from the
+//      request body), so there is no new destructive surface an attacker could aim.
+//
 // Secret hygiene (security-critical): never return or log the Pipedrive token, the webhook
 // HTTP-Basic password, or any Pipedrive URL (they carry `?api_token=`). The Projects/
 // webhooks clients already strip URLs from errors; we additionally scrub any reason we
 // surface. runtime=nodejs is REQUIRED for node:crypto timingSafeEqual.
 export const runtime = "nodejs";
+// verify-e2e makes ~65 sequential Pipedrive calls (deal + 2× 30-task provision + reads +
+// cleanup); give it headroom beyond the default function timeout. (Ignored by the other
+// actions, which are a handful of calls each.)
+export const maxDuration = 60;
 
 /** Timing-safe bearer check against ONBOARDING_SETUP_SECRET. Unconfigured = locked. */
 function authOk(request: Request): boolean {
@@ -72,6 +86,120 @@ export async function POST(request: Request): Promise<NextResponse> {
   const companyDomain = process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null;
 
   try {
+    if (body.action === "verify-e2e") {
+      // Board/phase/pipeline come from the SAME env the live webhook uses, so we exercise
+      // the real production configuration. All three are required — 503 if any is unset.
+      const boardId = Number(process.env.PIPEDRIVE_ONBOARDING_BOARD_ID);
+      const phaseId = Number(process.env.PIPEDRIVE_ONBOARDING_PHASE_ID);
+      const pipelineId = Number(process.env.PIPEDRIVE_SALES_PIPELINE_ID);
+      if (
+        !Number.isFinite(boardId) ||
+        !Number.isFinite(phaseId) ||
+        !Number.isFinite(pipelineId)
+      ) {
+        return NextResponse.json(
+          { ok: false, reason: "verify_env_not_configured" },
+          { status: 503 },
+        );
+      }
+
+      // Day 0 = server today (UTC), matching the deal-won builder's date convention.
+      const wonDate = new Date().toISOString().slice(0, 10);
+      const client = createProjectsClient({ companyDomain });
+
+      // Create + win the throwaway deal FIRST, then track its id so cleanup only ever
+      // targets what THIS request created — never an id supplied by the caller.
+      const dealTitle = `ZZZ QA E2E ${wonDate} — delete me`;
+      const { id: dealId } = await client.createDeal({
+        title: dealTitle,
+        pipeline_id: pipelineId,
+      });
+
+      const deal = {
+        id: dealId,
+        title: dealTitle,
+        orgName: "QA E2E Test",
+        wonDate,
+        pipelineId,
+      };
+
+      const cleanup = { projectDeleted: false, dealDeleted: false };
+      let projectId = 0;
+      let evidence:
+        | {
+            project: {
+              id: number;
+              title: string;
+              board_id: number;
+              phase_id: number;
+              start_date: string;
+            };
+            counts: { phases: number; tasks: number; gates: number };
+            idempotent: boolean;
+            tasks: Array<{
+              title: string;
+              due_date: string | null;
+              parent_task_id: number | null;
+            }>;
+          }
+        | undefined;
+
+      try {
+        await client.updateDealStatus(dealId, "won");
+
+        // Build the board through the real write path, then prove idempotency: a 2nd
+        // provision of the SAME deal must be a no-op returning the same project.
+        const first = await provisionOnboardingBoard({ client, deal, boardId, phaseId });
+        projectId = first.projectId;
+        const second = await provisionOnboardingBoard({ client, deal, boardId, phaseId });
+        const idempotent =
+          second.skippedExisting === true && second.projectId === first.projectId;
+
+        // Read the built board back for QA evidence.
+        const project = await client.getProject(projectId);
+        const tasks = await client.listProjectTasks(projectId);
+        const leaf = tasks.filter((t) => t.parent_task_id != null);
+        const gates = tasks.filter((t) => t.title.includes("GATE")).length;
+
+        evidence = {
+          project: {
+            id: project.id,
+            title: project.title,
+            board_id: project.board_id,
+            phase_id: project.phase_id,
+            start_date: project.start_date,
+          },
+          counts: { phases: first.phaseCount, tasks: first.taskCount, gates },
+          idempotent,
+          tasks: leaf.map((t) => ({
+            title: t.title,
+            due_date: t.due_date,
+            parent_task_id: t.parent_task_id,
+          })),
+        };
+      } finally {
+        // ALWAYS runs — even if a read/assert above threw. Delete ONLY the ids this
+        // request created; a failed delete is reported via its flag, never re-thrown
+        // (so cleanup can't mask the real error, and a leaked artifact is visible).
+        if (projectId) {
+          try {
+            await client.deleteProject(projectId);
+            cleanup.projectDeleted = true;
+          } catch {
+            /* reported via cleanup.projectDeleted = false */
+          }
+        }
+        try {
+          await client.deleteDeal(dealId);
+          cleanup.dealDeleted = true;
+        } catch {
+          /* reported via cleanup.dealDeleted = false */
+        }
+      }
+
+      return NextResponse.json({ ok: true, ...evidence, cleanup });
+    }
+
     if (body.action === "discover") {
       const client = createProjectsClient({ companyDomain });
       const boards = await client.listBoards();

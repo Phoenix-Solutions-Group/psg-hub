@@ -140,6 +140,41 @@ export interface CreateTaskInput {
   description?: string;
 }
 
+/**
+ * A project as read back for QA evidence (v2 `GET /projects/{id}`). Used by the
+ * `verify-e2e` ops action (PSG-602) to prove the auto-built board matches the template.
+ */
+export interface ProjectDetail {
+  id: number;
+  title: string;
+  board_id: number;
+  phase_id: number;
+  start_date: string;
+  /** Deals linked to the project — proves the throwaway deal is the one that built it. */
+  deal_ids: number[];
+}
+
+/** A task as read back for QA evidence (v2 `GET /tasks?project_id=`). */
+export interface ProjectTaskDetail {
+  id: number;
+  title: string;
+  due_date: string | null;
+  /** null for the 5 D-phase parent rows; set for the 25 leaf tasks. */
+  parent_task_id: number | null;
+  project_id: number;
+}
+
+/**
+ * Input for a throwaway deal created only by the server-side `verify-e2e` action.
+ * (org/person are optional — verify-e2e creates a bare deal in the sales pipeline.)
+ */
+export interface CreateDealInput {
+  title: string;
+  pipeline_id: number;
+  org_id?: number;
+  person_id?: number;
+}
+
 export interface PipedriveProjectsClient {
   listBoards(): Promise<ProjectBoard[]>;
   listPhases(boardId: number): Promise<ProjectPhase[]>;
@@ -149,6 +184,22 @@ export interface PipedriveProjectsClient {
   createTask(input: CreateTaskInput): Promise<{ id: number }>;
   /** Find an existing project whose title matches (idempotency guard). */
   findProjectByTitle(title: string): Promise<{ id: number } | null>;
+  // ── verify-e2e (PSG-602) read + delete + deal verbs ──────────────────────────────
+  // These power the server-side live write-path proof QA can't run by hand (the write
+  // token is a Vercel SENSITIVE var no agent/human can read). The route's `verify-e2e`
+  // action ONLY ever deletes ids it just created in the same request — see the route.
+  /** Read one project (QA evidence). */
+  getProject(id: number): Promise<ProjectDetail>;
+  /** Every task in a project, following v2 cursor pagination to exhaustion. */
+  listProjectTasks(projectId: number): Promise<ProjectTaskDetail[]>;
+  /** Delete a project (cleanup of the verify-e2e throwaway board). */
+  deleteProject(id: number): Promise<void>;
+  /** Create a deal (the verify-e2e throwaway deal). */
+  createDeal(input: CreateDealInput): Promise<{ id: number }>;
+  /** Move a deal to a terminal status — verify-e2e wins the throwaway deal. */
+  updateDealStatus(id: number, status: "won"): Promise<void>;
+  /** Delete a deal (cleanup of the verify-e2e throwaway deal). */
+  deleteDeal(id: number): Promise<void>;
 }
 
 /**
@@ -186,7 +237,7 @@ export function createProjectsClient(
   }
 
   async function call<T>(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "PATCH" | "DELETE",
     version: ApiVersion,
     path: string,
     params: Record<string, string> = {},
@@ -213,6 +264,48 @@ export function createProjectsClient(
       );
     }
     return payload.data as T;
+  }
+
+  /**
+   * GET a v2 list endpoint, following cursor pagination (`additional_data.next_cursor`)
+   * to exhaustion so a project with >1 page of tasks reads back complete. Bounded by a
+   * hard page cap so a misbehaving cursor can never spin forever. Same URL/token hygiene
+   * as `call` (the URL — which carries the token — is never surfaced in an error).
+   */
+  async function callPaged<T>(
+    version: ApiVersion,
+    path: string,
+    params: Record<string, string> = {},
+  ): Promise<T[]> {
+    const out: T[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 100; page += 1) {
+      const q = { ...params, limit: "100", ...(cursor ? { cursor } : {}) };
+      const res = await doFetch(url(version, path, q), {
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) {
+        throw new PipedriveProjectsError(
+          `Pipedrive GET /api/${version}/${path} returned HTTP ${res.status}`,
+          res.status,
+        );
+      }
+      const payload = (await res.json()) as {
+        success?: boolean;
+        data?: unknown;
+        additional_data?: { next_cursor?: string | null };
+      };
+      if (payload.success === false) {
+        throw new PipedriveProjectsError(
+          `Pipedrive GET /api/${version}/${path} returned success=false`,
+        );
+      }
+      out.push(...((payload.data as T[]) ?? []));
+      const next = payload.additional_data?.next_cursor;
+      if (!next) break;
+      cursor = next;
+    }
+    return out;
   }
 
   return {
@@ -262,6 +355,61 @@ export function createProjectsClient(
       );
       const hit = (data ?? []).find((p) => (p.title ?? "").trim() === title.trim());
       return hit ? { id: Number(hit.id) } : null;
+    },
+    // ── verify-e2e (PSG-602) — read + delete + deal verbs ────────────────────────────
+    async getProject(id) {
+      const p = await call<{
+        id: number;
+        title?: string;
+        board_id?: number;
+        phase_id?: number;
+        start_date?: string;
+        deal_ids?: number[];
+      }>("GET", "v2", `projects/${id}`);
+      return {
+        id: Number(p.id),
+        title: String(p.title ?? ""),
+        board_id: Number(p.board_id ?? 0),
+        phase_id: Number(p.phase_id ?? 0),
+        start_date: String(p.start_date ?? ""),
+        deal_ids: (p.deal_ids ?? []).map(Number),
+      };
+    },
+    async listProjectTasks(projectId) {
+      const rows = await callPaged<{
+        id: number;
+        title?: string;
+        due_date?: string | null;
+        parent_task_id?: number | null;
+        project_id?: number;
+      }>("v2", "tasks", { project_id: String(projectId) });
+      return rows.map((t) => ({
+        id: Number(t.id),
+        title: String(t.title ?? ""),
+        due_date: t.due_date ?? null,
+        parent_task_id: t.parent_task_id != null ? Number(t.parent_task_id) : null,
+        project_id: Number(t.project_id ?? projectId),
+      }));
+    },
+    async deleteProject(id) {
+      await call("DELETE", "v2", `projects/${id}`);
+    },
+    async createDeal(input) {
+      const body: Record<string, unknown> = {
+        title: input.title,
+        pipeline_id: input.pipeline_id,
+      };
+      if (input.org_id != null) body.org_id = input.org_id;
+      if (input.person_id != null) body.person_id = input.person_id;
+      const deal = await call<{ id: number }>("POST", "v2", "deals", {}, body);
+      return { id: Number(deal.id) };
+    },
+    async updateDealStatus(id, status) {
+      await call("PATCH", "v2", `deals/${id}`, {}, { status });
+    },
+    async deleteDeal(id) {
+      // v2 supports DELETE /deals/{id} (same version as create/update above).
+      await call("DELETE", "v2", `deals/${id}`);
     },
   };
 }

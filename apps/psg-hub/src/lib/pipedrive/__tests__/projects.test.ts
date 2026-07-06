@@ -36,6 +36,20 @@ function fakeClient(overrides: Partial<PipedriveProjectsClient> = {}) {
     createProject,
     createTask,
     findProjectByTitle,
+    // verify-e2e (PSG-602) verbs — unused by provisionOnboardingBoard, stubbed for the type.
+    getProject: vi.fn(async () => ({
+      id: 900,
+      title: "",
+      board_id: 0,
+      phase_id: 0,
+      start_date: "",
+      deal_ids: [],
+    })),
+    listProjectTasks: vi.fn(async () => []),
+    deleteProject: vi.fn(async () => {}),
+    createDeal: vi.fn(async () => ({ id: 555 })),
+    updateDealStatus: vi.fn(async () => {}),
+    deleteDeal: vi.fn(async () => {}),
     ...overrides,
   };
   return { client, createProject, createTask, findProjectByTitle };
@@ -223,6 +237,143 @@ describe("createProjectsClient — transport (PSG-588: /api/ base path + v1/v2 p
     expect(() => createProjectsClient({ apiKey: "", fetchImpl: fetch })).toThrow(
       /Missing Pipedrive token/,
     );
+  });
+});
+
+describe("createProjectsClient — verify-e2e verbs (PSG-602: read + delete + deal)", () => {
+  const TOKEN = "tok_secret_value";
+  function client(fetchImpl: typeof fetch) {
+    return createProjectsClient({ apiKey: TOKEN, companyDomain: "psg", fetchImpl });
+  }
+  /** A fetch stub that records URL/method/body and returns `{success,data,additional_data}`. */
+  function recordingFetch(data: unknown = {}, additional?: { next_cursor?: string | null }) {
+    const calls: Array<{ url: string; method: string; body?: string }> = [];
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        method: String(init?.method ?? "GET"),
+        body: typeof init?.body === "string" ? init.body : undefined,
+      });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data, additional_data: additional }),
+      } as Response;
+    }) as unknown as typeof fetch;
+    return { fetchImpl, calls };
+  }
+
+  it("getProject GETs /api/v2/projects/{id} and maps deal_ids", async () => {
+    const { fetchImpl, calls } = recordingFetch({
+      id: 900,
+      title: "Onboarding — QA E2E Test (deal 42)",
+      board_id: 3,
+      phase_id: 9,
+      start_date: "2026-07-06",
+      deal_ids: [42],
+    });
+    const p = await client(fetchImpl).getProject(900);
+    const u = new URL(calls[0].url);
+    expect(calls[0].method).toBe("GET");
+    expect(u.pathname).toBe("/api/v2/projects/900");
+    expect(u.searchParams.get("api_token")).toBe(TOKEN);
+    expect(p).toEqual({
+      id: 900,
+      title: "Onboarding — QA E2E Test (deal 42)",
+      board_id: 3,
+      phase_id: 9,
+      start_date: "2026-07-06",
+      deal_ids: [42],
+    });
+  });
+
+  it("listProjectTasks GETs /api/v2/tasks?project_id= and follows cursor pagination", async () => {
+    const calls: Array<{ url: string }> = [];
+    let page = 0;
+    const fetchImpl = (async (input: string | URL) => {
+      calls.push({ url: String(input) });
+      const body =
+        page === 0
+          ? {
+              success: true,
+              data: [{ id: 1, title: "phase", parent_task_id: null, project_id: 900 }],
+              additional_data: { next_cursor: "CURSOR_2" },
+            }
+          : {
+              success: true,
+              data: [
+                { id: 2, title: "leaf", due_date: "2026-07-07", parent_task_id: 1, project_id: 900 },
+              ],
+              additional_data: { next_cursor: null },
+            };
+      page += 1;
+      return { ok: true, status: 200, json: async () => body } as Response;
+    }) as unknown as typeof fetch;
+
+    const tasks = await client(fetchImpl).listProjectTasks(900);
+    expect(calls).toHaveLength(2); // followed the cursor to a 2nd page
+    expect(new URL(calls[0].url).pathname).toBe("/api/v2/tasks");
+    expect(new URL(calls[0].url).searchParams.get("project_id")).toBe("900");
+    expect(new URL(calls[1].url).searchParams.get("cursor")).toBe("CURSOR_2");
+    expect(tasks).toEqual([
+      { id: 1, title: "phase", due_date: null, parent_task_id: null, project_id: 900 },
+      { id: 2, title: "leaf", due_date: "2026-07-07", parent_task_id: 1, project_id: 900 },
+    ]);
+  });
+
+  it("deleteProject DELETEs /api/v2/projects/{id}", async () => {
+    const { fetchImpl, calls } = recordingFetch({ id: 900 });
+    await client(fetchImpl).deleteProject(900);
+    expect(calls[0].method).toBe("DELETE");
+    expect(new URL(calls[0].url).pathname).toBe("/api/v2/projects/900");
+  });
+
+  it("createDeal POSTs /api/v2/deals with title+pipeline_id (and optional org/person)", async () => {
+    const { fetchImpl, calls } = recordingFetch({ id: 555 });
+    const res = await client(fetchImpl).createDeal({
+      title: "ZZZ QA E2E 2026-07-06 — delete me",
+      pipeline_id: 8,
+      org_id: 77,
+    });
+    expect(res).toEqual({ id: 555 });
+    expect(calls[0].method).toBe("POST");
+    expect(new URL(calls[0].url).pathname).toBe("/api/v2/deals");
+    const sent = JSON.parse(calls[0].body ?? "{}");
+    expect(sent).toEqual({
+      title: "ZZZ QA E2E 2026-07-06 — delete me",
+      pipeline_id: 8,
+      org_id: 77,
+    });
+    expect(sent).not.toHaveProperty("person_id"); // omitted when absent
+  });
+
+  it("updateDealStatus PATCHes /api/v2/deals/{id} with {status:'won'}", async () => {
+    const { fetchImpl, calls } = recordingFetch({ id: 555 });
+    await client(fetchImpl).updateDealStatus(555, "won");
+    expect(calls[0].method).toBe("PATCH");
+    expect(new URL(calls[0].url).pathname).toBe("/api/v2/deals/555");
+    expect(JSON.parse(calls[0].body ?? "{}")).toEqual({ status: "won" });
+  });
+
+  it("deleteDeal DELETEs /api/v2/deals/{id}", async () => {
+    const { fetchImpl, calls } = recordingFetch({ id: 555 });
+    await client(fetchImpl).deleteDeal(555);
+    expect(calls[0].method).toBe("DELETE");
+    expect(new URL(calls[0].url).pathname).toBe("/api/v2/deals/555");
+  });
+
+  it("never leaks the token or URL in errors on non-2xx (deal verbs)", async () => {
+    const fetchImpl = (async () =>
+      ({ ok: false, status: 403, json: async () => ({}) }) as Response) as unknown as typeof fetch;
+    let err: PipedriveProjectsError | undefined;
+    try {
+      await client(fetchImpl).createDeal({ title: "x", pipeline_id: 8 });
+    } catch (e) {
+      err = e as PipedriveProjectsError;
+    }
+    expect(err).toBeInstanceOf(PipedriveProjectsError);
+    expect(err?.status).toBe(403);
+    expect(err?.message).not.toContain(TOKEN);
   });
 });
 
