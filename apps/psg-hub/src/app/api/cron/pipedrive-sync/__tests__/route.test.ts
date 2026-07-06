@@ -1,0 +1,76 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+const syncMock = vi.fn();
+vi.mock("@/lib/pipedrive/sync", () => ({
+  syncPipedriveDeals: (...args: unknown[]) => syncMock(...args),
+}));
+vi.mock("@/lib/pipedrive/client", () => ({
+  createPipedriveClient: vi.fn(() => ({ __client: true })),
+}));
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: vi.fn(() => ({ __service: true })),
+}));
+
+import { GET, POST } from "../route";
+
+function req(auth?: string): Request {
+  return new Request("http://localhost/api/cron/pipedrive-sync", {
+    headers: auth ? { authorization: auth } : {},
+  });
+}
+
+beforeEach(() => {
+  syncMock.mockReset();
+  vi.stubEnv("CRON_SECRET", "test-secret");
+  vi.stubEnv("PIPEDRIVE_API_TOKEN", "tok");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe("cron/pipedrive-sync gate", () => {
+  it("401 without Authorization — sync never called", async () => {
+    const res = await GET(req());
+    expect(res.status).toBe(401);
+    expect(syncMock).not.toHaveBeenCalled();
+  });
+
+  it("401 with the wrong secret", async () => {
+    const res = await POST(req("Bearer wrong"));
+    expect(res.status).toBe(401);
+    expect(syncMock).not.toHaveBeenCalled();
+  });
+
+  it("401 when CRON_SECRET is unset (unconfigured = locked)", async () => {
+    vi.stubEnv("CRON_SECRET", "");
+    const res = await GET(req("Bearer anything"));
+    expect(res.status).toBe(401);
+    expect(syncMock).not.toHaveBeenCalled();
+  });
+
+  it("503 pipedrive_not_configured when the token is missing — sync never called", async () => {
+    vi.stubEnv("PIPEDRIVE_API_TOKEN", "");
+    const res = await GET(req("Bearer test-secret"));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "pipedrive_not_configured" });
+    expect(syncMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("cron/pipedrive-sync run", () => {
+  it("200 with the result on a successful sync", async () => {
+    syncMock.mockResolvedValue({ ok: true, openDeals: 12, totalDeals: 15 });
+    const res = await POST(req("Bearer test-secret"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, openDeals: 12, totalDeals: 15 });
+    expect(syncMock).toHaveBeenCalledWith({ client: { __client: true }, service: { __service: true } });
+  });
+
+  it("502 when the sync captured a failure (so cron alerts)", async () => {
+    syncMock.mockResolvedValue({ ok: false, openDeals: 0, totalDeals: 0, error: "HTTP 500" });
+    const res = await GET(req("Bearer test-secret"));
+    expect(res.status).toBe(502);
+    expect((await res.json()).ok).toBe(false);
+  });
+});
