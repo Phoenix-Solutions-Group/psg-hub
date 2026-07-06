@@ -70,6 +70,10 @@
     {
       "path": "/api/cron/pipedrive-sync",
       "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/cron/pipedrive-recurring",
+      "schedule": "0 6 1 * *"
     }
   ]
 }
