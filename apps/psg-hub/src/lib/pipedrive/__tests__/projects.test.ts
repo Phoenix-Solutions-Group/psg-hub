@@ -5,6 +5,7 @@ import {
   isDealWonTransition,
   dealPipelineId,
   isDealPipelineInScope,
+  resolvePipedriveToken,
   type PipedriveProjectsClient,
   type CreateProjectInput,
   type CreateTaskInput,
@@ -184,5 +185,33 @@ describe("isDealPipelineInScope", () => {
   it("rejects won deals from other pipelines", () => {
     expect(isDealPipelineInScope({ pipeline_id: 3 }, 8)).toBe(false);
     expect(isDealPipelineInScope({}, 8)).toBe(false);
+  });
+});
+
+describe("resolvePipedriveToken", () => {
+  it("reads the canonical PIPEDRIVE_API_TOKEN (what Vercel actually holds)", () => {
+    expect(resolvePipedriveToken({ PIPEDRIVE_API_TOKEN: "tok_canonical" })).toBe(
+      "tok_canonical",
+    );
+  });
+  it("accepts PIPEDRIVE_API_KEY as an alias", () => {
+    expect(resolvePipedriveToken({ PIPEDRIVE_API_KEY: "tok_alias" })).toBe("tok_alias");
+  });
+  it("prefers PIPEDRIVE_API_TOKEN over the aliases", () => {
+    expect(
+      resolvePipedriveToken({
+        PIPEDRIVE_API_TOKEN: "tok_canonical",
+        PIPEDRIVE_TOKEN: "tok_two",
+        PIPEDRIVE_API_KEY: "tok_alias",
+      }),
+    ).toBe("tok_canonical");
+  });
+  it("trims whitespace and skips empty values", () => {
+    expect(
+      resolvePipedriveToken({ PIPEDRIVE_API_TOKEN: "   ", PIPEDRIVE_API_KEY: "  tok  " }),
+    ).toBe("tok");
+  });
+  it("returns empty string when no token env is set", () => {
+    expect(resolvePipedriveToken({})).toBe("");
   });
 });

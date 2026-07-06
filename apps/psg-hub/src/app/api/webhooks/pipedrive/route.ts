@@ -6,6 +6,7 @@ import {
   isDealWonTransition,
   isDealPipelineInScope,
   dealPipelineId,
+  resolvePipedriveToken,
   type WonDeal,
 } from "@/lib/pipedrive/projects";
 import { loadRoleUserMap } from "@/lib/pipedrive/role-user-map";
@@ -86,7 +87,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!basicAuthOk(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!process.env.PIPEDRIVE_API_KEY) {
+  if (!resolvePipedriveToken()) {
     return NextResponse.json({ error: "pipedrive_not_configured" }, { status: 503 });
   }
   const boardId = Number(process.env.PIPEDRIVE_ONBOARDING_BOARD_ID);

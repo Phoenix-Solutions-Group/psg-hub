@@ -17,7 +17,7 @@ browser UI and no browser-automation tool is involved anywhere in this path.
 
 | Var | Purpose |
 |---|---|
-| `PIPEDRIVE_API_KEY` | Write-capable personal API token (same admin token the intake path uses). |
+| `PIPEDRIVE_API_TOKEN` | Write-capable personal API token (same admin token the intake path uses). Canonical name — already set in Vercel. `PIPEDRIVE_API_KEY` / `PIPEDRIVE_TOKEN` are accepted aliases via `resolvePipedriveToken()`, so the secret lives under ONE name only (no duplication). |
 | `PIPEDRIVE_COMPANY_DOMAIN` | e.g. `psg` (for `https://psg.pipedrive.com`). Optional; falls back to `api.pipedrive.com`. |
 | `PIPEDRIVE_ONBOARDING_BOARD_ID` | The Projects board new onboarding projects are created on. |
 | `PIPEDRIVE_ONBOARDING_PHASE_ID` | The board phase (kanban column) new projects land in. |

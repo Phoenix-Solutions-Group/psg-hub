@@ -5,9 +5,10 @@
 // Noelle's confirmed template — is created for that client, entirely via the REST API.
 // No Pipedrive browser UI is involved: this is what unblocks the twice-stalled Move 1.
 //
-// Auth: the write-capable personal API token in `PIPEDRIVE_API_KEY` (same admin token
-// the inbound-lead intake path uses). v1 endpoints carry the token in the query string;
-// it is NEVER logged (errors never include the URL).
+// Auth: the write-capable personal API token — resolved via `resolvePipedriveToken()`
+// from `PIPEDRIVE_API_TOKEN` (canonical, same admin token the inbound-lead intake path
+// uses) with `PIPEDRIVE_API_KEY` accepted as an alias. v1 endpoints carry the token in
+// the query string; it is NEVER logged (errors never include the URL).
 //
 // Pipedrive data-model note (important, and the one non-obvious mapping):
 //   Pipedrive Projects has Boards → (kanban) Phases → Projects → Tasks. A *project*
@@ -35,6 +36,35 @@ export class PipedriveProjectsError extends Error {
   }
 }
 
+/**
+ * Env var names that may hold the write-capable Pipedrive token, tried in order.
+ * Kept in sync with `crm/pipedrive/config.ts` so this Move 1 path resolves the token
+ * the SAME way as the rest of the codebase: the canonical name the operator actually
+ * configured in Vercel is `PIPEDRIVE_API_TOKEN`; `PIPEDRIVE_API_KEY` is an accepted
+ * alias. Listing both avoids storing the same secret under two names in Vercel.
+ * (Duplicated here on purpose — this module stays self-contained so it is
+ * independently mergeable/deployable, per the file header.)
+ */
+export const PIPEDRIVE_TOKEN_ENV_CANDIDATES = [
+  "PIPEDRIVE_API_TOKEN",
+  "PIPEDRIVE_TOKEN",
+  "PIPEDRIVE_API_KEY",
+] as const;
+
+/**
+ * First non-empty (trimmed) Pipedrive token value among the accepted env names, or
+ * `""` when none is set. Never logs or echoes the value.
+ */
+export function resolvePipedriveToken(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  for (const name of PIPEDRIVE_TOKEN_ENV_CANDIDATES) {
+    const raw = env[name];
+    if (typeof raw === "string" && raw.trim() !== "") return raw.trim();
+  }
+  return "";
+}
+
 /** Base REST URL for a company domain (or the shared API host when unknown). */
 export function pipedriveBaseUrl(companyDomain?: string | null): string {
   const domain = (companyDomain ?? "").trim();
@@ -46,7 +76,7 @@ export function pipedriveBaseUrl(companyDomain?: string | null): string {
 // ── low-level client ────────────────────────────────────────────────────────────────
 
 export interface ProjectsClientConfig {
-  /** Admin write token. Defaults to `process.env.PIPEDRIVE_API_KEY`. */
+  /** Admin write token. Defaults to `resolvePipedriveToken()` (PIPEDRIVE_API_TOKEN, alias PIPEDRIVE_API_KEY). */
   apiKey?: string;
   companyDomain?: string | null;
   /** Injectable fetch (defaults to global `fetch`) — the seam unit tests mock. */
@@ -110,10 +140,12 @@ export interface PipedriveProjectsClient {
 export function createProjectsClient(
   config: ProjectsClientConfig = {},
 ): PipedriveProjectsClient {
-  const apiKey = config.apiKey ?? process.env.PIPEDRIVE_API_KEY ?? "";
+  const apiKey = config.apiKey ?? resolvePipedriveToken();
   if (!apiKey) {
     // Fail closed; message carries no token material.
-    throw new PipedriveProjectsError("Missing PIPEDRIVE_API_KEY");
+    throw new PipedriveProjectsError(
+      `Missing Pipedrive token (set one of: ${PIPEDRIVE_TOKEN_ENV_CANDIDATES.join(", ")})`,
+    );
   }
   const base = pipedriveBaseUrl(config.companyDomain);
   const doFetch = config.fetchImpl ?? fetch;
