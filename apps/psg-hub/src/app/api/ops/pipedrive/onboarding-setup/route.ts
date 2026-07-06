@@ -6,6 +6,7 @@ import {
   resolvePipedriveToken,
   PipedriveProjectsError,
 } from "@/lib/pipedrive/projects";
+import { runQaSmoke } from "@/lib/pipedrive/qa-smoke";
 
 // PSG-591 Move 1 go-live helper — agent-runnable Pipedrive onboarding setup.
 //
@@ -26,7 +27,16 @@ import {
 // HTTP-Basic password, or any Pipedrive URL (they carry `?api_token=`). The Projects/
 // webhooks clients already strip URLs from errors; we additionally scrub any reason we
 // surface. runtime=nodejs is REQUIRED for node:crypto timingSafeEqual.
+//
+//   3. "qa-smoke" (PSG-597) → run the full live write-path E2E: create a clearly-labelled
+//      test deal in the sales pipeline, win it, build the onboarding board through the REAL
+//      Projects-v2 write path, verify the project + task tree, prove idempotency, then
+//      delete the test project + deal. Returns structured evidence for QA sign-off. This is
+//      the one code path that needs Pipedrive WRITE, which only the in-env token can do.
 export const runtime = "nodejs";
+// The qa-smoke path makes ~35 sequential Pipedrive calls plus a bounded cleanup re-scan;
+// give it headroom beyond the default function timeout. (Ignored by discover/register.)
+export const maxDuration = 60;
 
 /** Timing-safe bearer check against ONBOARDING_SETUP_SECRET. Unconfigured = locked. */
 function authOk(request: Request): boolean {
@@ -62,6 +72,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     action?: string;
     boardId?: number | string;
     phaseId?: number | string;
+    runTag?: string;
   };
   try {
     body = await request.json();
@@ -72,6 +83,33 @@ export async function POST(request: Request): Promise<NextResponse> {
   const companyDomain = process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null;
 
   try {
+    if (body.action === "qa-smoke") {
+      // Board/phase to build the test board into come from the SAME env the live
+      // webhook uses, so we exercise the real production configuration. The sales
+      // pipeline defaults to 8 (Nick's pointer) when the scoping env is unset.
+      const boardId = Number(process.env.PIPEDRIVE_ONBOARDING_BOARD_ID);
+      const phaseId = Number(process.env.PIPEDRIVE_ONBOARDING_PHASE_ID);
+      if (!Number.isFinite(boardId) || !Number.isFinite(phaseId)) {
+        return NextResponse.json(
+          { ok: false, reason: "board_not_configured" },
+          { status: 503 },
+        );
+      }
+      const salesPipelineId = process.env.PIPEDRIVE_SALES_PIPELINE_ID
+        ? Number(process.env.PIPEDRIVE_SALES_PIPELINE_ID)
+        : 8;
+      const runTag =
+        (typeof body.runTag === "string" && body.runTag.trim()) || `run-${Date.now()}`;
+      const evidence = await runQaSmoke({
+        boardId,
+        phaseId,
+        salesPipelineId,
+        companyDomain,
+        runTag,
+      });
+      return NextResponse.json({ ok: true, evidence });
+    }
+
     if (body.action === "discover") {
       const client = createProjectsClient({ companyDomain });
       const boards = await client.listBoards();
