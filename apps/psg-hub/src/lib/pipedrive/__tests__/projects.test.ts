@@ -3,6 +3,8 @@ import {
   provisionOnboardingBoard,
   onboardingProjectTitle,
   isDealWonTransition,
+  dealPipelineId,
+  isDealPipelineInScope,
   type PipedriveProjectsClient,
   type CreateProjectInput,
   type CreateTaskInput,
@@ -27,6 +29,7 @@ function fakeClient(overrides: Partial<PipedriveProjectsClient> = {}) {
   const client: PipedriveProjectsClient = {
     listBoards: vi.fn(async () => []),
     listPhases: vi.fn(async () => []),
+    listUsers: vi.fn(async () => []),
     createProject,
     createTask,
     findProjectByTitle,
@@ -95,10 +98,12 @@ describe("provisionOnboardingBoard", () => {
       phaseId: 9,
       roleUserMap: { AS: 501, Analytics: 502 },
     });
-    const asTask = createTask.mock.calls
-      .map((c) => c[0])
-      .find((t) => t.title.startsWith("Send welcome email"));
+    const calls = createTask.mock.calls.map((c) => c[0]);
+    const asTask = calls.find((t) => t.title.startsWith("Send welcome email"));
     expect(asTask?.assignee_id).toBe(501);
+    // Unmapped roles (Ads/Web/CRO here) must stay UNASSIGNED — no hard failure.
+    const adsTask = calls.find((t) => t.title.startsWith("D2a Ads account audit"));
+    expect(adsTask?.assignee_id).toBeUndefined();
   });
 
   it("is idempotent: an existing project short-circuits (no double create)", async () => {
@@ -149,5 +154,35 @@ describe("isDealWonTransition", () => {
     expect(isDealWonTransition({ current: { status: "lost" }, previous: null })).toBe(
       false,
     );
+  });
+});
+
+describe("dealPipelineId", () => {
+  it("reads a bare numeric pipeline_id", () => {
+    expect(dealPipelineId({ pipeline_id: 8 })).toBe(8);
+    expect(dealPipelineId({ pipeline_id: "8" })).toBe(8);
+  });
+  it("reads a nested { value } pipeline_id", () => {
+    expect(dealPipelineId({ pipeline_id: { value: 8, name: "Sales" } })).toBe(8);
+  });
+  it("returns null when absent or unparseable", () => {
+    expect(dealPipelineId({})).toBeNull();
+    expect(dealPipelineId(null)).toBeNull();
+    expect(dealPipelineId({ pipeline_id: "n/a" })).toBeNull();
+  });
+});
+
+describe("isDealPipelineInScope", () => {
+  it("passes every deal when no pipeline is configured (scoping off)", () => {
+    expect(isDealPipelineInScope({ pipeline_id: 3 }, null)).toBe(true);
+    expect(isDealPipelineInScope({ pipeline_id: 8 }, undefined)).toBe(true);
+  });
+  it("passes only deals won in the configured sales pipeline", () => {
+    expect(isDealPipelineInScope({ pipeline_id: 8 }, 8)).toBe(true);
+    expect(isDealPipelineInScope({ pipeline_id: { value: 8 } }, 8)).toBe(true);
+  });
+  it("rejects won deals from other pipelines", () => {
+    expect(isDealPipelineInScope({ pipeline_id: 3 }, 8)).toBe(false);
+    expect(isDealPipelineInScope({}, 8)).toBe(false);
   });
 });

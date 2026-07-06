@@ -62,6 +62,14 @@ export interface ProjectPhase {
   name: string;
   board_id: number;
 }
+/** A Pipedrive account user — the "team record" a role→user map is sourced from. */
+export interface PipedriveUser {
+  id: number;
+  name: string;
+  email: string;
+  /** Whether the user is active (deactivated users should not be assigned work). */
+  active: boolean;
+}
 export interface CreateProjectInput {
   title: string;
   board_id: number;
@@ -86,6 +94,8 @@ export interface CreateTaskInput {
 export interface PipedriveProjectsClient {
   listBoards(): Promise<ProjectBoard[]>;
   listPhases(boardId: number): Promise<ProjectPhase[]>;
+  /** List account users so a role owner can be matched to a Pipedrive user id. */
+  listUsers(): Promise<PipedriveUser[]>;
   createProject(input: CreateProjectInput): Promise<{ id: number }>;
   createTask(input: CreateTaskInput): Promise<{ id: number }>;
   /** Find an existing project whose title matches (idempotency guard). */
@@ -158,6 +168,17 @@ export function createProjectsClient(
         board_id: Number(p.board_id),
       }));
     },
+    async listUsers() {
+      const data = await call<
+        Array<{ id: number; name?: string; email?: string; active_flag?: boolean }>
+      >("GET", "users");
+      return (data ?? []).map((u) => ({
+        id: Number(u.id),
+        name: String(u.name ?? ""),
+        email: String(u.email ?? ""),
+        active: u.active_flag !== false,
+      }));
+    },
     async createProject(input) {
       const proj = await call<{ id: number }>("POST", "projects", {}, {
         ...input,
@@ -189,6 +210,8 @@ export interface WonDeal {
   orgName?: string | null;
   orgId?: number | null;
   personId?: number | null;
+  /** Pipeline the deal was won in; used to scope which won deals build a board. */
+  pipelineId?: number | null;
   /** Day-0 date (deal-won date), `YYYY-MM-DD`. */
   wonDate: string;
 }
@@ -309,4 +332,37 @@ export function isDealWonTransition(payload: {
   const current = payload.current?.status;
   const previous = payload.previous?.status;
   return current === "won" && previous !== "won";
+}
+
+/**
+ * Extract the deal's pipeline id from a webhook `current` object. Pipedrive relates
+ * the pipeline as either a bare id or a nested `{ value, name }` object.
+ */
+export function dealPipelineId(
+  current: Record<string, unknown> | null | undefined,
+): number | null {
+  if (!current) return null;
+  const v = current.pipeline_id;
+  if (v == null) return null;
+  if (typeof v === "object") {
+    const n = Number((v as Record<string, unknown>).value);
+    return Number.isFinite(n) ? n : null;
+  }
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Scope which won deals build an onboarding board to a single sales pipeline.
+ * PSG runs more than one Pipedrive pipeline; only deals won in the sales pipeline
+ * (pipeline 8 — the one Nick pointed us at) should spin up a delivery board. Won
+ * deals in other pipelines are out of scope. When `allowedPipelineId` is null (env
+ * unset), scoping is OFF and every won deal passes — a deliberately safe default.
+ */
+export function isDealPipelineInScope(
+  current: Record<string, unknown> | null | undefined,
+  allowedPipelineId: number | null | undefined,
+): boolean {
+  if (allowedPipelineId == null || !Number.isFinite(allowedPipelineId)) return true;
+  return dealPipelineId(current) === allowedPipelineId;
 }

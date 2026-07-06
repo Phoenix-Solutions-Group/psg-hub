@@ -21,6 +21,7 @@ browser UI and no browser-automation tool is involved anywhere in this path.
 | `PIPEDRIVE_COMPANY_DOMAIN` | e.g. `psg` (for `https://psg.pipedrive.com`). Optional; falls back to `api.pipedrive.com`. |
 | `PIPEDRIVE_ONBOARDING_BOARD_ID` | The Projects board new onboarding projects are created on. |
 | `PIPEDRIVE_ONBOARDING_PHASE_ID` | The board phase (kanban column) new projects land in. |
+| `PIPEDRIVE_SALES_PIPELINE_ID` | Sales pipeline whose won deals build a board — set to **`8`** (`https://psg.pipedrive.com/pipeline/8`, the pipeline Nick confirmed). Won deals in other pipelines are ignored. Leave unset to accept won deals from **every** pipeline. |
 | `PIPEDRIVE_WEBHOOK_USER` / `PIPEDRIVE_WEBHOOK_PASS` | HTTP Basic auth pair the webhook is registered with; the route verifies it timing-safe. |
 
 ## One-time setup — all via `curl`, no UI

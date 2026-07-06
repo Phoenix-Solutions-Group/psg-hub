@@ -4,8 +4,11 @@ import {
   createProjectsClient,
   provisionOnboardingBoard,
   isDealWonTransition,
+  isDealPipelineInScope,
+  dealPipelineId,
   type WonDeal,
 } from "@/lib/pipedrive/projects";
+import { loadRoleUserMap } from "@/lib/pipedrive/role-user-map";
 
 // PSG-584 / PSG-576 Move 1 — Pipedrive deal-won webhook → auto-create delivery board.
 //
@@ -73,6 +76,7 @@ function toWonDeal(current: Record<string, unknown>): WonDeal | null {
       relName(current.org_id),
     orgId: relId(current.org_id),
     personId: relId(current.person_id),
+    pipelineId: relId(current.pipeline_id),
     // Day 0 = won date; fall back to today (UTC) only if Pipedrive omits both stamps.
     wonDate: (wonTime ?? new Date().toISOString()).slice(0, 10),
   };
@@ -110,6 +114,20 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: true, skipped: "not_won_transition" });
   }
 
+  // Scope to the sales pipeline (pipeline 8, per Nick's PSG-584 pointer). PSG runs
+  // multiple pipelines; only won deals in the sales pipeline should build a delivery
+  // board. Env unset ⇒ scoping OFF (every won deal passes) — a safe default.
+  const salesPipelineId = process.env.PIPEDRIVE_SALES_PIPELINE_ID
+    ? Number(process.env.PIPEDRIVE_SALES_PIPELINE_ID)
+    : null;
+  if (!isDealPipelineInScope(payload.current ?? null, salesPipelineId)) {
+    return NextResponse.json({
+      ok: true,
+      skipped: "out_of_scope_pipeline",
+      pipelineId: dealPipelineId(payload.current ?? null),
+    });
+  }
+
   const deal = payload.current ? toWonDeal(payload.current) : null;
   if (!deal) {
     return NextResponse.json({ ok: true, skipped: "no_deal" });
@@ -119,7 +137,16 @@ export async function POST(request: Request): Promise<NextResponse> {
     const client = createProjectsClient({
       companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
     });
-    const result = await provisionOnboardingBoard({ client, deal, boardId, phaseId });
+    // Role→user map from env: any confirmed role auto-assigns its tasks; unmapped
+    // roles stay unassigned (role in the title). Never throws on missing/bad values.
+    const roleUserMap = loadRoleUserMap();
+    const result = await provisionOnboardingBoard({
+      client,
+      deal,
+      boardId,
+      phaseId,
+      roleUserMap,
+    });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     // Never log the error's cause verbatim (Pipedrive URLs carry the token); the
