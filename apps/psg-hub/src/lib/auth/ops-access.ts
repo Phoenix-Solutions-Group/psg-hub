@@ -31,6 +31,12 @@ export const OPS_FUNCTIONS = [
   // psg_internal needs this flag granted. The matching in-DB policy/migration is
   // tracked on the parent (PSG-26) — app-level is defense-in-depth ahead of RLS.
   "ads_mutations",
+  // Sales Pipeline review (PSG-594). Gates the /ops/sales-pipeline page + the
+  // /api/ops/sales-pipeline export route (board access to open-pipeline-$). Mirrors
+  // the in-DB `pipedrive_deals` / `pipedrive_sync_runs` SELECT policies
+  // (private.current_user_has_fn('view_sales_pipeline'), PSG-434 migration).
+  // psg_superadmin passes implicitly; a psg_internal user needs this flag granted.
+  "view_sales_pipeline",
 ] as const;
 
 export type OpsFunction = (typeof OPS_FUNCTIONS)[number];
