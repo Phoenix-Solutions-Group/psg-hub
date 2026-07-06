@@ -6,6 +6,7 @@ import {
   PipedriveConfigError,
   PIPEDRIVE_TOKEN_ENV,
   PIPEDRIVE_DOMAIN_ENV,
+  PIPEDRIVE_GENERIC_BASE_URL,
 } from "@/lib/crm/pipedrive/config";
 import {
   pingPipedrive,
@@ -71,7 +72,23 @@ describe("loadPipedriveConfig", () => {
     expect(cfg.baseUrl).toBe("https://acme.pipedrive.com/api/v1");
   });
 
-  it("throws PipedriveConfigError listing candidate names when token is missing", () => {
+  it("falls back to the generic api.pipedrive.com host when only a token is set (PSG-590)", () => {
+    const cfg = loadPipedriveConfig({ [PIPEDRIVE_TOKEN_ENV]: "tok_only" });
+    expect(cfg.apiToken).toBe("tok_only");
+    expect(cfg.companyDomain).toBeNull();
+    expect(cfg.baseUrl).toBe(PIPEDRIVE_GENERIC_BASE_URL);
+    expect(cfg.baseUrl).toBe("https://api.pipedrive.com/api/v1");
+  });
+
+  it("prefers the subdomain host when a domain IS set (token-only fallback does not override)", () => {
+    const cfg = loadPipedriveConfig({
+      [PIPEDRIVE_TOKEN_ENV]: "tok_abc",
+      [PIPEDRIVE_DOMAIN_ENV]: "acme",
+    });
+    expect(cfg.baseUrl).toBe("https://acme.pipedrive.com/api/v1");
+  });
+
+  it("throws PipedriveConfigError listing token candidate names when token is missing", () => {
     expect(() =>
       loadPipedriveConfig({ [PIPEDRIVE_DOMAIN_ENV]: "acme" }),
     ).toThrow(PipedriveConfigError);
@@ -87,10 +104,8 @@ describe("loadPipedriveConfig", () => {
     }
   });
 
-  it("throws when domain is missing", () => {
-    expect(() => loadPipedriveConfig({ [PIPEDRIVE_TOKEN_ENV]: "tok" })).toThrow(
-      PipedriveConfigError,
-    );
+  it("throws when neither token nor domain is set", () => {
+    expect(() => loadPipedriveConfig({})).toThrow(PipedriveConfigError);
   });
 });
 

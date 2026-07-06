@@ -5,8 +5,14 @@ import "server-only";
 // (no secrets in code, no logging of secret values, fail-loud on missing env).
 //
 // Pipedrive personal-token auth: the `api_token` is passed as a QUERY PARAM against
-//   https://{companyDomain}.pipedrive.com/api/v1
-// so we need both the TOKEN and the COMPANY DOMAIN (subdomain).
+//   https://{companyDomain}.pipedrive.com/api/v1   (preferred, when a domain is set)
+// The TOKEN is the only hard requirement. The COMPANY DOMAIN (subdomain) is optional:
+// when it is absent we fall back to Pipedrive's generic host
+//   https://api.pipedrive.com/api/v1
+// which Pipedrive accepts for personal-token auth. This mirrors the write path's
+// `pipedriveBaseUrl()` (src/lib/pipedrive/projects.ts) so a token-only Vercel env is
+// sufficient to run the read-only sync (PSG-590 — operator provisioned the token in
+// PSG-445 but no domain). The subdomain host stays preferred when a domain IS set.
 //
 // ── On the exact Vercel env var names (PSG-423 step 1) ──────────────────────────
 // The CEO (Nick) added the Pipedrive credentials to Vercel (project psg-digital/
@@ -43,12 +49,21 @@ const DOMAIN_ENV_CANDIDATES = [
  */
 export type PipedriveEnv = Record<string, string | undefined>;
 
+/** Generic Pipedrive API host used when no company subdomain is configured. */
+export const PIPEDRIVE_GENERIC_BASE_URL = "https://api.pipedrive.com/api/v1";
+
 export type PipedriveConfig = {
   /** Personal API token (secret — never log or echo). */
   apiToken: string;
-  /** Normalized company subdomain, e.g. "acme" for acme.pipedrive.com. */
-  companyDomain: string;
-  /** Fully-qualified API base, e.g. "https://acme.pipedrive.com/api/v1". */
+  /**
+   * Normalized company subdomain, e.g. "acme" for acme.pipedrive.com. `null` when
+   * no domain env is set — in that case `baseUrl` is the generic host.
+   */
+  companyDomain: string | null;
+  /**
+   * Fully-qualified API base. `https://{companyDomain}.pipedrive.com/api/v1` when a
+   * domain is configured, else the generic `https://api.pipedrive.com/api/v1`.
+   */
   baseUrl: string;
 };
 
@@ -62,7 +77,7 @@ export class PipedriveConfigError extends Error {
     super(
       `Missing Pipedrive config: set one of [${missing.join(
         ", ",
-      )}] (token and/or company domain) in the environment`,
+      )}] (API token) in the environment`,
     );
     this.name = "PipedriveConfigError";
     this.missing = missing;
@@ -94,27 +109,28 @@ export function normalizeCompanyDomain(value: string): string | null {
 
 /**
  * Load Pipedrive config from the environment. Pure (env injectable for tests).
- * Throws PipedriveConfigError listing the candidate names when token or domain is
- * absent. Never logs or includes the token value in any message.
+ * The TOKEN is the only requirement; throws PipedriveConfigError listing the token
+ * candidate names when it is absent. The company DOMAIN is optional — when unset we
+ * fall back to the generic `api.pipedrive.com` host (token-only auth, PSG-590). Never
+ * logs or includes the token value in any message.
  */
 export function loadPipedriveConfig(
   env: PipedriveEnv = process.env,
 ): PipedriveConfig {
   const apiToken = firstEnv(TOKEN_ENV_CANDIDATES, env);
+  if (!apiToken) {
+    throw new PipedriveConfigError([...TOKEN_ENV_CANDIDATES]);
+  }
+
   const rawDomain = firstEnv(DOMAIN_ENV_CANDIDATES, env);
   const companyDomain = rawDomain ? normalizeCompanyDomain(rawDomain) : null;
-
-  const missing: string[] = [];
-  if (!apiToken) missing.push(...TOKEN_ENV_CANDIDATES);
-  if (!companyDomain) missing.push(...DOMAIN_ENV_CANDIDATES);
-  if (!apiToken || !companyDomain) {
-    throw new PipedriveConfigError(missing);
-  }
 
   return {
     apiToken,
     companyDomain,
-    baseUrl: `https://${companyDomain}.pipedrive.com/api/v1`,
+    baseUrl: companyDomain
+      ? `https://${companyDomain}.pipedrive.com/api/v1`
+      : PIPEDRIVE_GENERIC_BASE_URL,
   };
 }
 
