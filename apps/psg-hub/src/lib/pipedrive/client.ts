@@ -255,15 +255,42 @@ interface DealsPage {
   nextCursor: string | null;
 }
 
-/** A typed Pipedrive client. Only what the sync needs: paginated deal reads. */
+/** Raw Pipedrive stage payload — loose, mapped defensively (v1/v2). */
+export type RawPipedriveStage = Record<string, unknown>;
+
+/**
+ * A Pipedrive pipeline stage. PSG-622: Pipedrive v2 `/deals` returns `stage_id` but not
+ * the stage label, so we fetch `/api/v2/stages` and join the name in. `orderNr` is the
+ * stage's position within its pipeline (useful when confirming the stage → Sn mapping).
+ */
+export interface PipedriveStage {
+  id: number;
+  name: string | null;
+  pipelineId: number | null;
+  orderNr: number | null;
+}
+
+/** Map a raw Pipedrive stage onto `PipedriveStage`. */
+export function mapRawStage(raw: RawPipedriveStage): PipedriveStage {
+  return {
+    id: asNumber(raw.id) ?? 0,
+    name: typeof raw.name === "string" ? raw.name : null,
+    pipelineId: relId(raw.pipeline_id),
+    orderNr: asNumber(raw.order_nr),
+  };
+}
+
+/** A typed Pipedrive client. Only what the sync needs: paginated deal + stage reads. */
 export interface PipedriveClient {
-  /** All open deals (cursor-paginated, mapped). */
+  /** All open deals (cursor-paginated, mapped, stage names joined in). */
   fetchOpenDeals(): Promise<PipedriveDeal[]>;
   /** Deals of a given status updated on/after `updatedSince` (ISO). For churn/YoY. */
   fetchDealsByStatus(
     status: Extract<DealStatus, "won" | "lost">,
     updatedSince?: string,
   ): Promise<PipedriveDeal[]>;
+  /** All pipeline stages (cursor-paginated, mapped). PSG-622 — source of stage names. */
+  fetchStages(): Promise<PipedriveStage[]>;
 }
 
 export function createPipedriveClient(
@@ -318,10 +345,78 @@ export function createPipedriveClient(
     };
   }
 
+  // PSG-622 — one page of `/api/v2/stages` (same cursor-pagination shape as /deals).
+  async function getStagesPage(
+    cursor: string | null,
+  ): Promise<{ data: RawPipedriveStage[]; nextCursor: string | null }> {
+    const url = new URL(`${base}/api/v2/stages`);
+    url.searchParams.set("limit", String(limit));
+    if (cursor) url.searchParams.set("cursor", cursor);
+    url.searchParams.set("api_token", apiToken);
+
+    const res = await doFetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) {
+      // Never include the URL (it carries the token) in the error.
+      throw new PipedriveError(
+        `Pipedrive /stages returned HTTP ${res.status}`,
+        res.status,
+      );
+    }
+    const body = (await res.json()) as {
+      success?: boolean;
+      data?: RawPipedriveStage[] | null;
+      additional_data?: { next_cursor?: string | null } | null;
+    };
+    if (body.success === false) {
+      throw new PipedriveError("Pipedrive /stages returned success=false");
+    }
+    return {
+      data: Array.isArray(body.data) ? body.data : [],
+      nextCursor: body.additional_data?.next_cursor ?? null,
+    };
+  }
+
+  async function fetchStages(): Promise<PipedriveStage[]> {
+    const out: PipedriveStage[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < maxPages; page += 1) {
+      const { data, nextCursor } = await getStagesPage(cursor);
+      for (const raw of data) out.push(mapRawStage(raw));
+      if (!nextCursor) return out;
+      cursor = nextCursor;
+    }
+    throw new PipedriveError(`Pipedrive stage pagination exceeded ${maxPages} pages`);
+  }
+
+  // Fetch stage names once per client and memoize. RESILIENT (PSG-622): a stages-endpoint
+  // failure must NOT break the deal sync — the raw open-pipeline-$ (proven in PSG-446) is
+  // the load-bearing number, and it doesn't need names. On failure we fall back to an
+  // empty map, so deals still sync with `stageName` null (exactly today's behavior).
+  let stageNamesPromise: Promise<Map<number, string>> | null = null;
+  function loadStageNames(): Promise<Map<number, string>> {
+    if (!stageNamesPromise) {
+      stageNamesPromise = fetchStages()
+        .then((stages) => {
+          const m = new Map<number, string>();
+          for (const s of stages) {
+            if (s.name != null && s.name !== "") m.set(s.id, s.name);
+          }
+          return m;
+        })
+        .catch(() => new Map<number, string>());
+    }
+    return stageNamesPromise;
+  }
+
   async function paginate(
     status: DealStatus,
     updatedSince?: string,
   ): Promise<PipedriveDeal[]> {
+    // Join stage names (PSG-622). Fetched once per client; failure → empty map (names null).
+    const stageNames = await loadStageNames();
     const out: PipedriveDeal[] = [];
     let cursor: string | null = null;
     for (let page = 0; page < maxPages; page += 1) {
@@ -330,7 +425,15 @@ export function createPipedriveClient(
         cursor,
         updatedSince,
       );
-      for (const raw of data) out.push(mapRawDeal(raw));
+      for (const raw of data) {
+        const deal = mapRawDeal(raw);
+        // Only fill from the stages lookup when the raw payload didn't carry a name (v2).
+        if (deal.stageName == null && deal.stageId != null) {
+          const name = stageNames.get(deal.stageId);
+          if (name) deal.stageName = name;
+        }
+        out.push(deal);
+      }
       if (!nextCursor) return out;
       cursor = nextCursor;
     }
@@ -341,5 +444,6 @@ export function createPipedriveClient(
     fetchOpenDeals: () => paginate("open"),
     fetchDealsByStatus: (status, updatedSince) =>
       paginate(status, updatedSince),
+    fetchStages,
   };
 }

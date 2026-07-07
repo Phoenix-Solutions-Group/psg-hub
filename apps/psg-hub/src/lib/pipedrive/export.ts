@@ -11,6 +11,7 @@
 
 import { buildForecast, type ForecastOptions } from "./forecast";
 import { diagnoseDeals, type DealDiagnostics } from "./analysis";
+import { liveStageProbabilityMap, liveCommittedStageIds } from "./stages";
 import type { PipedriveDeal, PipelineForecast, RevenueType } from "./types";
 
 export interface DealsExportOptions extends ForecastOptions {
@@ -172,7 +173,23 @@ export function buildDealsExport(
   deals: readonly PipedriveDeal[],
   opts: DealsExportOptions,
 ): DealsExport {
-  const forecast = buildForecast(deals, opts);
+  // PSG-622 — weight by the LIVE Pipedrive stage → Sn map by default, so the weighted /
+  // committed lines are meaningful without waiting on sales to backfill per-deal win %.
+  // A caller-supplied `stageProbability`/`committedStageIds` still wins; and while the
+  // live map is unconfirmed (empty) both helpers return `undefined`, leaving today's
+  // win_probability fallback (and probability-threshold committed gate) untouched.
+  //
+  // The live stage-map and its committed (S6+) stage set are a PAIR: only inject the live
+  // committed set when we're also defaulting the live probability map. If a caller supplies
+  // its own `stageProbability` (a different pipeline), don't force our stage_ids onto its
+  // committed line — leave it to the probability-threshold gate unless it sets its own set.
+  const usingLiveMap = opts.stageProbability === undefined;
+  const forecast = buildForecast(deals, {
+    ...opts,
+    stageProbability: opts.stageProbability ?? liveStageProbabilityMap(),
+    committedStageIds:
+      opts.committedStageIds ?? (usingLiveMap ? liveCommittedStageIds() : undefined),
+  });
   const diagnostics = diagnoseDeals(deals, {
     asOf: opts.asOf,
     staleDays: opts.staleDays,

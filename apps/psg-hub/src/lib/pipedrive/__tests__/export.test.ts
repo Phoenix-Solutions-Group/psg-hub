@@ -408,4 +408,37 @@ describe("serializers", () => {
     expect(csv).toContain("monthly_value");
     expect(csv).toContain("RECURRING MONTHLY (Σ vs Invoiced MRR; 1 unresolved/manual)");
   });
+
+  it("PSG-622: default live stage weighting is active (blank win% → weighted by stage)", () => {
+    // Deals mirror the live pipeline-8 shape: real stage_ids, win_probability all blank.
+    // With Reese's confirmed PIPELINE_8_STAGE_CODES (PSG-627), buildDealsExport weights by
+    // stage automatically — no explicit stageProbability needed by the caller.
+    const deals = [
+      deal({ dealId: 1, value: 35_800, stageId: 59, stageName: null, winProbability: null }), // S4 0.70
+      deal({ dealId: 2, value: 25_230, stageId: 61, stageName: null, winProbability: null }), // S0 0.10
+    ];
+    const exp = buildDealsExport(deals, { asOf: ASOF });
+    expect(exp.forecast.bestCaseValue).toBe(61_030); // raw open-pipeline-$ still correct
+    // weighted by stage: 35800*0.70 + 25230*0.10 = 25060 + 2523 = 27583
+    expect(exp.forecast.weightedValue).toBe(27_583);
+    expect(exp.forecast.committedValue).toBe(0); // neither deal is at S6+
+  });
+
+  it("PSG-622/627: reproduces Reese's confirmed live forecast oracle to the penny", () => {
+    // The exact 2026-07-07 live pipeline (per-stage totals as one deal each), weighted by the
+    // confirmed map with NO explicit options — the production path. Ties to Reese's sign-off:
+    //   raw $65,562.25 · weighted ≈ $29,948.23 · committed $0.00.
+    const deals = [
+      deal({ dealId: 61, value: 25_230.25, stageId: 61, stageName: null, winProbability: null }), // S0 0.10
+      deal({ dealId: 60, value: 1_770.0, stageId: 60, stageName: null, winProbability: null }), // S2 0.40
+      deal({ dealId: 57, value: 2_762.0, stageId: 57, stageName: null, winProbability: null }), // S3 0.60
+      deal({ dealId: 59, value: 35_800.0, stageId: 59, stageName: null, winProbability: null }), // S4 0.70
+      deal({ dealId: 58, value: 0.0, stageId: 58, stageName: null, winProbability: null }), // S5 0.85
+      deal({ dealId: 56, value: 0.0, stageId: 56, stageName: null, winProbability: null }), // S6 0.95
+    ];
+    const exp = buildDealsExport(deals, { asOf: ASOF });
+    expect(exp.forecast.bestCaseValue).toBe(65_562.25);
+    expect(exp.forecast.weightedValue).toBe(29_948.23);
+    expect(exp.forecast.committedValue).toBe(0);
+  });
 });
