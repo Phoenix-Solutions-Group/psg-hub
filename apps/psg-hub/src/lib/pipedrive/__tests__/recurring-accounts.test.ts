@@ -2,8 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 import {
   activeRecurringAccounts,
   firstOfCurrentMonthUTC,
+  resolveMaintenanceRoster,
   resolveRecurringBoardConfig,
   runRecurringCycle,
+  selectRecurringAccounts,
 } from "../recurring-accounts";
 import type { MirrorDealRow, MirrorSupabase } from "../mirror";
 import type { PipedriveDeal, DealStatus } from "../types";
@@ -94,6 +96,104 @@ describe("activeRecurringAccounts", () => {
     const accounts = await activeRecurringAccounts(db);
     expect(accounts).toHaveLength(2);
     expect(accounts.map((a) => a.orgName)).toEqual(["No Org Co", "Another"]);
+  });
+});
+
+// ── resolveMaintenanceRoster (PSG-817 opt-in roster parser) ──────────────────────────
+
+describe("resolveMaintenanceRoster", () => {
+  it("returns null when the env var is unset or blank (fail-safe → no filtering)", () => {
+    expect(resolveMaintenanceRoster({})).toBeNull();
+    expect(resolveMaintenanceRoster({ RECURRING_MAINTENANCE_ROSTER: "" })).toBeNull();
+    expect(resolveMaintenanceRoster({ RECURRING_MAINTENANCE_ROSTER: "   " })).toBeNull();
+    expect(resolveMaintenanceRoster({ RECURRING_MAINTENANCE_ROSTER: " , ,\n" })).toBeNull();
+  });
+
+  it("parses bare-digit and id:-prefixed tokens as org ids", () => {
+    const roster = resolveMaintenanceRoster({ RECURRING_MAINTENANCE_ROSTER: "77, id:88, id: 99" });
+    expect(roster).not.toBeNull();
+    expect([...roster!.orgIds].sort((a, b) => a - b)).toEqual([77, 88, 99]);
+    expect(roster!.orgNames.size).toBe(0);
+  });
+
+  it("parses non-numeric tokens as normalized org names (lowercase, whitespace-collapsed)", () => {
+    const roster = resolveMaintenanceRoster({
+      RECURRING_MAINTENANCE_ROSTER: "Sunrise Collision,  ACME   Body  Shop \n Duncan's Auto",
+    });
+    expect([...roster!.orgNames].sort()).toEqual([
+      "acme body shop",
+      "duncan's auto",
+      "sunrise collision",
+    ]);
+    expect(roster!.orgIds.size).toBe(0);
+  });
+
+  it("accepts a mixed comma/newline list of ids and names", () => {
+    const roster = resolveMaintenanceRoster({
+      RECURRING_MAINTENANCE_ROSTER: "101\nBecker Auto Body\n202, City Collision",
+    });
+    expect([...roster!.orgIds].sort((a, b) => a - b)).toEqual([101, 202]);
+    expect([...roster!.orgNames].sort()).toEqual(["becker auto body", "city collision"]);
+  });
+});
+
+// ── selectRecurringAccounts / activeRecurringAccounts roster gate (PSG-817) ──────────
+
+describe("recurring roster gate", () => {
+  it("roster unset → returns the full derived fleet unchanged (non-destructive default)", async () => {
+    const db = fakeDb([
+      deal({ dealId: 1, orgName: "Maint Co", orgId: 10, personId: 100 }),
+      deal({ dealId: 2, orgName: "Website-only Co", orgId: 20, personId: 200 }),
+    ]);
+    const sel = await selectRecurringAccounts(db, null);
+    expect(sel.rosterApplied).toBe(false);
+    expect(sel.derivedTotal).toBe(2);
+    expect(sel.excluded).toEqual([]);
+    expect(sel.accounts.map((a) => a.orgName)).toEqual(["Maint Co", "Website-only Co"]);
+    // activeRecurringAccounts(db, null) is the same unfiltered set.
+    expect((await activeRecurringAccounts(db, null)).map((a) => a.orgId)).toEqual([10, 20]);
+  });
+
+  it("roster set (by org id) → only roster orgs returned, non-roster won deal excluded", async () => {
+    const db = fakeDb([
+      deal({ dealId: 1, orgName: "Maint Co", orgId: 10, personId: 100 }),
+      deal({ dealId: 2, orgName: "Website-only Co", orgId: 20, personId: 200 }),
+      deal({ dealId: 3, orgName: "Other Maint", orgId: 30, personId: 300 }),
+    ]);
+    const roster = resolveMaintenanceRoster({ RECURRING_MAINTENANCE_ROSTER: "10, 30" })!;
+    const sel = await selectRecurringAccounts(db, roster);
+    expect(sel.rosterApplied).toBe(true);
+    expect(sel.derivedTotal).toBe(3);
+    expect(sel.accounts.map((a) => a.orgId)).toEqual([10, 30]);
+    expect(sel.excluded.map((a) => a.orgId)).toEqual([20]); // captured, not silently dropped
+  });
+
+  it("matches an orgless account by normalized name fallback", async () => {
+    const db = fakeDb([
+      deal({ dealId: 1, orgName: "Corner Body Shop", orgId: null, personId: 1 }),
+      deal({ dealId: 2, orgName: "Skip Co", orgId: null, personId: 2 }),
+    ]);
+    const roster = resolveMaintenanceRoster({
+      RECURRING_MAINTENANCE_ROSTER: "corner  body shop",
+    })!;
+    const accounts = await activeRecurringAccounts(db, roster);
+    expect(accounts.map((a) => a.orgName)).toEqual(["Corner Body Shop"]);
+  });
+
+  it("matches by id even when the account name is not on the roster", async () => {
+    const db = fakeDb([deal({ dealId: 1, orgName: "Renamed Later LLC", orgId: 555, personId: 9 })]);
+    const roster = resolveMaintenanceRoster({ RECURRING_MAINTENANCE_ROSTER: "id:555" })!;
+    const accounts = await activeRecurringAccounts(db, roster);
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0].orgId).toBe(555);
+  });
+
+  it("empty roster after dedupe still narrows to zero (nothing matches → provision none)", async () => {
+    const db = fakeDb([deal({ dealId: 1, orgName: "Unlisted Co", orgId: 42, personId: 1 })]);
+    const roster = resolveMaintenanceRoster({ RECURRING_MAINTENANCE_ROSTER: "id:999" })!;
+    const sel = await selectRecurringAccounts(db, roster);
+    expect(sel.accounts).toEqual([]);
+    expect(sel.excluded.map((a) => a.orgId)).toEqual([42]);
   });
 });
 
