@@ -3,10 +3,23 @@
 /** A recipient/sender — a bare address or a named address. */
 export type EmailAddress = string | { name?: string; email: string };
 
+/** A file attached to an outgoing message (SendGrid attachment shape). */
+export interface MailAttachment {
+  /** Base64-encoded file content. */
+  content: string;
+  filename: string;
+  /** MIME type, e.g. "image/jpeg". */
+  type?: string;
+  /** "attachment" (default) or "inline". */
+  disposition?: "attachment" | "inline";
+}
+
 export interface MailMessage {
   to: EmailAddress | EmailAddress[];
   /** Defaults to SENDGRID_FROM_EMAIL when omitted. */
   from?: EmailAddress;
+  /** Where replies should go (the sender is a verified system address). */
+  replyTo?: EmailAddress;
   subject?: string;
   html?: string;
   text?: string;
@@ -21,6 +34,8 @@ export interface MailMessage {
    * Undefined leaves the account default untouched.
    */
   clickTracking?: boolean;
+  /** Files to attach (e.g. a lead's uploaded photo). */
+  attachments?: MailAttachment[];
 }
 
 export interface MailResult {
