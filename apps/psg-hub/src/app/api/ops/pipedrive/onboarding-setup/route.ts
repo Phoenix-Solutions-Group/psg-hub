@@ -9,6 +9,7 @@ import {
 import { runQaSmoke } from "@/lib/pipedrive/qa-smoke";
 import { runRecurringQaSmoke } from "@/lib/pipedrive/recurring-qa-smoke";
 import { runWebBuildQaSmoke } from "@/lib/pipedrive/web-build-qa-smoke";
+import { runAssigneeAudit } from "@/lib/pipedrive/assignee-audit";
 import {
   activeRecurringAccounts,
   firstOfCurrentMonthUTC,
@@ -213,6 +214,17 @@ export async function POST(request: Request): Promise<NextResponse> {
         { ok: result.errored === 0, result },
         { status: result.errored > 0 ? 502 : 200 },
       );
+    }
+
+    if (body.action === "scan-assignees") {
+      // PSG-686 — READ-ONLY audit. Until `80a14d5` (PSG-680) every auto-created delivery-
+      // board task landed with no owner (v2 assigns via `assignee_ids: number[]`; the old
+      // code sent the ignored singular `assignee_id`). This scans every live project's tasks
+      // and reports any real (non-QA) board whose open leaf tasks have empty `assignee_ids`,
+      // so we know whether any client board built during the unassigned window needs a
+      // back-fill. It writes NOTHING — issues only GET requests.
+      const evidence = await runAssigneeAudit({ companyDomain });
+      return NextResponse.json({ ok: true, evidence });
     }
 
     if (body.action === "discover") {
