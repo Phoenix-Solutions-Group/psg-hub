@@ -143,9 +143,16 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
         return ok({ id: taskId, phase_id: body.phase_id ?? null });
       }
       if (parts[5] == null && method === "GET") {
+        // Live plan row shape is `{ item_id, item_type, phase_id, group_id }` (prod, PSG-737),
+        // NOT `task_id`/`type`. Mirror prod so getProjectPlan is genuinely exercised.
         const items = [...tasks.values()]
           .filter((t) => t.project_id === id)
-          .map((t) => ({ type: "task", task_id: t.id, phase_id: t.phase_id ?? null }));
+          .map((t) => ({
+            item_type: "task",
+            item_id: t.id,
+            phase_id: t.phase_id ?? null,
+            group_id: null,
+          }));
         return ok(items);
       }
     }
