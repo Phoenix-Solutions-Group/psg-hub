@@ -60,8 +60,13 @@ export interface OnboardingTask {
 }
 
 export interface OnboardingPhase {
-  /** Stable phase key (D1..D5). */
-  readonly key: "D1" | "D2" | "D3" | "D4" | "D5";
+  /**
+   * Stable phase key. The WHM onboarding template uses `D1..D5`; the net-new one-time
+   * templates that reuse this shape (PSG-668 — e.g. New Website Build's `P1..P4`) carry
+   * their own phase keys, so this is a free-form string rather than the onboarding-only
+   * `D1..D5` union. Only ever surfaced in the phase parent-task description.
+   */
+  readonly key: string;
   /** Phase display name. */
   readonly name: string;
   readonly tasks: readonly OnboardingTask[];
