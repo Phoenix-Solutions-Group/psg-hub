@@ -30,6 +30,12 @@ const SECTIONS = [
     note: "Inventory of PII surfaces and the controls protecting them. (v1.5 — PSG-29)",
     available: true,
   },
+  {
+    href: "/ops/admin/analytics-sync",
+    label: "Sync now",
+    note: "Run analytics data syncs and monthly reports on demand. (PSG-645)",
+    available: true,
+  },
 ];
 
 export default async function OpsAdminHome() {
