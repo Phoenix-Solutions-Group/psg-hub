@@ -67,11 +67,15 @@ function buildPayload(
   return {
     to: message.to,
     from,
+    ...(message.replyTo ? { replyTo: message.replyTo } : {}),
     subject: message.subject,
     html: message.html,
     text: message.text,
     templateId: message.templateId,
     dynamicTemplateData: message.dynamicTemplateData,
+    ...(message.attachments && message.attachments.length > 0
+      ? { attachments: message.attachments }
+      : {}),
     // Per-message click-tracking override. Only emitted when explicitly disabled,
     // so account-default behavior is untouched for every other send.
     ...(message.clickTracking === false
