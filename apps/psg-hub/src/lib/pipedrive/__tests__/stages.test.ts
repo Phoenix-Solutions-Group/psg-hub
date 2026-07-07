@@ -31,29 +31,32 @@ describe("committedStageIds (≥ S6 / Contract)", () => {
   });
 });
 
-describe("live stage map (PSG-622 — Reese's confirmed mapping, PSG-627)", () => {
-  it("PIPELINE_8_STAGE_CODES holds the confirmed 56–61 → Sn mapping", () => {
+describe("live stage map (PSG-622 — Reese's name-corrected mapping, PSG-631)", () => {
+  it("PIPELINE_8_STAGE_CODES holds the confirmed 56–61 → Sn mapping (56=New Lead … 61=Won)", () => {
     expect(PIPELINE_8_STAGE_CODES).toEqual({
-      61: "S0",
-      60: "S2",
-      57: "S3",
+      56: "S0",
+      57: "S2",
+      58: "S3",
       59: "S4",
-      58: "S5",
-      56: "S6",
+      60: "S5",
+      61: "S5",
     });
   });
   it("liveStageProbabilityMap resolves each stage_id to its S0–S8 confidence", () => {
     expect(liveStageProbabilityMap()).toEqual({
-      61: 0.1, // S0
-      60: 0.4, // S2
-      57: 0.6, // S3
-      59: 0.7, // S4
-      58: 0.85, // S5
-      56: 0.95, // S6
+      56: 0.1, // S0  New Lead
+      57: 0.4, // S2  Contacted / Discovery
+      58: 0.6, // S3  Qualified
+      59: 0.7, // S4  Proposal Sent
+      60: 0.85, // S5  Verbal / Negotiation
+      61: 0.85, // S5  Won (open, unclosed) — interim cap
     });
   });
-  it("liveCommittedStageIds is the S6+ set (stage 56 only)", () => {
-    expect([...liveCommittedStageIds()!]).toEqual([56]);
+  it("liveCommittedStageIds is undefined — no live stage is ≥ S6 (committed stays $0, PSG-631)", () => {
+    // Reese's call: the 9 open deals in the 'Won' stage are NOT booked-committed. No live
+    // stage maps to ≥ S6, so there is no committed stage set and the committed line is $0
+    // (via the probability-threshold fallback) until PSG-632 promotes any verified deals.
+    expect(liveCommittedStageIds()).toBeUndefined();
   });
 });
 
