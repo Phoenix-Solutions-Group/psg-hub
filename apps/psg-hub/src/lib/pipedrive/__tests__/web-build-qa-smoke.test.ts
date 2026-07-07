@@ -13,7 +13,10 @@ function fakePipedrive(opts: { wonTime?: string; skipStamps?: number } = {}) {
   // PSG-723: regression seam — no-op the first `skipStamps` phase-stamp PUTs, simulating
   // the PSG-715 defect where a task never gets stamped into its phase. Used to PROVE the
   // gate turns red (0 tasks in "Phase unassigned" must not be assumed — it's verified).
+  // A dropped-stamp task falls OUT of the phased plan rows entirely (Pipedrive's real
+  // "Phase unassigned" bucket is not a phase), so `getProjectPlan` omits it below.
   let stampsToSkip = opts.skipStamps ?? 0;
+  const droppedStampTaskIds = new Set<number>();
   let seq = 1;
   const deals = new Map<number, Record<string, unknown>>();
   const projects = new Map<number, Record<string, unknown>>();
@@ -144,8 +147,9 @@ function fakePipedrive(opts: { wonTime?: string; skipStamps?: number } = {}) {
         const taskId = Number(parts[6]);
         const t = tasks.get(taskId);
         if (stampsToSkip > 0) {
-          // Simulate a dropped stamp: acknowledge the call but leave phase_id unset.
+          // Simulate a dropped stamp: acknowledge the call but leave the task unphased.
           stampsToSkip -= 1;
+          droppedStampTaskIds.add(taskId);
           return ok({ id: taskId, phase_id: null });
         }
         if (t) t.phase_id = body.phase_id ?? null;
@@ -156,6 +160,9 @@ function fakePipedrive(opts: { wonTime?: string; skipStamps?: number } = {}) {
         // NOT `task_id`/`type`. Mirror prod so getProjectPlan is genuinely exercised.
         const items = [...tasks.values()]
           .filter((t) => t.project_id === id)
+          // Unphased (dropped-stamp) tasks are NOT in any phase row — the real "Phase
+          // unassigned" bucket. Omitting them is what makes `tasksInUnassigned` count them.
+          .filter((t) => !droppedStampTaskIds.has(t.id as number))
           .map((t) => ({
             item_type: "task",
             item_id: t.id,
