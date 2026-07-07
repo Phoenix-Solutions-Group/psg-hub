@@ -15,8 +15,9 @@
 //   • Day 0 = the cycle anchor date (recommended: the client's monthly billing /
 //     anniversary date; the FIRST cycle anchors on the onboarding D5 sign-off date).
 //   • Every `dayOffset` below is CALENDAR DAYS from Day 0; a task's due date is
-//     cycleStart + offset. The Day-25 gate leaves a ~5-day buffer before the next
-//     cycle spawns so a slipped month is visible before it compounds.
+//     cycleStart + offset. The last task (client call, Day 20) lands ~10 days before
+//     the next cycle spawns, leaving buffer so a slipped month is visible before it
+//     compounds.
 //   • `owner` is the single accountable ROLE. Roles are a SUBSET of the onboarding
 //     roles (AS/Analytics/Web) so the same `roleUserMap` from PSG-584/PSG-587 works
 //     unchanged.
@@ -35,12 +36,17 @@ export interface RecurringTask {
   readonly owner: RecurringRole;
   /** Calendar days from Day 0 (cycle anchor date). Due date = cycleStart + dayOffset. */
   readonly dayOffset: number;
-  /** True for the monthly Definition-of-Done gate. */
+  /**
+   * Reserved gate flag (renders " · GATE" in the task description). The canonical
+   * PSG-610 §2a monthly template carries NO gate task, so no task sets this today; the
+   * optional field is kept so the builder/QA-smoke code stays gate-aware if a future
+   * design amendment re-introduces a monthly Definition-of-Done gate.
+   */
   readonly gate?: boolean;
 }
 
 export interface RecurringGroup {
-  /** Stable group key. MU = Monthly Updates · CC = Customer Comments · CT = Client Touchpoints & Close. */
+  /** Stable group key. MU = Monthly Updates · CC = Customer Comments · CT = Client touchpoints. */
   readonly key: "MU" | "CC" | "CT";
   /** Group display name (rendered as the parent task on the board). */
   readonly name: string;
@@ -48,10 +54,13 @@ export interface RecurringGroup {
 }
 
 /**
- * The confirmed WHM monthly recurring-service template: 3 workstream groups, 9 tasks,
- * one accountable owner each, explicit day-offsets, one monthly DoD gate. Groups map
- * 1:1 to Noelle's confirmed workstreams (PSG-577). Do not reorder or renumber without
- * updating PSG-582's template doc first.
+ * The confirmed WHM monthly recurring-service template: 3 workstream groups, 8 tasks
+ * (3 + 3 + 2), one accountable owner each, explicit day-offsets. This is the exact shape
+ * from the board-approved parent design (PSG-610 §2a — Monthly Updates / Customer Comments
+ * / Client touchpoints), grounded in Noelle's confirmed workstreams from the live Asana
+ * boards (PSG-577). Do not reorder, renumber, or add a gate without updating PSG-610 §2a
+ * and PSG-642 first. (PSG-642 realigned this to the canonical 8-task shape — the earlier
+ * PSG-582 build carried a 9th monthly Definition-of-Done gate that the design does not.)
  */
 export const WHM_RECURRING_SERVICE_TEMPLATE: readonly RecurringGroup[] = [
   {
@@ -78,17 +87,10 @@ export const WHM_RECURRING_SERVICE_TEMPLATE: readonly RecurringGroup[] = [
   },
   {
     key: "CT",
-    name: "Client Touchpoints & Close",
+    name: "Client touchpoints",
     tasks: [
       { title: "Client email — monthly relationship touch", owner: "AS", dayOffset: 15 },
       { title: "Client call — monthly check-in", owner: "AS", dayOffset: 20 },
-      {
-        title:
-          "GATE: monthly cycle Definition of Done — report emailed + client email & call done; site updates & comments live",
-        owner: "AS",
-        dayOffset: 25,
-        gate: true,
-      },
     ],
   },
 ] as const;

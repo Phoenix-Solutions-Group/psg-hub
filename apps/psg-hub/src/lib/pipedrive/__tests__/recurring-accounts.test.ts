@@ -210,7 +210,7 @@ describe("runRecurringCycle", () => {
     });
   });
 
-  it("builds the 9-task template for a fresh account and titles it deterministically", async () => {
+  it("builds the 8-task template for a fresh account and titles it deterministically", async () => {
     const client = fakeClient();
     const account: RecurringClient = { orgName: "Fresh Co", orgId: 1, personId: 11 };
     const result = await runRecurringCycle({
@@ -221,7 +221,7 @@ describe("runRecurringCycle", () => {
       phaseId: 8,
     });
     expect(result.created).toBe(1);
-    // 3 group parents + 9 leaf tasks.
+    // 3 group parents + 8 leaf tasks.
     expect(client.createTask).toHaveBeenCalledTimes(3 + recurringTaskCount());
     expect(client.findProjectByTitle).toHaveBeenCalledWith(
       recurringCycleTitle(account, CYCLE),

@@ -98,7 +98,7 @@ function fakeFetch(store: Store): typeof fetch {
 }
 
 describe("runRecurringQaSmoke", () => {
-  it("builds 3 groups / 9 tasks / 1 gate, proves idempotency, and cleans up", async () => {
+  it("builds 3 groups / 8 tasks / 0 gate, proves idempotency, and cleans up", async () => {
     const store = makeStore();
     const evidence = await runRecurringQaSmoke(
       {
@@ -115,7 +115,8 @@ describe("runRecurringQaSmoke", () => {
 
     expect(evidence.tree.parentTasks).toBe(3);
     expect(evidence.tree.leafTasks).toBe(recurringTaskCount());
-    expect(evidence.tree.gateTasks).toBe(1);
+    expect(evidence.tree.leafTasks).toBe(8);
+    expect(evidence.tree.gateTasks).toBe(0);
     expect(evidence.idempotency.skippedExisting).toBe(true);
     expect(evidence.idempotency.projectIdMatches).toBe(true);
     expect(evidence.checks.projectTitleMatches).toBe(true);

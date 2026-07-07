@@ -41,12 +41,26 @@ function fakeClient(overrides: Partial<PipedriveProjectsClient> = {}) {
 }
 
 describe("WHM_RECURRING_SERVICE_TEMPLATE", () => {
-  it("has 3 groups and 9 leaf tasks with exactly one monthly gate", () => {
+  // PSG-642 acceptance lock: the EXACT 8-task / 3-group shape from PSG-610 §2a
+  // (Monthly Updates 3 · Customer Comments 3 · Client touchpoints 2), no gate task.
+  it("is the exact 8-task / 3-group canonical shape (3/3/2, no gate)", () => {
     expect(WHM_RECURRING_SERVICE_TEMPLATE.length).toBe(3);
-    expect(recurringTaskCount()).toBe(9);
+    expect(recurringTaskCount()).toBe(8);
+
+    const shape = WHM_RECURRING_SERVICE_TEMPLATE.map((g) => ({
+      name: g.name,
+      count: g.tasks.length,
+    }));
+    expect(shape).toEqual([
+      { name: "Monthly Updates", count: 3 },
+      { name: "Customer Comments", count: 3 },
+      { name: "Client touchpoints", count: 2 },
+    ]);
+
+    // The canonical monthly template carries NO gate task (the PSG-582 build's 9th
+    // Definition-of-Done gate was dropped to match PSG-610 §2a / PSG-642).
     const gates = WHM_RECURRING_SERVICE_TEMPLATE.flatMap((g) => g.tasks).filter((t) => t.gate);
-    expect(gates).toHaveLength(1);
-    expect(gates[0]?.owner).toBe("AS");
+    expect(gates).toHaveLength(0);
   });
 
   it("keeps day-offsets monotonic and within a single month (buffer before next cycle)", () => {
@@ -93,7 +107,7 @@ describe("provisionRecurringServiceBoard", () => {
     expect(res.taskCount).toBe(recurringTaskCount());
 
     expect(createProject).toHaveBeenCalledTimes(1);
-    // parent tasks (3 groups) + 9 leaf tasks = 12 createTask calls.
+    // parent tasks (3 groups) + 8 leaf tasks = 11 createTask calls.
     expect(createTask).toHaveBeenCalledTimes(3 + recurringTaskCount());
   });
 
