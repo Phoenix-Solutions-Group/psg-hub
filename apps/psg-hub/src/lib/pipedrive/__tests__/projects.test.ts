@@ -166,6 +166,39 @@ describe("provisionOnboardingBoard", () => {
     expect(createTask).not.toHaveBeenCalled();
     expect(createPhase).not.toHaveBeenCalled();
     expect(setTaskPhase).not.toHaveBeenCalled();
+    // PSG-770: no stamps attempted on the no-op path.
+    expect(res.phaseStampAttempts).toBe(0);
+    expect(res.phaseStampConfirmed).toBe(0);
+    expect(res.phaseStampDiagnostic).toBeNull();
+  });
+
+  it("PSG-770: reports every phase-stamp confirmed when the API accepts them all", async () => {
+    const { client } = fakeClient();
+    const res = await provisionOnboardingBoard({ client, deal: DEAL, boardId: 3, phaseId: 9 });
+    expect(res.phaseStampAttempts).toBe(templateTaskCount());
+    expect(res.phaseStampConfirmed).toBe(templateTaskCount());
+    expect(res.phaseStampDiagnostic).toBeNull();
+  });
+
+  it("PSG-770: a non-persisting stamp is non-fatal — the board still builds and the first reason is captured", async () => {
+    // setTaskPhase throws (verify-after-retry failed live): the board must NOT abort — every
+    // task is still created, and the failure is surfaced via the phaseStamp accounting so a
+    // silent broken board can never ship.
+    const setTaskPhase = vi.fn(async () => {
+      throw new PipedriveProjectsError(
+        "Pipedrive PUT /api/v1/projects/{id}/plan/tasks/{id} did not persist phase: sent phase_id=500, response phase_id=null",
+      );
+    });
+    const { client, createTask } = fakeClient({ setTaskPhase });
+    const res = await provisionOnboardingBoard({ client, deal: DEAL, boardId: 3, phaseId: 9 });
+    // Board fully built despite the stamp failures.
+    expect(res.created).toBe(true);
+    expect(res.taskCount).toBe(templateTaskCount());
+    expect(createTask).toHaveBeenCalledTimes(templateTaskCount());
+    // Every stamp attempted, none confirmed, first reason captured (token-free).
+    expect(res.phaseStampAttempts).toBe(templateTaskCount());
+    expect(res.phaseStampConfirmed).toBe(0);
+    expect(res.phaseStampDiagnostic).toMatch(/did not persist phase/);
   });
 });
 
@@ -273,7 +306,9 @@ describe("createProjectsClient — transport (PSG-588: /api/ base path + v1/v2 p
   });
 
   it("setTaskPhase PUTs /api/v1/projects/{id}/plan/tasks/{taskId} with { phase_id } (PSG-722)", async () => {
-    const { fetchImpl, calls } = recordingFetch({});
+    // PSG-770: the PUT response echoes the resulting task; setTaskPhase now verifies it, so
+    // the stub must return the phase we sent (71) for the happy path.
+    const { fetchImpl, calls } = recordingFetch({ id: 900, type: "task", phase_id: 71 });
     await client(fetchImpl).setTaskPhase!(42, 900, 71);
     const u = new URL(calls[0].url);
     expect(calls[0].method).toBe("PUT");
@@ -283,6 +318,57 @@ describe("createProjectsClient — transport (PSG-588: /api/ base path + v1/v2 p
     expect(u.pathname.startsWith("/api/")).toBe(true); // PSG-588 base-path discipline
     expect(u.searchParams.get("api_token")).toBe(TOKEN);
     expect(JSON.parse(calls[0].body!)).toEqual({ phase_id: 71 });
+    // Verified stamp = exactly one PUT (no retry needed).
+    expect(calls.length).toBe(1);
+  });
+
+  it("setTaskPhase verifies the PUT echoed our phase_id, retries once, then throws a token-free diagnostic (PSG-770)", async () => {
+    // The exact live defect (PSG-764): the v1 plan PUT returns 200 but does NOT persist the
+    // phase — its response echoes `phase_id: null`. The old code discarded the body and
+    // returned silently, so every task stayed in "Phase unassigned". Now it retries once and
+    // throws with the observed value (never the URL/token).
+    const noPersist = () => {
+      const calls: Array<{ url: string; body?: string }> = [];
+      const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+        calls.push({
+          url: String(input),
+          body: typeof init?.body === "string" ? init.body : undefined,
+        });
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { id: 900, phase_id: null } }),
+        } as Response;
+      }) as unknown as typeof fetch;
+      return { fetchImpl, calls };
+    };
+    const { fetchImpl, calls } = noPersist();
+    await expect(client(fetchImpl).setTaskPhase!(42, 900, 71)).rejects.toThrowError(
+      /did not persist phase: sent phase_id=71, response phase_id=null/,
+    );
+    // One retry ⇒ the PUT is attempted exactly twice before giving up.
+    expect(calls.length).toBe(2);
+    // The thrown message never leaks the token (it rides in the URL query string).
+    await expect(client(noPersist().fetchImpl).setTaskPhase!(42, 900, 71)).rejects.toThrow(
+      expect.not.stringContaining(TOKEN),
+    );
+  });
+
+  it("setTaskPhase succeeds on the second attempt when the first PUT lags the plan (PSG-770 race)", async () => {
+    // A task created via v2 `POST /tasks` can lag before it materialises in the v1 plan; the
+    // first PUT echoes null, the retry echoes our phase → one retry recovers it, no throw.
+    let n = 0;
+    const fetchImpl = (async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: { id: 900, phase_id: n++ === 0 ? null : 71 },
+        }),
+      }) as Response) as unknown as typeof fetch;
+    await expect(client(fetchImpl).setTaskPhase!(42, 900, 71)).resolves.toBeUndefined();
+    expect(n).toBe(2);
   });
 
   it("maps assignee_id → assignee_ids:[id] on the v2 tasks wire body (PSG-680 regression)", async () => {

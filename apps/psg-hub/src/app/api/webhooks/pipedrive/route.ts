@@ -152,6 +152,21 @@ export async function POST(request: Request): Promise<NextResponse> {
       defaultPhaseId: phaseId,
       roleUserMap,
     });
+    // PSG-770: a phase-stamp that Pipedrive silently fails to persist leaves tasks in "Phase
+    // unassigned" without any error. Emit a token-free warning (the diagnostic never carries
+    // the URL/token) so a regression is visible in prod logs, not just in the QA smoke.
+    for (const p of summary.projects) {
+      if (p.phaseStampConfirmed < p.phaseStampAttempts) {
+        console.warn(
+          "[pipedrive-webhook] phase-stamp did not fully persist for deal",
+          deal.id,
+          "project",
+          p.projectId,
+          `(${p.phaseStampConfirmed}/${p.phaseStampAttempts} confirmed):`,
+          p.phaseStampDiagnostic ?? "unknown",
+        );
+      }
+    }
     return NextResponse.json({ ok: true, ...summary });
   } catch (err) {
     // Never log the error's cause verbatim (Pipedrive URLs carry the token); the

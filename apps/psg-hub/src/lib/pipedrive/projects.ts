@@ -271,6 +271,24 @@ export function toV2TaskBody(
 }
 
 /**
+ * PSG-770 — pull the resulting `phase_id` out of the v1 plan PUT response (the updated
+ * task object Pipedrive echoes back: `{ id, type, phase_id, group_id }`). Accepts the raw
+ * `data` from `call` (already unwrapped from `{ success, data }`) and defensively reads a
+ * numeric or numeric-string `phase_id`; returns `null` for any other shape so a stamp that
+ * did not persist is detectable rather than silently assumed to have worked.
+ */
+export function readResponsePhaseId(data: unknown): number | null {
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const v = (data as Record<string, unknown>).phase_id;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) {
+      return Number(v);
+    }
+  }
+  return null;
+}
+
+/**
  * Default HTTP client for the Pipedrive Projects API (v2 flat paths, personal-token auth).
  * Self-contained on purpose so this module is independently mergeable to `main`
  * (and therefore deployable to production) without the unmerged read-sync client.
@@ -464,13 +482,34 @@ export function createProjectsClient(
       // v1 `PUT /projects/{id}/plan/tasks/{taskId}` `{ phase_id }` (PSG-722). This is the
       // ONLY way to set a task's phase — v2 `POST /tasks` ignores `phase_id`. Token rides
       // in the query string only (never logged); errors carry PATH + status, never the URL.
-      await call<unknown>(
-        "PUT",
-        "v1",
-        `projects/${projectId}/plan/tasks/${taskId}`,
-        {},
-        { phase_id: phaseId },
-      );
+      //
+      // PSG-770: the first version DISCARDED the response, so a silent no-op (the PUT returns
+      // 200 but the phase does not persist — seen live in PSG-764, every task stuck in "Phase
+      // unassigned") went undetected. The v1 plan PUT echoes the updated task's resulting
+      // `phase_id` in its response, so we now READ it back and VERIFY. If it doesn't match we
+      // retry ONCE (a task created via v2 `POST /tasks` can lag before it materialises in the
+      // v1 plan — the retry covers that create→plan propagation race), then throw a
+      // token-free diagnostic naming the phase_id the API actually returned. The caller
+      // (`provisionOnboardingBoard`) treats that throw as non-fatal so the board still builds,
+      // but records it — turning a silent broken board into a reported, diagnosable one.
+      const attempt = async (): Promise<number | null> => {
+        const data = await call<unknown>(
+          "PUT",
+          "v1",
+          `projects/${projectId}/plan/tasks/${taskId}`,
+          {},
+          { phase_id: phaseId },
+        );
+        return readResponsePhaseId(data);
+      };
+      let observed = await attempt();
+      if (observed !== phaseId) observed = await attempt(); // one retry for the propagation race
+      if (observed !== phaseId) {
+        throw new PipedriveProjectsError(
+          `Pipedrive PUT /api/v1/projects/{id}/plan/tasks/{id} did not persist phase: ` +
+            `sent phase_id=${phaseId}, response phase_id=${observed ?? "null"}`,
+        );
+      }
     },
     async findProjectByTitle(title) {
       // Projects list is small for a single company; page defensively and match exact.
@@ -646,6 +685,18 @@ export interface ProvisionResult {
   taskCount: number;
   /** True when an existing project with the same title was found (no-op). */
   skippedExisting: boolean;
+  /**
+   * PSG-770 — phase-stamp accounting. `phaseStampAttempts` counts tasks we tried to move
+   * out of "Phase unassigned"; `phaseStampConfirmed` counts the ones Pipedrive's PUT
+   * response actually echoed back with the requested phase. When they differ the stamp did
+   * NOT persist (the exact defect PSG-722 was meant to close, seen live in PSG-764):
+   * `phaseStampDiagnostic` carries the first token-free reason (e.g. the phase_id the API
+   * returned instead of the one we sent), so a credentialed smoke can report the live cause
+   * without a broken board being shipped silently.
+   */
+  phaseStampAttempts: number;
+  phaseStampConfirmed: number;
+  phaseStampDiagnostic: string | null;
 }
 
 /**
@@ -725,6 +776,9 @@ export async function provisionOnboardingBoard(
       phaseCount: 0,
       taskCount: 0,
       skippedExisting: true,
+      phaseStampAttempts: 0,
+      phaseStampConfirmed: 0,
+      phaseStampDiagnostic: null,
     };
   }
 
@@ -750,6 +804,9 @@ export async function provisionOnboardingBoard(
   );
 
   let taskCount = 0;
+  let phaseStampAttempts = 0;
+  let phaseStampConfirmed = 0;
+  let phaseStampDiagnostic: string | null = null;
   for (const phase of template) {
     const targetPhaseId = phaseMap.get(phase.name.trim());
     for (const t of phase.tasks) {
@@ -764,7 +821,21 @@ export async function provisionOnboardingBoard(
       // Stamp into the template phase. Skipped only when the phase could not be resolved
       // (minimal test fake without createPhase) — prod always has a resolved id.
       if (targetPhaseId != null && typeof client.setTaskPhase === "function") {
-        await client.setTaskPhase(project.id, task.id, targetPhaseId);
+        phaseStampAttempts += 1;
+        // PSG-770: a stamp that Pipedrive silently fails to persist must NOT abort the whole
+        // board build (the live deal-won webhook would then leave half-built boards on every
+        // won deal). We swallow the per-task failure, keep the first token-free reason, and
+        // surface the confirmed/attempted counts so a credentialed smoke reports the live
+        // cause. `setTaskPhase` only throws AFTER a verify + one retry, so a confirmed stamp
+        // never lands here.
+        try {
+          await client.setTaskPhase(project.id, task.id, targetPhaseId);
+          phaseStampConfirmed += 1;
+        } catch (err) {
+          if (phaseStampDiagnostic == null) {
+            phaseStampDiagnostic = err instanceof Error ? err.message : String(err);
+          }
+        }
       }
       taskCount += 1;
     }
@@ -776,6 +847,9 @@ export async function provisionOnboardingBoard(
     phaseCount: template.length,
     taskCount,
     skippedExisting: false,
+    phaseStampAttempts,
+    phaseStampConfirmed,
+    phaseStampDiagnostic,
   };
 }
 
