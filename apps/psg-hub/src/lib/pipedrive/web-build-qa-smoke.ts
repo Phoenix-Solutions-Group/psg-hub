@@ -134,6 +134,19 @@ export interface WebBuildQaSmokeEvidence {
   };
   /** PSG-722 — proof every task landed in its template phase (0 in "Phase unassigned"). */
   phases: PhaseStampCheck;
+  /**
+   * PSG-770 — what the WRITE side saw when stamping phases, read straight off the v1 plan
+   * PUT responses (independent of the readback in `phases`). `confirmed < attempts` means
+   * Pipedrive did not persist the stamp; `diagnostic` names the phase_id the API returned
+   * instead. Splits the live cause: if the PUT already echoes `phase_id=null` the write is
+   * rejected (endpoint/id/payload), whereas confirmed writes + a null readback point at the
+   * plan read shape. Lets a credentialed run pin the root cause without another round-trip.
+   */
+  phaseStamp: {
+    attempts: number;
+    confirmed: number;
+    diagnostic: string | null;
+  };
   /** UX + QA (PSG-668 roles) owner→assignee resolution, read off the live board. */
   assigneeChecks: WebBuildAssigneeCheck[];
   dueDateSpotChecks: {
@@ -370,6 +383,11 @@ export async function runWebBuildQaSmoke(
         gateTitles: gates.map((t) => t.title),
       },
       phases,
+      phaseStamp: {
+        attempts: prov.phaseStampAttempts,
+        confirmed: prov.phaseStampConfirmed,
+        diagnostic: prov.phaseStampDiagnostic,
+      },
       assigneeChecks,
       dueDateSpotChecks: {
         kickoffD2: {
@@ -422,6 +440,12 @@ export async function runWebBuildQaSmoke(
     c.templatePhaseColumnsPresent = phases.allTemplatePhasesPresent;
     c.zeroTasksUnassigned = phases.tasksInUnassigned === 0;
     c.everyTaskInItsPhase = phases.everyTaskStamped;
+    // PSG-770 — the WRITE side confirms every stamp persisted (the v1 plan PUT echoed back
+    // the phase we sent). Distinct from `everyTaskInItsPhase` (a READ of the plan): if this
+    // fails but the columns exist, the PUT is a silent no-op — see `phaseStamp.diagnostic`.
+    c.everyStampApiConfirmed =
+      evidence.phaseStamp.attempts > 0 &&
+      evidence.phaseStamp.confirmed === evidence.phaseStamp.attempts;
     c.phaseTaskSplitMatches =
       phases.perPhase.length === 4 &&
       phases.perPhase[0]!.taskCount === 6 &&

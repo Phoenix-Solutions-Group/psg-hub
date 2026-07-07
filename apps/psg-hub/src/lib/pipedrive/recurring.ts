@@ -83,6 +83,9 @@ export async function provisionRecurringServiceBoard(
       phaseCount: 0,
       taskCount: 0,
       skippedExisting: true,
+      phaseStampAttempts: 0,
+      phaseStampConfirmed: 0,
+      phaseStampDiagnostic: null,
     };
   }
 
@@ -109,6 +112,9 @@ export async function provisionRecurringServiceBoard(
   );
 
   let taskCount = 0;
+  let phaseStampAttempts = 0;
+  let phaseStampConfirmed = 0;
+  let phaseStampDiagnostic: string | null = null;
   for (const group of template) {
     const targetPhaseId = phaseMap.get(group.name.trim());
     for (const t of group.tasks) {
@@ -121,7 +127,18 @@ export async function provisionRecurringServiceBoard(
         ...(assignee != null ? { assignee_id: assignee } : {}),
       });
       if (targetPhaseId != null && typeof client.setTaskPhase === "function") {
-        await client.setTaskPhase(project.id, task.id, targetPhaseId);
+        // PSG-770: a non-persisting phase-stamp is non-fatal (never abort a monthly board
+        // mid-build); record the first token-free reason + confirmed/attempted counts so the
+        // silent no-op surfaces instead of shipping a board stuck in "Phase unassigned".
+        phaseStampAttempts += 1;
+        try {
+          await client.setTaskPhase(project.id, task.id, targetPhaseId);
+          phaseStampConfirmed += 1;
+        } catch (err) {
+          if (phaseStampDiagnostic == null) {
+            phaseStampDiagnostic = err instanceof Error ? err.message : String(err);
+          }
+        }
       }
       taskCount += 1;
     }
@@ -133,5 +150,8 @@ export async function provisionRecurringServiceBoard(
     phaseCount: template.length,
     taskCount,
     skippedExisting: false,
+    phaseStampAttempts,
+    phaseStampConfirmed,
+    phaseStampDiagnostic,
   };
 }
