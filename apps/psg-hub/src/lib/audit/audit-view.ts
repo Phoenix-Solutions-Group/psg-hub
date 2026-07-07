@@ -51,6 +51,7 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "production.template.revoke": "Revoked mail template",
   "approval.approve": "Approved queued action",
   "approval.reject": "Rejected queued action",
+  "approval.retry_publish": "Retried publish of queued action",
   "sitemap.run": "Ran sitemap pipeline",
   "sitemap.checkpoint": "Decided sitemap checkpoint",
   "ccc.connection.approve": "Approved CCC connection",

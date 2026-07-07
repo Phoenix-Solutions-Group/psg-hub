@@ -230,6 +230,56 @@ export async function approveApproval(
   }
 }
 
+/**
+ * Re-attempt the publish for an action whose approval was already recorded but
+ * whose downstream publish FAILED (status `publish_failed`). PSG-768 (B3/A1): a
+ * failed publish is kept in the queue with a retry — never silently dropped — so
+ * the owner can try again after a transient downstream error without re-approving.
+ *
+ * Only a `publish_failed` row is retryable (the decision, actor and notes are
+ * already recorded and are preserved). On success → `published`; on another throw
+ * → back to `publish_failed` with the fresh error. With no registered publisher for
+ * the action_type there is nothing to retry, so it settles to `approved`.
+ */
+export async function retryPublish(
+  store: ApprovalQueueStore,
+  args: DecisionArgs,
+  opts: { publishers?: PublisherRegistry } = {}
+): Promise<ApprovalQueueRow> {
+  if (!args.actorProfileId) {
+    throw new ApprovalDecisionError("retryPublish: actorProfileId is required");
+  }
+  const existing = await store.get(args.id);
+  if (!existing) throw new ApprovalDecisionError(`approval ${args.id} not found`);
+  if (existing.status !== "publish_failed") {
+    throw new ApprovalDecisionError(
+      `approval is ${existing.status}; only a publish_failed item can be retried`
+    );
+  }
+
+  const publishers = opts.publishers ?? defaultPublishers;
+  const publisher = publishers[existing.action_type];
+  // No publisher wired for this type → the decision stands as approved; there is
+  // nothing to publish, so clear the stale error and settle.
+  if (!publisher) {
+    return store.update(args.id, { status: "approved", publish_error: null });
+  }
+
+  try {
+    await publisher(existing);
+    return store.update(args.id, {
+      status: "published",
+      published_at: args.now,
+      publish_error: null,
+    });
+  } catch (err) {
+    return store.update(args.id, {
+      status: "publish_failed",
+      publish_error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 /** Reject a pending action. Never publishes. */
 export async function rejectApproval(
   store: ApprovalQueueStore,

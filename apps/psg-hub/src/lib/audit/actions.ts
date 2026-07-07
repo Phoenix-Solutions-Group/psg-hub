@@ -54,6 +54,11 @@ export const AUDIT_ACTIONS = [
   // provable. Generic over action_type so G-a/b/c all publish through one gate.
   "approval.approve",
   "approval.reject",
+  // PSG-768 (B3/A1) — re-attempt the downstream publish for an approval whose
+  // publish FAILED (status publish_failed). The decision was already recorded; this
+  // only retries the publish, so a transient failure is recoverable without
+  // re-approving. Attributable to actor + shop like the approve/reject decisions.
+  "approval.retry_publish",
   // sitemap & content-architecture run (PSG-258 / Wave 1A) — a superadmin runs the
   // gated sitemap pipeline for a shop from /ops/sitemap. The run is metered (G5-gated
   // content-gap / cluster-refine) and persists a client deliverable, so each run is

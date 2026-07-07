@@ -4,6 +4,7 @@ import {
   approveApproval,
   enqueueApproval,
   rejectApproval,
+  retryPublish,
   validateApprovalDecision,
   type ApprovalQueueRow,
   type ApprovalQueueStore,
@@ -211,6 +212,90 @@ describe("rejectApproval — never publishes", () => {
     await rejectApproval(store, { id: id!, actorProfileId: "p1", now: NOW });
     await expect(
       rejectApproval(store, { id: id!, actorProfileId: "p1", now: NOW })
+    ).rejects.toBeInstanceOf(ApprovalDecisionError);
+  });
+});
+
+describe("retryPublish — recover a failed publish (PSG-768 B3/A1)", () => {
+  let store: ReturnType<typeof memoryStore>;
+  beforeEach(() => {
+    store = memoryStore();
+  });
+
+  /** Approve with a failing publisher → leaves the row in publish_failed. */
+  async function seedFailed(publisher = vi.fn().mockRejectedValue(new Error("GBP API 503"))) {
+    const { id } = await seedPending(store);
+    await approveApproval(
+      store,
+      { id: id!, actorProfileId: "p1", actorName: "Owner Olivia", notes: "ship it", now: NOW },
+      { publishers: { gbp_post: publisher } }
+    );
+    return id!;
+  }
+
+  it("re-publishes a publish_failed row on success (→ published, error cleared, decision preserved)", async () => {
+    const id = await seedFailed();
+    const publish = vi.fn().mockResolvedValue({ ref: "gbp-777" });
+    const RETRY_NOW = "2026-06-24T12:05:00.000Z";
+
+    const row = await retryPublish(
+      store,
+      { id, actorProfileId: "p2", now: RETRY_NOW },
+      { publishers: { gbp_post: publish } }
+    );
+
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(row.status).toBe("published");
+    expect(row.published_at).toBe(RETRY_NOW);
+    expect(row.publish_error).toBeNull();
+    // The ORIGINAL approval decision is preserved (retry does not re-decide).
+    expect(row.decided_by_profile_id).toBe("p1");
+    expect(row.decided_by_name).toBe("Owner Olivia");
+    expect(row.decision_notes).toBe("ship it");
+  });
+
+  it("stays publish_failed with the fresh error when the retry also throws", async () => {
+    const id = await seedFailed();
+    const publish = vi.fn().mockRejectedValue(new Error("GBP API 500 again"));
+    const row = await retryPublish(
+      store,
+      { id, actorProfileId: "p1", now: NOW },
+      { publishers: { gbp_post: publish } }
+    );
+    expect(row.status).toBe("publish_failed");
+    expect(row.publish_error).toBe("GBP API 500 again");
+    expect(row.published_at).toBeNull();
+  });
+
+  it("refuses to retry a row that is not publish_failed", async () => {
+    const { id } = await seedPending(store);
+    // pending → cannot retry
+    await expect(
+      retryPublish(store, { id: id!, actorProfileId: "p1", now: NOW })
+    ).rejects.toBeInstanceOf(ApprovalDecisionError);
+
+    // published → cannot retry (no double publish)
+    const publish = vi.fn().mockResolvedValue(undefined);
+    await approveApproval(store, { id: id!, actorProfileId: "p1", now: NOW }, { publishers: { gbp_post: publish } });
+    await expect(
+      retryPublish(store, { id: id!, actorProfileId: "p1", now: NOW }, { publishers: { gbp_post: publish } })
+    ).rejects.toBeInstanceOf(ApprovalDecisionError);
+  });
+
+  it("with NO registered publisher settles a failed row to approved (nothing to publish)", async () => {
+    const id = await seedFailed();
+    const row = await retryPublish(store, { id, actorProfileId: "p1", now: NOW }, {});
+    expect(row.status).toBe("approved");
+    expect(row.publish_error).toBeNull();
+  });
+
+  it("throws on a missing row and on a missing actor", async () => {
+    await expect(
+      retryPublish(store, { id: "nope", actorProfileId: "p1", now: NOW })
+    ).rejects.toBeInstanceOf(ApprovalDecisionError);
+    const id = await seedFailed();
+    await expect(
+      retryPublish(store, { id, actorProfileId: "", now: NOW })
     ).rejects.toBeInstanceOf(ApprovalDecisionError);
   });
 });
