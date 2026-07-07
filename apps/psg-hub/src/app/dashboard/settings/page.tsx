@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SettingsForm, type SettingsFormValues } from "./settings-form";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -9,23 +10,36 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser();
 
   // Render the ACTIVE shop (switcher), not an arbitrary .limit(1) membership.
-  const { activeShopId } = user
+  const { shops, activeShopId } = user
     ? await getActiveShopContext(user.id)
-    : { activeShopId: null };
+    : { shops: [], activeShopId: null };
 
-  // Live `shops` schema diverges from the inherited code: there is no
-  // website_url/phone/city/state. Alias the real columns (06-04 pattern) so the
-  // existing JSX keys (shop.website_url, shop.phone, shop.city, shop.state) keep working.
-  // RLS clamps to the member's shops; activeShopId is already a validated membership.
+  const active = shops.find((s) => s.id === activeShopId) ?? null;
+  const canEdit = active?.role === "owner" || active?.role === "manager";
+
+  // Real `shops` columns (verified prod schema, PSG-779). `hours` is added by
+  // migration 20260707000200_shops_hours.sql (applied at deploy).
   const { data: shop } = activeShopId
     ? await supabase
         .from("shops")
         .select(
-          "name, slug, website_url:url, phone:telephone, city:address_locality, state:address_region"
+          "name, telephone, url, radius, address_street, address_locality, address_region, address_postal_code, hours"
         )
         .eq("id", activeShopId)
         .maybeSingle()
     : { data: null };
+
+  const initial: SettingsFormValues = {
+    name: shop?.name ?? "",
+    telephone: shop?.telephone ?? "",
+    url: shop?.url ?? "",
+    radius: shop?.radius != null ? String(shop.radius) : "",
+    address_street: shop?.address_street ?? "",
+    address_locality: shop?.address_locality ?? "",
+    address_region: shop?.address_region ?? "",
+    address_postal_code: shop?.address_postal_code ?? "",
+    hours: shop?.hours ?? "",
+  };
 
   return (
     <div className="space-y-6">
@@ -40,40 +54,11 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent>
           {shop ? (
-            <dl className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <dt className="text-sm font-medium text-muted-foreground">
-                  Name
-                </dt>
-                <dd className="mt-1 text-foreground">{shop.name}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-muted-foreground">
-                  Website
-                </dt>
-                <dd className="mt-1 text-foreground">
-                  {shop.website_url || "Not set"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-muted-foreground">
-                  Phone
-                </dt>
-                <dd className="mt-1 text-foreground">
-                  {shop.phone || "Not set"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-muted-foreground">
-                  Location
-                </dt>
-                <dd className="mt-1 text-foreground">
-                  {shop.city && shop.state
-                    ? `${shop.city}, ${shop.state}`
-                    : "Not set"}
-                </dd>
-              </div>
-            </dl>
+            <SettingsForm
+              initial={initial}
+              email={user?.email ?? ""}
+              canEdit={canEdit}
+            />
           ) : (
             <p className="text-muted-foreground">
               No shop linked to your account yet.

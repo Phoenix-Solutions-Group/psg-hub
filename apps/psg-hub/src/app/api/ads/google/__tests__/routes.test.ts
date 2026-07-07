@@ -40,12 +40,11 @@ let mockShop:
       id: string;
       slug: string;
       name?: string;
-      address?: string | null;
-      city?: string | null;
-      state?: string | null;
-      website_url?: string | null;
-      service_radius_miles?: number | null;
-      max_daily_ad_budget_micros?: number | null;
+      address_street?: string | null;
+      address_locality?: string | null;
+      address_region?: string | null;
+      url?: string | null;
+      radius?: number | null;
     }
   | null = null;
 let mockSub: { status: string; tier: string } | null = null;
@@ -279,12 +278,11 @@ describe("POST /api/ads/google/campaigns (create)", () => {
       id: "s1",
       slug: "acme",
       name: "Acme",
-      address: "123 Main St",
-      city: "Lincoln",
-      state: "NE",
-      website_url: "https://acme.example.com",
-      service_radius_miles: 25,
-      max_daily_ad_budget_micros: null,
+      address_street: "123 Main St",
+      address_locality: "Lincoln",
+      address_region: "NE",
+      url: "https://acme.example.com",
+      radius: 25,
       ...extras,
     };
   }
@@ -326,7 +324,7 @@ describe("POST /api/ads/google/campaigns (create)", () => {
 
   it("400 when shop website_url missing; Google mock not called", async () => {
     setupBaseline();
-    mockShop = tieredShop({ website_url: null });
+    mockShop = tieredShop({ url: null });
     const res = await campaignsPOST(
       req({
         shop_id: "s1",
@@ -342,7 +340,7 @@ describe("POST /api/ads/google/campaigns (create)", () => {
 
   it("400 when shop website_url non-https; Google mock not called", async () => {
     setupBaseline();
-    mockShop = tieredShop({ website_url: "http://acme.example.com" });
+    mockShop = tieredShop({ url: "http://acme.example.com" });
     const res = await campaignsPOST(
       req({
         shop_id: "s1",
@@ -358,7 +356,7 @@ describe("POST /api/ads/google/campaigns (create)", () => {
 
   it("400 when shop address missing; Google mock not called", async () => {
     setupBaseline();
-    mockShop = tieredShop({ address: null });
+    mockShop = tieredShop({ address_street: null });
     const res = await campaignsPOST(
       req({
         shop_id: "s1",
@@ -374,7 +372,7 @@ describe("POST /api/ads/google/campaigns (create)", () => {
 
   it("400 when service_radius_miles missing", async () => {
     setupBaseline();
-    mockShop = tieredShop({ service_radius_miles: null });
+    mockShop = tieredShop({ radius: null });
     const res = await campaignsPOST(
       req({
         shop_id: "s1",
