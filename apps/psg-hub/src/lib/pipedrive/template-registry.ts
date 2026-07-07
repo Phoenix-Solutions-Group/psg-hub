@@ -113,25 +113,44 @@ function defMatchesProducts(
 }
 
 /**
- * Map a won deal (via its line items) to a one-time template, or `null` when it cannot
- * be confidently mapped. `null` covers all three fall-back-to-onboarding cases:
- *   • zero products, or no registry template matches → unmapped;
- *   • two or more DIFFERENT registry templates match → ambiguous.
- * The caller (`provisionForDeal`) turns `null` into the onboarding board.
+ * Map a won deal (via its line items) to the DISTINCT one-time delivery templates it
+ * sold (PSG-678). Returns the deduped list of matched registry templates, in registry
+ * priority order — one entry per distinct template even when several line items match the
+ * same one. An empty array means "no delivery template sold" (zero products, add-ons /
+ * consulting only, or unmapped products); the caller (`provisionForDeal`) turns an empty
+ * result into today's onboarding board so the deal-won path never builds nothing.
+ *
+ * This replaces the old single-template rule: previously two or more DIFFERENT matches
+ * were treated as ambiguous → onboarding fallback. Per PSG-677 the correct behaviour is
+ * to build ONE project per distinct delivery template, so a deal selling e.g. Website
+ * Build + a second one-time template now builds both delivery boards.
  */
-export function selectTemplate(
+export function selectTemplates(
   _deal: WonDeal,
   products: readonly DealProduct[],
-): OneTimeTemplateDef | null {
-  if (!products || products.length === 0) return null;
+  registry: readonly OneTimeTemplateDef[] = ONE_TIME_TEMPLATE_REGISTRY,
+): OneTimeTemplateDef[] {
+  if (!products || products.length === 0) return [];
   const matches: OneTimeTemplateDef[] = [];
-  for (const def of ONE_TIME_TEMPLATE_REGISTRY) {
+  for (const def of registry) {
     if (defMatchesProducts(def, products) && !matches.some((m) => m.id === def.id)) {
       matches.push(def);
     }
   }
-  // Confident mapping requires exactly one distinct template. Ambiguous ⇒ onboarding.
-  return matches.length === 1 ? matches[0]! : null;
+  return matches;
+}
+
+/**
+ * Back-compat single-result shim: the FIRST distinct matched template (registry priority
+ * order), or `null` when the deal sold no delivery template. Prefer `selectTemplates`,
+ * which returns every distinct match; this shim is retained for callers that only care
+ * about "did a delivery template sell, and which is primary".
+ */
+export function selectTemplate(
+  deal: WonDeal,
+  products: readonly DealProduct[],
+): OneTimeTemplateDef | null {
+  return selectTemplates(deal, products)[0] ?? null;
 }
 
 /** Parse an env var to a finite integer id, or `null` if unset/malformed. */
@@ -156,6 +175,8 @@ export interface ProvisionForDealOptions {
   products?: readonly DealProduct[];
   /** Env source (injectable for tests). Defaults to `process.env`. */
   env?: Record<string, string | undefined>;
+  /** Template registry to select from (injectable for tests). Defaults to the module registry. */
+  registry?: readonly OneTimeTemplateDef[];
 }
 
 export interface ProvisionForDealResult extends ProvisionResult {
@@ -167,16 +188,71 @@ export interface ProvisionForDealResult extends ProvisionResult {
 }
 
 /**
- * Build the RIGHT one-time board for a won deal. Selects a template from the deal's line
- * items and dispatches its `phases` + board/phase into the existing
- * `provisionOnboardingBoard` (idempotent, per-deal title-scoped). Falls back to the
- * onboarding board whenever the deal cannot be confidently mapped OR the product read
- * fails — the deal-won path must never regress into building nothing.
+ * Summary of everything a single won deal built. A deal that sold N distinct delivery
+ * templates yields N projects (one per template); a deal that sold none yields exactly
+ * one onboarding-fallback project. `projects` is never empty — the deal-won path never
+ * builds nothing.
+ */
+export interface ProvisionForDealSummary {
+  /** One result per project built, in registry priority order (fallback ⇒ a single onboarding entry). */
+  projects: ProvisionForDealResult[];
+  /** Convenience list of the template ids built (parallel to `projects`). */
+  templateIds: string[];
+  /** True when ≥1 net-new delivery template matched (false ⇒ pure onboarding fallback). */
+  matchedTemplates: boolean;
+}
+
+/**
+ * Build one project for a single resolved template def. Resolves the per-template
+ * board/phase override (unset ⇒ reuse the onboarding board/phase) and dispatches the
+ * def's `phases` into the existing idempotent, per-deal-title `provisionOnboardingBoard`.
+ */
+async function provisionOneTemplate(
+  def: OneTimeTemplateDef,
+  matched: boolean,
+  opts: ProvisionForDealOptions,
+  env: Record<string, string | undefined>,
+): Promise<ProvisionForDealResult> {
+  const { client, deal, defaultBoardId, defaultPhaseId } = opts;
+  // Per-template board/phase override; unset ⇒ reuse the onboarding board/phase.
+  const boardId = envInt(env, def.boardIdEnv) ?? defaultBoardId;
+  const phaseId = envInt(env, def.phaseIdEnv) ?? defaultPhaseId;
+
+  const result = await provisionOnboardingBoard({
+    client,
+    deal,
+    boardId,
+    phaseId,
+    template: def.phases,
+    roleUserMap: opts.roleUserMap,
+    // Per-template title prefix ⇒ distinct deterministic title ⇒ its own idempotency
+    // guard (findProjectByTitle). Two templates on one deal never collide.
+    projectTitle: deliveryProjectTitle(def.titlePrefix, deal),
+  });
+
+  return {
+    ...result,
+    templateId: def.id,
+    templateFamily: def.family,
+    matchedTemplate: matched,
+  };
+}
+
+/**
+ * Build the RIGHT one-time board(s) for a won deal (PSG-678). Selects the DISTINCT
+ * delivery templates the deal sold and builds one project per template. Falls back to a
+ * single onboarding project whenever the deal sold no delivery template OR the product
+ * read fails — the deal-won path must never regress into building nothing.
+ *
+ * Idempotency is preserved per project: each template's title carries its own prefix, so
+ * a re-fired won-webhook is a per-project no-op (each guarded by `findProjectByTitle`).
+ * Projects are built sequentially to keep Pipedrive write ordering deterministic and
+ * bounded (a deal sells only a handful of delivery templates).
  */
 export async function provisionForDeal(
   opts: ProvisionForDealOptions,
-): Promise<ProvisionForDealResult> {
-  const { client, deal, defaultBoardId, defaultPhaseId } = opts;
+): Promise<ProvisionForDealSummary> {
+  const { client, deal } = opts;
   const env = opts.env ?? process.env;
 
   // Resolve the deal's line items. A read failure is non-fatal: fall back to onboarding
@@ -190,27 +266,19 @@ export async function provisionForDeal(
     }
   }
 
-  const selected = selectTemplate(deal, products);
-  const def = selected ?? ONBOARDING_TEMPLATE_DEF;
+  const selected = selectTemplates(deal, products, opts.registry);
+  // Zero delivery-template matches ⇒ single onboarding fallback (never build nothing).
+  const defs = selected.length > 0 ? selected : [ONBOARDING_TEMPLATE_DEF];
+  const matched = selected.length > 0;
 
-  // Per-template board/phase override; unset ⇒ reuse the onboarding board/phase.
-  const boardId = envInt(env, def.boardIdEnv) ?? defaultBoardId;
-  const phaseId = envInt(env, def.phaseIdEnv) ?? defaultPhaseId;
-
-  const result = await provisionOnboardingBoard({
-    client,
-    deal,
-    boardId,
-    phaseId,
-    template: def.phases,
-    roleUserMap: opts.roleUserMap,
-    projectTitle: deliveryProjectTitle(def.titlePrefix, deal),
-  });
+  const projects: ProvisionForDealResult[] = [];
+  for (const def of defs) {
+    projects.push(await provisionOneTemplate(def, matched, opts, env));
+  }
 
   return {
-    ...result,
-    templateId: def.id,
-    templateFamily: def.family,
-    matchedTemplate: selected != null,
+    projects,
+    templateIds: projects.map((p) => p.templateId),
+    matchedTemplates: matched,
   };
 }
