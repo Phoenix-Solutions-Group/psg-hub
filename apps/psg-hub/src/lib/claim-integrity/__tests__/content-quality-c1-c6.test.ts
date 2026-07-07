@@ -114,6 +114,47 @@ describe("C1 hardening (PSG-775) — MUST-PASS honest copy (zero false positives
   }
 });
 
+// PSG-793 — two narrow edges found in Lee's PSG-775 sign-off. Neither changes
+// any behavior on the shipped acceptance set; they close a title-cased brag that
+// slipped through and stop over-flagging one honest phrase.
+describe("C1 polish (PSG-793) — title-cased 'best in <place>' is caught", () => {
+  const MUST_BLOCK: readonly string[] = [
+    "Best in Town", // title-cased closed place-word (the reported gap)
+    "Best in Town — call today!",
+    "BEST IN THE STATE", // all-caps headline
+    "Best in the State", // title-cased with a lowercase article before the noun
+    "Best in Yonkers", // title-cased proper-noun place
+  ];
+  for (const copy of MUST_BLOCK) {
+    it(`BLOCKS: ${copy}`, () => {
+      expect(scanSuperlatives(copy).length, `expected a C1 violation for "${copy}"`).toBeGreaterThan(0);
+    });
+  }
+});
+
+describe("C1 polish (PSG-793) — honest 'best work' copy is no longer over-flagged", () => {
+  const MUST_PASS: readonly string[] = [
+    "Our best work shows in every repair",
+    "We take pride in our best work",
+  ];
+  for (const copy of MUST_PASS) {
+    it(`PASSES: ${copy}`, () => {
+      expect(scanSuperlatives(copy), `superlative false-positive on "${copy}"`).toHaveLength(0);
+    });
+  }
+
+  it("still blocks a genuine business superlative like 'best body shop'", () => {
+    expect(scanSuperlatives("The best body shop around").length).toBeGreaterThan(0);
+  });
+
+  it("still lets a capital-required proper noun distinguish an innocent 'best in <lowercase>' phrase", () => {
+    // "class" is a lowercase common noun, not a proper-noun place, so the
+    // capital-sensitive proper-noun rule leaves it alone (pre-existing behavior,
+    // preserved after the leading-word case-fold).
+    expect(scanSuperlatives("Best in class turnaround time")).toHaveLength(0);
+  });
+});
+
 describe("C1 hardening (PSG-775) — attribution escape hatch (a linked source clears it)", () => {
   it("passes a superlative attributed to a named third party WITH a link", () => {
     const copy = "Voted best body shop — Westchester Magazine 2026 https://westchestermagazine.com/best-of";

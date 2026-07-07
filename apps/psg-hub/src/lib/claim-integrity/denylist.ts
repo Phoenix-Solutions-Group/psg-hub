@@ -147,13 +147,31 @@ export const UNPROVABLE_SUPERLATIVE_PATTERNS: readonly { re: RegExp; label: stri
     label: '"self-superlative"',
   },
   // 1e — "best" as a business superlative (best + business/service noun).
+  // PSG-793: "work" was removed from this noun set. "Our best work" is honest
+  // craftsmanship copy ("our finest effort"), not a claim to beat every rival,
+  // so blocking it over-flagged honest wording. A real superlative like "best
+  // body shop / best price" is still caught. (The competitive-ranking sense,
+  // "best in <place>", is handled by the two rules just below.)
   {
-    re: /\b(?:the\s+|#\s?1\s+)?best\s+(?:body\s?shops?|auto\s?body|collision(?:\s+(?:repair|center|shop))?|repair(?:\s+shop)?|service|price|work|shops?)\b/i,
+    re: /\b(?:the\s+|#\s?1\s+)?best\s+(?:body\s?shops?|auto\s?body|collision(?:\s+(?:repair|center|shop))?|repair(?:\s+shop)?|service|price|shops?)\b/i,
     label: '"best <business>"',
   },
-  // 1e — "best in <place>".
+  // 1e — "best in <known place-word>". PSG-793: case-insensitive on purpose —
+  // headlines are often title-cased ("Best in Town"), and this alternative is a
+  // CLOSED set of place words, so folding case here cannot over-match innocent
+  // copy. (This is why it is a separate rule from the open proper-noun rule
+  // below, which must stay capital-sensitive.)
   {
-    re: /\bbest\s+in\s+(?:town|the\s+(?:state|area|city|county|business|region)|[a-z]+\s+county|[A-Z][a-zA-Z]+)\b/,
+    re: /\bbest\s+in\s+(?:town|the\s+(?:state|area|city|county|business|region)|[a-z]+\s+county)\b/i,
+    label: '"best in …"',
+  },
+  // 1e — "best in <Proper Noun>" (e.g. "Best in Yonkers"). The place token must
+  // start with a real capital, so innocent "best in class / best in stock" still
+  // pass; only the leading "Best"/"best" is case-folded (a headline capitalizes
+  // it). Keeping the capital requirement here is the false-positive guard, so
+  // this rule is intentionally NOT given the /i flag.
+  {
+    re: /\b[Bb]est\s+in\s+[A-Z][a-zA-Z]+\b/,
     label: '"best in …"',
   },
   // 1f — legacy constructs kept for continuity.
