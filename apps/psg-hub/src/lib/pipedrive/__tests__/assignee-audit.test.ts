@@ -15,6 +15,7 @@ const parent = (id: number, title = `Phase ${id}`): AuditTask => ({
   parentTaskId: null,
   assigneeIds: [],
   done: false,
+  description: "",
 });
 const leaf = (
   id: number,
@@ -25,6 +26,7 @@ const leaf = (
   parentTaskId: 1,
   assigneeIds: [],
   done: false,
+  description: "",
   ...over,
 });
 
