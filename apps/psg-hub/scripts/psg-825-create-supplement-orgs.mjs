@@ -123,11 +123,16 @@ async function main() {
   if (!allResolved) {
     console.log("(dry-run or partial — re-run with --apply to mint the missing org ids)");
   }
-  console.log(resolved.map((r) => `${r.id ?? "<id>"}|${r.name}`).join("\n"));
+  // Separator MUST be one the DEPLOYED engine parser resolveMaintenanceSupplement()
+  // accepts between id and name: `=`, `:`, or a space. A pipe `|` is NOT accepted —
+  // every entry would be silently skipped and all 12 shops dropped (they would never
+  // get a monthly board). Use `=`: unambiguous even when names contain spaces (PSG-832).
+  console.log(resolved.map((r) => `${r.id ?? "<id>"}=${r.name}`).join("\n"));
   console.log("--- end ---");
   console.log(
-    "\nNext: paste the block above into Vercel prod env RECURRING_MAINTENANCE_SUPPLEMENT (newline-separated),\n" +
-      "then redeploy. The engine reads it additively on top of RECURRING_MAINTENANCE_ROSTER (PSG-817).",
+    "\nNext: paste the block above VERBATIM into Vercel prod env RECURRING_MAINTENANCE_SUPPLEMENT\n" +
+      "(newline-separated, `id=name` per line — do NOT change the `=` to a pipe), then redeploy.\n" +
+      "The engine reads it additively on top of RECURRING_MAINTENANCE_ROSTER (PSG-817).",
   );
 }
 
