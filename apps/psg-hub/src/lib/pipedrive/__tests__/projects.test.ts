@@ -226,6 +226,81 @@ describe("createProjectsClient — transport (PSG-588: /api/ base path + v1/v2 p
   });
 });
 
+describe("createProjectsClient — PSG-642 thin v2-Tasks adapter (updateTask + attachProjectFile)", () => {
+  const TOKEN = "tok_secret_value";
+  /** Recording fetch that captures method/url/body (string OR FormData). */
+  function recordingFetch(data: unknown = { id: 1 }) {
+    const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        method: String(init?.method ?? "GET"),
+        body: init?.body,
+      });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data }),
+      } as Response;
+    }) as unknown as typeof fetch;
+    return { fetchImpl, calls };
+  }
+  function client(fetchImpl: typeof fetch) {
+    return createProjectsClient({ apiKey: TOKEN, companyDomain: "psg", fetchImpl });
+  }
+
+  it("updateTask PATCHes /api/v2/tasks/{id} with only the changed fields, token in query", async () => {
+    const { fetchImpl, calls } = recordingFetch({ id: 55 });
+    const driveLink = "See report: https://drive.google.com/file/d/abc/view";
+    const res = await client(fetchImpl).updateTask!(55, { description: driveLink });
+    expect(res.id).toBe(55);
+
+    const u = new URL(calls[0].url);
+    expect(calls[0].method).toBe("PATCH");
+    expect(`${u.origin}${u.pathname}`).toBe("https://psg.pipedrive.com/api/v2/tasks/55");
+    expect(u.pathname.startsWith("/api/")).toBe(true); // PSG-588 base-path discipline
+    expect(u.searchParams.get("api_token")).toBe(TOKEN); // token in query, not path
+    expect(JSON.parse(String(calls[0].body))).toEqual({ description: driveLink });
+  });
+
+  it("attachProjectFile POSTs multipart to /api/v1/files with the file + project_id", async () => {
+    const { fetchImpl, calls } = recordingFetch({ id: 900 });
+    const res = await client(fetchImpl).attachProjectFile!({
+      projectId: 42,
+      fileName: "report.pdf",
+      content: "PDFBYTES",
+      contentType: "application/pdf",
+    });
+    expect(res.id).toBe(900);
+
+    const u = new URL(calls[0].url);
+    expect(calls[0].method).toBe("POST");
+    expect(`${u.origin}${u.pathname}`).toBe("https://psg.pipedrive.com/api/v1/files");
+    expect(u.searchParams.get("api_token")).toBe(TOKEN);
+    // Body is FormData (boundary derived by fetch — we never set Content-Type by hand).
+    expect(calls[0].body).toBeInstanceOf(FormData);
+    const form = calls[0].body as FormData;
+    expect(form.get("project_id")).toBe("42");
+    expect(form.has("file")).toBe(true);
+    expect(form.get("file")).toBeInstanceOf(Blob);
+  });
+
+  it("updateTask surfaces a secret-free error on non-2xx (path + status only)", async () => {
+    const fetchImpl = (async () =>
+      ({ ok: false, status: 400, json: async () => ({}) }) as Response) as unknown as typeof fetch;
+    let err: PipedriveProjectsError | undefined;
+    try {
+      await client(fetchImpl).updateTask!(7, { description: "x" });
+    } catch (e) {
+      err = e as PipedriveProjectsError;
+    }
+    expect(err).toBeInstanceOf(PipedriveProjectsError);
+    expect(err?.status).toBe(400);
+    expect(err?.message).toContain("/api/v2/tasks/7");
+    expect(err?.message).not.toContain(TOKEN);
+  });
+});
+
 describe("onboardingProjectTitle", () => {
   it("is deterministic and prefers the org name", () => {
     expect(onboardingProjectTitle(DEAL)).toBe(

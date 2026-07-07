@@ -140,6 +140,35 @@ export interface CreateTaskInput {
   description?: string;
 }
 
+/**
+ * PSG-642 — fields patchable on an existing task via v2 `PATCH /tasks/{id}`. The v2 Tasks
+ * API is still beta, so this thin type is the ONE place a field rename lands. Every field
+ * is optional: send only what changes. `description` is the attachment-SOP write target
+ * (paste a Google Drive share link into a task — see MONTHLY-RECURRING-ATTACHMENTS-SOP.md).
+ */
+export interface UpdateTaskInput {
+  title?: string;
+  assignee_id?: number;
+  due_date?: string; // YYYY-MM-DD
+  description?: string;
+  /** Some workflows mark a task done via the v2 status field; kept for one-place mapping. */
+  status?: string;
+}
+
+/**
+ * PSG-642 — a project-level file attach (v1 `POST /files`) for the RARE true-file case.
+ * Pipedrive cannot attach a file to an individual TASK (confirmed in PSG-610 §2d), so the
+ * default SOP is a Drive link in the task description; this is the escape hatch for a file
+ * that must physically live in Pipedrive, attached to the whole project.
+ */
+export interface AttachProjectFileInput {
+  projectId: number;
+  fileName: string;
+  /** File bytes (or text). A raw `Blob` is passed through as-is. */
+  content: Blob | Uint8Array | ArrayBuffer | string;
+  contentType?: string;
+}
+
 export interface PipedriveProjectsClient {
   listBoards(): Promise<ProjectBoard[]>;
   listPhases(boardId: number): Promise<ProjectPhase[]>;
@@ -149,6 +178,13 @@ export interface PipedriveProjectsClient {
   createTask(input: CreateTaskInput): Promise<{ id: number }>;
   /** Find an existing project whose title matches (idempotency guard). */
   findProjectByTitle(title: string): Promise<{ id: number } | null>;
+  // ── PSG-642 thin v2-Tasks adapter (optional so existing test fakes stay valid) ──
+  // Both are always present on the concrete client below; they are the one-place fix for a
+  // beta v2 Tasks field/endpoint change and back the attachment SOP + future overdue digest.
+  /** Update an existing task (v2 `PATCH /tasks/{id}`). Send only the fields that change. */
+  updateTask?(taskId: number, patch: UpdateTaskInput): Promise<{ id: number }>;
+  /** Attach a file at PROJECT level (v1 `POST /files`) for the rare true-file case. */
+  attachProjectFile?(input: AttachProjectFileInput): Promise<{ id: number }>;
 }
 
 /**
@@ -186,7 +222,7 @@ export function createProjectsClient(
   }
 
   async function call<T>(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "PATCH",
     version: ApiVersion,
     path: string,
     params: Record<string, string> = {},
@@ -251,6 +287,50 @@ export function createProjectsClient(
     async createTask(input) {
       const task = await call<{ id: number }>("POST", "v2", "tasks", {}, { ...input });
       return { id: Number(task.id) };
+    },
+    async updateTask(taskId, patch) {
+      // v2 `PATCH /tasks/{id}` — beta; this call site is the one place the shape lives.
+      const task = await call<{ id: number }>(
+        "PATCH",
+        "v2",
+        `tasks/${taskId}`,
+        {},
+        { ...patch },
+      );
+      return { id: Number(task.id) };
+    },
+    async attachProjectFile(input) {
+      // v1 `POST /files` (multipart) — the rare true-file case (PSG-610 §2d). Content-Type
+      // is NOT set by hand: `fetch` derives the multipart boundary from the FormData body.
+      // Token rides in the query string only, exactly like every other call (never logged).
+      const blob =
+        input.content instanceof Blob
+          ? input.content
+          : new Blob([input.content as BlobPart], {
+              type: input.contentType ?? "application/octet-stream",
+            });
+      const form = new FormData();
+      form.append("file", blob, input.fileName);
+      form.append("project_id", String(input.projectId));
+      const res = await doFetch(url("v1", "files"), {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body: form,
+      });
+      if (!res.ok) {
+        // NEVER include the URL (it carries the token) in the error.
+        throw new PipedriveProjectsError(
+          `Pipedrive POST /api/v1/files returned HTTP ${res.status}`,
+          res.status,
+        );
+      }
+      const payload = (await res.json()) as { success?: boolean; data?: { id?: number } };
+      if (payload.success === false) {
+        throw new PipedriveProjectsError(
+          "Pipedrive POST /api/v1/files returned success=false",
+        );
+      }
+      return { id: Number(payload.data?.id) };
     },
     async findProjectByTitle(title) {
       // Projects list is small for a single company; page defensively and match exact.

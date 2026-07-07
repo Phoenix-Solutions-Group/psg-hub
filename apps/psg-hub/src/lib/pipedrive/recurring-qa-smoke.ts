@@ -4,7 +4,7 @@ import "server-only";
 // (build → verify → prove idempotent no-op → cleanup), run entirely server-side.
 //
 // Why this exists: same reason as qa-smoke.ts (Move 1 onboarding). The recurring builder's
-// WRITE path against LIVE Pipedrive (create project + 3 group parents + 9 subtasks via
+// WRITE path against LIVE Pipedrive (create project + 3 group parents + 8 subtasks via
 // Projects API v2) cannot be driven by QA (Tess): the write token is a SENSITIVE Vercel var
 // no agent can read and there is no Pipedrive MCP. Rather than hand a human a curl runbook
 // (rule #1), this runs the whole golden path in-process using the in-env token and returns
@@ -220,10 +220,11 @@ export async function runRecurringQaSmoke(
     c.phaseMatches = project.phase_id === opts.phaseId;
     c.startDateIsCycleStart = project.start_date === cycleStart;
     c.threeGroupParents = parents.length === WHM_RECURRING_SERVICE_TEMPLATE.length;
-    c.nineLeafTasks = leaves.length === recurringTaskCount();
-    c.totalIsTwelve =
+    c.eightLeafTasks = leaves.length === recurringTaskCount(); // canonical 8 (PSG-610 §2a)
+    c.totalIsEleven =
       tasks.length === WHM_RECURRING_SERVICE_TEMPLATE.length + recurringTaskCount();
-    c.oneMonthlyGate = gates.length === 1;
+    // PSG-642 realigned the template to the canonical 8-task shape → NO gate task.
+    c.noGateTasks = gates.length === 0;
     c.idempotentNoSecondProject =
       again.skippedExisting && again.projectId === prov.projectId;
     evidence.allChecksPass = Object.values(c).every(Boolean);
