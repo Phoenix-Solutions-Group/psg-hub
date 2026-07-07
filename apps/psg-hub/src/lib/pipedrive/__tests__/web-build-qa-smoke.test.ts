@@ -105,8 +105,10 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
           parent_task_id: body.parent_task_id ?? null,
           due_date: body.due_date ?? null,
           // The two fields this fake adds over qa-smoke's: preserved + returned so the
-          // owner→assignee + role-from-description spot-checks are real.
-          assignee_id: body.assignee_id ?? null,
+          // owner→assignee + role-from-description spot-checks are real. PSG-680: the v2
+          // Tasks API assigns via `assignee_ids` (array), so store + return that shape —
+          // exactly what the real API does and what the read-back (`toTask`) now parses.
+          assignee_ids: Array.isArray(body.assignee_ids) ? body.assignee_ids : [],
           description: body.description ?? null,
         });
         return ok({ id: tid });

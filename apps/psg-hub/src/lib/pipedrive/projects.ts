@@ -218,6 +218,22 @@ export interface PipedriveProjectsClient {
 }
 
 /**
+ * Translate our internal task input (which carries a single `assignee_id`) to the v2
+ * Tasks wire body. The ONLY transform: `assignee_id` (singular) → `assignee_ids: [id]`
+ * (the array field the v2 API actually reads — the singular one is silently dropped,
+ * PSG-680). Every other field passes through untouched. Omits the assignee entirely when
+ * unset so an unmapped role stays unassigned (rather than sending an empty array).
+ */
+export function toV2TaskBody(
+  input: CreateTaskInput | UpdateTaskInput,
+): Record<string, unknown> {
+  const { assignee_id, ...rest } = input;
+  const body: Record<string, unknown> = { ...rest };
+  if (assignee_id != null) body.assignee_ids = [assignee_id];
+  return body;
+}
+
+/**
  * Default HTTP client for the Pipedrive Projects API (v2 flat paths, personal-token auth).
  * Self-contained on purpose so this module is independently mergeable to `main`
  * (and therefore deployable to production) without the unmerged read-sync client.
@@ -342,17 +358,24 @@ export function createProjectsClient(
       return { id: Number(proj.id) };
     },
     async createTask(input) {
-      const task = await call<{ id: number }>("POST", "v2", "tasks", {}, { ...input });
+      // WIRE MAPPING (PSG-680): the v2 Tasks API assigns via `assignee_ids: number[]`, NOT
+      // the singular `assignee_id`. Sending the singular field is SILENTLY IGNORED (proven
+      // live: task returns `assignee_ids: []`), so provisioned boards land unassigned. We
+      // keep the singular `assignee_id` as the internal contract (every call site passes
+      // one owner) and translate to the array here — the one place the wire shape lives.
+      const body = toV2TaskBody(input);
+      const task = await call<{ id: number }>("POST", "v2", "tasks", {}, body);
       return { id: Number(task.id) };
     },
     async updateTask(taskId, patch) {
       // v2 `PATCH /tasks/{id}` — beta; this call site is the one place the shape lives.
+      // Same `assignee_id` → `assignee_ids: [id]` translation as createTask (PSG-680).
       const task = await call<{ id: number }>(
         "PATCH",
         "v2",
         `tasks/${taskId}`,
         {},
-        { ...patch },
+        toV2TaskBody(patch),
       );
       return { id: Number(task.id) };
     },

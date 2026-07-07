@@ -171,6 +171,30 @@ describe("createProjectsClient — transport (PSG-588: /api/ base path + v1/v2 p
     }
   });
 
+  it("maps assignee_id → assignee_ids:[id] on the v2 tasks wire body (PSG-680 regression)", async () => {
+    // The v2 Tasks API assigns via `assignee_ids` (array); the singular `assignee_id` is
+    // silently ignored (proven live), which left every provisioned task UNASSIGNED. Lock
+    // the translation: createTask + updateTask must emit `assignee_ids`, never `assignee_id`.
+    const create = recordingFetch({ id: 1 });
+    await client(create.fetchImpl).createTask({ title: "t", project_id: 9, assignee_id: 777 });
+    const createBody = JSON.parse(create.calls[0].body!);
+    expect(createBody.assignee_ids).toEqual([777]);
+    expect("assignee_id" in createBody).toBe(false);
+
+    const update = recordingFetch({ id: 1 });
+    await client(update.fetchImpl).updateTask!(1, { assignee_id: 888 });
+    const updateBody = JSON.parse(update.calls[0].body!);
+    expect(updateBody.assignee_ids).toEqual([888]);
+    expect("assignee_id" in updateBody).toBe(false);
+
+    // No assignee → no assignee field at all (unmapped role stays unassigned, not []).
+    const none = recordingFetch({ id: 1 });
+    await client(none.fetchImpl).createTask({ title: "t", project_id: 9 });
+    const noneBody = JSON.parse(none.calls[0].body!);
+    expect("assignee_ids" in noneBody).toBe(false);
+    expect("assignee_id" in noneBody).toBe(false);
+  });
+
   it("keeps users on /api/v1 (no v2 users endpoint) and passes board_id + limit params", async () => {
     const { fetchImpl, calls } = recordingFetch([]);
     const c = client(fetchImpl);
