@@ -14,6 +14,7 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
   const deals = new Map<number, Record<string, unknown>>();
   const projects = new Map<number, Record<string, unknown>>();
   const tasks = new Map<number, Record<string, unknown>>();
+  const phases = new Map<number, Record<string, unknown>>(); // PSG-722 board phases
   const log: Array<{ method: string; path: string }> = [];
 
   const ok = (data: unknown, additional: unknown = {}) =>
@@ -110,6 +111,7 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
           // exactly what the real API does and what the read-back (`toTask`) now parses.
           assignee_ids: Array.isArray(body.assignee_ids) ? body.assignee_ids : [],
           description: body.description ?? null,
+          phase_id: null, // stamped later via the v1 plan-task PUT (PSG-722)
         });
         return ok({ id: tid });
       }
@@ -119,10 +121,39 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
       }
     }
 
+    // ── v2 phases (PSG-722) ──
+    if (version === "v2" && resource === "phases") {
+      if (method === "POST") {
+        const phid = seq++;
+        phases.set(phid, { id: phid, name: body.name, board_id: body.board_id });
+        return ok({ id: phid });
+      }
+      if (id == null && method === "GET") {
+        const bid = Number(u.searchParams.get("board_id"));
+        return ok([...phases.values()].filter((p) => p.board_id === bid).map((p) => ({ ...p })));
+      }
+    }
+
+    // ── v1 project plan (PSG-722: setTaskPhase PUT + getProjectPlan GET) ──
+    if (version === "v1" && resource === "projects" && parts[4] === "plan") {
+      if (parts[5] === "tasks" && method === "PUT") {
+        const taskId = Number(parts[6]);
+        const t = tasks.get(taskId);
+        if (t) t.phase_id = body.phase_id ?? null;
+        return ok({ id: taskId, phase_id: body.phase_id ?? null });
+      }
+      if (parts[5] == null && method === "GET") {
+        const items = [...tasks.values()]
+          .filter((t) => t.project_id === id)
+          .map((t) => ({ type: "task", task_id: t.id, phase_id: t.phase_id ?? null }));
+        return ok(items);
+      }
+    }
+
     return notFound();
   }) as unknown as typeof fetch;
 
-  return { fetchImpl, deals, projects, tasks, log };
+  return { fetchImpl, deals, projects, tasks, phases, log };
 }
 
 const noSleep = async () => {};
@@ -152,13 +183,22 @@ describe("runWebBuildQaSmoke — selector → New Website Build board, full E2E 
     expect(ev.selection.matchedTemplate).toBe(true);
     expect(ev.selection.templateFamily).toBe(WEB_BUILD_TEMPLATE_DEF.family);
 
-    // Structure: 4 phases / 22 leaves (6+5+6+5) / 4 gates / 26 total.
-    expect(ev.tree.parentTasks).toBe(4);
-    expect(ev.tree.leafTasks).toBe(TEMPLATE_LEAVES);
-    expect(ev.tree.leafTasks).toBe(22);
-    expect(ev.tree.leavesPerPhase).toEqual([6, 5, 6, 5]);
+    // Structure (PSG-722): FLAT — 22 tasks, no container/parent tasks, 4 gates. Tasks are
+    // stamped across the 4 template phase columns (6+5+6+5); 0 land in "Phase unassigned".
+    expect(ev.tree.totalTasks).toBe(TEMPLATE_LEAVES);
+    expect(ev.tree.totalTasks).toBe(22);
+    expect(ev.tree.containerTasks).toBe(0);
     expect(ev.tree.gateTasks).toBe(4);
-    expect(ev.tree.totalTasks).toBe(26);
+    expect(ev.phases.templatePhaseNames).toEqual(
+      NEW_WEBSITE_BUILD_TEMPLATE.map((p) => p.name),
+    );
+    expect(ev.phases.allTemplatePhasesPresent).toBe(true);
+    expect(ev.phases.tasksInUnassigned).toBe(0);
+    expect(ev.phases.everyTaskStamped).toBe(true);
+    expect(ev.phases.perPhase.map((p) => p.taskCount)).toEqual([6, 5, 6, 5]);
+    expect(ev.checks.zeroTasksUnassigned).toBe(true);
+    expect(ev.checks.everyTaskInItsPhase).toBe(true);
+    expect(ev.checks.phaseTaskSplitMatches).toBe(true);
 
     // Board/phase resolve to the onboarding fallback (no WEBBUILD override in env:{}).
     expect(ev.expectedBoardId).toBe(1);

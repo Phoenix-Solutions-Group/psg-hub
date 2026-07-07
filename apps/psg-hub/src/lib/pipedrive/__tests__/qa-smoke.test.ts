@@ -11,6 +11,9 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
   const deals = new Map<number, Record<string, unknown>>();
   const projects = new Map<number, Record<string, unknown>>();
   const tasks = new Map<number, Record<string, unknown>>();
+  // PSG-722: board phases (id → {id,name,board_id}) so ensureBoardPhases + the plan readback
+  // run against a coherent fake. A task's phase_id is set by the v1 plan-task PUT.
+  const phases = new Map<number, Record<string, unknown>>();
   const log: Array<{ method: string; path: string }> = [];
   const projectCreateBodies: Array<Record<string, unknown>> = [];
 
@@ -109,6 +112,7 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
           project_id: body.project_id,
           parent_task_id: body.parent_task_id ?? null,
           due_date: body.due_date ?? null,
+          phase_id: null, // stamped later via the v1 plan-task PUT (PSG-722)
         });
         return ok({ id: tid });
       }
@@ -118,10 +122,42 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
       }
     }
 
+    // ── v2 phases (PSG-722: ensureBoardPhases + phase-name readback) ──
+    if (version === "v2" && resource === "phases") {
+      if (method === "POST") {
+        const phid = seq++;
+        phases.set(phid, { id: phid, name: body.name, board_id: body.board_id });
+        return ok({ id: phid });
+      }
+      if (id == null && method === "GET") {
+        const bid = Number(u.searchParams.get("board_id"));
+        return ok([...phases.values()].filter((p) => p.board_id === bid).map((p) => ({ ...p })));
+      }
+    }
+
+    // ── v1 project plan (PSG-722: setTaskPhase PUT + getProjectPlan GET) ──
+    if (version === "v1" && resource === "projects" && parts[4] === "plan") {
+      const projectId = id;
+      // PUT /projects/{id}/plan/tasks/{taskId} { phase_id } — stamp a task's phase.
+      if (parts[5] === "tasks" && method === "PUT") {
+        const taskId = Number(parts[6]);
+        const t = tasks.get(taskId);
+        if (t) t.phase_id = body.phase_id ?? null;
+        return ok({ id: taskId, phase_id: body.phase_id ?? null });
+      }
+      // GET /projects/{id}/plan — items link each task to its phase.
+      if (parts[5] == null && method === "GET") {
+        const items = [...tasks.values()]
+          .filter((t) => t.project_id === projectId)
+          .map((t) => ({ type: "task", task_id: t.id, phase_id: t.phase_id ?? null }));
+        return ok(items);
+      }
+    }
+
     return notFound();
   }) as unknown as typeof fetch;
 
-  return { fetchImpl, deals, projects, tasks, log, projectCreateBodies };
+  return { fetchImpl, deals, projects, tasks, phases, log, projectCreateBodies };
 }
 
 const noSleep = async () => {};
@@ -166,12 +202,26 @@ describe("runQaSmoke — full write-path E2E against an in-memory Pipedrive", ()
     expect(ev.checks.projectOrgIdsPopulated).toBe(true);
     expect(ev.checks.projectPersonIdsPopulated).toBe(true);
 
-    // Task tree: 5 parents + 25 leaves = 30, exactly 3 GATE tasks
-    expect(ev.tree.parentTasks).toBe(WHM_ONBOARDING_TEMPLATE.length);
-    expect(ev.tree.leafTasks).toBe(templateTaskCount());
-    expect(ev.tree.totalTasks).toBe(WHM_ONBOARDING_TEMPLATE.length + templateTaskCount());
+    // Task tree (PSG-722): FLAT — 25 tasks, no container/parent tasks, exactly 3 GATE tasks.
+    expect(ev.tree.totalTasks).toBe(templateTaskCount());
+    expect(ev.tree.containerTasks).toBe(0);
     expect(ev.tree.gateTasks).toBe(3);
     expect(ev.tree.gateTitles.every((t) => t.toUpperCase().includes("GATE"))).toBe(true);
+
+    // PSG-722 phase-stamp: the board carries the template's phase columns and EVERY task
+    // is stamped into its template phase (0 in "Phase unassigned").
+    expect(ev.phases.templatePhaseNames).toEqual(
+      WHM_ONBOARDING_TEMPLATE.map((p) => p.name),
+    );
+    expect(ev.phases.allTemplatePhasesPresent).toBe(true);
+    expect(ev.phases.tasksInUnassigned).toBe(0);
+    expect(ev.phases.everyTaskStamped).toBe(true);
+    expect(ev.phases.perPhase.map((p) => p.taskCount)).toEqual(
+      WHM_ONBOARDING_TEMPLATE.map((p) => p.tasks.length),
+    );
+    expect(ev.checks.zeroTasksUnassigned).toBe(true);
+    expect(ev.checks.everyTaskInItsPhase).toBe(true);
+    expect(ev.checks.templatePhaseColumnsPresent).toBe(true);
 
     // Due-date spot checks: D1 welcome = won+1, D5 client sign-off = won+55
     expect(ev.dueDateSpotChecks.d1Welcome.due).toBe("2026-07-07");

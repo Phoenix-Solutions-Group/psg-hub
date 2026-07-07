@@ -221,8 +221,8 @@ describe("runRecurringCycle", () => {
       phaseId: 8,
     });
     expect(result.created).toBe(1);
-    // 3 group parents + 8 leaf tasks.
-    expect(client.createTask).toHaveBeenCalledTimes(3 + recurringTaskCount());
+    // PSG-722: FLAT board — one createTask per template task (no group-parent tasks).
+    expect(client.createTask).toHaveBeenCalledTimes(recurringTaskCount());
     expect(client.findProjectByTitle).toHaveBeenCalledWith(
       recurringCycleTitle(account, CYCLE),
     );

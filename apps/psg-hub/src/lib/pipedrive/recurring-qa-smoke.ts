@@ -36,9 +36,11 @@ import {
 import {
   createQaRestClient,
   isQaTestTitle,
+  checkPhaseStamping,
   QA_TEST_MARKER,
   type QaFetch,
   type QaProject,
+  type PhaseStampCheck,
 } from "./qa-smoke";
 import { firstOfCurrentMonthUTC } from "./recurring-accounts";
 
@@ -70,12 +72,13 @@ export interface RecurringQaSmokeEvidence {
   };
   tree: {
     totalTasks: number;
-    parentTasks: number;
-    leafTasks: number;
+    /** PSG-722: boards are now FLAT (no container parents). Kept for regression visibility. */
+    containerTasks: number;
     gateTasks: number;
     gateTitles: string[];
-    parentTitles: string[];
   };
+  /** PSG-722 — proof every task landed in its workstream phase (0 in "Phase unassigned"). */
+  phases: PhaseStampCheck;
   idempotency: {
     skippedExisting: boolean;
     projectIdMatches: boolean;
@@ -167,12 +170,22 @@ export async function runRecurringQaSmoke(
       phaseId: opts.phaseId,
     });
 
-    // 2) Read back the project + task tree.
+    // 2) Read back the project + task tree + phase stamping (PSG-722).
     const project = await rest.getProject(prov.projectId);
     const tasks = await rest.listProjectTasks(prov.projectId);
-    const parents = tasks.filter((t) => t.parent_task_id == null);
-    const leaves = tasks.filter((t) => t.parent_task_id != null);
+    const parentIds = new Set(
+      tasks.map((t) => t.parent_task_id).filter((id): id is number => id != null),
+    );
+    const containers = tasks.filter((t) => parentIds.has(t.id));
     const gates = tasks.filter((t) => t.title.toUpperCase().includes("GATE"));
+    const plan = await rest.getProjectPlan(prov.projectId);
+    const boardPhases = await rest.listBoardPhases(opts.boardId);
+    const phases = checkPhaseStamping({
+      tasks,
+      plan,
+      boardPhases,
+      template: WHM_RECURRING_SERVICE_TEMPLATE,
+    });
 
     // 3) Idempotency: re-provision → must be a no-op on the same project id.
     const again = await provisionRecurringServiceBoard({
@@ -197,12 +210,11 @@ export async function runRecurringQaSmoke(
       },
       tree: {
         totalTasks: tasks.length,
-        parentTasks: parents.length,
-        leafTasks: leaves.length,
+        containerTasks: containers.length,
         gateTasks: gates.length,
         gateTitles: gates.map((t) => t.title),
-        parentTitles: parents.map((t) => t.title),
       },
+      phases,
       idempotency: {
         skippedExisting: again.skippedExisting,
         projectIdMatches: again.projectId === prov.projectId,
@@ -219,12 +231,16 @@ export async function runRecurringQaSmoke(
     c.boardMatches = project.board_id === opts.boardId;
     c.phaseMatches = project.phase_id === opts.phaseId;
     c.startDateIsCycleStart = project.start_date === cycleStart;
-    c.threeGroupParents = parents.length === WHM_RECURRING_SERVICE_TEMPLATE.length;
-    c.eightLeafTasks = leaves.length === recurringTaskCount(); // canonical 8 (PSG-610 §2a)
-    c.totalIsEleven =
-      tasks.length === WHM_RECURRING_SERVICE_TEMPLATE.length + recurringTaskCount();
+    // PSG-722: board is FLAT (no container/group-parent tasks); all 8 template tasks present.
+    c.noContainerTasks = containers.length === 0;
+    c.eightTasks = tasks.length === recurringTaskCount(); // canonical 8 (PSG-610 §2a)
+    c.threeGroupPhases = WHM_RECURRING_SERVICE_TEMPLATE.length === 3;
     // PSG-642 realigned the template to the canonical 8-task shape → NO gate task.
     c.noGateTasks = gates.length === 0;
+    // PSG-722 phase-stamp: 3 workstream columns present + 0 tasks in "Phase unassigned".
+    c.templatePhaseColumnsPresent = phases.allTemplatePhasesPresent;
+    c.zeroTasksUnassigned = phases.tasksInUnassigned === 0;
+    c.everyTaskInItsPhase = phases.everyTaskStamped;
     c.idempotentNoSecondProject =
       again.skippedExisting && again.projectId === prov.projectId;
     evidence.allChecksPass = Object.values(c).every(Boolean);

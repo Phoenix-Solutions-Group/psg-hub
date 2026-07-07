@@ -9,9 +9,10 @@
 // Reuses the exact same Pipedrive Projects client + role→user map + UTC date math as
 // onboarding, so there is one code path to the Pipedrive API and one place to fix.
 
-import type {
-  PipedriveProjectsClient,
-  ProvisionResult,
+import {
+  ensureBoardPhases,
+  type PipedriveProjectsClient,
+  type ProvisionResult,
 } from "./projects";
 import {
   WHM_RECURRING_SERVICE_TEMPLATE,
@@ -59,11 +60,12 @@ export function recurringCycleTitle(account: RecurringClient, cycleStart: string
 }
 
 /**
- * Create one monthly recurring-service board for a client: one project, one parent
- * task per workstream group, each group's tasks as subtasks with due dates =
- * cycleStart + offset. Idempotent: if a project with the deterministic
- * (client + month) title already exists, it is a no-op (`skippedExisting: true`) so a
- * retried monthly trigger never double-creates.
+ * Create one monthly recurring-service board for a client: one project, and each template
+ * task created FLAT and stamped into its workstream phase (due dates = cycleStart + offset).
+ * The board's phase columns are ensured to match the template first (PSG-722). Idempotent:
+ * if a project with the deterministic (client + month) title already exists it is a no-op
+ * (`skippedExisting: true`) so a retried monthly trigger never double-creates; phase
+ * creation is idempotent by name.
  */
 export async function provisionRecurringServiceBoard(
   opts: RecurringProvisionOptions,
@@ -97,27 +99,30 @@ export async function provisionRecurringServiceBoard(
     ...(account.personId != null ? { person_ids: [account.personId] } : {}),
   });
 
+  // Give the board this template's workstream phase columns (idempotent by name), then
+  // stamp each task into its group — same PSG-722 fix as the onboarding/web-build boards,
+  // so the monthly WHM board is phased too (no task lands in "Phase unassigned").
+  const phaseMap = await ensureBoardPhases(
+    client,
+    boardId,
+    template.map((g) => g.name),
+  );
+
   let taskCount = 0;
   for (const group of template) {
-    // Parent task = the workstream group; due date is the group's last task offset.
-    const groupEndOffset = group.tasks.reduce((m, t) => Math.max(m, t.dayOffset), 0);
-    const parent = await client.createTask({
-      title: group.name,
-      project_id: project.id,
-      due_date: dueDateFor(cycleStart, groupEndOffset),
-      description: `${group.key} — ${group.tasks.length} task(s).`,
-    });
-
+    const targetPhaseId = phaseMap.get(group.name.trim());
     for (const t of group.tasks) {
       const assignee = roleUserMap[t.owner];
-      await client.createTask({
+      const task = await client.createTask({
         title: t.title,
         project_id: project.id,
-        parent_task_id: parent.id,
         due_date: dueDateFor(cycleStart, t.dayOffset),
         description: `Owner: ${ROLE_LABELS[t.owner]} (${t.owner})${t.gate ? " · GATE" : ""}`,
         ...(assignee != null ? { assignee_id: assignee } : {}),
       });
+      if (targetPhaseId != null && typeof client.setTaskPhase === "function") {
+        await client.setTaskPhase(project.id, task.id, targetPhaseId);
+      }
       taskCount += 1;
     }
   }

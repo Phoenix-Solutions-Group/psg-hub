@@ -13,18 +13,22 @@ import { recurringTaskCount } from "../recurring-service-template";
 // it created — the realistic round trip without hitting the network.
 interface Store {
   projects: Map<number, { id: number; title: string; board_id: number; phase_id: number; start_date: string }>;
-  tasks: Array<{ id: number; title: string; parent_task_id: number | null; due_date: string | null; project_id: number }>;
+  tasks: Array<{ id: number; title: string; parent_task_id: number | null; due_date: string | null; project_id: number; phase_id: number | null }>;
+  // PSG-722: board phases (id → {id,name,board_id}) shared by build + read-back.
+  phases: Array<{ id: number; name: string; board_id: number }>;
   next: number;
 }
 
 function makeStore(): Store {
-  return { projects: new Map(), tasks: [], next: 900 };
+  return { projects: new Map(), tasks: [], phases: [], next: 900 };
 }
 
 function fakeProvisionClient(store: Store): PipedriveProjectsClient {
   return {
     listBoards: vi.fn(async () => []),
-    listPhases: vi.fn(async () => []),
+    listPhases: vi.fn(async (boardId: number) =>
+      store.phases.filter((p) => p.board_id === boardId),
+    ),
     listUsers: vi.fn(async () => []),
     findProjectByTitle: vi.fn(async (title: string) => {
       for (const p of store.projects.values()) if (p.title === title) return { id: p.id };
@@ -49,8 +53,18 @@ function fakeProvisionClient(store: Store): PipedriveProjectsClient {
         parent_task_id: input.parent_task_id ?? null,
         due_date: input.due_date ?? null,
         project_id: input.project_id,
+        phase_id: null,
       });
       return { id };
+    }),
+    createPhase: vi.fn(async (boardId: number, name: string, _order?: number) => {
+      const id = store.next++;
+      store.phases.push({ id, name, board_id: boardId });
+      return { id };
+    }),
+    setTaskPhase: vi.fn(async (_projectId: number, taskId: number, phaseId: number) => {
+      const t = store.tasks.find((x) => x.id === taskId);
+      if (t) t.phase_id = phaseId;
     }),
   };
 }
@@ -83,6 +97,22 @@ function fakeFetch(store: Store): typeof fetch {
       const pid = Number(u.searchParams.get("project_id"));
       return ok(store.tasks.filter((t) => t.project_id === pid), {});
     }
+    // PSG-722: GET board phases (name read-back for the phase-stamp verifier).
+    if (method === "GET" && path.endsWith("/api/v2/phases")) {
+      const bid = Number(u.searchParams.get("board_id"));
+      return ok(store.phases.filter((p) => p.board_id === bid), {});
+    }
+    // PSG-722: GET project plan — links each task to its stamped phase_id.
+    const plan = path.match(/\/api\/v1\/projects\/(\d+)\/plan$/);
+    if (method === "GET" && plan) {
+      const pid = Number(plan[1]);
+      return ok(
+        store.tasks
+          .filter((t) => t.project_id === pid)
+          .map((t) => ({ type: "task", task_id: t.id, phase_id: t.phase_id })),
+        {},
+      );
+    }
     // GET projects list (dedupe / cleanup scan)
     if (method === "GET" && path.endsWith("/api/v2/projects")) {
       return ok([...store.projects.values()], {});
@@ -113,10 +143,17 @@ describe("runRecurringQaSmoke", () => {
       fakeProvisionClient(store),
     );
 
-    expect(evidence.tree.parentTasks).toBe(3);
-    expect(evidence.tree.leafTasks).toBe(recurringTaskCount());
-    expect(evidence.tree.leafTasks).toBe(8);
+    // PSG-722: FLAT board — 8 tasks, no container/parent tasks, 0 gate; all phase-stamped.
+    expect(evidence.tree.totalTasks).toBe(recurringTaskCount());
+    expect(evidence.tree.totalTasks).toBe(8);
+    expect(evidence.tree.containerTasks).toBe(0);
     expect(evidence.tree.gateTasks).toBe(0);
+    expect(evidence.phases.tasksInUnassigned).toBe(0);
+    expect(evidence.phases.everyTaskStamped).toBe(true);
+    expect(evidence.phases.allTemplatePhasesPresent).toBe(true);
+    expect(evidence.phases.perPhase.map((p) => p.taskCount)).toEqual([3, 3, 2]);
+    expect(evidence.checks.zeroTasksUnassigned).toBe(true);
+    expect(evidence.checks.everyTaskInItsPhase).toBe(true);
     expect(evidence.idempotency.skippedExisting).toBe(true);
     expect(evidence.idempotency.projectIdMatches).toBe(true);
     expect(evidence.checks.projectTitleMatches).toBe(true);

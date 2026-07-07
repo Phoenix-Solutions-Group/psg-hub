@@ -33,9 +33,14 @@ function fakeClient(
 ) {
   let nextId = 2000;
   let nextProjectId = 700;
+  let nextPhaseId = 400;
   const createProject = vi.fn(async (_input: CreateProjectInput) => ({ id: nextProjectId++ }));
   const createTask = vi.fn(async (_input: CreateTaskInput) => ({ id: nextId++ }));
   const findProjectByTitle = vi.fn(async (_title: string) => null as { id: number } | null);
+  const createPhase = vi.fn(async (_b: number, _name: string, _order?: number) => ({
+    id: nextPhaseId++,
+  }));
+  const setTaskPhase = vi.fn(async (_p: number, _t: number, _phase: number) => {});
   const listDealProducts = vi.fn(async (_dealId: number) => {
     if (products instanceof Error) throw products;
     return products;
@@ -47,10 +52,12 @@ function fakeClient(
     createProject,
     createTask,
     findProjectByTitle,
+    createPhase,
+    setTaskPhase,
     listDealProducts,
     ...overrides,
   };
-  return { client, createProject, createTask, findProjectByTitle, listDealProducts };
+  return { client, createProject, createTask, findProjectByTitle, createPhase, setTaskPhase, listDealProducts };
 }
 
 const webBuildProduct: DealProduct = {

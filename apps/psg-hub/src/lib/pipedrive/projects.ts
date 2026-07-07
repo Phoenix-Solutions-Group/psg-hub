@@ -23,13 +23,26 @@
 //   this can never silently regress.
 //
 // Pipedrive data-model note (important, and the one non-obvious mapping):
-//   Pipedrive Projects has Boards → (kanban) Phases → Projects → Tasks. A *project*
-//   lives in ONE board phase (a kanban column like "Not started"), so Pipedrive's
-//   "phases" are NOT our D1–D5 delivery phases. We therefore model each D-phase as a
-//   PARENT TASK inside the project, with that phase's tasks as its subtasks
-//   (`parent_task_id`). This gives a clean "phases + nested tasks" board without
-//   abusing kanban columns. The exact board/phase to drop the project into is
+//   Pipedrive Projects has Boards → Phases → Projects → Tasks. A *project* lives in ONE
+//   board phase as a kanban card (`CreateProjectInput.phase_id`, e.g. "Not started").
+//   SEPARATELY, the SAME board phases also organise the tasks inside a project's Tasks
+//   view — a task carries its own `phase_id` (a board phase) and everything unstamped
+//   piles into "Phase unassigned".
+//
+//   PSG-722 fix (was the "Phase unassigned" bug): the first version WRONGLY assumed
+//   project tasks had no phase field, so it modelled each D-phase as a PARENT TASK with
+//   its tasks as subtasks (`parent_task_id`). That left every task in "Phase unassigned"
+//   and the board showing Pipedrive's factory phase columns. We now (a) ensure the target
+//   board carries one phase per template phase — by name, idempotently — and (b) stamp
+//   each task into its template phase after create. The redundant phase-PARENT tasks are
+//   dropped: real phase columns replace them, so tasks are created FLAT (no parent) and
+//   each gets a `phase_id`. The board/phase the project card sits in is still
 //   configurable (`boardId`/`phaseId`) and discoverable via `listBoards`/`listPhases`.
+//
+//   Two API facts this relies on (confirmed live, PSG-715 research):
+//     • Board phases are created via v2 `POST /phases` `{ name, board_id, order_nr? }`.
+//     • A task's phase is set AFTER create via v1 `PUT /projects/{id}/plan/tasks/{taskId}`
+//       `{ phase_id }` — v2 `POST /tasks` silently ignores `phase_id`.
 
 import {
   WHM_ONBOARDING_TEMPLATE,
@@ -132,8 +145,10 @@ export interface CreateProjectInput {
 export interface CreateTaskInput {
   title: string;
   project_id: number;
-  // NB: v2 `POST /tasks` has NO `phase_id` — D-phases are modelled as parent tasks
-  // (`parent_task_id`), so we never send one. (See file header + PSG-588.)
+  // NB: v2 `POST /tasks` silently IGNORES `phase_id` (confirmed live, PSG-715) — a task's
+  // phase is stamped AFTER create via `setTaskPhase` (v1 plan endpoint). `parent_task_id`
+  // is retained for the legacy subtask shape but the provisioner no longer sends one:
+  // tasks are created FLAT and phased (see file header + PSG-722).
   parent_task_id?: number;
   assignee_id?: number;
   due_date?: string; // YYYY-MM-DD
@@ -215,6 +230,28 @@ export interface PipedriveProjectsClient {
   listProjectTasks?(
     projectId: number,
   ): Promise<Array<{ id: number; title: string; description: string }>>;
+  /**
+   * PSG-722 — create a board phase by name (v2 `POST /phases` `{ board_id, name, order_nr? }`).
+   * Optional so existing test fakes stay valid; the concrete client always implements it.
+   * Backs `ensureBoardPhases` — the idempotent "give this board the template's phase
+   * columns" step that fixes the "Phase unassigned" defect.
+   */
+  createPhase?(
+    boardId: number,
+    name: string,
+    orderNr?: number,
+  ): Promise<{ id: number }>;
+  /**
+   * PSG-722 — stamp a task into a board phase (v1 `PUT /projects/{id}/plan/tasks/{taskId}`
+   * `{ phase_id }`). This is the ONLY way to set a task's phase: v2 `POST /tasks` ignores
+   * `phase_id`. Optional on the interface (test-fake friendliness); always implemented by
+   * the concrete client so every provisioned task lands in its template phase.
+   */
+  setTaskPhase?(
+    projectId: number,
+    taskId: number,
+    phaseId: number,
+  ): Promise<void>;
 }
 
 /**
@@ -268,7 +305,7 @@ export function createProjectsClient(
   }
 
   async function call<T>(
-    method: "GET" | "POST" | "PATCH",
+    method: "GET" | "POST" | "PATCH" | "PUT",
     version: ApiVersion,
     path: string,
     params: Record<string, string> = {},
@@ -411,6 +448,29 @@ export function createProjectsClient(
         );
       }
       return { id: Number(payload.data?.id) };
+    },
+    async createPhase(boardId, name, orderNr) {
+      // v2 `POST /phases` (PSG-722). Board phases double as the project-card kanban columns
+      // AND the task-grouping columns in a project's Tasks view — so creating the template's
+      // phases here is what replaces Pipedrive's factory columns. `order_nr` is optional
+      // (1..existing+1); omitted ⇒ Pipedrive appends. Idempotency is the caller's job
+      // (`ensureBoardPhases` only creates a phase whose name is missing).
+      const body: Record<string, unknown> = { board_id: boardId, name };
+      if (orderNr != null) body.order_nr = orderNr;
+      const phase = await call<{ id: number }>("POST", "v2", "phases", {}, body);
+      return { id: Number(phase.id) };
+    },
+    async setTaskPhase(projectId, taskId, phaseId) {
+      // v1 `PUT /projects/{id}/plan/tasks/{taskId}` `{ phase_id }` (PSG-722). This is the
+      // ONLY way to set a task's phase — v2 `POST /tasks` ignores `phase_id`. Token rides
+      // in the query string only (never logged); errors carry PATH + status, never the URL.
+      await call<unknown>(
+        "PUT",
+        "v1",
+        `projects/${projectId}/plan/tasks/${taskId}`,
+        {},
+        { phase_id: phaseId },
+      );
     },
     async findProjectByTitle(title) {
       // Projects list is small for a single company; page defensively and match exact.
@@ -604,10 +664,50 @@ export function onboardingProjectTitle(deal: WonDeal): string {
 }
 
 /**
- * Create the full onboarding delivery board for a won deal: one project, one parent
- * task per D-phase, and each phase's tasks as subtasks with due dates = wonDate +
- * offset. Idempotent: if a project with the deterministic title already exists, it is
- * a no-op (returns `skippedExisting: true`) so a webhook retry never double-creates.
+ * PSG-722 — ensure a board carries one phase for each name in `phaseNames`, returning a
+ * name → phaseId map. Existing phases are matched by exact (trimmed) name via `listPhases`;
+ * any missing phase is created via `createPhase` (appended in template order). IDEMPOTENT:
+ * a re-run finds every phase already present and creates nothing.
+ *
+ * Board-scoped by design (phases belong to a board, PSG-715): when several templates share
+ * one fallback board, the board accumulates the union of their phases — each project's tasks
+ * still land only in their own template's phases, and separate per-template boards (the
+ * registry's `boardIdEnv`) give each a clean column set. Template phase names carry their
+ * `P1 —`/`D1 —` prefix, so two templates on a shared board never collide on a name.
+ *
+ * Degrades gracefully for minimal test fakes: a client without `createPhase` simply returns
+ * the map of whatever phases already exist (missing ones are skipped, not thrown).
+ */
+export async function ensureBoardPhases(
+  client: PipedriveProjectsClient,
+  boardId: number,
+  phaseNames: readonly string[],
+): Promise<Map<string, number>> {
+  const existing = await client.listPhases(boardId);
+  const byName = new Map<string, number>();
+  for (const p of existing) {
+    const key = p.name.trim();
+    if (key !== "" && !byName.has(key)) byName.set(key, p.id);
+  }
+  let nextOrder = existing.length + 1;
+  for (const raw of phaseNames) {
+    const name = raw.trim();
+    if (name === "" || byName.has(name)) continue;
+    if (typeof client.createPhase !== "function") continue;
+    const created = await client.createPhase(boardId, name, nextOrder);
+    byName.set(name, created.id);
+    nextOrder += 1;
+  }
+  return byName;
+}
+
+/**
+ * Create the full onboarding delivery board for a won deal: one project, and each template
+ * task created FLAT and stamped into its template phase (due dates = wonDate + offset). The
+ * board's phase columns are ensured to match the template first (PSG-722 — this is what
+ * replaces Pipedrive's factory columns and empties "Phase unassigned"). Idempotent: if a
+ * project with the deterministic title already exists it is a no-op (`skippedExisting:true`)
+ * so a webhook retry never double-creates; phase creation is idempotent by name.
  */
 export async function provisionOnboardingBoard(
   opts: ProvisionOptions,
@@ -642,27 +742,30 @@ export async function provisionOnboardingBoard(
     ...(deal.personId != null ? { person_ids: [deal.personId] } : {}),
   });
 
+  // Give the board this template's phase columns (idempotent by name), then stamp each task.
+  const phaseMap = await ensureBoardPhases(
+    client,
+    boardId,
+    template.map((p) => p.name),
+  );
+
   let taskCount = 0;
   for (const phase of template) {
-    // Parent task = the D-phase; due date is the phase's last task offset (phase end).
-    const phaseEndOffset = phase.tasks.reduce((m, t) => Math.max(m, t.dayOffset), 0);
-    const parent = await client.createTask({
-      title: phase.name,
-      project_id: project.id,
-      due_date: dueDateFor(deal.wonDate, phaseEndOffset),
-      description: `Phase ${phase.key} — ${phase.tasks.length} task(s).`,
-    });
-
+    const targetPhaseId = phaseMap.get(phase.name.trim());
     for (const t of phase.tasks) {
       const assignee = roleUserMap[t.owner];
-      await client.createTask({
+      const task = await client.createTask({
         title: t.title,
         project_id: project.id,
-        parent_task_id: parent.id,
         due_date: dueDateFor(deal.wonDate, t.dayOffset),
         description: `Owner: ${ROLE_LABELS[t.owner]} (${t.owner})${t.gate ? " · GATE" : ""}`,
         ...(assignee != null ? { assignee_id: assignee } : {}),
       });
+      // Stamp into the template phase. Skipped only when the phase could not be resolved
+      // (minimal test fake without createPhase) — prod always has a resolved id.
+      if (targetPhaseId != null && typeof client.setTaskPhase === "function") {
+        await client.setTaskPhase(project.id, task.id, targetPhaseId);
+      }
       taskCount += 1;
     }
   }

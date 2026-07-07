@@ -15,6 +15,10 @@ import "server-only";
 //   • Only LEAF tasks (`parent_task_id != null`) are considered. The D-phase PARENT tasks
 //     are created without an owner ON PURPOSE (they are containers), so a parent with an
 //     empty assignee is correct, not a finding.
+//   • PSG-722 note: this tool targets the LEGACY parent/child boards it was built for
+//     (PSG-686/687, the pre-fix unassigned window). New boards are FLAT + phased (no parent
+//     tasks) and assign owners at creation, so this audit simply reports 0 leaves / clean on
+//     them — correct, since a post-fix phased board never needs a back-fill.
 //   • DONE leaf tasks are ignored — a completed task needs no routing.
 //   • QA test projects (title carries the `ZZ QA TEST` marker) are skipped — they are
 //     throwaway smoke artifacts, never a real client's board.

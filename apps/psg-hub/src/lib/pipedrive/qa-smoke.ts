@@ -130,6 +130,16 @@ export interface QaRestClient {
   deleteProject(projectId: number): Promise<void>;
   /** Raw v2 projects page + whether more pages exist (idempotency scale signal). */
   listProjectsPage(limit: number): Promise<{ items: QaProject[]; hasMore: boolean }>;
+  /**
+   * PSG-722 — the AUTHORITATIVE task→phase readback. v2 `GET /tasks` does NOT reliably
+   * return `phase_id`; the v1 project plan (`GET /projects/{id}/plan`) links each task to
+   * its phase + group. Returns one row per plan item that is a task.
+   */
+  getProjectPlan(
+    projectId: number,
+  ): Promise<Array<{ taskId: number; phaseId: number | null; groupId: number | null }>>;
+  /** PSG-722 — board phases (id + name) so a task's stamped phase_id maps back to a name. */
+  listBoardPhases(boardId: number): Promise<Array<{ id: number; name: string }>>;
 }
 
 export function createQaRestClient(config: QaClientConfig = {}): QaRestClient {
@@ -291,6 +301,125 @@ export function createQaRestClient(config: QaClientConfig = {}): QaRestClient {
         hasMore: str(additional.next_cursor) != null,
       };
     },
+    async getProjectPlan(projectId) {
+      // v1 `GET /projects/{id}/plan` — items are tasks + activities linked to a phase/group.
+      // Field names are read defensively (task id under `task_id` or `id`; a `type` marker
+      // distinguishes tasks from activities when present) so a minor shape drift can't crash
+      // the readback. Non-task rows are dropped.
+      const { data } = await call<unknown[]>("GET", "v1", `projects/${projectId}/plan`);
+      const out: Array<{ taskId: number; phaseId: number | null; groupId: number | null }> = [];
+      for (const item of data ?? []) {
+        const r = asRecord(item);
+        const type = typeof r.type === "string" ? r.type.toLowerCase() : null;
+        if (type != null && type !== "task") continue; // keep tasks; drop activities
+        const taskId = num(r.task_id) ?? num(r.id);
+        if (taskId == null) continue;
+        out.push({ taskId, phaseId: num(r.phase_id), groupId: num(r.group_id) });
+      }
+      return out;
+    },
+    async listBoardPhases(boardId) {
+      const { data } = await call<unknown[]>("GET", "v2", "phases", {
+        board_id: String(boardId),
+      });
+      return (data ?? []).map((p) => {
+        const r = asRecord(p);
+        return { id: num(r.id) ?? 0, name: str(r.name) ?? "" };
+      });
+    },
+  };
+}
+
+// ── PSG-722 shared phase-stamp verifier (used by every write-path smoke) ──────────────
+
+/** A template shape both onboarding phases and recurring groups satisfy structurally. */
+export interface PhasedTemplateEntry {
+  readonly name: string;
+  readonly tasks: readonly { readonly title: string }[];
+}
+
+export interface PhaseStampCheck {
+  /** Phase names present on the board (from v2 listPhases). */
+  boardPhaseNames: string[];
+  /** Phase names the template expects. */
+  templatePhaseNames: string[];
+  /** True when every template phase name exists on the board. */
+  allTemplatePhasesPresent: boolean;
+  /** Provisioned tasks whose plan row has no phase (the "Phase unassigned" bucket). MUST be 0. */
+  tasksInUnassigned: number;
+  /** True when 0 tasks are unassigned AND every task sits in its template phase. */
+  everyTaskStamped: boolean;
+  /** Per template phase: expected board phase id + how many provisioned tasks landed in it. */
+  perPhase: Array<{ name: string; phaseId: number | null; taskCount: number }>;
+}
+
+/**
+ * PSG-722 — verify that every provisioned task was stamped into the RIGHT template phase.
+ * Cross-references three live reads: the project's tasks (id + title), the v1 plan
+ * (task → phase_id), and the board's phases (id → name). A task is matched to its template
+ * phase by title, then its plan phase_id is checked to resolve to that phase's name.
+ */
+export function checkPhaseStamping(args: {
+  tasks: ReadonlyArray<{ id: number; title: string }>;
+  plan: ReadonlyArray<{ taskId: number; phaseId: number | null }>;
+  boardPhases: ReadonlyArray<{ id: number; name: string }>;
+  template: readonly PhasedTemplateEntry[];
+}): PhaseStampCheck {
+  const { tasks, plan, boardPhases, template } = args;
+  const phaseIdByName = new Map<string, number>();
+  const phaseNameById = new Map<number, string>();
+  for (const p of boardPhases) {
+    const name = p.name.trim();
+    if (name !== "" && !phaseIdByName.has(name)) phaseIdByName.set(name, p.id);
+    phaseNameById.set(p.id, name);
+  }
+  const planPhaseByTask = new Map<number, number | null>();
+  for (const row of plan) planPhaseByTask.set(row.taskId, row.phaseId ?? null);
+  // title → expected template phase name.
+  const expectedPhaseByTitle = new Map<string, string>();
+  for (const phase of template) {
+    for (const t of phase.tasks) expectedPhaseByTitle.set(t.title.trim(), phase.name.trim());
+  }
+
+  const templatePhaseNames = template.map((p) => p.name.trim());
+  const boardPhaseNames = boardPhases.map((p) => p.name.trim());
+  const allTemplatePhasesPresent = templatePhaseNames.every((n) =>
+    phaseIdByName.has(n),
+  );
+
+  let tasksInUnassigned = 0;
+  let everyTaskStamped = true;
+  for (const task of tasks) {
+    const stampedPhaseId = planPhaseByTask.get(task.id) ?? null;
+    if (stampedPhaseId == null) {
+      tasksInUnassigned += 1;
+      everyTaskStamped = false;
+      continue;
+    }
+    const expectedName = expectedPhaseByTitle.get(task.title.trim());
+    // A task not in the template (shouldn't happen) is stamped-but-unverifiable → not a pass.
+    if (expectedName == null || phaseNameById.get(stampedPhaseId) !== expectedName) {
+      everyTaskStamped = false;
+    }
+  }
+
+  const perPhase = template.map((phase) => {
+    const name = phase.name.trim();
+    const phaseId = phaseIdByName.get(name) ?? null;
+    const taskCount =
+      phaseId == null
+        ? 0
+        : tasks.filter((t) => (planPhaseByTask.get(t.id) ?? null) === phaseId).length;
+    return { name, phaseId, taskCount };
+  });
+
+  return {
+    boardPhaseNames,
+    templatePhaseNames,
+    allTemplatePhasesPresent,
+    tasksInUnassigned,
+    everyTaskStamped,
+    perPhase,
   };
 }
 
@@ -329,12 +458,13 @@ export interface QaSmokeEvidence {
   linkedPersonId: number | null;
   tree: {
     totalTasks: number;
-    parentTasks: number;
-    leafTasks: number;
+    /** PSG-722: boards are now FLAT (no container parents). Kept for regression visibility. */
+    containerTasks: number;
     gateTasks: number;
     gateTitles: string[];
-    parentTitles: string[];
   };
+  /** PSG-722 — proof every task landed in its template phase (0 in "Phase unassigned"). */
+  phases: PhaseStampCheck;
   dueDateSpotChecks: {
     d1Welcome: { title: string | null; due: string | null; expected: string; ok: boolean };
     d5SignOff: { title: string | null; due: string | null; expected: string; ok: boolean };
@@ -450,17 +580,28 @@ export async function runQaSmoke(
       phaseId: opts.phaseId,
     });
 
-    // 4) Read back the project + task tree.
+    // 4) Read back the project + task tree + phase stamping (PSG-722).
     const project = await rest.getProject(prov.projectId);
     const tasks = await rest.listProjectTasks(prov.projectId);
-    const parents = tasks.filter((t) => t.parent_task_id == null);
-    const leaves = tasks.filter((t) => t.parent_task_id != null);
+    // Container = referenced as another task's parent. On a phased board there are none.
+    const parentIds = new Set(
+      tasks.map((t) => t.parent_task_id).filter((id): id is number => id != null),
+    );
+    const containers = tasks.filter((t) => parentIds.has(t.id));
     const gates = tasks.filter((t) => t.title.toUpperCase().includes("GATE"));
+    const plan = await rest.getProjectPlan(prov.projectId);
+    const boardPhases = await rest.listBoardPhases(opts.boardId);
+    const phases = checkPhaseStamping({
+      tasks,
+      plan,
+      boardPhases,
+      template: WHM_ONBOARDING_TEMPLATE,
+    });
 
-    const d1 = leaves.find((t) => t.title.toLowerCase().includes("welcome email"));
+    const d1 = tasks.find((t) => t.title.toLowerCase().includes("welcome email"));
     // NB: "sign-off" also appears in the D5 pre-launch GATE (offset 39); match the
     // *client* sign-off (offset 55) specifically so the spot-check is unambiguous.
-    const d5 = leaves.find((t) => t.title.toLowerCase().includes("client sign-off"));
+    const d5 = tasks.find((t) => t.title.toLowerCase().includes("client sign-off"));
     const d1Expected = dueDateFor(wonDate, 1);
     const d5Expected = dueDateFor(wonDate, 55);
 
@@ -490,12 +631,11 @@ export async function runQaSmoke(
       linkedPersonId: won.personId,
       tree: {
         totalTasks: tasks.length,
-        parentTasks: parents.length,
-        leafTasks: leaves.length,
+        containerTasks: containers.length,
         gateTasks: gates.length,
         gateTitles: gates.map((t) => t.title),
-        parentTitles: parents.map((t) => t.title),
       },
+      phases,
       dueDateSpotChecks: {
         d1Welcome: {
           title: d1?.title ?? null,
@@ -526,10 +666,14 @@ export async function runQaSmoke(
     c.boardIsDelivery = project.board_id === opts.boardId;
     c.phaseIsKickoff = project.phase_id === opts.phaseId;
     c.startDateIsWonDate = project.start_date === wonDate;
-    c.fiveParentTasks = parents.length === 5;
-    c.twentyFiveLeafTasks = leaves.length === templateTaskCount();
-    c.totalIsThirty = tasks.length === 5 + templateTaskCount();
+    // PSG-722: board is FLAT (no container/parent tasks); every template task is present.
+    c.noContainerTasks = containers.length === 0;
+    c.allTemplateTasksPresent = tasks.length === templateTaskCount();
     c.phaseCountFromTemplate = WHM_ONBOARDING_TEMPLATE.length === 5;
+    // PSG-722 phase-stamp: real template columns + 0 tasks in "Phase unassigned".
+    c.templatePhaseColumnsPresent = phases.allTemplatePhasesPresent;
+    c.zeroTasksUnassigned = phases.tasksInUnassigned === 0;
+    c.everyTaskInItsPhase = phases.everyTaskStamped;
     c.d1WelcomeDue = evidence.dueDateSpotChecks.d1Welcome.ok;
     c.d5SignOffDue = evidence.dueDateSpotChecks.d5SignOff.ok;
     c.idempotentNoSecondProject =
