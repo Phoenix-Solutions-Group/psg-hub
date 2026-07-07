@@ -2,13 +2,13 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   createProjectsClient,
-  provisionOnboardingBoard,
   isDealWonTransition,
   isDealPipelineInScope,
   dealPipelineId,
   resolvePipedriveToken,
   type WonDeal,
 } from "@/lib/pipedrive/projects";
+import { provisionForDeal } from "@/lib/pipedrive/template-registry";
 import { loadRoleUserMap } from "@/lib/pipedrive/role-user-map";
 
 // PSG-584 / PSG-576 Move 1 — Pipedrive deal-won webhook → auto-create delivery board.
@@ -141,11 +141,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Role→user map from env: any confirmed role auto-assigns its tasks; unmapped
     // roles stay unassigned (role in the title). Never throws on missing/bad values.
     const roleUserMap = loadRoleUserMap();
-    const result = await provisionOnboardingBoard({
+    // PSG-668: select the RIGHT one-time board from the deal's line items. Falls back to
+    // the onboarding board (boardId/phaseId above) whenever the deal cannot be confidently
+    // mapped or the product read fails — no regression on today's onboarding behavior.
+    const result = await provisionForDeal({
       client,
       deal,
-      boardId,
-      phaseId,
+      defaultBoardId: boardId,
+      defaultPhaseId: phaseId,
       roleUserMap,
     });
     return NextResponse.json({ ok: true, ...result });

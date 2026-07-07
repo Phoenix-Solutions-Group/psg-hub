@@ -169,11 +169,31 @@ export interface AttachProjectFileInput {
   contentType?: string;
 }
 
+/**
+ * PSG-668 — one line item on a won deal, as needed by the template selector. The SKU is
+ * how a deal is mapped to a net-new one-time template (e.g. Website Design & Build →
+ * `PSG_P_026`); `name` is the human fallback match. Read-only; nothing here is written.
+ */
+export interface DealProduct {
+  /** Line-item / product name as it reads on the deal. */
+  name: string;
+  /** Product SKU / code (Pipedrive `sku`/`code`), when present — the primary match key. */
+  sku: string | null;
+  /** Pipedrive product id, when present (diagnostic only). */
+  productId: number | null;
+}
+
 export interface PipedriveProjectsClient {
   listBoards(): Promise<ProjectBoard[]>;
   listPhases(boardId: number): Promise<ProjectPhase[]>;
   /** List account users so a role owner can be matched to a Pipedrive user id. */
   listUsers(): Promise<PipedriveUser[]>;
+  /**
+   * PSG-668 — read the line items sold on a deal (v1 `GET /deals/{id}/products`) so the
+   * template selector can map a won deal to the right one-time template. Optional on the
+   * interface so existing test fakes stay valid; the concrete client always implements it.
+   */
+  listDealProducts?(dealId: number): Promise<DealProduct[]>;
   createProject(input: CreateProjectInput): Promise<{ id: number }>;
   createTask(input: CreateTaskInput): Promise<{ id: number }>;
   /** Find an existing project whose title matches (idempotency guard). */
@@ -277,6 +297,33 @@ export function createProjectsClient(
         email: String(u.email ?? ""),
         active: u.active_flag !== false,
       }));
+    },
+    async listDealProducts(dealId) {
+      // Deal line items live on v1 (`/api/v1/deals/{id}/products`) — no v2 equivalent.
+      // Read-only. The SKU is exposed as `sku` on newer responses; older ones nest the
+      // catalog `code` under `product` — accept either so the selector always sees a SKU.
+      const data = await call<
+        Array<{
+          product_id?: number | null;
+          name?: string | null;
+          sku?: string | null;
+          code?: string | null;
+          product?: { code?: string | null; name?: string | null } | null;
+        }>
+      >("GET", "v1", `deals/${dealId}/products`);
+      return (data ?? []).map((p) => {
+        const sku =
+          (typeof p.sku === "string" && p.sku.trim() !== "" ? p.sku.trim() : null) ??
+          (typeof p.code === "string" && p.code.trim() !== "" ? p.code.trim() : null) ??
+          (typeof p.product?.code === "string" && p.product.code.trim() !== ""
+            ? p.product.code.trim()
+            : null);
+        return {
+          name: String(p.name ?? p.product?.name ?? ""),
+          sku,
+          productId: p.product_id != null ? Number(p.product_id) : null,
+        };
+      });
     },
     async createProject(input) {
       const proj = await call<{ id: number }>("POST", "v2", "projects", {}, {
@@ -479,6 +526,13 @@ export interface ProvisionOptions {
    * title). PSG must confirm who fills each role before we hard-assign — see PSG-584.
    */
   roleUserMap?: Partial<Record<OnboardingRole, number>>;
+  /**
+   * PSG-668 — override the project title. Defaults to `onboardingProjectTitle(deal)`
+   * (the `Onboarding — …` prefix). The template selector passes a template-appropriate
+   * title (e.g. `New Website Build — …`) so a non-onboarding board is not mislabeled.
+   * Still deterministic per deal, so idempotency (title-based no-op on retry) is intact.
+   */
+  projectTitle?: string;
 }
 
 export interface ProvisionResult {
@@ -490,10 +544,19 @@ export interface ProvisionResult {
   skippedExisting: boolean;
 }
 
-/** Deterministic project title so re-delivery of the same won deal is idempotent. */
-export function onboardingProjectTitle(deal: WonDeal): string {
+/**
+ * Deterministic delivery-project title (`{prefix} — {client} (deal {id})`) so
+ * re-delivery of the same won deal is a title-based no-op. `prefix` names the template
+ * family (e.g. `Onboarding`, `New Website Build`); the deal id keeps it unique per deal.
+ */
+export function deliveryProjectTitle(prefix: string, deal: WonDeal): string {
   const client = (deal.orgName ?? "").trim() || deal.title.trim();
-  return `Onboarding — ${client} (deal ${deal.id})`;
+  return `${prefix.trim()} — ${client} (deal ${deal.id})`;
+}
+
+/** Deterministic onboarding project title (back-compat wrapper over `deliveryProjectTitle`). */
+export function onboardingProjectTitle(deal: WonDeal): string {
+  return deliveryProjectTitle("Onboarding", deal);
 }
 
 /**
@@ -508,7 +571,7 @@ export async function provisionOnboardingBoard(
   const { client, deal, boardId, phaseId } = opts;
   const template = opts.template ?? WHM_ONBOARDING_TEMPLATE;
   const roleUserMap = opts.roleUserMap ?? {};
-  const title = onboardingProjectTitle(deal);
+  const title = opts.projectTitle ?? onboardingProjectTitle(deal);
 
   const existing = await client.findProjectByTitle(title);
   if (existing) {
