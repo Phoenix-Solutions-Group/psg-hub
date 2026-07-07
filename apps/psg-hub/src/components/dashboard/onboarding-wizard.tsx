@@ -10,6 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export function OnboardingWizard() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  // PSG-767 — after the shop is created we kick off the free SEO audit so a real
+  // "first win" result is waiting on the dashboard; this flags that phase for copy.
+  const [auditing, setAuditing] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [discoveryNote, setDiscoveryNote] = useState<string | null>(null);
   const [pendingFields, setPendingFields] = useState<string[]>([]);
@@ -87,6 +90,20 @@ export function OnboardingWizard() {
       setError(data.error ?? "Setup failed. Please try again.");
       setLoading(false);
       return;
+    }
+
+    // PSG-767 first-win: completing onboarding automatically starts the free SEO
+    // audit — no separate action — so a real result is persisted before the owner
+    // reaches the dashboard. Best-effort: a slow or failed audit must never block
+    // the owner from their dashboard (which degrades to a "check is running" state).
+    setAuditing(true);
+    try {
+      await fetch("/api/onboarding/audit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+    } catch {
+      // Swallow — the dashboard shows the pending first-win card if this didn't land.
     }
 
     router.push("/dashboard");
@@ -222,7 +239,11 @@ export function OnboardingWizard() {
                 onClick={handleSubmit}
                 disabled={loading}
               >
-                {loading ? "Setting up..." : "Complete setup"}
+                {auditing
+                  ? "Running your free website check…"
+                  : loading
+                    ? "Setting up..."
+                    : "Complete setup"}
               </Button>
             </div>
           </div>
