@@ -18,8 +18,24 @@
 // SEPARATE recurring board (Noelle's decision on PSG-580), tracked as its own
 // follow-on. Onboarding must be able to reach "Done" at D5 sign-off (Day 55).
 
-/** Single accountable role for a task (per Noelle's one-owner rule). */
-export type OnboardingRole = "AS" | "Ads" | "Analytics" | "Web" | "CRO";
+/**
+ * Single accountable role for a task (per Noelle's one-owner rule).
+ *
+ * The first five roles are the original WHM onboarding roles (PSG-584/PSG-587). `UX`
+ * and `QA` are added by PSG-668 because the net-new one-time templates authored under
+ * PSG-611 (the Web family — New Website Build, Redesign, Landing Page — and others)
+ * assign design and quality-assurance owners. Every role listed here MUST have a
+ * matching entry in `ROLE_LABELS` (below) and `ROLE_USER_ENV` (role-user-map.ts), so
+ * that adding a role here fails the build until its label + env mapping are supplied.
+ */
+export type OnboardingRole =
+  | "AS"
+  | "Ads"
+  | "Analytics"
+  | "Web"
+  | "CRO"
+  | "UX"
+  | "QA";
 
 /** Human-readable role names, for surfacing in task descriptions / titles. */
 export const ROLE_LABELS: Record<OnboardingRole, string> = {
@@ -28,6 +44,8 @@ export const ROLE_LABELS: Record<OnboardingRole, string> = {
   Analytics: "Analytics Engineer",
   Web: "Web Engineer",
   CRO: "CRO Analyst",
+  UX: "UX Designer",
+  QA: "QA Analyst",
 };
 
 export interface OnboardingTask {

@@ -40,4 +40,23 @@ describe("loadRoleUserMap", () => {
   it("returns an empty map when nothing is configured", () => {
     expect(loadRoleUserMap({})).toEqual({});
   });
+
+  it("maps the PSG-668 UX and QA roles from their env vars", () => {
+    const map = loadRoleUserMap({
+      [ROLE_USER_ENV.UX]: "701",
+      [ROLE_USER_ENV.QA]: "702",
+    });
+    expect(map).toEqual({ UX: 701, QA: 702 });
+  });
+
+  it("exposes a canonical env var for every role in the typed model", () => {
+    // Guards the invariant that every OnboardingRole (incl. UX/QA) has an env mapping,
+    // so a role added to the union without a var here fails the build, not at runtime.
+    expect(Object.keys(ROLE_USER_ENV).sort()).toEqual(
+      ["AS", "Ads", "Analytics", "CRO", "QA", "UX", "Web"].sort(),
+    );
+    for (const varName of Object.values(ROLE_USER_ENV)) {
+      expect(varName).toMatch(/^PIPEDRIVE_ROLE_USER_[A-Z]+$/);
+    }
+  });
 });

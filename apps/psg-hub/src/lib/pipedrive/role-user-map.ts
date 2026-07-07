@@ -30,6 +30,11 @@ export const ROLE_USER_ENV: Record<OnboardingRole, string> = {
   Analytics: "PIPEDRIVE_ROLE_USER_ANALYTICS",
   Web: "PIPEDRIVE_ROLE_USER_WEB",
   CRO: "PIPEDRIVE_ROLE_USER_CRO",
+  // PSG-668: UX + QA owners used by the net-new one-time templates (Web family, etc.).
+  // Same env-backed, partial-rollout-safe contract as the roles above — unset ⇒ that
+  // role's tasks stay unassigned (role in the title), never a provisioning failure.
+  UX: "PIPEDRIVE_ROLE_USER_UX",
+  QA: "PIPEDRIVE_ROLE_USER_QA",
 };
 
 /**
