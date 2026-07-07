@@ -24,13 +24,14 @@ import { PASSWORD } from "./fixtures";
 
 const CONFIRM = (process.env.E2E_CONFIRM_MODE || "off").toLowerCase(); // "on" | "off"
 const RUN = process.env.GITHUB_RUN_ID || String(Date.now());
-const INBUCKET = process.env.INBUCKET_URL || "http://127.0.0.1:54354";
+// Supabase local's bundled mail catcher. Recent CLIs serve Mailpit here (the
+// [inbucket] config key is legacy); we target the Mailpit API and fall back to
+// the old Inbucket API for older stacks.
+const MAILPIT = process.env.MAILPIT_URL || process.env.INBUCKET_URL || "http://127.0.0.1:54354";
 
 // A confirmed account seeded via the service role — used by the error-copy checks
 // (D) that need a pre-existing account regardless of the confirmation mode.
 const SEEDED_EMAIL = `dupe-${RUN}@e2e-auth.test`;
-
-test.describe.configure({ mode: "serial" });
 
 test.beforeAll(async () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -52,45 +53,64 @@ test.beforeAll(async () => {
 });
 
 /**
- * Poll the local Inbucket test inbox for the newest message in a mailbox and
+ * Poll the local mail catcher for the newest message addressed to `address` and
  * return the first actionable auth link (GoTrue verify → our /auth/callback).
- * Mailbox name is the local part of the address (Supabase's bundled Inbucket).
+ * Tries the Mailpit API first (current Supabase local), then the legacy Inbucket
+ * API, so this works regardless of which mailer the CLI bundles.
  */
-async function latestEmailLink(mailbox: string): Promise<string> {
+async function latestEmailLink(address: string): Promise<string> {
   const deadline = Date.now() + 25_000;
   let lastErr = "no messages";
   while (Date.now() < deadline) {
     try {
-      const listRes = await fetch(`${INBUCKET}/api/v1/mailbox/${encodeURIComponent(mailbox)}`);
-      if (listRes.ok) {
-        const msgs = (await listRes.json()) as Array<{ id: string; date?: string }>;
-        if (msgs.length) {
-          // Newest first — resend/recovery supersedes any earlier token.
-          const sorted = [...msgs].sort((a, b) =>
-            String(b.date ?? "").localeCompare(String(a.date ?? ""))
-          );
-          for (const m of sorted) {
-            const msgRes = await fetch(
-              `${INBUCKET}/api/v1/mailbox/${encodeURIComponent(mailbox)}/${m.id}`
-            );
-            if (!msgRes.ok) continue;
-            const msg = (await msgRes.json()) as { body?: { text?: string; html?: string } };
-            const link =
-              extractActionLink(msg.body?.html ?? "") ??
-              extractActionLink(msg.body?.text ?? "");
-            if (link) return link;
-          }
-          lastErr = "message(s) present but no action link found";
-        }
-      } else {
-        lastErr = `mailbox list HTTP ${listRes.status}`;
-      }
+      const link = (await mailpitLink(address)) ?? (await inbucketLink(address));
+      if (link) return link;
     } catch (e) {
       lastErr = String(e);
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error(`[e2e] No auth e-mail link for mailbox "${mailbox}" within timeout — ${lastErr}`);
+  throw new Error(`[e2e] No auth e-mail link for "${address}" within timeout — ${lastErr}`);
+}
+
+/** Mailpit: list messages, filter by recipient, newest first, extract the link. */
+async function mailpitLink(address: string): Promise<string | null> {
+  const listRes = await fetch(`${MAILPIT}/api/v1/messages?limit=200`);
+  if (!listRes.ok) return null; // not Mailpit (or no messages endpoint) — caller falls back
+  const data = (await listRes.json()) as {
+    messages?: Array<{ ID: string; Created?: string; To?: Array<{ Address?: string }> }>;
+  };
+  const mine = (data.messages ?? [])
+    .filter((m) =>
+      (m.To ?? []).some((t) => (t.Address ?? "").toLowerCase() === address.toLowerCase())
+    )
+    .sort((a, b) => String(b.Created ?? "").localeCompare(String(a.Created ?? "")));
+  for (const m of mine) {
+    const mres = await fetch(`${MAILPIT}/api/v1/message/${m.ID}`);
+    if (!mres.ok) continue;
+    const msg = (await mres.json()) as { HTML?: string; Text?: string };
+    const link = extractActionLink(msg.HTML ?? "") ?? extractActionLink(msg.Text ?? "");
+    if (link) return link;
+  }
+  return null;
+}
+
+/** Legacy Inbucket fallback: mailbox = local part of the address. */
+async function inbucketLink(address: string): Promise<string | null> {
+  const mailbox = address.split("@")[0];
+  const listRes = await fetch(`${MAILPIT}/api/v1/mailbox/${encodeURIComponent(mailbox)}`);
+  if (!listRes.ok) return null;
+  const msgs = (await listRes.json()) as Array<{ id: string; date?: string }>;
+  const sorted = [...msgs].sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? "")));
+  for (const m of sorted) {
+    const mres = await fetch(`${MAILPIT}/api/v1/mailbox/${encodeURIComponent(mailbox)}/${m.id}`);
+    if (!mres.ok) continue;
+    const msg = (await mres.json()) as { body?: { text?: string; html?: string } };
+    const link =
+      extractActionLink(msg.body?.html ?? "") ?? extractActionLink(msg.body?.text ?? "");
+    if (link) return link;
+  }
+  return null;
 }
 
 function extractActionLink(body: string): string | null {
@@ -133,7 +153,7 @@ test("A: confirm ON — check-email screen, then confirmation link signs in (no 
   await expect(page.getByText(/Sent again/i)).toBeVisible();
 
   // Follow the confirmation link from the local test inbox.
-  const link = await latestEmailLink(email.split("@")[0]);
+  const link = await latestEmailLink(email);
   await page.goto(link);
 
   // Routed through /auth/callback → signed in. Fresh account = no shop → the
@@ -191,7 +211,7 @@ test("C: forgot password → reset link → set new password → signed in", asy
   await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
 
   // Recovery link → /auth/callback?next=/reset-password → set-new-password form.
-  const link = await latestEmailLink(email.split("@")[0]);
+  const link = await latestEmailLink(email);
   await page.goto(link);
   await page.waitForURL("**/reset-password");
   await page.getByLabel("New password").fill(NEWPW);
