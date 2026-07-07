@@ -101,6 +101,11 @@ export interface QaTask {
   title: string;
   parent_task_id: number | null;
   due_date: string | null;
+  // PSG-673: read back the task's assignee + description so the web-build smoke can
+  // spot-check that role→user assignment (esp. the PSG-668 UX/QA roles) actually landed
+  // on the created board. Additive/optional — the onboarding smoke ignores them.
+  assignee_id: number | null;
+  description: string | null;
 }
 
 export interface QaRestClient {
@@ -207,6 +212,10 @@ export function createQaRestClient(config: QaClientConfig = {}): QaRestClient {
       // parent_task_id) as a child. Preserve null explicitly so parent/leaf split works.
       parent_task_id: r.parent_task_id == null ? null : num(r.parent_task_id),
       due_date: str(r.due_date),
+      // PSG-673: assignee id (v2 tasks) + the "Owner: <label> (<ROLE>)" description the
+      // provisioner writes — lets the web-build smoke map a leaf back to its ROLE + user.
+      assignee_id: r.assignee_id == null ? null : num(r.assignee_id),
+      description: str(r.description),
     };
   }
 

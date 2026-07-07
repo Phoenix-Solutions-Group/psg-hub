@@ -8,6 +8,7 @@ import {
 } from "@/lib/pipedrive/projects";
 import { runQaSmoke } from "@/lib/pipedrive/qa-smoke";
 import { runRecurringQaSmoke } from "@/lib/pipedrive/recurring-qa-smoke";
+import { runWebBuildQaSmoke } from "@/lib/pipedrive/web-build-qa-smoke";
 import {
   activeRecurringAccounts,
   firstOfCurrentMonthUTC,
@@ -120,6 +121,37 @@ export async function POST(request: Request): Promise<NextResponse> {
         runTag,
       });
       return NextResponse.json({ ok: true, evidence });
+    }
+
+    if (body.action === "web-build-qa-smoke") {
+      // PSG-673 / PSG-668 — live write-path smoke for the SHARED PROVISIONING ENGINE on
+      // the New Website Build path. Fires a won deal with an injected web-build line item
+      // through the REAL selector (`provisionForDeal`), proving the RIGHT board (4 phases /
+      // 22 tasks, UX+QA owners → real users, day-offsets) is built. Board/phase come from
+      // the SAME env the live webhook uses (onboarding fallback + optional WEBBUILD override).
+      const boardId = Number(process.env.PIPEDRIVE_ONBOARDING_BOARD_ID);
+      const phaseId = Number(process.env.PIPEDRIVE_ONBOARDING_PHASE_ID);
+      if (!Number.isFinite(boardId) || !Number.isFinite(phaseId)) {
+        return NextResponse.json(
+          { ok: false, reason: "board_not_configured" },
+          { status: 503 },
+        );
+      }
+      const salesPipelineId = process.env.PIPEDRIVE_SALES_PIPELINE_ID
+        ? Number(process.env.PIPEDRIVE_SALES_PIPELINE_ID)
+        : 8;
+      const runTag =
+        (typeof body.runTag === "string" && body.runTag.trim()) || `run-${Date.now()}`;
+      const evidence = await runWebBuildQaSmoke({
+        defaultBoardId: boardId,
+        defaultPhaseId: phaseId,
+        salesPipelineId,
+        companyDomain,
+        // Prod role→user map (UX/QA env-backed, PSG-589/PSG-668) — proves live assignment.
+        roleUserMap: loadRoleUserMap(),
+        runTag,
+      });
+      return NextResponse.json({ ok: evidence.allChecksPass, evidence });
     }
 
     if (body.action === "recurring-qa-smoke") {
