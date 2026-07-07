@@ -88,7 +88,10 @@ function bool(v: unknown): boolean {
   return false;
 }
 
-function toDigestTask(t: unknown): DigestTask {
+// Exported so QA/verification harnesses can map a raw Pipedrive `/api/v2/tasks`
+// row into a DigestTask through the EXACT same coercion the deployed adapter uses
+// (no drift between the live read path and the accuracy check).
+export function toDigestTask(t: unknown): DigestTask {
   const r = asRecord(t);
   return {
     id: num(r.id) ?? 0,
@@ -102,7 +105,9 @@ function toDigestTask(t: unknown): DigestTask {
   };
 }
 
-function toDigestProject(p: unknown): DigestProject {
+// Exported alongside toDigestTask so the verification harness maps raw
+// `/api/v2/projects` rows through the shipped adapter's exact coercion.
+export function toDigestProject(p: unknown): DigestProject {
   const r = asRecord(p);
   return {
     id: num(r.id) ?? 0,
