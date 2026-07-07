@@ -10,6 +10,7 @@ import { runQaSmoke } from "@/lib/pipedrive/qa-smoke";
 import { runRecurringQaSmoke } from "@/lib/pipedrive/recurring-qa-smoke";
 import { runWebBuildQaSmoke } from "@/lib/pipedrive/web-build-qa-smoke";
 import { runAssigneeAudit } from "@/lib/pipedrive/assignee-audit";
+import { runAssigneeBackfill } from "@/lib/pipedrive/assignee-backfill";
 import {
   activeRecurringAccounts,
   firstOfCurrentMonthUTC,
@@ -87,6 +88,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     runTag?: string;
     /** recurring-run: the org id of the single account to spawn a cycle-1 board for. */
     orgId?: number | string;
+    /** backfill-assignees: false/absent ⇒ dry-run; true ⇒ actually PATCH assignees. */
+    apply?: boolean;
+    /** backfill-assignees: optional extra scope guard — only these project ids. */
+    projectIds?: number[];
   };
   try {
     body = await request.json();
@@ -225,6 +230,26 @@ export async function POST(request: Request): Promise<NextResponse> {
       // back-fill. It writes NOTHING — issues only GET requests.
       const evidence = await runAssigneeAudit({ companyDomain });
       return NextResponse.json({ ok: true, evidence });
+    }
+
+    if (body.action === "backfill-assignees") {
+      // PSG-686 — GUARDED back-fill of task owners on delivery boards our provisioner built
+      // during the pre-`80a14d5` unassigned window. Default is a DRY-RUN (plans the writes,
+      // writes nothing); pass `{"apply": true}` to actually PATCH. Layered scope guards mean
+      // only `(deal N)`-titled provisioner boards with role-tokened, ownerless, open leaf
+      // tasks (whose role maps to a user) are ever touched — never a legacy/migrated board.
+      // Optional `projectIds` narrows the scope further. Uses the provisioner's own
+      // `loadRoleUserMap`. See PSG-687 evidence for why the broad scan must be scoped down.
+      const projectIds = Array.isArray(body.projectIds)
+        ? body.projectIds.map((n) => Number(n)).filter((n) => Number.isFinite(n))
+        : undefined;
+      const evidence = await runAssigneeBackfill({
+        companyDomain,
+        apply: body.apply === true,
+        projectIds,
+        roleUserMap: loadRoleUserMap(),
+      });
+      return NextResponse.json({ ok: evidence.failedCount === 0, evidence });
     }
 
     if (body.action === "discover") {

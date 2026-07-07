@@ -58,6 +58,9 @@ export interface AuditTask {
   assigneeIds: number[];
   /** A finished task needs no routing, so it is excluded from findings. */
   done: boolean;
+  /** The provisioner writes `Owner: <label> (<ROLE>)` here — the role-recovery key the
+   *  PSG-686 back-fill parses. Empty for tasks not built by our provisioner. */
+  description: string;
 }
 
 /** One live delivery board that has leaf tasks with no owner (a back-fill candidate). */
@@ -218,6 +221,7 @@ export function createAssigneeAuditClient(
           parentTaskId: r.parent_task_id == null ? null : num(r.parent_task_id),
           assigneeIds: numArray(r.assignee_ids),
           done: isDone(r),
+          description: str(r.description),
         };
       });
     },
