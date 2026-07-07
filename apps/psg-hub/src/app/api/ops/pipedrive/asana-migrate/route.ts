@@ -44,6 +44,14 @@ function scrub(message: string): string {
     .replace(/api_token=[^&\s"']*/gi, "api_token=[redacted]");
 }
 
+/** Coerce a JSON value to an array of non-empty trimmed strings (drops non-strings/blanks). */
+function parseStringList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .filter((v) => v.length > 0);
+}
+
 /** Coerce a JSON `assigneeMap` (asanaUserGid → pipedrive user id) to positive-int values. */
 function parseAssigneeMap(raw: unknown): AssigneeMap {
   const map: AssigneeMap = {};
@@ -76,6 +84,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     assigneeMap?: Record<string, unknown>;
     clientLabel?: string;
     includeHistoryCsv?: boolean;
+    excludeStaleRemnants?: boolean;
+    excludeStaleTitles?: unknown;
+    excludeGids?: unknown;
   };
   try {
     body = await request.json();
@@ -110,6 +121,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       assigneeMap: parseAssigneeMap(body.assigneeMap),
       dryRun: action === "dry-run",
       clientLabel: (body.clientLabel ?? "").toString().trim() || null,
+      excludeStaleRemnants: body.excludeStaleRemnants === true,
+      excludeStaleTitles: parseStringList(body.excludeStaleTitles),
+      excludeGids: parseStringList(body.excludeGids),
     });
 
     // The CSV can be large; include it only when asked (default: yes, so the archive

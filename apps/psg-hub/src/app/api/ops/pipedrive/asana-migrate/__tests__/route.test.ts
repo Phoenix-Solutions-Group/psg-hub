@@ -172,6 +172,32 @@ describe("POST /api/ops/pipedrive/asana-migrate — dispatch", () => {
     const json = await res.json();
     expect(json.result.historyCsv).toBe("[omitted]");
   });
+
+  it("passes the PSG-802 scope-filter flags through, coercing lists to clean strings", async () => {
+    await POST(
+      makeReq(
+        {
+          ...OK_BODY,
+          excludeStaleRemnants: true,
+          excludeStaleTitles: ["Extra Monthly Task", "  ", 42, "  Trim Me  "],
+          excludeGids: ["111", "", 222, "  333  "],
+        },
+        SECRET,
+      ),
+    );
+    const arg = migrateClientOpenTasks.mock.calls[0][0];
+    expect(arg.excludeStaleRemnants).toBe(true);
+    expect(arg.excludeStaleTitles).toEqual(["Extra Monthly Task", "Trim Me"]);
+    expect(arg.excludeGids).toEqual(["111", "333"]);
+  });
+
+  it("defaults the scope filter OFF when the flags are absent", async () => {
+    await POST(makeReq(OK_BODY, SECRET));
+    const arg = migrateClientOpenTasks.mock.calls[0][0];
+    expect(arg.excludeStaleRemnants).toBe(false);
+    expect(arg.excludeStaleTitles).toEqual([]);
+    expect(arg.excludeGids).toEqual([]);
+  });
 });
 
 describe("POST /api/ops/pipedrive/asana-migrate — error mapping + secret scrubbing", () => {

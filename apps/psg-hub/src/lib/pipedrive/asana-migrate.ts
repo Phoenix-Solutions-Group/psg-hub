@@ -21,6 +21,8 @@ import {
   extractMigratedGids,
   buildHistoryCsv,
   historyArchiveCount,
+  selectStaleRemnantGids,
+  RECURRING_REMNANT_TITLES,
   type AsanaTask,
   type AssigneeMap,
   type MigrationPlan,
@@ -39,6 +41,32 @@ export interface MigrateClientOptions {
   dryRun?: boolean;
   /** Human label for this client, echoed into evidence (e.g. org name). */
   clientLabel?: string | null;
+  /**
+   * PSG-802 — opt-in scope filter. When true, open tasks whose title matches a stale
+   * recurring-checklist remnant (see `RECURRING_REMNANT_TITLES`) are excluded so the
+   * recurring engine's own monthly tasks are not duplicated onto the fresh board. When
+   * false/absent, EVERY incomplete task migrates (PSG-644 default — unchanged).
+   */
+  excludeStaleRemnants?: boolean;
+  /**
+   * Extra stale-remnant titles to exclude, merged with `RECURRING_REMNANT_TITLES` (used
+   * only when `excludeStaleRemnants` is true). For a client that names a monthly-cycle
+   * task differently. Matched on normalized title equality.
+   */
+  excludeStaleTitles?: string[] | null;
+  /**
+   * Explicit Asana gids to exclude — an operator-reviewed skip-list, applied regardless of
+   * `excludeStaleRemnants`. Non-destructive: the tasks are simply not re-created.
+   */
+  excludeGids?: string[] | null;
+}
+
+/** One open task the scope filter excluded from creation, with why — surfaced for review. */
+export interface ExcludedTaskEvidence {
+  asanaGid: string;
+  title: string;
+  /** "stale-recurring-remnant" (title-matched) or "explicit" (operator skip-list). */
+  reason: "stale-recurring-remnant" | "explicit";
 }
 
 /** One created (or would-be-created) task in the result — enough for QA to spot-check. */
@@ -63,6 +91,10 @@ export interface MigrateClientResult {
   createdCount: number;
   /** Open tasks skipped because their marker was already in the target project. */
   skippedAlreadyMigratedCount: number;
+  /** Open tasks excluded by the opt-in scope filter (PSG-802); 0 when the filter is off. */
+  excludedByFilterCount: number;
+  /** The excluded open tasks (gid + title + reason), for a human to review before a real run. */
+  excludedByFilter: ExcludedTaskEvidence[];
   /** Closed tasks routed to the CSV archive (never created). */
   archivedCount: number;
   /** The RFC-4180 history archive CSV (caller uploads to Drive). */
@@ -87,6 +119,9 @@ export async function migrateClientOpenTasks(
     assigneeMap = {},
     dryRun = false,
     clientLabel = null,
+    excludeStaleRemnants = false,
+    excludeStaleTitles = null,
+    excludeGids = null,
   } = opts;
 
   // 1) Read the full Asana task tree (open + closed, flattened parent-linked list).
@@ -112,18 +147,42 @@ export async function migrateClientOpenTasks(
   const existing = await pipedrive.listProjectTasks(pipedriveProjectId);
   const alreadyMigrated = extractMigratedGids(existing);
 
-  // 4) Build the plan (open only, one-level nesting) + the closed-task archive.
+  // 4a) PSG-802 scope filter (opt-in). Compute the set of open tasks to EXCLUDE — stale
+  // recurring-checklist remnants (title-matched) plus any operator-supplied explicit gids —
+  // and capture them as reviewable evidence. Default (filter off) → nothing excluded, so the
+  // behaviour is byte-identical to PSG-644.
+  const openTasks = withComments.filter((t) => !t.completed);
+  const staleGids = excludeStaleRemnants
+    ? selectStaleRemnantGids(
+        openTasks,
+        excludeStaleTitles && excludeStaleTitles.length
+          ? [...RECURRING_REMNANT_TITLES, ...excludeStaleTitles]
+          : undefined,
+      )
+    : new Set<string>();
+  const explicitGids = new Set((excludeGids ?? []).map((g) => String(g).trim()).filter(Boolean));
+  const excludeSet = new Set<string>([...staleGids, ...explicitGids]);
+  const excludedByFilter: ExcludedTaskEvidence[] = openTasks
+    .filter((t) => excludeSet.has(t.gid))
+    .map((t) => ({
+      asanaGid: t.gid,
+      title: (t.name ?? "").trim(),
+      reason: staleGids.has(t.gid) ? "stale-recurring-remnant" : "explicit",
+    }));
+
+  // 4b) Build the plan (open only, one-level nesting, minus filtered) + the closed archive.
   const plan: MigrationPlan = planClientMigration(withComments, {
     assigneeMap,
     alreadyMigrated,
+    excludeGids: excludeSet,
   });
   const historyCsv = buildHistoryCsv(withComments);
   const archivedCount = historyArchiveCount(withComments);
 
-  // How many open tasks did the marker-guard skip? (planned-open excludes them, so
-  // recompute the raw open count and subtract what remains to be created.)
-  const rawOpenCount = withComments.filter((t) => !t.completed).length;
-  const skippedAlreadyMigratedCount = Math.max(0, rawOpenCount - plan.openTaskCount);
+  // How many open tasks did the marker-guard skip? Eligible = open minus filter-excluded;
+  // planned-open excludes both, so subtract the plan from the eligible count.
+  const eligibleOpenCount = openTasks.length - excludedByFilter.length;
+  const skippedAlreadyMigratedCount = Math.max(0, eligibleOpenCount - plan.openTaskCount);
 
   const tasks: MigratedTaskEvidence[] = [];
   let createdCount = 0;
@@ -184,6 +243,8 @@ export async function migrateClientOpenTasks(
     openTaskCount: plan.openTaskCount,
     createdCount,
     skippedAlreadyMigratedCount,
+    excludedByFilterCount: excludedByFilter.length,
+    excludedByFilter,
     archivedCount,
     historyCsv,
     tasks,
