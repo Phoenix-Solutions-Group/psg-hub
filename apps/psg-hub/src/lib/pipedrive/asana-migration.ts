@@ -128,6 +128,57 @@ export function extractMigratedGids(
   return gids;
 }
 
+// ── stale recurring-remnant filter (PSG-802) ─────────────────────────────────────────
+//
+// Long-lived WHM clients accumulate, in Asana, one uncompleted copy of the standard monthly
+// checklist for EVERY past month it was never closed (LaMettry's had ~13 such cycles). Those
+// are past-month duplicates of the three "Monthly Updates" tasks that the recurring engine
+// (recurring-service-template.ts) now regenerates automatically on the fresh Pipedrive board.
+// Migrating them would double the recurring engine's own output onto the new board, so the
+// pilot migration excludes them by title. This is OPT-IN (default = migrate every incomplete
+// task, PSG-644) and NON-DESTRUCTIVE (the Asana tasks are untouched; they still archive/stay
+// visible in Asana) — it only decides what NOT to re-create on the fresh board.
+
+/** Normalize a title for tolerant matching: lower-case, punctuation→space, collapse spaces. */
+export function normalizeTitleForMatch(title: string | null | undefined): string {
+  return (title ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Titles of the stale monthly-checklist remnants a recurring WHM Asana board accumulates —
+ * past-month copies of the three "Monthly Updates" recurring tasks. Matched on NORMALIZED
+ * EQUALITY (see `normalizeTitleForMatch`) so punctuation/casing variance doesn't matter, but
+ * a genuinely-active task with a different name is never caught. Extend per-client via the
+ * migrate route's `excludeStaleTitles` when a board uses a naming variant.
+ */
+export const RECURRING_REMNANT_TITLES: readonly string[] = [
+  "Check Site Health & Plugins",
+  "Google Studio Custom Analytics Report",
+  "Send Email w/Monthly Custom Analytics Report",
+];
+
+/**
+ * Pure: the gids of OPEN tasks whose title matches one of `titles` (normalized equality).
+ * Completed tasks are ignored — they archive to CSV regardless of this filter. Deterministic.
+ */
+export function selectStaleRemnantGids(
+  tasks: ReadonlyArray<AsanaTask>,
+  titles: ReadonlyArray<string> = RECURRING_REMNANT_TITLES,
+): Set<string> {
+  const wanted = new Set(titles.map(normalizeTitleForMatch).filter((t) => t.length > 0));
+  const gids = new Set<string>();
+  if (wanted.size === 0) return gids;
+  for (const t of tasks) {
+    if (t.completed) continue;
+    if (wanted.has(normalizeTitleForMatch(t.name))) gids.add(t.gid);
+  }
+  return gids;
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────────────
 
 /** Normalize an Asana due value to a `YYYY-MM-DD` date, or null. Handles `due_at` datetimes. */
@@ -205,6 +256,15 @@ export interface PlanOptions {
    * task in this set is skipped — the marker-guard that makes the import idempotent.
    */
   alreadyMigrated?: ReadonlySet<string>;
+  /**
+   * PSG-802 — opt-in scope filter. Open tasks whose gid is in this set are NOT planned
+   * (treated as if absent): the orchestrator uses this to drop stale recurring-checklist
+   * remnants that the recurring engine already regenerates on the fresh board, so they are
+   * not duplicated. Absent/empty → every open task is planned (PSG-644 default, unchanged).
+   * An excluded task's open children (rare — remnants are leaves) re-home to top-level via
+   * the same "no open ancestor → top-level" rule, so no genuinely-open work is ever dropped.
+   */
+  excludeGids?: ReadonlySet<string>;
 }
 
 /**
@@ -229,13 +289,16 @@ export function planClientMigration(
 ): MigrationPlan {
   const assigneeMap = options.assigneeMap ?? {};
   const already = options.alreadyMigrated ?? new Set<string>();
+  const excluded = options.excludeGids ?? new Set<string>();
 
   const byGid = new Map<string, AsanaTask>();
   for (const t of tasks) byGid.set(t.gid, t);
 
-  const openTasks = tasks.filter((t) => !t.completed);
+  // Filter-excluded open tasks (PSG-802) are dropped from planning here. Closed tasks are
+  // counted independently so the archive total stays correct regardless of the filter.
+  const openTasks = tasks.filter((t) => !t.completed && !excluded.has(t.gid));
   const openGids = new Set(openTasks.map((t) => t.gid));
-  const closedTaskCount = tasks.length - openTasks.length;
+  const closedTaskCount = tasks.reduce((n, t) => (t.completed ? n + 1 : n), 0);
 
   /**
    * Walk up the parent chain and return the TOP-MOST open ancestor gid that is strictly

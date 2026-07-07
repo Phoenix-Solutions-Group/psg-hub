@@ -140,6 +140,90 @@ describe("migrateClientOpenTasks — idempotency", () => {
   });
 });
 
+describe("migrateClientOpenTasks — PSG-802 scope filter", () => {
+  it("defaults OFF: every incomplete task migrates (unchanged PSG-644 behaviour)", async () => {
+    const asana = fakeAsana([
+      t("1", { name: "Monthly Updates" }),
+      t("2", { name: "Check Site Health & Plugins" }),
+    ]);
+    const pd = fakePipedrive();
+    const res = await migrateClientOpenTasks({
+      asana,
+      pipedrive: pd.client,
+      asanaProjectGid: "PROJ",
+      pipedriveProjectId: 42,
+    });
+    expect(res.excludedByFilterCount).toBe(0);
+    expect(res.excludedByFilter).toEqual([]);
+    expect(res.openTaskCount).toBe(2);
+  });
+
+  it("excludeStaleRemnants drops the stale monthly remnants and reports them for review", async () => {
+    const asana = fakeAsana([
+      t("act1", { name: "Monthly Updates" }),
+      t("act2", { name: "Rework — Main Navigation" }),
+      t("rem1", { name: "Check Site Health & Plugins" }),
+      t("rem2", { name: "Google Studio Custom Analytics Report" }),
+      t("rem3", { name: "Send Email w/Monthly Custom Analytics Report" }),
+    ]);
+    const pd = fakePipedrive();
+    const res = await migrateClientOpenTasks({
+      asana,
+      pipedrive: pd.client,
+      asanaProjectGid: "PROJ",
+      pipedriveProjectId: 42,
+      dryRun: true,
+      excludeStaleRemnants: true,
+    });
+    expect(res.openTaskCount).toBe(2); // only the two genuinely-active tasks planned
+    expect(res.excludedByFilterCount).toBe(3);
+    expect(res.excludedByFilter.map((e) => e.asanaGid).sort()).toEqual(["rem1", "rem2", "rem3"]);
+    expect(res.excludedByFilter.every((e) => e.reason === "stale-recurring-remnant")).toBe(true);
+    // Non-destructive: nothing about the exclusion routes tasks into the closed archive.
+    expect(res.archivedCount).toBe(0);
+  });
+
+  it("explicit excludeGids skip-list is applied and labelled 'explicit'", async () => {
+    const asana = fakeAsana([t("1", { name: "Keep me" }), t("2", { name: "Skip me" })]);
+    const pd = fakePipedrive();
+    const res = await migrateClientOpenTasks({
+      asana,
+      pipedrive: pd.client,
+      asanaProjectGid: "PROJ",
+      pipedriveProjectId: 42,
+      excludeGids: ["2"],
+    });
+    expect(res.createdCount).toBe(1);
+    expect(pd.createTask.mock.calls[0][0].title).toBe("Keep me");
+    expect(res.excludedByFilter).toEqual([
+      { asanaGid: "2", title: "Skip me", reason: "explicit" },
+    ]);
+  });
+
+  it("keeps the already-migrated skip count correct alongside the filter", async () => {
+    const asana = fakeAsana([
+      t("done", { name: "Monthly Updates" }),
+      t("rem", { name: "Check Site Health & Plugins" }),
+      t("new", { name: "Client Call/Email" }),
+    ]);
+    const pd = fakePipedrive([
+      { id: 9, title: "Monthly Updates", description: asanaMarker("done") },
+    ]);
+    const res = await migrateClientOpenTasks({
+      asana,
+      pipedrive: pd.client,
+      asanaProjectGid: "PROJ",
+      pipedriveProjectId: 42,
+      excludeStaleRemnants: true,
+    });
+    // 3 open: "done" already migrated (skip), "rem" filtered, "new" created.
+    expect(res.excludedByFilterCount).toBe(1);
+    expect(res.skippedAlreadyMigratedCount).toBe(1);
+    expect(res.createdCount).toBe(1);
+    expect(pd.createTask.mock.calls[0][0].title).toBe("Client Call/Email");
+  });
+});
+
 describe("migrateClientOpenTasks — guards", () => {
   it("refuses to run when the Pipedrive client cannot list project tasks", async () => {
     const pd = fakePipedrive();

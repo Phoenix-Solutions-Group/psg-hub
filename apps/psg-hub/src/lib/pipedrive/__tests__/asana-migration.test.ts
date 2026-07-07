@@ -7,6 +7,9 @@ import {
   asanaMarker,
   extractMigratedGids,
   normalizeDueDate,
+  normalizeTitleForMatch,
+  selectStaleRemnantGids,
+  RECURRING_REMNANT_TITLES,
   HISTORY_CSV_HEADER,
   type AsanaTask,
 } from "../asana-migration";
@@ -32,6 +35,76 @@ describe("normalizeDueDate", () => {
     expect(normalizeDueDate(undefined)).toBeNull();
     expect(normalizeDueDate("   ")).toBeNull();
     expect(normalizeDueDate("not-a-date")).toBeNull();
+  });
+});
+
+describe("normalizeTitleForMatch", () => {
+  it("lower-cases, folds punctuation, and collapses whitespace", () => {
+    expect(normalizeTitleForMatch("Send Email w/Monthly  Custom Analytics Report")).toBe(
+      "send email w monthly custom analytics report",
+    );
+    expect(normalizeTitleForMatch("Check Site Health & Plugins")).toBe(
+      "check site health plugins",
+    );
+    expect(normalizeTitleForMatch(null)).toBe("");
+    expect(normalizeTitleForMatch(undefined)).toBe("");
+  });
+});
+
+describe("selectStaleRemnantGids (PSG-802 scope filter)", () => {
+  it("matches the default stale monthly-remnant titles (normalized, ignoring punctuation)", () => {
+    const tasks: AsanaTask[] = [
+      task("r1", { name: "Check Site Health & Plugins" }),
+      task("r2", { name: "google studio custom analytics report" }), // casing variant
+      task("r3", { name: "Send Email w/ Monthly Custom Analytics Report" }), // spacing variant
+      task("a1", { name: "Monthly Updates" }), // genuinely active — kept
+      task("a2", { name: "Rework — Main Navigation" }), // genuinely active — kept
+    ];
+    const gids = selectStaleRemnantGids(tasks);
+    expect([...gids].sort()).toEqual(["r1", "r2", "r3"]);
+  });
+
+  it("never matches a COMPLETED task (those archive to CSV regardless)", () => {
+    const tasks: AsanaTask[] = [
+      task("c1", { name: "Check Site Health & Plugins", completed: true }),
+    ];
+    expect(selectStaleRemnantGids(tasks).size).toBe(0);
+  });
+
+  it("honours a caller-supplied title list and an empty list matches nothing", () => {
+    const tasks: AsanaTask[] = [
+      task("x", { name: "Monthly Custom Report" }),
+      task("y", { name: "Check Site Health & Plugins" }),
+    ];
+    expect([...selectStaleRemnantGids(tasks, ["Monthly Custom Report"])]).toEqual(["x"]);
+    expect(selectStaleRemnantGids(tasks, []).size).toBe(0);
+  });
+
+  it("exposes the three known remnant titles as the default", () => {
+    expect(RECURRING_REMNANT_TITLES).toHaveLength(3);
+  });
+});
+
+describe("planClientMigration — excludeGids (PSG-802)", () => {
+  it("drops excluded open tasks from the plan without inflating the closed count", () => {
+    const tasks: AsanaTask[] = [
+      task("keep"),
+      task("drop"),
+      task("closed", { completed: true }),
+    ];
+    const plan = planClientMigration(tasks, { excludeGids: new Set(["drop"]) });
+    expect(plan.parents.map((p) => p.asanaGid)).toEqual(["keep"]);
+    expect(plan.openTaskCount).toBe(1);
+    expect(plan.closedTaskCount).toBe(1); // "closed" only — "drop" is excluded, not archived
+  });
+
+  it("re-homes an excluded parent's open child to top-level (never drops open work)", () => {
+    const tasks: AsanaTask[] = [task("parent"), task("child", { parentGid: "parent" })];
+    const plan = planClientMigration(tasks, { excludeGids: new Set(["parent"]) });
+    // Parent excluded → child has no open ancestor → becomes a top-level task.
+    expect(plan.parents.map((p) => p.asanaGid)).toEqual(["child"]);
+    expect(plan.parents[0].children).toHaveLength(0);
+    expect(plan.openTaskCount).toBe(1);
   });
 });
 
