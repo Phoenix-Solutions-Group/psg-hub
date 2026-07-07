@@ -19,6 +19,7 @@ export const OPS_FUNCTION_LABELS: Record<OpsFunction, string> = {
   manage_reports: "Operational Reports",
   manage_production: "Production",
   ads_mutations: "Ads Mutation Studio",
+  view_sales_pipeline: "Sales Pipeline (view)",
 };
 
 export type SecurityProfileDef = {
