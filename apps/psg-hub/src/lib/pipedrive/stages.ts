@@ -98,19 +98,30 @@ export function committedStageIds(
  *   60       | 3          | $1,770.00  |
  *   61       | 9          | $25,230.25 |
  *
- * INTENTIONALLY EMPTY until Reese (CRO, owns the live weights per PSG-433/PSG-435)
- * confirms which live stage is which lifecycle step — the values are a revenue call, not
- * an engineering one. While empty, the forecast is UNCHANGED (it falls back to each deal's
- * own win_probability → weighted stays $0). The moment this is filled in, the weighted /
- * committed lines light up everywhere `buildDealsExport` is consumed (the /ops/sales-
- * pipeline page + export route) with no other code change.
+ * CONFIRMED by Reese (CRO, owns the live weights per PSG-433/PSG-435) on 2026-07-07
+ * (PSG-627, refining the order_nr draft she ratified in PSG-624). stage_id order = pipeline
+ * order: stage 61 is the earliest step (Prospect), stage 56 the latest open step (Contract).
+ * Confidence %s stay at the uncalibrated S0–S8 defaults for now — Reese owns re-tuning them
+ * to PSG's real win-rates later (PSG-433/PSG-435), a separate exercise this does NOT wait on.
  *
- * Proposed strawman for Reese to confirm/correct (stage_id order = pipeline order):
- *   { 61: "S0", 60: "S2", 57: "S3", 59: "S4", 58: "S5", 56: "S6" }
+ * "Committed" = S6 or later (→ stage 56 only). Against the 2026-07-07 import this yields:
+ * raw open pipeline $65,562.25 (unchanged) · weighted ≈ $29,948.23 · committed $0.00 (nothing
+ * has reached Contract yet — a truthful $0, not a bug). Filling this lit up the weighted /
+ * committed lines everywhere `buildDealsExport` is consumed (the /ops/sales-pipeline page +
+ * export route) with no other code change.
+ *
+ * NAME SANITY-CHECK (Reese's PSG-627 gate): the mapping assumes stage_id order == pipeline
+ * order. Once the fetched `stage_name`s land in the mirror (post-deploy), verify each name
+ * matches its S-code (61 ≈ prospect-like … 56 ≈ contract-like). If any name contradicts the
+ * order, re-map by order_nr and ping Reese BEFORE finalizing the release.
  */
 export const PIPELINE_8_STAGE_CODES: Record<number, LifecycleStage["code"]> = {
-  // Pending Reese confirmation (PSG-622). Fill from the confirmed mapping, e.g.:
-  //   61: "S0", 60: "S2", 57: "S3", 59: "S4", 58: "S5", 56: "S6",
+  61: "S0", // Prospect   10%
+  60: "S2", // Discovery  40%
+  57: "S3", // Solution   60%
+  59: "S4", // Proposal   70%
+  58: "S5", // Negotiate  85%
+  56: "S6", // Contract   95%  (committed floor)
 };
 
 /**

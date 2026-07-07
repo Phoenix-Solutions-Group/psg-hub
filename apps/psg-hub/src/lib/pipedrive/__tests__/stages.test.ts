@@ -31,21 +31,29 @@ describe("committedStageIds (≥ S6 / Contract)", () => {
   });
 });
 
-describe("live stage map (PSG-622 — gated on Reese's confirmation)", () => {
-  it("returns undefined while PIPELINE_8_STAGE_CODES is unconfirmed/empty (behavior-preserving)", () => {
-    // Guard: until Reese confirms the 56–61 → Sn mapping, the constant is empty so the
-    // forecast keeps its win_probability fallback. This asserts that gated state.
-    expect(Object.keys(PIPELINE_8_STAGE_CODES)).toHaveLength(0);
-    expect(liveStageProbabilityMap()).toBeUndefined();
-    expect(liveCommittedStageIds()).toBeUndefined();
+describe("live stage map (PSG-622 — Reese's confirmed mapping, PSG-627)", () => {
+  it("PIPELINE_8_STAGE_CODES holds the confirmed 56–61 → Sn mapping", () => {
+    expect(PIPELINE_8_STAGE_CODES).toEqual({
+      61: "S0",
+      60: "S2",
+      57: "S3",
+      59: "S4",
+      58: "S5",
+      56: "S6",
+    });
   });
-  it("would activate weighting once the constant is filled (mechanism check)", () => {
-    // Proves the wiring: a populated mapping yields a usable probability map + committed set.
-    const codes = { 61: "S0", 60: "S2", 57: "S3", 59: "S4", 58: "S5", 56: "S6" } as const;
-    const map = buildStageProbabilityMap(codes);
-    expect(map[59]).toBe(0.7); // S4
-    expect(map[56]).toBe(0.95); // S6
-    expect([...committedStageIds(codes)]).toEqual([56]);
+  it("liveStageProbabilityMap resolves each stage_id to its S0–S8 confidence", () => {
+    expect(liveStageProbabilityMap()).toEqual({
+      61: 0.1, // S0
+      60: 0.4, // S2
+      57: 0.6, // S3
+      59: 0.7, // S4
+      58: 0.85, // S5
+      56: 0.95, // S6
+    });
+  });
+  it("liveCommittedStageIds is the S6+ set (stage 56 only)", () => {
+    expect([...liveCommittedStageIds()!]).toEqual([56]);
   });
 });
 
