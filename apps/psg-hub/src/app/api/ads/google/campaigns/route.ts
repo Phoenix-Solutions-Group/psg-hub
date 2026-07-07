@@ -121,10 +121,14 @@ export async function POST(request: Request) {
   }
 
   const service = createServiceClient();
+  // Real `shops` columns (verified prod schema, PSG-779). The prior code selected
+  // address/city/state/website_url/max_daily_ad_budget_micros — none of which
+  // exist — so this preflight always 500'd. Map to the real columns while KEEPING
+  // the same `missing` string keys so the campaign modal's message is unchanged.
   const { data: shop, error: shopErr } = await service
     .from("shops")
     .select(
-      "id, name, address, city, state, website_url, max_daily_ad_budget_micros"
+      "id, name, address_street, address_locality, address_region, url, radius"
     )
     .eq("id", shopId)
     .maybeSingle();
@@ -133,17 +137,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Shop lookup failed" }, { status: 500 });
   }
 
-  // Shop preflight
+  // Shop preflight — keys preserved: address, service_radius_miles, website_url,
+  // website_url_https.
   const missing: string[] = [];
-  if (!shop.address || String(shop.address).trim() === "") missing.push("address");
-  // service_radius_miles is expected but may not exist in schema yet — treat null as missing.
-  const radius = (shop as unknown as { service_radius_miles?: number | null })
-    .service_radius_miles;
+  if (!shop.address_street || String(shop.address_street).trim() === "")
+    missing.push("address");
+  const radius = shop.radius;
   if (radius === undefined || radius === null)
     missing.push("service_radius_miles");
-  if (!shop.website_url || String(shop.website_url).trim() === "")
-    missing.push("website_url");
-  else if (!String(shop.website_url).startsWith("https://"))
+  if (!shop.url || String(shop.url).trim() === "") missing.push("website_url");
+  else if (!String(shop.url).startsWith("https://"))
     missing.push("website_url_https");
 
   if (missing.length > 0) {
@@ -153,12 +156,10 @@ export async function POST(request: Request) {
     );
   }
 
-  // Budget ceiling
-  const cap =
-    shop.max_daily_ad_budget_micros &&
-    typeof shop.max_daily_ad_budget_micros === "number"
-      ? shop.max_daily_ad_budget_micros
-      : envMaxMicros();
+  // Budget ceiling. There is no per-shop budget-cap column in the real schema, so
+  // use the env cap only.
+  // TODO(PSG-779): a per-shop max daily ad budget column is a separate ticket.
+  const cap = envMaxMicros();
   if (dailyBudget > cap) {
     return NextResponse.json(
       { error: `daily_budget_micros exceeds cap ${cap}`, cap },
@@ -188,11 +189,11 @@ export async function POST(request: Request) {
       template,
       campaignName,
       dailyBudgetMicros: dailyBudget,
-      finalUrl: shop.website_url as string,
+      finalUrl: shop.url as string,
       geoTargeting: {
-        address: shop.address as string,
-        city: (shop.city as string | null) ?? null,
-        state: (shop.state as string | null) ?? null,
+        address: shop.address_street as string,
+        city: (shop.address_locality as string | null) ?? null,
+        state: (shop.address_region as string | null) ?? null,
         radiusMiles: radius as number,
       },
     });
