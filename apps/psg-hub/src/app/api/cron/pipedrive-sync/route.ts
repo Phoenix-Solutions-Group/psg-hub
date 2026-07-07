@@ -17,6 +17,20 @@ import { syncPipedriveDeals, type SyncSupabase } from "@/lib/pipedrive/sync";
 // runtime=nodejs is REQUIRED: node:crypto timingSafeEqual + the service-role client.
 export const runtime = "nodejs";
 
+// PSG-623 — pull won/lost deals (not just open) into the mirror so the won/booked
+// reconciliation line (buildDealsExport) has live data. Rolling window in days; matches
+// the export's default 90-day reconcile window (DEFAULT_CLOSED_WITHIN_DAYS in export.ts).
+// Pipedrive `updated_since` filters by update_time, which is >= a deal's close date, so a
+// 90-day update window fully covers every deal CLOSED in the last 90 days. Over-fetching is
+// harmless: the UPSERT is idempotent and the export re-windows on closeDate.
+const CLOSED_RECONCILE_WINDOW_DAYS = 90;
+
+/** ISO date `CLOSED_RECONCILE_WINDOW_DAYS` before `now`, for the won/lost pull. */
+function closedUpdatedSince(now: Date): string {
+  const ms = CLOSED_RECONCILE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  return new Date(now.getTime() - ms).toISOString();
+}
+
 function authorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false; // unconfigured = locked
@@ -43,7 +57,11 @@ async function handle(request: Request): Promise<NextResponse> {
   const client = createPipedriveClient({
     companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
   });
-  const result = await syncPipedriveDeals({ client, service });
+  const result = await syncPipedriveDeals({
+    client,
+    service,
+    closedUpdatedSince: closedUpdatedSince(new Date()),
+  });
   // A captured sync failure (e.g. Pipedrive 5xx) is a 502, not a 200 — so cron alerts.
   return NextResponse.json(result, { status: result.ok ? 200 : 502 });
 }

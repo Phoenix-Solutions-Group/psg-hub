@@ -64,7 +64,30 @@ describe("cron/pipedrive-sync run", () => {
     const res = await POST(req("Bearer test-secret"));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, openDeals: 12, totalDeals: 15 });
-    expect(syncMock).toHaveBeenCalledWith({ client: { __client: true }, service: { __service: true } });
+    // PSG-623 — the cron now passes a rolling won/lost window so the won/booked line has data.
+    expect(syncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        client: { __client: true },
+        service: { __service: true },
+        closedUpdatedSince: expect.any(String),
+      }),
+    );
+  });
+
+  it("passes a ~90-day rolling closedUpdatedSince window (PSG-623)", async () => {
+    syncMock.mockResolvedValue({ ok: true, openDeals: 1, totalDeals: 1 });
+    const before = Date.now();
+    await POST(req("Bearer test-secret"));
+    const after = Date.now();
+
+    const { closedUpdatedSince } = syncMock.mock.calls[0]![0] as {
+      closedUpdatedSince: string;
+    };
+    const since = new Date(closedUpdatedSince).getTime();
+    const day = 24 * 60 * 60 * 1000;
+    // Bracket the 90-day-ago timestamp against the wall clock either side of the call.
+    expect(since).toBeGreaterThanOrEqual(before - 90 * day - day);
+    expect(since).toBeLessThanOrEqual(after - 90 * day + day);
   });
 
   it("502 when the sync captured a failure (so cron alerts)", async () => {
