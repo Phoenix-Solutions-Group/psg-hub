@@ -36,6 +36,40 @@ function closedUpdatedSince(now: Date): string {
   return new Date(now.getTime() - ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
+/**
+ * PSG-760 — resolve the won/lost `closedUpdatedSince` window for one run.
+ *
+ * Default (the Vercel daily cron, which calls with NO query param): the rolling
+ * `CLOSED_RECONCILE_WINDOW_DAYS`-day window (PSG-623) — behaviour is unchanged.
+ *
+ * One-time override: `?since=YYYY-MM-DD` widens the won/lost pull to everything updated on
+ * or after that calendar date, for a full historical backfill (used to backfill client
+ * (org) names onto every mirrored deal — the newer v2 `/deals` API returns no org name, so
+ * only a re-sync fills them). Strictly validated to a real calendar date and emitted as
+ * whole-second RFC3339 (PSG-630) so Pipedrive never rejects it with HTTP 400. Anything
+ * malformed silently falls back to the safe default — an override can only ever WIDEN a
+ * read window, never change what gets written (the UPSERT is idempotent).
+ */
+export function resolveClosedSince(requestUrl: string, now: Date): string {
+  let since: string | null = null;
+  try {
+    since = new URL(requestUrl).searchParams.get("since");
+  } catch {
+    since = null;
+  }
+  if (since && /^\d{4}-\d{2}-\d{2}$/.test(since)) {
+    const iso = `${since}T00:00:00Z`;
+    const parsed = new Date(iso);
+    // Reject regex-passing-but-invalid dates. JS rolls an out-of-range day OVER rather
+    // than failing (2026-02-30 → 2026-03-02), so validity requires the parsed instant to
+    // round-trip back to the SAME calendar date, not just be non-NaN.
+    if (!Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(since)) {
+      return iso;
+    }
+  }
+  return closedUpdatedSince(now);
+}
+
 function authorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false; // unconfigured = locked
@@ -65,7 +99,7 @@ async function handle(request: Request): Promise<NextResponse> {
   const result = await syncPipedriveDeals({
     client,
     service,
-    closedUpdatedSince: closedUpdatedSince(new Date()),
+    closedUpdatedSince: resolveClosedSince(request.url, new Date()),
   });
   // A captured sync failure (e.g. Pipedrive 5xx) is a 502, not a 200 — so cron alerts.
   return NextResponse.json(result, { status: result.ok ? 200 : 502 });

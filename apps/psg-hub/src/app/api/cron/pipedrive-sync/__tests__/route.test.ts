@@ -11,10 +11,10 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: vi.fn(() => ({ __service: true })),
 }));
 
-import { GET, POST } from "../route";
+import { GET, POST, resolveClosedSince } from "../route";
 
-function req(auth?: string): Request {
-  return new Request("http://localhost/api/cron/pipedrive-sync", {
+function req(auth?: string, url = "http://localhost/api/cron/pipedrive-sync"): Request {
+  return new Request(url, {
     headers: auth ? { authorization: auth } : {},
   });
 }
@@ -109,5 +109,40 @@ describe("cron/pipedrive-sync run", () => {
     const res = await GET(req("Bearer test-secret"));
     expect(res.status).toBe(502);
     expect((await res.json()).ok).toBe(false);
+  });
+
+  it("passes the widened window when `?since=` is supplied (PSG-760 backfill)", async () => {
+    syncMock.mockResolvedValue({ ok: true, openDeals: 3, totalDeals: 3 });
+    const url = "http://localhost/api/cron/pipedrive-sync?since=2010-01-01";
+    await POST(req("Bearer test-secret", url));
+    const { closedUpdatedSince } = syncMock.mock.calls[0]![0] as {
+      closedUpdatedSince: string;
+    };
+    expect(closedUpdatedSince).toBe("2010-01-01T00:00:00Z");
+  });
+});
+
+describe("resolveClosedSince (PSG-760)", () => {
+  const now = new Date("2026-07-07T12:00:00Z");
+
+  it("defaults to the 90-day rolling window with no `since` param", () => {
+    const out = resolveClosedSince("http://x/api/cron/pipedrive-sync", now);
+    // 90 days before 2026-07-07 = 2026-04-08, whole-second RFC3339.
+    expect(out).toBe("2026-04-08T12:00:00Z");
+  });
+
+  it("honours a valid `?since=YYYY-MM-DD` override as whole-second RFC3339", () => {
+    const out = resolveClosedSince("http://x/api/cron/pipedrive-sync?since=2010-01-01", now);
+    expect(out).toBe("2010-01-01T00:00:00Z");
+    expect(out).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    expect(out).not.toContain(".");
+  });
+
+  it("falls back to the default for a malformed or invalid `since`", () => {
+    const def = resolveClosedSince("http://x/api/cron/pipedrive-sync", now);
+    for (const bad of ["not-a-date", "2010/01/01", "2026-13-01", "2026-02-30", "20100101"]) {
+      const out = resolveClosedSince(`http://x/api/cron/pipedrive-sync?since=${bad}`, now);
+      expect(out).toBe(def);
+    }
   });
 });
