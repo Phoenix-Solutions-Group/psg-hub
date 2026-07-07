@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { friendlyAuthError } from "@/lib/auth/auth-errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 
-export function LoginForm() {
+export function LoginForm({ notice }: { notice?: string | null }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +28,7 @@ export function LoginForm() {
     });
 
     if (authError) {
-      setError(authError.message);
+      setError(friendlyAuthError(authError));
       setLoading(false);
       return;
     }
@@ -39,6 +40,11 @@ export function LoginForm() {
   return (
     <Card>
       <CardContent className="pt-6">
+        {notice && (
+          <p className="mb-4 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+            {notice}
+          </p>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
@@ -52,7 +58,15 @@ export function LoginForm() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <a
+                href="/forgot-password"
+                className="text-sm font-medium text-primary hover:text-ember"
+              >
+                Forgot password?
+              </a>
+            </div>
             <Input
               id="password"
               type="password"

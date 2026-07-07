@@ -1,19 +1,7 @@
 import { Logo } from "@/components/brand/logo";
-import { LoginForm } from "@/components/auth/login-form";
+import { ResetPasswordForm } from "@/components/auth/reset-password-form";
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const { error } = await searchParams;
-  // Set when a confirmation/recovery link was expired, already used, or missing
-  // its code (redirected here from /auth/callback) — explain rather than dump.
-  const notice =
-    error === "link"
-      ? "That link has expired or was already used. Please sign in, or request a new link below."
-      : null;
-
+export default function ResetPasswordPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
@@ -23,17 +11,16 @@ export default async function LoginPage({
             Phoenix Solutions Group
           </p>
           <h1 className="mt-2 font-heading text-3xl font-bold tracking-tight text-foreground">
-            Welcome back
+            Choose a new password
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Sign in to your client hub.
+            Enter a new password for your account.
           </p>
         </div>
-        <LoginForm notice={notice} />
+        <ResetPasswordForm />
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          No account?{" "}
-          <a href="/signup" className="font-medium text-primary hover:text-ember">
-            Sign up
+          <a href="/login" className="font-medium text-primary hover:text-ember">
+            Back to sign in
           </a>
         </p>
       </div>
