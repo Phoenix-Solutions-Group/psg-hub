@@ -32,6 +32,9 @@ function uniqueIpHeaders(): Record<string, string> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Configure a destination inbox for the happy-path tests; the "unconfigured"
+  // test below clears it explicitly.
+  process.env.TEDESCO_LEAD_INBOX = "shop@example.test";
   sendEmail.mockResolvedValue({ statusCode: 202, messageId: "msg-1" });
 });
 
@@ -47,8 +50,18 @@ describe("POST /api/leads/tedesco-estimate", () => {
     expect(msg.text).toContain("(914) 555-0199");
     expect(msg.text).toContain("2019 Honda");
     expect(msg.text).toContain("rear bumper");
+    expect(msg.to).toBe("shop@example.test");
     expect(msg.replyTo).toBe(msg.to); // replies route back to the shop inbox
     expect(msg.attachments).toEqual([]);
+  });
+
+  it("fails honestly (503, no false success) when no inbox is configured", async () => {
+    delete process.env.TEDESCO_LEAD_INBOX;
+    const res = await POST(makeRequest(baseForm(), uniqueIpHeaders()));
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toHaveProperty("error");
+    // Never confirm a lead we cannot deliver.
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it("rejects a submission missing name or phone with 400 and sends nothing", async () => {

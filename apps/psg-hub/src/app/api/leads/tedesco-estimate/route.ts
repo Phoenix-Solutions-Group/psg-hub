@@ -18,10 +18,6 @@ import type { MailAttachment } from "@/lib/mail/types";
 // File upload + multipart require the Node.js runtime (not edge).
 export const runtime = "nodejs";
 
-/** Destination inbox for leads. Real shop inbox is operator-confirmed (Lee/CEO);
- * until then a clearly-synthetic default is used and a warning is logged. */
-const DEFAULT_LEAD_INBOX = "tedesco-estimates@leads.psg-digital.example";
-
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_PHOTO_TYPES = new Set([
   "image/jpeg",
@@ -165,11 +161,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const inbox = process.env.TEDESCO_LEAD_INBOX?.trim() || DEFAULT_LEAD_INBOX;
-  if (inbox === DEFAULT_LEAD_INBOX) {
-    console.warn(
-      "[leads/tedesco-estimate] TEDESCO_LEAD_INBOX not set — using synthetic default. " +
-        "Set the real shop inbox before go-live."
+  // Where the lead is delivered. This MUST be the real, operator-confirmed shop
+  // inbox — there is no fallback. If it is not configured we cannot durably
+  // capture the lead, so we return a non-2xx and let the page show the honest
+  // call/text fallback rather than emailing a black hole and falsely confirming.
+  const inbox = process.env.TEDESCO_LEAD_INBOX?.trim();
+  if (!inbox) {
+    console.error(
+      "[leads/tedesco-estimate] TEDESCO_LEAD_INBOX is not set — refusing to " +
+        "confirm a lead we cannot deliver. Set the real shop inbox in the environment."
+    );
+    return NextResponse.json(
+      { error: "Could not submit right now — please call or text the shop." },
+      { status: 503 }
     );
   }
 
