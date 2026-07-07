@@ -98,30 +98,41 @@ export function committedStageIds(
  *   60       | 3          | $1,770.00  |
  *   61       | 9          | $25,230.25 |
  *
- * CONFIRMED by Reese (CRO, owns the live weights per PSG-433/PSG-435) on 2026-07-07
- * (PSG-627, refining the order_nr draft she ratified in PSG-624). stage_id order = pipeline
- * order: stage 61 is the earliest step (Prospect), stage 56 the latest open step (Contract).
- * Confidence %s stay at the uncalibrated S0–S8 defaults for now — Reese owns re-tuning them
- * to PSG's real win-rates later (PSG-433/PSG-435), a separate exercise this does NOT wait on.
+ * CONFIRMED by Reese (CRO, owns the live weights per PSG-433/PSG-435) on 2026-07-07,
+ * keyed to the FETCHED stage NAMES (PSG-631). This CORRECTS the reversed strawman from
+ * PSG-627/PSG-624: an earlier guess assumed stage_id order == pipeline order, but the names
+ * showed it runs the other way — `56 "New Lead"` is the START and `61 "Won"` is the END:
  *
- * "Committed" = S6 or later (→ stage 56 only). Against the 2026-07-07 import this yields:
- * raw open pipeline $65,562.25 (unchanged) · weighted ≈ $29,948.23 · committed $0.00 (nothing
- * has reached Contract yet — a truthful $0, not a bug). Filling this lit up the weighted /
- * committed lines everywhere `buildDealsExport` is consumed (the /ops/sales-pipeline page +
- * export route) with no other code change.
+ *   stage_id | name                    | → Sn | conf | note
+ *   ---------+-------------------------+------+------+---------------------------------------
+ *   56       | New Lead                |  S0  | 10%  | top of funnel
+ *   57       | Contacted / Discovery   |  S2  | 40%  | active discovery
+ *   58       | Qualified               |  S3  | 60%  | fit confirmed
+ *   59       | Proposal Sent           |  S4  | 70%  | proposal out
+ *   60       | Verbal / Negotiation    |  S5  | 85%  | negotiating terms
+ *   61       | Won (open, UNCLOSED)     |  S5  | 85%  | interim cap — see below
  *
- * NAME SANITY-CHECK (Reese's PSG-627 gate): the mapping assumes stage_id order == pipeline
- * order. Once the fetched `stage_name`s land in the mirror (post-deploy), verify each name
- * matches its S-code (61 ≈ prospect-like … 56 ≈ contract-like). If any name contradicts the
- * order, re-map by order_nr and ping Reese BEFORE finalizing the release.
+ * STAGE 61 ("Won") — Reese's explicit call (PSG-631): the 9 deals in this stage are still
+ * `status = open` (NOT among the 228 formally closed-won deals the accounting mirror tracks).
+ * Booking them as committed would put ~$25K on the board that contradicts the CFO's booked
+ * figure, so they are weighted at S5 (85%, high-confidence) but deliberately kept OUT of the
+ * committed (≥ S6) bucket. "Committed" must reflect formally-closed-won status, NOT stage
+ * position — so NO live stage maps to ≥ S6, and the committed line stays $0.00 until a deal is
+ * closed-won (→ booked/reconciled) or verified signed-contract-open (→ promoted to 61→S6).
+ * That reclassification of the 9 is tracked in PSG-632 (hygiene sweep, Reese).
+ *
+ * Against the 2026-07-07 08:57 UTC sync this yields: raw open pipeline $65,562.25 (unchanged)
+ * · weighted ≈ $49,115.01 · committed $0.00. Confidence %s per the ratified S0–S8 scale
+ * (S0 10 / S2 40 / S3 60 / S4 70 / S5 85 / S6 95). Drives every `buildDealsExport` consumer
+ * (the /ops/sales-pipeline page + export route).
  */
 export const PIPELINE_8_STAGE_CODES: Record<number, LifecycleStage["code"]> = {
-  61: "S0", // Prospect   10%
-  60: "S2", // Discovery  40%
-  57: "S3", // Solution   60%
-  59: "S4", // Proposal   70%
-  58: "S5", // Negotiate  85%
-  56: "S6", // Contract   95%  (committed floor)
+  56: "S0", // New Lead               10%
+  57: "S2", // Contacted / Discovery  40%
+  58: "S3", // Qualified              60%
+  59: "S4", // Proposal Sent          70%
+  60: "S5", // Verbal / Negotiation   85%
+  61: "S5", // Won (open, unclosed)   85%  interim — NOT committed (PSG-631/PSG-632)
 };
 
 /**
