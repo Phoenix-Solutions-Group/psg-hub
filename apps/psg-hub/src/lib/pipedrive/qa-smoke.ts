@@ -105,6 +105,10 @@ export interface QaTask {
   // spot-check that role→user assignment (esp. the PSG-668 UX/QA roles) actually landed
   // on the created board. Additive/optional — the onboarding smoke ignores them.
   assignee_id: number | null;
+  // PSG-680: Pipedrive Projects v2 stores a task assignee under `assignee_ids` (array);
+  // setting `assignee_id` on create overwrites `assignee_ids`. Read BOTH so the assignee
+  // spot-check can't false-negative on which field the GET reflects.
+  assignee_ids: number[];
   description: string | null;
 }
 
@@ -215,6 +219,7 @@ export function createQaRestClient(config: QaClientConfig = {}): QaRestClient {
       // PSG-673: assignee id (v2 tasks) + the "Owner: <label> (<ROLE>)" description the
       // provisioner writes — lets the web-build smoke map a leaf back to its ROLE + user.
       assignee_id: r.assignee_id == null ? null : num(r.assignee_id),
+      assignee_ids: numArray(r.assignee_ids),
       description: str(r.description),
     };
   }

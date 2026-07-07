@@ -93,6 +93,9 @@ export interface WebBuildAssigneeCheck {
   sampleTaskTitle: string | null;
   expectedUserId: number | null;
   actualAssigneeId: number | null;
+  // PSG-680: raw v2 `assignee_ids` array read back off the live task (Pipedrive reflects
+  // the assignee here after a create with `assignee_id`). Surfaced as proof.
+  actualAssigneeIds: number[];
   ok: boolean;
 }
 
@@ -285,14 +288,25 @@ export async function runWebBuildQaSmoke(
     const assigneeChecks: WebBuildAssigneeCheck[] = rolesToCheck.map((role) => {
       const leaf = leaves.find((l) => roleFromDescription(l.description) === role);
       const expectedUserId = roleUserMap[role] ?? null;
-      const actual = leaf?.assignee_id ?? null;
+      const actualIds = leaf?.assignee_ids ?? [];
+      // Pipedrive v2 reflects the assignee under `assignee_ids` (array); `assignee_id`
+      // (singular) may be absent on the GET even though the create set it. Treat the user
+      // as assigned if present in EITHER field.
+      const actual = leaf?.assignee_id ?? (actualIds.length > 0 ? actualIds[0] : null);
+      const isAssignedToExpected =
+        expectedUserId != null &&
+        (actual === expectedUserId || actualIds.includes(expectedUserId));
       // ok = resolves to the mapped user when mapped; stays unassigned when unmapped.
-      const ok = expectedUserId != null ? actual === expectedUserId : actual == null;
+      const ok =
+        expectedUserId != null
+          ? isAssignedToExpected
+          : actual == null && actualIds.length === 0;
       return {
         role,
         sampleTaskTitle: leaf?.title ?? null,
         expectedUserId,
         actualAssigneeId: actual,
+        actualAssigneeIds: actualIds,
         ok,
       };
     });
