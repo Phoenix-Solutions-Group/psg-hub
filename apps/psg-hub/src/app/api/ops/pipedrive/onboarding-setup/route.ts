@@ -11,6 +11,7 @@ import { runRecurringQaSmoke } from "@/lib/pipedrive/recurring-qa-smoke";
 import { runWebBuildQaSmoke } from "@/lib/pipedrive/web-build-qa-smoke";
 import { runAssigneeAudit } from "@/lib/pipedrive/assignee-audit";
 import { runAssigneeBackfill } from "@/lib/pipedrive/assignee-backfill";
+import { runFlipDealsWon } from "@/lib/pipedrive/flip-deals-won";
 import {
   activeRecurringAccounts,
   firstOfCurrentMonthUTC,
@@ -250,6 +251,20 @@ export async function POST(request: Request): Promise<NextResponse> {
         roleUserMap: loadRoleUserMap(),
       });
       return NextResponse.json({ ok: evidence.failedCount === 0, evidence });
+    }
+
+    if (body.action === "flip-deals-won") {
+      // PSG-824 (Group A of PSG-819, Nick-approved) — one-time records fix. Flips FIVE
+      // hard-coded, mis-marked WHM monthly-maintenance deals to "won" so the recurring
+      // engine can see them. The target deal ids live in the lib as a fixed allowlist —
+      // this route passes NO deal ids from the request body, so it can only ever touch
+      // those five deals. Idempotent (already-won deals are skipped), org-guarded, and it
+      // writes ONLY the status (never the value — no inflated amounts).
+      const evidence = await runFlipDealsWon({ companyDomain });
+      return NextResponse.json(
+        { ok: evidence.errored === 0, evidence },
+        { status: evidence.errored > 0 ? 502 : 200 },
+      );
     }
 
     if (body.action === "discover") {
