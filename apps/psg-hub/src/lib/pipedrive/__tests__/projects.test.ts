@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   provisionOnboardingBoard,
+  ensureBoardPhases,
   onboardingProjectTitle,
   isDealWonTransition,
   dealPipelineId,
@@ -9,6 +10,7 @@ import {
   createProjectsClient,
   PipedriveProjectsError,
   type PipedriveProjectsClient,
+  type ProjectPhase,
   type CreateProjectInput,
   type CreateTaskInput,
   type WonDeal,
@@ -26,24 +28,38 @@ const DEAL: WonDeal = {
 
 function fakeClient(overrides: Partial<PipedriveProjectsClient> = {}) {
   let nextId = 1000;
+  let nextPhaseId = 500;
+  // A stateful phase store so createPhase + listPhases stay consistent (idempotency).
+  const phases: ProjectPhase[] = [];
   const createProject = vi.fn(async (_input: CreateProjectInput) => ({ id: 900 }));
   const createTask = vi.fn(async (_input: CreateTaskInput) => ({ id: nextId++ }));
   const findProjectByTitle = vi.fn(async (_title: string) => null as { id: number } | null);
+  const listPhases = vi.fn(async (boardId: number) =>
+    phases.filter((p) => p.board_id === boardId),
+  );
+  const createPhase = vi.fn(async (boardId: number, name: string, _order?: number) => {
+    const created = { id: nextPhaseId++, name, board_id: boardId };
+    phases.push(created);
+    return { id: created.id };
+  });
+  const setTaskPhase = vi.fn(async (_p: number, _t: number, _phase: number) => {});
   const client: PipedriveProjectsClient = {
     listBoards: vi.fn(async () => []),
-    listPhases: vi.fn(async () => []),
+    listPhases,
     listUsers: vi.fn(async () => []),
     createProject,
     createTask,
     findProjectByTitle,
+    createPhase,
+    setTaskPhase,
     ...overrides,
   };
-  return { client, createProject, createTask, findProjectByTitle };
+  return { client, createProject, createTask, findProjectByTitle, createPhase, setTaskPhase, listPhases };
 }
 
 describe("provisionOnboardingBoard", () => {
-  it("creates one project + one parent task per phase + every leaf task", async () => {
-    const { client, createProject, createTask } = fakeClient();
+  it("creates one project, one board phase per template phase, and every task FLAT + phase-stamped", async () => {
+    const { client, createProject, createTask, createPhase, setTaskPhase } = fakeClient();
     const res = await provisionOnboardingBoard({
       client,
       deal: DEAL,
@@ -57,10 +73,13 @@ describe("provisionOnboardingBoard", () => {
     expect(res.taskCount).toBe(templateTaskCount());
 
     expect(createProject).toHaveBeenCalledTimes(1);
-    // parent tasks (5 phases) + 25 leaf tasks = 30 createTask calls.
-    expect(createTask).toHaveBeenCalledTimes(
-      WHM_ONBOARDING_TEMPLATE.length + templateTaskCount(),
-    );
+    // PSG-722: NO phase-parent tasks — exactly one createTask per template task.
+    expect(createTask).toHaveBeenCalledTimes(templateTaskCount());
+    // One board phase ensured per template phase (created because listPhases starts empty).
+    expect(createPhase).toHaveBeenCalledTimes(WHM_ONBOARDING_TEMPLATE.length);
+    expect(createPhase).toHaveBeenCalledWith(3, WHM_ONBOARDING_TEMPLATE[0]!.name, 1);
+    // Every task is stamped into a phase (0 land in "Phase unassigned").
+    expect(setTaskPhase).toHaveBeenCalledTimes(templateTaskCount());
 
     // Project links the deal, sets Day-0 start, and drops into the given board/phase.
     expect(createProject).toHaveBeenCalledWith(
@@ -75,21 +94,43 @@ describe("provisionOnboardingBoard", () => {
     );
   });
 
-  it("dates the first D1 task at Day 0 + offset and the final task at Day 55", async () => {
+  it("dates the first D1 task at Day 0 + offset and the final task at Day 55, and creates tasks FLAT", async () => {
     const { client, createTask } = fakeClient();
     await provisionOnboardingBoard({ client, deal: DEAL, boardId: 3, phaseId: 9 });
 
-    const leafCalls = createTask.mock.calls.map((c) => c[0]);
-    const welcome = leafCalls.find((t) =>
+    const taskCalls = createTask.mock.calls.map((c) => c[0]);
+    const welcome = taskCalls.find((t) =>
       t.title.startsWith("Send welcome email"),
     );
-    const signoff = leafCalls.find((t) =>
+    const signoff = taskCalls.find((t) =>
       t.title.startsWith("Client sign-off"),
     );
     expect(welcome?.due_date).toBe("2026-07-07"); // Day 1
     expect(signoff?.due_date).toBe("2026-08-30"); // Day 55
-    // Leaf tasks are nested under a phase parent.
-    expect(welcome?.parent_task_id).toBeDefined();
+    // PSG-722: tasks are FLAT — no parent_task_id (phases replace the parent grouping).
+    expect(welcome?.parent_task_id).toBeUndefined();
+    expect(taskCalls.every((t) => t.parent_task_id === undefined)).toBe(true);
+  });
+
+  it("stamps each task into the phase matching its template phase name", async () => {
+    const { client, createTask, createPhase, setTaskPhase } = fakeClient();
+    await provisionOnboardingBoard({ client, deal: DEAL, boardId: 3, phaseId: 9 });
+
+    // name→phaseId as the fake assigned it (phase ids start at 500, in creation order).
+    const phaseIdByName = new Map(
+      createPhase.mock.calls.map((c, i) => [c[1] as string, 500 + i]),
+    );
+    // createTask then setTaskPhase are 1:1 in order, so pair them by index: the Nth stamp
+    // is for the Nth created task. Assert each landed in ITS template phase.
+    expect(setTaskPhase.mock.calls.length).toBe(createTask.mock.calls.length);
+    setTaskPhase.mock.calls.forEach(([, , phaseId], i) => {
+      const title = createTask.mock.calls[i]![0].title;
+      const phase = WHM_ONBOARDING_TEMPLATE.find((p) =>
+        p.tasks.some((t) => t.title === title),
+      );
+      expect(phase).toBeDefined();
+      expect(phaseId).toBe(phaseIdByName.get(phase!.name));
+    });
   });
 
   it("assigns tasks to users when a role→user map is supplied", async () => {
@@ -109,8 +150,8 @@ describe("provisionOnboardingBoard", () => {
     expect(adsTask?.assignee_id).toBeUndefined();
   });
 
-  it("is idempotent: an existing project short-circuits (no double create)", async () => {
-    const { client, createProject, createTask } = fakeClient({
+  it("is idempotent: an existing project short-circuits (no create, no phases, no stamps)", async () => {
+    const { client, createProject, createTask, createPhase, setTaskPhase } = fakeClient({
       findProjectByTitle: vi.fn(async () => ({ id: 900 })),
     });
     const res = await provisionOnboardingBoard({
@@ -123,6 +164,51 @@ describe("provisionOnboardingBoard", () => {
     expect(res.created).toBe(false);
     expect(createProject).not.toHaveBeenCalled();
     expect(createTask).not.toHaveBeenCalled();
+    expect(createPhase).not.toHaveBeenCalled();
+    expect(setTaskPhase).not.toHaveBeenCalled();
+  });
+});
+
+describe("ensureBoardPhases (PSG-722 name→id resolver + idempotent phase creation)", () => {
+  it("creates a phase for each missing name (in order) and returns a name→id map", async () => {
+    const { client, createPhase } = fakeClient();
+    const map = await ensureBoardPhases(client, 3, ["Alpha", "Beta", "Gamma"]);
+    expect(createPhase).toHaveBeenCalledTimes(3);
+    // order_nr appends after existing (empty board ⇒ 1,2,3).
+    expect(createPhase.mock.calls.map((c) => [c[1], c[2]])).toEqual([
+      ["Alpha", 1],
+      ["Beta", 2],
+      ["Gamma", 3],
+    ]);
+    expect([...map.keys()]).toEqual(["Alpha", "Beta", "Gamma"]);
+    expect(map.get("Alpha")).toBe(500);
+  });
+
+  it("is idempotent: existing phases are reused by name, nothing is re-created", async () => {
+    const existing = [
+      { id: 11, name: "Alpha", board_id: 3 },
+      { id: 12, name: "Beta", board_id: 3 },
+    ];
+    const { client, createPhase } = fakeClient({
+      listPhases: vi.fn(async () => existing),
+    });
+    const map = await ensureBoardPhases(client, 3, ["Alpha", "Beta"]);
+    expect(createPhase).not.toHaveBeenCalled();
+    expect(map.get("Alpha")).toBe(11);
+    expect(map.get("Beta")).toBe(12);
+  });
+
+  it("creates only the missing phases when some already exist", async () => {
+    const existing = [{ id: 11, name: "Alpha", board_id: 3 }];
+    const { client, createPhase } = fakeClient({
+      listPhases: vi.fn(async () => existing),
+    });
+    const map = await ensureBoardPhases(client, 3, ["Alpha", "Beta"]);
+    expect(createPhase).toHaveBeenCalledTimes(1);
+    // Appends after the one existing phase ⇒ order_nr 2.
+    expect(createPhase).toHaveBeenCalledWith(3, "Beta", 2);
+    expect(map.get("Alpha")).toBe(11);
+    expect(map.get("Beta")).toBe(500);
   });
 });
 
@@ -169,6 +255,34 @@ describe("createProjectsClient — transport (PSG-588: /api/ base path + v1/v2 p
       expect(u.pathname).not.toContain("/projects/phases");
       expect(u.searchParams.get("api_token")).toBe(TOKEN); // token in query, not path
     }
+  });
+
+  it("createPhase POSTs /api/v2/phases with { board_id, name, order_nr } (PSG-722)", async () => {
+    const { fetchImpl, calls } = recordingFetch({ id: 71 });
+    const res = await client(fetchImpl).createPhase!(7, "P1 — Discovery & Planning", 2);
+    expect(res.id).toBe(71);
+    const u = new URL(calls[0].url);
+    expect(calls[0].method).toBe("POST");
+    expect(`${u.origin}${u.pathname}`).toBe("https://psg.pipedrive.com/api/v2/phases");
+    expect(u.searchParams.get("api_token")).toBe(TOKEN); // token in query, not path
+    expect(JSON.parse(calls[0].body!)).toEqual({
+      board_id: 7,
+      name: "P1 — Discovery & Planning",
+      order_nr: 2,
+    });
+  });
+
+  it("setTaskPhase PUTs /api/v1/projects/{id}/plan/tasks/{taskId} with { phase_id } (PSG-722)", async () => {
+    const { fetchImpl, calls } = recordingFetch({});
+    await client(fetchImpl).setTaskPhase!(42, 900, 71);
+    const u = new URL(calls[0].url);
+    expect(calls[0].method).toBe("PUT");
+    expect(`${u.origin}${u.pathname}`).toBe(
+      "https://psg.pipedrive.com/api/v1/projects/42/plan/tasks/900",
+    );
+    expect(u.pathname.startsWith("/api/")).toBe(true); // PSG-588 base-path discipline
+    expect(u.searchParams.get("api_token")).toBe(TOKEN);
+    expect(JSON.parse(calls[0].body!)).toEqual({ phase_id: 71 });
   });
 
   it("maps assignee_id → assignee_ids:[id] on the v2 tasks wire body (PSG-680 regression)", async () => {

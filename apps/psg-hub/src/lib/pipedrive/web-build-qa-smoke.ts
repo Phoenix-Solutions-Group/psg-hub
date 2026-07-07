@@ -47,9 +47,11 @@ import {
   QA_TEST_MARKER,
   createQaRestClient,
   isQaTestTitle,
+  checkPhaseStamping,
   type QaFetch,
   type QaProject,
   type QaRestClient,
+  type PhaseStampCheck,
 } from "./qa-smoke";
 
 /** The web-build line item we inject so the selector maps the deal to New Website Build. */
@@ -125,14 +127,13 @@ export interface WebBuildQaSmokeEvidence {
   linkedPersonId: number | null;
   tree: {
     totalTasks: number;
-    parentTasks: number;
-    leafTasks: number;
+    /** PSG-722: boards are now FLAT (no container parents). Kept for regression visibility. */
+    containerTasks: number;
     gateTasks: number;
-    /** Leaf count per phase parent, in P1..P4 order. */
-    leavesPerPhase: number[];
-    parentTitles: string[];
     gateTitles: string[];
   };
+  /** PSG-722 — proof every task landed in its template phase (0 in "Phase unassigned"). */
+  phases: PhaseStampCheck;
   /** UX + QA (PSG-668 roles) owner→assignee resolution, read off the live board. */
   assigneeChecks: WebBuildAssigneeCheck[];
   dueDateSpotChecks: {
@@ -271,25 +272,28 @@ export async function runWebBuildQaSmoke(
     });
     const prov = provSummary.projects[0]!;
 
-    // 4) Read back the project + task tree.
+    // 4) Read back the project + task tree + phase stamping (PSG-722).
     const project = await rest.getProject(prov.projectId);
     const tasks = await rest.listProjectTasks(prov.projectId);
-    const parents = tasks.filter((t) => t.parent_task_id == null);
-    const leaves = tasks.filter((t) => t.parent_task_id != null);
+    const parentIds = new Set(
+      tasks.map((t) => t.parent_task_id).filter((id): id is number => id != null),
+    );
+    const containers = tasks.filter((t) => parentIds.has(t.id));
     const gates = tasks.filter((t) => t.title.toUpperCase().includes("GATE"));
-
-    // Leaf count per phase parent, in P1..P4 order (parent titles start "P1 —" … "P4 —").
-    const orderedParents = [...parents].sort((a, b) =>
-      a.title.localeCompare(b.title),
-    );
-    const leavesPerPhase = orderedParents.map(
-      (p) => leaves.filter((l) => l.parent_task_id === p.id).length,
-    );
+    const plan = await rest.getProjectPlan(prov.projectId);
+    // The web-build board resolves to expectedBoardId (its env override or onboarding fallback).
+    const boardPhases = await rest.listBoardPhases(expectedBoardId);
+    const phases = checkPhaseStamping({
+      tasks,
+      plan,
+      boardPhases,
+      template: NEW_WEBSITE_BUILD_TEMPLATE,
+    });
 
     // Owner→assignee spot-checks for the PSG-668 roles UX + QA (and Web as a control).
     const rolesToCheck: OnboardingRole[] = ["UX", "QA", "Web"];
     const assigneeChecks: WebBuildAssigneeCheck[] = rolesToCheck.map((role) => {
-      const leaf = leaves.find((l) => roleFromDescription(l.description) === role);
+      const leaf = tasks.find((l) => roleFromDescription(l.description) === role);
       const expectedUserId = roleUserMap[role] ?? null;
       const actualIds = leaf?.assignee_ids ?? [];
       // Pipedrive v2 reflects the assignee under `assignee_ids` (array); `assignee_id`
@@ -315,10 +319,10 @@ export async function runWebBuildQaSmoke(
     });
 
     // Day-offset spot checks against the transcribed template (offsets 2 … 63).
-    const kickoff = leaves.find((t) =>
+    const kickoff = tasks.find((t) =>
       t.title.toLowerCase().includes("kick-off call"),
     );
-    const finalGate = leaves.find((t) =>
+    const finalGate = tasks.find((t) =>
       t.title.toLowerCase().includes("post-launch qa"),
     );
     const kickoffExpected = dueDateFor(wonDate, 2);
@@ -361,13 +365,11 @@ export async function runWebBuildQaSmoke(
       linkedPersonId: won.personId,
       tree: {
         totalTasks: tasks.length,
-        parentTasks: parents.length,
-        leafTasks: leaves.length,
+        containerTasks: containers.length,
         gateTasks: gates.length,
-        leavesPerPhase,
-        parentTitles: orderedParents.map((t) => t.title),
         gateTitles: gates.map((t) => t.title),
       },
+      phases,
       assigneeChecks,
       dueDateSpotChecks: {
         kickoffD2: {
@@ -405,23 +407,27 @@ export async function runWebBuildQaSmoke(
     c.boardResolvesToExpected = project.board_id === expectedBoardId;
     c.phaseResolvesToExpected = project.phase_id === expectedPhaseId;
     c.startDateIsWonDate = project.start_date === wonDate;
-    // Structure: 4 phases → 4 parents, 22 leaves (6+5+6+5), 4 gates. Leaf count is derived
-    // from the transcribed template, not a magic literal.
-    const templateLeafCount = NEW_WEBSITE_BUILD_TEMPLATE.reduce(
+    // Structure (PSG-722): board is FLAT (no container parents); all 22 template tasks
+    // present, stamped across 4 phase columns (6+5+6+5). Count is derived, not a literal.
+    const templateTaskCount = NEW_WEBSITE_BUILD_TEMPLATE.reduce(
       (s, p) => s + p.tasks.length,
       0,
     );
-    c.fourPhaseParents = parents.length === 4;
-    c.twentyTwoLeafTasks = leaves.length === templateLeafCount;
-    c.leavesPerPhaseMatch =
-      leavesPerPhase.length === 4 &&
-      leavesPerPhase[0] === 6 &&
-      leavesPerPhase[1] === 5 &&
-      leavesPerPhase[2] === 6 &&
-      leavesPerPhase[3] === 5;
-    c.totalIsTwentySix = tasks.length === 4 + templateLeafCount;
+    c.noContainerTasks = containers.length === 0;
+    c.allTemplateTasksPresent = tasks.length === templateTaskCount;
     c.fourGates = gates.length === 4;
     c.templateHasFourPhases = NEW_WEBSITE_BUILD_TEMPLATE.length === 4;
+    // PSG-722 phase-stamp: real template columns + 0 tasks in "Phase unassigned" + the
+    // 6/5/6/5 split lands in the right phases.
+    c.templatePhaseColumnsPresent = phases.allTemplatePhasesPresent;
+    c.zeroTasksUnassigned = phases.tasksInUnassigned === 0;
+    c.everyTaskInItsPhase = phases.everyTaskStamped;
+    c.phaseTaskSplitMatches =
+      phases.perPhase.length === 4 &&
+      phases.perPhase[0]!.taskCount === 6 &&
+      phases.perPhase[1]!.taskCount === 5 &&
+      phases.perPhase[2]!.taskCount === 6 &&
+      phases.perPhase[3]!.taskCount === 5;
     // Owner→assignee: every checked role resolves as expected (mapped→user, else unassigned).
     c.uxAssigneeResolves = assigneeChecks.find((a) => a.role === "UX")?.ok === true;
     c.qaAssigneeResolves = assigneeChecks.find((a) => a.role === "QA")?.ok === true;

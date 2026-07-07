@@ -25,9 +25,14 @@ const CYCLE_START = "2026-09-01";
 
 function fakeClient(overrides: Partial<PipedriveProjectsClient> = {}) {
   let nextId = 1000;
+  let nextPhaseId = 500;
   const createProject = vi.fn(async (_input: CreateProjectInput) => ({ id: 900 }));
   const createTask = vi.fn(async (_input: CreateTaskInput) => ({ id: nextId++ }));
   const findProjectByTitle = vi.fn(async (_title: string) => null as { id: number } | null);
+  const createPhase = vi.fn(async (_b: number, _name: string, _order?: number) => ({
+    id: nextPhaseId++,
+  }));
+  const setTaskPhase = vi.fn(async (_p: number, _t: number, _phase: number) => {});
   const client: PipedriveProjectsClient = {
     listBoards: vi.fn(async () => []),
     listPhases: vi.fn(async () => []),
@@ -35,9 +40,11 @@ function fakeClient(overrides: Partial<PipedriveProjectsClient> = {}) {
     createProject,
     createTask,
     findProjectByTitle,
+    createPhase,
+    setTaskPhase,
     ...overrides,
   };
-  return { client, createProject, createTask, findProjectByTitle };
+  return { client, createProject, createTask, findProjectByTitle, createPhase, setTaskPhase };
 }
 
 describe("WHM_RECURRING_SERVICE_TEMPLATE", () => {
@@ -91,8 +98,8 @@ describe("cycleLabelFor / recurringCycleTitle", () => {
 });
 
 describe("provisionRecurringServiceBoard", () => {
-  it("creates one project + one parent task per group + every leaf task", async () => {
-    const { client, createProject, createTask } = fakeClient();
+  it("creates one project, one phase per group, and every task FLAT + phase-stamped", async () => {
+    const { client, createProject, createTask, createPhase, setTaskPhase } = fakeClient();
     const res = await provisionRecurringServiceBoard({
       client,
       account: ACCOUNT,
@@ -107,8 +114,10 @@ describe("provisionRecurringServiceBoard", () => {
     expect(res.taskCount).toBe(recurringTaskCount());
 
     expect(createProject).toHaveBeenCalledTimes(1);
-    // parent tasks (3 groups) + 8 leaf tasks = 11 createTask calls.
-    expect(createTask).toHaveBeenCalledTimes(3 + recurringTaskCount());
+    // PSG-722: NO group-parent tasks — one createTask per template task, each phase-stamped.
+    expect(createTask).toHaveBeenCalledTimes(recurringTaskCount());
+    expect(createPhase).toHaveBeenCalledTimes(WHM_RECURRING_SERVICE_TEMPLATE.length);
+    expect(setTaskPhase).toHaveBeenCalledTimes(recurringTaskCount());
   });
 
   it("relates org/person as v2 ARRAYS and sets the cycle start date", async () => {
@@ -165,7 +174,7 @@ describe("provisionRecurringServiceBoard", () => {
   });
 
   it("is idempotent: an existing same-month board is a no-op", async () => {
-    const { client, createProject, createTask } = fakeClient({
+    const { client, createProject, createTask, createPhase, setTaskPhase } = fakeClient({
       findProjectByTitle: vi.fn(async () => ({ id: 424242 })),
     });
     const res = await provisionRecurringServiceBoard({
@@ -180,5 +189,7 @@ describe("provisionRecurringServiceBoard", () => {
     expect(res.projectId).toBe(424242);
     expect(createProject).not.toHaveBeenCalled();
     expect(createTask).not.toHaveBeenCalled();
+    expect(createPhase).not.toHaveBeenCalled();
+    expect(setTaskPhase).not.toHaveBeenCalled();
   });
 });
