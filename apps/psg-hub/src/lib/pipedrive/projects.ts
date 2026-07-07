@@ -205,6 +205,16 @@ export interface PipedriveProjectsClient {
   updateTask?(taskId: number, patch: UpdateTaskInput): Promise<{ id: number }>;
   /** Attach a file at PROJECT level (v1 `POST /files`) for the rare true-file case. */
   attachProjectFile?(input: AttachProjectFileInput): Promise<{ id: number }>;
+  /**
+   * PSG-644 — list a project's tasks (v2 `GET /tasks?project_id`). Optional so existing
+   * test fakes stay valid. Backs the Asana-import marker-guard: a re-run reads the tasks
+   * already in the target project, extracts their `[asana:<gid>]` markers, and skips any
+   * open Asana task already migrated — so a re-run never double-writes. Returns id + title
+   * + description (the description is where the marker lives).
+   */
+  listProjectTasks?(
+    projectId: number,
+  ): Promise<Array<{ id: number; title: string; description: string }>>;
 }
 
 /**
@@ -389,6 +399,17 @@ export function createProjectsClient(
       );
       const hit = (data ?? []).find((p) => (p.title ?? "").trim() === title.trim());
       return hit ? { id: Number(hit.id) } : null;
+    },
+    async listProjectTasks(projectId) {
+      // v2 `GET /tasks?project_id` — the marker-guard read for the Asana import (PSG-644).
+      const data = await call<
+        Array<{ id: number; title?: string; description?: string }>
+      >("GET", "v2", "tasks", { project_id: String(projectId), limit: "500" });
+      return (data ?? []).map((t) => ({
+        id: Number(t.id),
+        title: String(t.title ?? ""),
+        description: String(t.description ?? ""),
+      }));
     },
   };
 }
