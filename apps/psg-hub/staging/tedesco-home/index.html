@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Tedesco Auto Body — Collision &amp; Auto Body Repair in New Rochelle</title>
+<meta name="description" content="Collision and auto body repair in New Rochelle, NY. Call (914) 636-3000 for a free estimate, or text a photo of the damage. I-CAR Gold Class certified." />
+<!--
+  Tedesco Auto Body — home page (STAGING PREVIEW, not published)
+  Build: PSG-748 (engineering) · Design/spec: PSG-719 build-handoff-spec (Uri) · Honesty sign-off: PSG-717 (Lee)
+  Self-contained: no external network dependencies. Fonts declared by name (Archivo/Inter) with a
+  system fallback stack so the file renders offline; embed webfonts before publish if desired.
+  The ONE job of this page: get a just-crashed visitor to CALL or REQUEST AN ESTIMATE.
+-->
+<style>
+  :root{
+    --red:#C4161C; --red-dark:#9E1015; --ink:#23272B; --gold:#C8A84B;
+    --gray:#5B6169; --lgray:#D7DBDF; --hero-a:#1B1E22; --hero-b:#282D33;
+    --line:#E3E4E7; --tint:#F5F5F6; --white:#fff;
+    --gut:20px; --sticky-h:64px;
+    --sans:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --head:"Archivo", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; font-family:var(--sans); color:var(--ink); background:var(--white);
+    font-size:15px; line-height:1.5;
+    /* keep content clear of the fixed mobile bar */
+    padding-bottom:calc(var(--sticky-h) + env(safe-area-inset-bottom));
+  }
+  h1,h2,h3{font-family:var(--head); font-weight:800; line-height:1.1; margin:0}
+  a{color:inherit}
+  img{max-width:100%; display:block}
+  .wrap{max-width:1200px; margin:0 auto; padding-left:var(--gut); padding-right:var(--gut)}
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    min-height:48px; padding:0 24px; border-radius:10px; font-weight:700; font-size:15px;
+    text-decoration:none; border:2px solid transparent; cursor:pointer;
+    transition:background-color .12s ease, filter .12s ease; white-space:nowrap;
+  }
+  .btn:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+  .btn-red{background:var(--red); color:#fff}
+  .btn-red:hover{filter:brightness(.92)}
+  .btn-red:active{background:var(--red-dark)}
+  .btn-outline-light{background:transparent; color:#fff; border-color:rgba(255,255,255,.7)}
+  .btn-outline-light:hover{background:rgba(255,255,255,.08)}
+  .btn-outline-ink{background:transparent; color:var(--ink); border-color:var(--ink)}
+  .btn-outline-ink:hover{background:rgba(35,39,43,.06)}
+  .btn-ink{background:var(--ink); color:#fff}
+  .btn-ink:hover{filter:brightness(1.12)}
+  .btn[aria-disabled="true"]{opacity:.55; pointer-events:none}
+
+  /* ---------- Header ---------- */
+  .site-header{
+    position:sticky; top:0; z-index:40; background:rgba(27,30,34,.98);
+    border-bottom:1px solid rgba(255,255,255,.08); backdrop-filter:saturate(1.2) blur(4px);
+  }
+  .header-row{display:flex; align-items:center; justify-content:space-between; min-height:64px; gap:12px}
+  .brand{display:flex; align-items:center; gap:10px; text-decoration:none; color:#fff}
+  .brand .mark{
+    width:38px; height:38px; border-radius:9px; background:var(--red); color:#fff;
+    display:grid; place-items:center; font-family:var(--head); font-weight:900; font-size:18px;
+  }
+  .brand .name{font-family:var(--head); font-weight:800; font-size:17px; letter-spacing:.2px; line-height:1}
+  .brand .name small{display:block; font-family:var(--sans); font-weight:600; font-size:11px; color:var(--gold); letter-spacing:.14em; margin-top:3px}
+  .header-cta{display:none; align-items:center; gap:10px}
+  .header-cta .btn{min-height:42px; padding:0 16px; font-size:14px}
+  /* Mobile: icon-only call in header */
+  .header-call-icon{
+    display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px;
+    border-radius:9px; background:var(--red); color:#fff; text-decoration:none;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    background:linear-gradient(160deg, var(--hero-a), var(--hero-b));
+    color:var(--lgray); padding:36px 0 40px;
+  }
+  .eyebrow{color:var(--gold); font-weight:700; font-size:12.5px; letter-spacing:.16em; text-transform:uppercase; margin:0 0 12px}
+  .hero h1{color:#fff; font-size:33px; font-weight:900; letter-spacing:-.5px; max-width:16ch}
+  .hero .sub{color:var(--lgray); font-size:15px; margin:14px 0 0; max-width:44ch}
+  .hero-cta{display:flex; flex-direction:column; gap:12px; margin-top:22px}
+  .hero-cta .btn{width:100%}
+  .text-photo{margin-top:14px; font-size:14px; color:var(--lgray)}
+  .text-photo a{color:#fff; font-weight:700; text-decoration:underline; text-underline-offset:2px}
+  .loc-line{display:flex; align-items:center; gap:8px; margin-top:18px; color:var(--lgray); font-size:14px}
+  .loc-line svg{flex:none}
+
+  /* ---------- Trust strip ---------- */
+  .trust{background:var(--ink); color:#fff; padding:16px 0}
+  .chips{display:flex; flex-wrap:wrap; gap:10px}
+  .chip{
+    display:inline-flex; align-items:center; gap:8px; background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.12); border-radius:13px; padding:8px 13px;
+    font-size:12.5px; font-weight:600; white-space:nowrap; color:#fff;
+  }
+  .chip svg{flex:none; color:var(--gold)}
+
+  /* ---------- Insurance / reassurance ---------- */
+  .section{padding:40px 0}
+  .section h2{font-size:19px; margin-bottom:10px}
+  .lede{color:var(--gray); font-size:15px; max-width:56ch}
+  .insurance{background:var(--tint); border-top:1px solid var(--line); border-bottom:1px solid var(--line)}
+  .insurance p{margin:0; font-size:16px; color:var(--ink); max-width:60ch}
+  .insurance strong{font-weight:700}
+
+  /* ---------- Steps ---------- */
+  .steps{display:grid; gap:16px; margin-top:8px}
+  .step{display:flex; gap:14px; align-items:flex-start}
+  .step .n{flex:none; width:34px; height:34px; border-radius:50%; background:var(--red); color:#fff; font-family:var(--head); font-weight:800; display:grid; place-items:center; font-size:15px}
+  .step h3{font-size:16px; margin-bottom:2px}
+  .step p{margin:0; color:var(--gray); font-size:14px}
+
+  /* ---------- Estimate form ---------- */
+  .estimate{background:var(--hero-a); color:#fff}
+  .estimate h2{color:#fff}
+  .estimate .lede{color:var(--lgray)}
+  .form-card{background:#fff; color:var(--ink); border-radius:14px; padding:20px; margin-top:18px; max-width:520px}
+  .field{margin-bottom:14px}
+  .field label{display:block; font-size:13px; font-weight:600; margin-bottom:6px}
+  .field input, .field textarea{
+    width:100%; font:inherit; padding:12px; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink);
+  }
+  .field input:focus, .field textarea:focus{outline:2px solid var(--ink); outline-offset:1px; border-color:var(--ink)}
+  .form-card .btn{width:100%; margin-top:4px}
+  .form-alt{margin-top:14px; font-size:13px; color:var(--gray); text-align:center}
+  .form-alt a{color:var(--red); font-weight:700}
+
+  /* ---------- Footer ---------- */
+  footer{background:var(--ink); color:var(--lgray); padding:32px 0 24px; font-size:14px}
+  footer a{color:#fff; text-decoration:none}
+  footer a:hover{text-decoration:underline}
+  .foot-grid{display:grid; gap:18px}
+  .foot-brand{font-family:var(--head); font-weight:800; color:#fff; font-size:18px}
+  .foot-contact div{margin-bottom:6px; display:flex; gap:8px; align-items:center}
+  .foot-legal{margin-top:20px; padding-top:16px; border-top:1px solid rgba(255,255,255,.12); color:var(--gray); font-size:12.5px}
+
+  /* ---------- Sticky mobile call/estimate bar (<=639px) ---------- */
+  .sticky-bar{
+    position:fixed; left:0; right:0; bottom:0; z-index:60; display:flex;
+    height:calc(var(--sticky-h) + env(safe-area-inset-bottom));
+    padding-bottom:env(safe-area-inset-bottom);
+    background:var(--ink); border-top:1px solid rgba(255,255,255,.12);
+    box-shadow:0 -6px 20px rgba(0,0,0,.22);
+  }
+  .sticky-bar a{
+    flex:1 1 0; display:flex; align-items:center; justify-content:center; gap:8px;
+    min-height:48px; text-decoration:none; color:#fff; font-weight:700; font-size:15px;
+  }
+  .sticky-bar a:focus-visible{outline:2px solid #fff; outline-offset:-4px}
+  .sticky-bar .sb-call{background:var(--red)}
+  .sticky-bar .sb-est{background:var(--ink)}
+  .sticky-bar svg{flex:none}
+
+  /* ---------- Responsive: sm/md/lg ---------- */
+  @media (min-width:640px){
+    .hero-cta{flex-direction:row; flex-wrap:wrap; align-items:center}
+    .hero-cta .btn{width:auto}
+    .steps{grid-template-columns:repeat(3,1fr)}
+  }
+  @media (min-width:768px){
+    :root{--gut:48px}
+    .header-cta{display:flex}
+    .header-call-icon{display:none}
+    .hero{padding:64px 0 72px}
+    .hero h1{font-size:52px}
+    .hero .sub{font-size:17px}
+    .section h2{font-size:28px}
+    /* Desktop: no bottom bar; header keeps the persistent Call + Estimate pair */
+    .sticky-bar{display:none}
+    body{padding-bottom:0}
+    .foot-grid{grid-template-columns:1.4fr 1fr 1fr}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none !important}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<header class="site-header">
+  <div class="wrap header-row">
+    <a class="brand" href="#top" aria-label="Tedesco Auto Body home">
+      <span class="mark">T</span>
+      <span class="name">Tedesco Auto Body<small>NEW ROCHELLE, NY</small></span>
+    </a>
+    <!-- Desktop: persistent Call + Free estimate pair -->
+    <div class="header-cta">
+      <a class="btn btn-red" href="tel:+19146363000">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        Call (914) 636-3000
+      </a>
+      <a class="btn btn-outline-ink" style="color:#fff;border-color:rgba(255,255,255,.7)" href="#estimate">Free estimate</a>
+    </div>
+    <!-- Mobile: compact icon call -->
+    <a class="header-call-icon" href="tel:+19146363000" aria-label="Call Tedesco Auto Body at (914) 636-3000">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+    </a>
+  </div>
+</header>
+
+<a id="top"></a>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow">NEW ROCHELLE · WESTCHESTER, NY</p>
+    <h1>Collision &amp; Auto Body Repair in New Rochelle</h1>
+    <p class="sub">Just had an accident? We&rsquo;ll get your car back to the way it was &mdash; and work directly with your insurance company. Call now and talk to a real person.</p>
+
+    <div class="hero-cta">
+      <a class="btn btn-red" href="tel:+19146363000">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        Call now &mdash; (914) 636-3000
+      </a>
+      <a class="btn btn-outline-light" href="#estimate">Get your free estimate</a>
+    </div>
+
+    <p class="text-photo">or <a href="sms:+19143403604">Text a photo &rarr; (914) 340-3604</a></p>
+
+    <p class="loc-line">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      320 Main St, New Rochelle, NY
+    </p>
+  </div>
+</section>
+
+<!-- ============ TRUST STRIP (approved wording only — PSG-717) ============ -->
+<section class="trust" aria-label="Certifications and reputation">
+  <div class="wrap chips">
+    <span class="chip"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 6 6 .9-4.5 4.3 1 6.3L12 16.9 6.5 19.5l1-6.3L3 8.9 9 8z"/></svg>I&#8209;CAR Gold Class Certified</span>
+    <span class="chip"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="6"/><path d="M8.5 13.5L7 22l5-3 5 3-1.5-8.5"/></svg>Best of Westchester 2026</span>
+    <span class="chip"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Limited lifetime warranty on our workmanship</span>
+    <span class="chip"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Over 20 years serving New Rochelle</span>
+  </div>
+</section>
+
+<!-- ============ INSURANCE / REASSURANCE (approved wording — PSG-717) ============ -->
+<section class="section insurance">
+  <div class="wrap">
+    <h2>Dealing with insurance?</h2>
+    <p><strong>We work directly with your insurance company &mdash; and guide you through the whole claim.</strong> Bring us the car and the claim number; we&rsquo;ll take it from there so you&rsquo;re not stuck on the phone.</p>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="section">
+  <div class="wrap">
+    <h2>Getting your car fixed is simple</h2>
+    <div class="steps">
+      <div class="step"><span class="n">1</span><div><h3>Call or text a photo</h3><p>Reach a real person at (914)&nbsp;636&#8209;3000, or text a photo of the damage to (914)&nbsp;340&#8209;3604.</p></div></div>
+      <div class="step"><span class="n">2</span><div><h3>Get your free estimate</h3><p>We assess the damage and walk you through the repair &mdash; and the insurance side.</p></div></div>
+      <div class="step"><span class="n">3</span><div><h3>Drive away restored</h3><p>Quality repairs backed by our limited lifetime warranty on workmanship.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!--
+  ============ BEFORE / AFTER SECTION — BUILT BUT GATED (do NOT render until real photos land) ============
+  HONESTY GATE (PSG-719 fix #5 / PSG-717): renders ONLY when the shop provides its OWN rights-cleared
+  repair photos. No stock, no AI, no competitor photos. Owner to source: Lee -> Iris/Nova (PSG-709/PSG-710).
+  The markup below is the DESIGNED module, kept in a <template> so it ships built-but-omitted.
+  To enable once real photos exist: move the pairs into <div id="ba-pairs"> and call renderBeforeAfter().
+-->
+<template id="before-after-template">
+  <section class="section" style="background:var(--tint); border-top:1px solid var(--line)">
+    <div class="wrap">
+      <h2>Real repairs, before &amp; after</h2>
+      <p class="lede">Every photo below is a real repair we completed &mdash; the shop&rsquo;s own work.</p>
+      <div id="ba-pairs" style="display:grid; gap:16px; margin-top:18px; grid-template-columns:1fr">
+        <!-- pair card: <figure><img before><img after><figcaption>…</figcaption></figure> -->
+      </div>
+    </div>
+  </section>
+</template>
+<script>
+  // Photos array is EMPTY by design — section stays omitted until Lee delivers rights-cleared shop photos.
+  window.TEDESCO_BEFORE_AFTER_PHOTOS = [];
+  function renderBeforeAfter(){
+    var photos = window.TEDESCO_BEFORE_AFTER_PHOTOS || [];
+    if(!photos.length) return; // honesty gate: omit entirely, no empty "coming soon"
+    var tpl = document.getElementById('before-after-template');
+    var node = tpl.content.cloneNode(true);
+    // (population logic runs only when real photos are supplied)
+    document.getElementById('how-anchor').after(node);
+  }
+  renderBeforeAfter();
+</script>
+<span id="how-anchor"></span>
+
+<!-- ============ ESTIMATE (secondary CTA target) ============ -->
+<section class="section estimate" id="estimate">
+  <div class="wrap">
+    <h2>Get your free estimate</h2>
+    <p class="lede">Tell us what happened. We&rsquo;ll get back to you fast &mdash; or call (914)&nbsp;636&#8209;3000 to talk now.</p>
+    <form class="form-card" onsubmit="return false" aria-label="Request a free estimate">
+      <div class="field"><label for="f-name">Your name</label><input id="f-name" name="name" type="text" autocomplete="name" /></div>
+      <div class="field"><label for="f-phone">Phone</label><input id="f-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(914) 000-0000" /></div>
+      <div class="field"><label for="f-vehicle">Vehicle (year, make, model)</label><input id="f-vehicle" name="vehicle" type="text" /></div>
+      <div class="field"><label for="f-msg">What happened?</label><textarea id="f-msg" name="message" rows="3"></textarea></div>
+      <button class="btn btn-red" type="submit">Request my free estimate</button>
+      <p class="form-alt">Prefer to talk? <a href="tel:+19146363000">Call (914)&nbsp;636&#8209;3000</a> &middot; or <a href="sms:+19143403604">text a photo</a></p>
+    </form>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap foot-grid">
+    <div>
+      <div class="foot-brand">Tedesco Auto Body</div>
+      <p style="margin:8px 0 0; max-width:34ch">Collision &amp; auto body repair serving New Rochelle and Westchester County for over 20 years.</p>
+    </div>
+    <div class="foot-contact">
+      <div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg><a href="tel:+19146363000">(914) 636-3000</a></div>
+      <div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><a href="sms:+19143403604">Text a photo: (914) 340-3604</a></div>
+      <div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>320 Main St, New Rochelle, NY</div>
+    </div>
+    <div class="foot-contact">
+      <div style="font-weight:700;color:#fff">Certified &amp; trusted</div>
+      <div>I&#8209;CAR Gold Class Certified</div>
+      <div>Best of Westchester 2026</div>
+      <div>Limited lifetime warranty on workmanship</div>
+    </div>
+  </div>
+  <div class="wrap foot-legal">
+    &copy; Tedesco Auto Body. Staging preview &mdash; not the live site.
+  </div>
+</footer>
+
+<!-- ============ STICKY MOBILE CALL / ESTIMATE BAR (<=639px only) ============ -->
+<nav class="sticky-bar" aria-label="Quick contact">
+  <a class="sb-call" href="tel:+19146363000">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+    Call now
+  </a>
+  <a class="sb-est" href="#estimate">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>
+    Free estimate
+  </a>
+</nav>
+
+</body>
+</html>
