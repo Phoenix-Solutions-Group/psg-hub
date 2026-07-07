@@ -56,6 +56,86 @@ describe("C1 — undocumentable hard numbers", () => {
   });
 });
 
+// PSG-775 — C1 hardening: digit-form rank brags and vague / adjective-padded
+// quantity boasts that slipped past the human review in PSG-762 QA must now be
+// caught by the machine, WITHOUT any new false positive on honest tenure /
+// contact / address / service copy. Fixtures are 1:1 with the C1 Hardening Spec.
+describe("C1 hardening (PSG-775) — MUST-BLOCK rank & quantity brags", () => {
+  const MUST_BLOCK: readonly [string, string][] = [
+    // [pattern, copy]
+    ["1b", "We're number 1 in Westchester"],
+    ["1b", "The number one collision shop in town"],
+    ["1c", "No. 1 rated body shop"],
+    ["1a", "#1 rated auto body"],
+    ["1e", "The best body shop in Yonkers"],
+    ["1d", "Top-rated collision repair — guaranteed"],
+    ["1d", "Yonkers' premier auto body center"],
+    ["1d", "Unbeatable prices, unbeatable service"],
+    ["2a", "We've repaired thousands of cars"],
+    ["2a", "Hundreds of happy customers"],
+    ["2b", "5,000 happy families served"],
+    ["2a", "Countless satisfied drivers"],
+  ];
+
+  for (const [pattern, copy] of MUST_BLOCK) {
+    it(`[${pattern}] BLOCKS: ${copy}`, () => {
+      const v = [...scanSuperlatives(copy), ...scanUnverifiableNumbers(copy)];
+      expect(v.length, `expected a C1 violation for "${copy}"`).toBeGreaterThan(0);
+    });
+  }
+});
+
+describe("C1 hardening (PSG-775) — MUST-PASS honest copy (zero false positives)", () => {
+  const MUST_PASS: readonly string[] = [
+    // Tenure
+    "Serving Yonkers since 1969",
+    "Family-owned for over 20 years",
+    "22 years in business",
+    // Phone
+    "Call (914) 555-0100",
+    "Text us at 914-555-0199",
+    // Address / bay numbers
+    "1 Tuckahoe Road, Yonkers, NY",
+    "No. 5 Central Ave",
+    "Drop-off at Bay 1",
+    // Service copy
+    "We handle all insurance claims",
+    "Free estimates",
+    "I-CAR Gold Class certified",
+    // Adverbial "best" — not a business superlative
+    "We'll do our best to get you back on the road",
+  ];
+
+  for (const copy of MUST_PASS) {
+    it(`PASSES: ${copy}`, () => {
+      expect(scanSuperlatives(copy), `superlative false-positive on "${copy}"`).toHaveLength(0);
+      expect(scanUnverifiableNumbers(copy), `number false-positive on "${copy}"`).toHaveLength(0);
+    });
+  }
+});
+
+describe("C1 hardening (PSG-775) — attribution escape hatch (a linked source clears it)", () => {
+  it("passes a superlative attributed to a named third party WITH a link", () => {
+    const copy = "Voted best body shop — Westchester Magazine 2026 https://westchestermagazine.com/best-of";
+    expect(scanSuperlatives(copy)).toHaveLength(0);
+  });
+
+  it("still BLOCKS the same superlative when there is NO link (no link, no pass)", () => {
+    const copy = "Voted best body shop — Westchester Magazine 2026";
+    expect(scanSuperlatives(copy).length).toBeGreaterThan(0);
+  });
+
+  it("passes an attributed count WITH a link", () => {
+    const copy = "Over 5,000 vehicles repaired — verified on Google https://g.page/shop-x";
+    expect(scanUnverifiableNumbers(copy)).toHaveLength(0);
+  });
+
+  it("does not let a link two sentences away excuse an unattributed brag", () => {
+    const copy = "We're #1 in town. Visit us at https://ourshop.com";
+    expect(scanSuperlatives(copy).length).toBeGreaterThan(0);
+  });
+});
+
 describe("C6 — reviews are the gatekeeper", () => {
   it("rejects a rating when the shop has none on record (never invent)", () => {
     expect(scanRating("Rated 4.9 by our customers.", noRatingFacts.rating).map((x) => x.code)).toContain(
