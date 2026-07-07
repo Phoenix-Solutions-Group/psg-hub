@@ -303,16 +303,25 @@ export function createQaRestClient(config: QaClientConfig = {}): QaRestClient {
     },
     async getProjectPlan(projectId) {
       // v1 `GET /projects/{id}/plan` — items are tasks + activities linked to a phase/group.
-      // Field names are read defensively (task id under `task_id` or `id`; a `type` marker
-      // distinguishes tasks from activities when present) so a minor shape drift can't crash
-      // the readback. Non-task rows are dropped.
+      // The live plan rows are shaped `{ item_id, item_type, phase_id, group_id }` (verified
+      // against prod, PSG-737): the id is `item_id` and the type marker is `item_type` — NOT
+      // `task_id`/`id`/`type`. Reading only the latter dropped EVERY row (taskId == null), so
+      // the plan looked empty and the phase-stamp check always false-negatived even though
+      // provisioning stamps correctly. We now read `item_id`/`item_type` first and keep
+      // `task_id`/`id`/`type` as defensive fallbacks so a future shape drift can't crash.
       const { data } = await call<unknown[]>("GET", "v1", `projects/${projectId}/plan`);
       const out: Array<{ taskId: number; phaseId: number | null; groupId: number | null }> = [];
       for (const item of data ?? []) {
         const r = asRecord(item);
-        const type = typeof r.type === "string" ? r.type.toLowerCase() : null;
+        const rawType =
+          typeof r.item_type === "string"
+            ? r.item_type
+            : typeof r.type === "string"
+              ? r.type
+              : null;
+        const type = rawType != null ? rawType.toLowerCase() : null;
         if (type != null && type !== "task") continue; // keep tasks; drop activities
-        const taskId = num(r.task_id) ?? num(r.id);
+        const taskId = num(r.item_id) ?? num(r.task_id) ?? num(r.id);
         if (taskId == null) continue;
         out.push({ taskId, phaseId: num(r.phase_id), groupId: num(r.group_id) });
       }

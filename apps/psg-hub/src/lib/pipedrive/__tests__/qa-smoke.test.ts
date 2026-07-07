@@ -145,11 +145,19 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
         if (t) t.phase_id = body.phase_id ?? null;
         return ok({ id: taskId, phase_id: body.phase_id ?? null });
       }
-      // GET /projects/{id}/plan — items link each task to its phase.
+      // GET /projects/{id}/plan — items link each task to its phase. The LIVE plan row shape
+      // is `{ item_id, item_type, phase_id, group_id }` (verified against prod, PSG-737) — NOT
+      // `task_id`/`type`. The fake must mirror prod exactly, else getProjectPlan can read the
+      // wrong id field and drop every row (the false negative PSG-737 fixed).
       if (parts[5] == null && method === "GET") {
         const items = [...tasks.values()]
           .filter((t) => t.project_id === projectId)
-          .map((t) => ({ type: "task", task_id: t.id, phase_id: t.phase_id ?? null }));
+          .map((t) => ({
+            item_type: "task",
+            item_id: t.id,
+            phase_id: t.phase_id ?? null,
+            group_id: null,
+          }));
         return ok(items);
       }
     }
