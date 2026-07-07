@@ -306,7 +306,10 @@ export function createExportSource(root: unknown): ExportSource {
       for (const [gid, list] of parsed.tasksByProject) {
         let open = 0;
         let closed = 0;
-        for (const t of list) (t.completed ? closed++ : open++);
+        for (const t of list) {
+          if (t.completed) closed++;
+          else open++;
+        }
         out.push({
           gid,
           name: parsed.projectNames.get(gid) ?? gid,
