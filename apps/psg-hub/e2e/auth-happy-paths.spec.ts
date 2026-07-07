@@ -214,7 +214,7 @@ test("C: forgot password → reset link → set new password → signed in", asy
   const link = await latestEmailLink(email);
   await page.goto(link);
   await page.waitForURL("**/reset-password");
-  await page.getByLabel("New password").fill(NEWPW);
+  await page.getByLabel("New password", { exact: true }).fill(NEWPW);
   await page.getByLabel("Confirm new password").fill(NEWPW);
   await page.getByRole("button", { name: "Save new password" }).click();
   await page.waitForURL("**/dashboard");
