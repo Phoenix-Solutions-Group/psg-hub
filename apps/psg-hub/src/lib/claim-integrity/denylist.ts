@@ -7,7 +7,7 @@
 //
 // Pure data + pure functions — no I/O, node-testable.
 
-import type { DrpDisclosure, Violation } from "./types";
+import { RATING_STAR_THRESHOLD, type DrpDisclosure, type Rating, type Violation } from "./types";
 
 /**
  * Major MSO / consolidator brands that are ALWAYS competitors to one of our
@@ -98,6 +98,161 @@ export const INSURANCE_CLAIM_IMPLICATION_PATTERNS: readonly { re: RegExp; label:
   { re: /\byour insurance (will )?(pays?|covers?) (it|everything|the whole|all)\b/i, label: "implies insurance pays all" },
   { re: /\bwe only (do|handle|take) insurance (work|jobs|claims)\b/i, label: "implies insurance-only" },
 ];
+
+/**
+ * C1 (honest claims) — unprovable superlatives. The BSM Content-Quality Standard
+ * v1 lists these as REJECT triggers with NO "unless verified" escape: a
+ * superlative that can't be proven is removed, not softened. So — unlike a rating
+ * (C6), which is allowed when verified — these are ALWAYS a HARD-FAIL regardless
+ * of the verified-facts record. Patterns are deliberately narrow (bragging
+ * constructs) so ordinary words like "quality" or a bare "best" inside a longer
+ * honest phrase are not swept up; each is a whole-phrase, case-insensitive regex.
+ */
+export const UNPROVABLE_SUPERLATIVE_PATTERNS: readonly { re: RegExp; label: string }[] = [
+  { re: /#\s?1\b/, label: '"#1"' },
+  { re: /\bnumber one\b/i, label: '"number one"' },
+  { re: /\bbest in (?:town|the (?:state|area|city|county)|[a-z]+ county)\b/i, label: '"best in …"' },
+  { re: /\b(?:the )?best (?:body ?shop|collision (?:repair|center|shop)|auto body(?: shop)?) (?:in|around)\b/i, label: '"best … in/around"' },
+  { re: /\bvoted (?:the )?best\b/i, label: '"voted best"' },
+  { re: /\b(?:#\s?1|number one|top)[ -]?rated\b/i, label: '"#1-rated / top-rated"' },
+  { re: /\bhighest[ -]rated\b/i, label: '"highest-rated"' },
+  { re: /\bunbeatable\b/i, label: '"unbeatable"' },
+  { re: /\bsecond to none\b/i, label: '"second to none"' },
+  { re: /\bbest (?:in the )?business\b/i, label: '"best in the business"' },
+  { re: /\bnobody (?:does it |beats )/i, label: '"nobody beats/does it better"' },
+];
+
+/**
+ * C1 (honest claims) — hard numbers a shop generally cannot document, and for
+ * which the verified-facts record has NO backing field (unlike tenure, which is
+ * governed by the `yearsInBusiness` manifest binding). A repaired-vehicle /
+ * served-customer count on a page has no verifiable source, so it is a HARD-FAIL.
+ * Deliberately narrow: matches an explicit count paired with a repair/service
+ * verb, so a street address, a phone number, or "since 1969" never trips it.
+ */
+export const UNVERIFIABLE_NUMBER_PATTERNS: readonly { re: RegExp; label: string }[] = [
+  {
+    re: /\b\d[\d,]{2,}\+?\s+(?:cars?|vehicles?|customers?|drivers?|repairs?)\s+(?:repaired|serviced|fixed|restored|completed|served|helped)\b/i,
+    label: "repaired/served count",
+  },
+  {
+    re: /\b(?:repaired|serviced|fixed|restored|completed|served|helped)\s+(?:over |more than |upwards of )?\d[\d,]{2,}\+?\s+(?:cars?|vehicles?|customers?|drivers?)\b/i,
+    label: "repaired/served count",
+  },
+];
+
+/** Scan for unprovable superlatives (C1). Always a HARD-FAIL. */
+export function scanSuperlatives(text: string): Violation[] {
+  const violations: Violation[] = [];
+  for (const { re, label } of UNPROVABLE_SUPERLATIVE_PATTERNS) {
+    const m = text.match(re);
+    if (m) {
+      violations.push({
+        code: "unprovable_superlative",
+        message: `Copy uses an unprovable superlative (${label}). A claim that can't be proven must be removed, not softened (C1 honest claims).`,
+        evidence: m[0],
+      });
+    }
+  }
+  return violations;
+}
+
+/** Scan for undocumentable hard numbers such as repaired-vehicle counts (C1). */
+export function scanUnverifiableNumbers(text: string): Violation[] {
+  const violations: Violation[] = [];
+  for (const { re, label } of UNVERIFIABLE_NUMBER_PATTERNS) {
+    const m = text.match(re);
+    if (m) {
+      violations.push({
+        code: "unverifiable_number",
+        message: `Copy states a hard number the shop can't document (${label}). Undocumentable numbers must be left out (C1 honest claims).`,
+        evidence: m[0].trim(),
+      });
+    }
+  }
+  return violations;
+}
+
+/**
+ * Star-rating / review-count assertions we detect in copy for C6. Detection is
+ * separate from the verdict: a matched rating is ALLOWED only when the shop has a
+ * verified rating that clears the bar and is linkable (see `scanRating`). Each
+ * captures the asserted numeric value where present so over-claiming can be
+ * caught.
+ */
+const RATING_MENTION_PATTERNS: readonly { re: RegExp; kind: "value" | "count" }[] = [
+  { re: /\b([0-5](?:\.\d)?)\s*(?:★|\bstars?\b|-?\s*star\b)/i, kind: "value" },
+  { re: /\brated\s+([0-5](?:\.\d)?)\b/i, kind: "value" },
+  { re: /\b([0-5](?:\.\d)?)\s*\/\s*5\b/i, kind: "value" },
+  { re: /\b(\d[\d,]*)\+?\s+(?:google\s+)?reviews?\b/i, kind: "count" },
+  { re: /\bgoogle rating\b/i, kind: "count" },
+  { re: /\bstar rating\b/i, kind: "count" },
+];
+
+/**
+ * C6 — reviews are the gatekeeper. A rating or review count may be surfaced ONLY
+ * when the shop's verified record carries a rating that (a) genuinely clears the
+ * ~4.5★ bar and (b) is linkable to a live public profile — and the copy must not
+ * over-claim past the verified value. Anything else is a HARD-FAIL:
+ *   - no verified rating on record ⇒ `unverified_rating` (never invent one)
+ *   - verified rating below ~4.5★ ⇒ `rating_below_threshold` (omit, don't dress up)
+ *   - verified rating not linkable ⇒ `rating_not_linkable`
+ *   - copy asserts more than the record ⇒ `overclaimed_rating`
+ * When the copy makes no rating/review-count claim at all, this returns nothing.
+ */
+export function scanRating(text: string, rating?: Rating): Violation[] {
+  let asserted: string | undefined;
+  let assertedValue: number | undefined;
+  for (const { re, kind } of RATING_MENTION_PATTERNS) {
+    const m = text.match(re);
+    if (!m) continue;
+    asserted = m[0].trim();
+    if (kind === "value" && m[1] !== undefined) {
+      const v = Number.parseFloat(m[1]);
+      if (!Number.isNaN(v)) assertedValue = v;
+    }
+    break;
+  }
+  if (asserted === undefined) return [];
+
+  if (!rating) {
+    return [
+      {
+        code: "unverified_rating",
+        message: `Copy surfaces a rating/review count ("${asserted}") but the shop has no verified rating on record. A rating must never be invented — omit it (C6).`,
+        evidence: asserted,
+      },
+    ];
+  }
+  if (rating.value < RATING_STAR_THRESHOLD) {
+    return [
+      {
+        code: "rating_below_threshold",
+        message: `Copy surfaces a rating ("${asserted}") but the shop's verified rating (${rating.value}★) is below the ~${RATING_STAR_THRESHOLD}★ bar. A weak rating is left off, not dressed up (C6).`,
+        evidence: asserted,
+      },
+    ];
+  }
+  if (!rating.profileUrl) {
+    return [
+      {
+        code: "rating_not_linkable",
+        message: `Copy surfaces a rating ("${asserted}") but the verified rating has no live public profile to link to. An unlinkable rating cannot be surfaced (C6).`,
+        evidence: asserted,
+      },
+    ];
+  }
+  if (assertedValue !== undefined && assertedValue > rating.value + 1e-9) {
+    return [
+      {
+        code: "overclaimed_rating",
+        message: `Copy asserts a ${assertedValue}★ rating but the record verifies only ${rating.value}★. Never over-claim the rating (C6).`,
+        evidence: asserted,
+      },
+    ];
+  }
+  return [];
+}
 
 /** Build a case-insensitive whole-word/phrase matcher for a literal string. */
 function literalPhraseRegex(phrase: string): RegExp {
@@ -222,5 +377,9 @@ export function scanDenylist(
     ...scanCarrierDisclosure(text, drp),
     ...scanAbsoluteCost(text),
     ...scanInsuranceImplication(text),
+    // C1 (honest claims) — always-prohibited unprovable superlatives and
+    // undocumentable hard numbers. Text-only, independent of the manifest.
+    ...scanSuperlatives(text),
+    ...scanUnverifiableNumbers(text),
   ];
 }
