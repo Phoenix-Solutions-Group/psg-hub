@@ -1,0 +1,44 @@
+{
+  "$comment": "PSG-617 — canonical list of PUBLIC objects the psg-hub repo migrations are expected to produce (i.e. what a from-scratch `supabase db reset` yields). scripts/check-schema-drift.mjs diffs a live DB against this. Regenerate from a CLEAN code-built database (never from prod) with:  node scripts/check-schema-drift.mjs --generate --objects-file <objects.json>   (or point SUPABASE_DB_URL at a fresh rebuild). Two-track migration timestamps make the ledger `version` unreliable, so this manifest keys on OBJECTS, not version strings — complementary to the ledger check in scripts/check-migration-drift.mjs.",
+  "generatedFrom": "code-built staging branch drqmiywewgftngldotjd (repo HEAD after PSG-617), 2026-07-07",
+  "extensionOwnedTables": [
+    "spatial_ref_sys"
+  ],
+  "tables": [
+    "access_audit", "accident_density", "accident_import_sources", "accident_market_daypart_rollup",
+    "accident_market_rollup", "accident_market_zip_rollup", "accidents", "accidents_2016", "accidents_2017",
+    "accidents_2018", "accidents_2019", "accidents_2020", "accidents_2021", "accidents_2022", "accidents_2023",
+    "accidents_2024", "accidents_2025", "accidents_2026", "accidents_2027", "accidents_default", "activity_log",
+    "ad_copy_events", "ads_api_call_log", "ads_audit_logs", "ai_prompt_templates", "analytics_snapshots",
+    "analytics_sync_runs", "api_cache", "app_user_roles", "approval_queue", "billing_memory_decisions",
+    "billing_run_history", "body_shops", "bsm_campaigns", "campaign_budget_snapshots", "campaign_sends",
+    "campaigns", "ccc_accounts", "ccc_api_call_log", "clients", "companies", "company_programs",
+    "competitor_monitor_runs", "competitor_scores", "competitors", "configs", "consolidators", "content_items",
+    "county_references", "county_vehicle_registrations", "crash_event_sources", "crash_events", "crash_zip_annual",
+    "customer_zip_report_monthly", "discovery_briefs", "dmv_vehicle_registrations", "elements", "email_events",
+    "employees", "estimated_zip_vehicles", "estimates", "ev_registrations", "google_ads_accounts",
+    "google_ads_campaigns", "google_ads_oauth_states", "google_oauth_accounts", "google_oauth_pending_states",
+    "import_templates", "insurance_agents", "insurance_companies", "integrations", "invoiced_catalog_items",
+    "invoiced_customer_cache", "invoiced_customers", "invoices", "items", "leads", "llm_call_log",
+    "localreach_pages", "location_brand", "location_certifications", "location_insurance", "location_market",
+    "location_paperclip_mapping", "location_profiles", "location_services", "locations", "mail_send_history",
+    "mail_send_priors", "mail_suppression", "mail_template_approvals", "mail_vendor_jobs", "market_map_point_cache",
+    "market_zip_latest_signal", "module_access_grants", "modules", "monthly_reports", "pages", "payments",
+    "pipedrive_deals", "pipedrive_sync_runs", "portal_sessions_log", "portal_users", "production_batches",
+    "production_documents", "production_reprint_log", "products", "profiles", "psg_knowledge_chunks",
+    "psg_knowledge_meta", "python_worker_jobs", "rental_assignments", "repair_customers", "repair_order_employees",
+    "repair_orders", "reports", "research_artifacts", "review_items", "review_responses", "review_sentiment",
+    "review_solicitation_sends", "reviews", "security_profile_defs", "security_profiles", "shop_seo_audits",
+    "shop_users", "shops", "sitemap_checkpoints", "skills", "sms_events", "solicitation_opt_outs",
+    "state_references", "state_vehicle_registrations", "storm_event_sources", "storm_events", "storm_zip_monthly",
+    "stripe_webhook_events", "subscriptions", "superadmin_emails", "survey_dispatches", "survey_responses",
+    "user_security_profile_assignments", "utm_exports", "vehicles", "verified_facts", "weather_cache",
+    "zcta_income_annual", "zcta_vehicle_availability", "zcta_zip_mapping", "zip_references", "zipcode_boundaries"
+  ],
+  "storageBuckets": [
+    "ads-mutation-logs",
+    "monthly-reports",
+    "pilot-intake",
+    "public-assets"
+  ]
+}

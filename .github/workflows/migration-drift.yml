@@ -42,7 +42,7 @@ jobs:
           node-version: 20
 
       # psql is preinstalled on the ubuntu-latest runner image (postgresql-client).
-      - name: Check migration drift
+      - name: Check migration drift (ledger)
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
@@ -51,6 +51,23 @@ jobs:
           code=$?
           if [ "$code" = "2" ]; then
             echo "::warning title=Migration drift check skipped::SUPABASE_DB_URL secret not set — enforcement is OFF. See docs/runbooks/supabase-migration-apply.md."
+            exit 0
+          fi
+          exit $code
+
+      # PSG-617 — object-parity check. Complements the ledger check above: it catches
+      # prod-only tables/buckets that have NO ledger row (invisible to the ledger
+      # check) and code objects not yet applied, by diffing the live DB against
+      # apps/psg-hub/supabase/schema-manifest.json.
+      - name: Check schema drift (object parity)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set +e
+          node scripts/check-schema-drift.mjs
+          code=$?
+          if [ "$code" = "2" ]; then
+            echo "::warning title=Schema drift check skipped::SUPABASE_DB_URL secret not set — enforcement is OFF. See docs/runbooks/supabase-migration-apply.md."
             exit 0
           fi
           exit $code
