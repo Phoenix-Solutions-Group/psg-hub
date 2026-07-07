@@ -58,6 +58,7 @@ function fakeClient(open: PipedriveDeal[], closed: PipedriveDeal[] = []): Pipedr
   return {
     fetchOpenDeals: vi.fn(async () => open),
     fetchDealsByStatus: vi.fn(async () => closed),
+    fetchStages: vi.fn(async () => []),
   };
 }
 
@@ -130,6 +131,7 @@ describe("syncPipedriveDeals", () => {
         throw new Error("Pipedrive /deals returned HTTP 500");
       }),
       fetchDealsByStatus: vi.fn(async () => []),
+      fetchStages: vi.fn(async () => []),
     };
     const result = await syncPipedriveDeals({ client, service, now: NOW });
     expect(result.ok).toBe(false);

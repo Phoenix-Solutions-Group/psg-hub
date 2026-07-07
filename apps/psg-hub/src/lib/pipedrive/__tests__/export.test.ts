@@ -408,4 +408,19 @@ describe("serializers", () => {
     expect(csv).toContain("monthly_value");
     expect(csv).toContain("RECURRING MONTHLY (Σ vs Invoiced MRR; 1 unresolved/manual)");
   });
+
+  it("PSG-622: default live stage weighting is a no-op while unconfirmed (blank win% → weighted 0)", () => {
+    // Deals mirror the live pipeline-8 shape: real stage_ids, win_probability all blank.
+    // Until Reese confirms PIPELINE_8_STAGE_CODES, buildDealsExport must NOT invent weights
+    // — the weighted line stays $0 (raw open-$ remains the trustworthy number), unchanged
+    // from today. This guards finance's numbers against an accidental early activation.
+    const deals = [
+      deal({ dealId: 1, value: 35_800, stageId: 59, stageName: null, winProbability: null }),
+      deal({ dealId: 2, value: 25_230, stageId: 61, stageName: null, winProbability: null }),
+    ];
+    const exp = buildDealsExport(deals, { asOf: ASOF });
+    expect(exp.forecast.bestCaseValue).toBe(61_030); // raw open-pipeline-$ still correct
+    expect(exp.forecast.weightedValue).toBe(0); // gated: no weighting until the map is filled
+    expect(exp.forecast.committedValue).toBe(0);
+  });
 });

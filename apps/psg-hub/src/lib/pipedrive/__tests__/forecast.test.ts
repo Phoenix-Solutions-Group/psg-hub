@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildForecast, resolveProbability } from "../forecast";
+import { buildStageProbabilityMap, committedStageIds } from "../stages";
 import type { PipedriveDeal } from "../types";
 
 function deal(p: Partial<PipedriveDeal>): PipedriveDeal {
@@ -139,5 +140,38 @@ describe("buildForecast", () => {
     ];
     const f = buildForecast(deals);
     expect(f.perStage[f.perStage.length - 1].stageId).toBeNull();
+  });
+
+  // PSG-622 — end-to-end: the live pipeline-8 stages, all with blank win_probability,
+  // weight to a REAL forecast (not $0) once the stage → Sn map is wired. This is the
+  // exact chain the export uses (buildStageProbabilityMap + committedStageIds → forecast).
+  it("turns the blank-win_probability live pipeline into a non-zero weighted forecast", () => {
+    // Representative open deals at each live stage_id (56–61), win_probability all null.
+    const deals: PipedriveDeal[] = [
+      deal({ dealId: 1, value: 20_000, stageId: 56, winProbability: null }), // → S6
+      deal({ dealId: 2, value: 2_762, stageId: 57, winProbability: null }), // → S3
+      deal({ dealId: 3, value: 5_000, stageId: 58, winProbability: null }), // → S5
+      deal({ dealId: 4, value: 35_800, stageId: 59, winProbability: null }), // → S4
+      deal({ dealId: 5, value: 1_770, stageId: 60, winProbability: null }), // → S2
+      deal({ dealId: 6, value: 25_230, stageId: 61, winProbability: null }), // → S0
+    ];
+    const codes = { 61: "S0", 60: "S2", 57: "S3", 59: "S4", 58: "S5", 56: "S6" } as const;
+
+    // Without the map: every deal weights to 0 (the bug this ticket fixes).
+    const before = buildForecast(deals);
+    expect(before.weightedValue).toBe(0);
+    expect(before.committedValue).toBe(0);
+
+    // With the map wired: weighted becomes a real, meaningful number.
+    const after = buildForecast(deals, {
+      stageProbability: buildStageProbabilityMap(codes),
+      committedStageIds: committedStageIds(codes),
+    });
+    expect(after.weightedValue).toBeGreaterThan(0);
+    // committed floor = the single ≥ S6 deal (stage 56), face-$.
+    expect(after.committedDealCount).toBe(1);
+    expect(after.committedValue).toBe(20_000);
+    // best-case is unchanged (un-weighted ceiling, identical before/after).
+    expect(after.bestCaseValue).toBe(before.bestCaseValue);
   });
 });

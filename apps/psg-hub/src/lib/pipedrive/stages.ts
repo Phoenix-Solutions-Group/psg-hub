@@ -59,3 +59,76 @@ export function buildStageProbabilityMap(
   }
   return map;
 }
+
+/** Index of a lifecycle code within PSG_LIFECYCLE_STAGES (S0 → 0 … S8 → 8), or -1. */
+function stageIndex(code: LifecycleStage["code"]): number {
+  return PSG_LIFECYCLE_STAGES.findIndex((s) => s.code === code);
+}
+
+/**
+ * The set of Pipedrive stage_ids that count as "committed" (≥ S6 / Contract), derived
+ * from a stage_id → Sn mapping. Supply the same `stageIdToCode` used for the probability
+ * map; the committed line then keys off the explicit stage (via `ForecastOptions.
+ * committedStageIds`) instead of the probability-threshold fallback.
+ */
+export function committedStageIds(
+  stageIdToCode: Record<number, LifecycleStage["code"]>
+): ReadonlySet<number> {
+  const set = new Set<number>();
+  for (const [stageId, code] of Object.entries(stageIdToCode)) {
+    if (stageIndex(code) >= COMMITTED_FROM_STAGE_INDEX) set.add(Number(stageId));
+  }
+  return set;
+}
+
+/**
+ * LIVE Pipedrive `stage_id → Sn` mapping for the active sales pipeline (pipeline 8).
+ * This is the single knob that turns the probability-WEIGHTED forecast on (PSG-622).
+ *
+ * The first live sync (PSG-446, 2026-07-07) surfaced pipeline 8 with 6 stages, ids 56–61.
+ * Pipedrive's per-deal "win probability %" is blank on 17 of 19 deals, so the weighted /
+ * committed lines can only become meaningful via THIS stage-based weighting.
+ *
+ *   stage_id | open deals | value      | (stage_name populated by client.ts once synced)
+ *   ---------+------------+------------+------------------------------------------------
+ *   56       | 2          | $0.00      |
+ *   57       | 2          | $2,762.00  |
+ *   58       | 2          | $0.00      |
+ *   59       | 1          | $35,800.00 |
+ *   60       | 3          | $1,770.00  |
+ *   61       | 9          | $25,230.25 |
+ *
+ * INTENTIONALLY EMPTY until Reese (CRO, owns the live weights per PSG-433/PSG-435)
+ * confirms which live stage is which lifecycle step — the values are a revenue call, not
+ * an engineering one. While empty, the forecast is UNCHANGED (it falls back to each deal's
+ * own win_probability → weighted stays $0). The moment this is filled in, the weighted /
+ * committed lines light up everywhere `buildDealsExport` is consumed (the /ops/sales-
+ * pipeline page + export route) with no other code change.
+ *
+ * Proposed strawman for Reese to confirm/correct (stage_id order = pipeline order):
+ *   { 61: "S0", 60: "S2", 57: "S3", 59: "S4", 58: "S5", 56: "S6" }
+ */
+export const PIPELINE_8_STAGE_CODES: Record<number, LifecycleStage["code"]> = {
+  // Pending Reese confirmation (PSG-622). Fill from the confirmed mapping, e.g.:
+  //   61: "S0", 60: "S2", 57: "S3", 59: "S4", 58: "S5", 56: "S6",
+};
+
+/**
+ * The live stage_id → probability map for the weighted forecast, or `undefined` while
+ * {@link PIPELINE_8_STAGE_CODES} is unconfirmed/empty. `undefined` (not `{}`) so callers
+ * cleanly fall back to today's behavior — an empty map would still be "supplied" and could
+ * mask the win_probability fallback for a stage that isn't listed.
+ */
+export function liveStageProbabilityMap(): StageProbabilityMap | undefined {
+  const map = buildStageProbabilityMap(PIPELINE_8_STAGE_CODES);
+  return Object.keys(map).length > 0 ? map : undefined;
+}
+
+/**
+ * The live committed (≥ S6) stage_id set, or `undefined` while the mapping is empty — so
+ * the committed line keeps its probability-threshold fallback until the stages are wired.
+ */
+export function liveCommittedStageIds(): ReadonlySet<number> | undefined {
+  const set = committedStageIds(PIPELINE_8_STAGE_CODES);
+  return set.size > 0 ? set : undefined;
+}

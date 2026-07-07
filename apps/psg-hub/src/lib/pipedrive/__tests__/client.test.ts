@@ -4,6 +4,7 @@ import {
   deriveMonthlyValue,
   deriveRevenueType,
   mapRawDeal,
+  mapRawStage,
   pipedriveBaseUrl,
   PipedriveError,
 } from "../client";
@@ -152,22 +153,26 @@ describe("createPipedriveClient", () => {
   });
 
   it("follows cursor pagination until next_cursor is null", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          success: true,
-          data: [{ id: 1, value: 100, status: "open" }],
-          additional_data: { next_cursor: "CUR2" },
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+    // Routed by URL: fetchOpenDeals first fetches /stages (the name join), then the two
+    // /deals pages. Route so the extra stages call can't consume a deal-page response.
+    const fetchImpl = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/v2/stages")) {
+        return jsonResponse({ success: true, data: [], additional_data: { next_cursor: null } });
+      }
+      if (u.includes("cursor=CUR2")) {
+        return jsonResponse({
           success: true,
           data: [{ id: 2, value: 200, status: "open" }],
           additional_data: { next_cursor: null },
-        }),
-      );
+        });
+      }
+      return jsonResponse({
+        success: true,
+        data: [{ id: 1, value: 100, status: "open" }],
+        additional_data: { next_cursor: "CUR2" },
+      });
+    });
 
     const client = createPipedriveClient({
       apiToken: "tok_secret",
@@ -177,14 +182,15 @@ describe("createPipedriveClient", () => {
     const deals = await client.fetchOpenDeals();
 
     expect(deals.map((d) => d.dealId)).toEqual([1, 2]);
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
 
-    const firstUrl = String(fetchImpl.mock.calls[0][0]);
-    expect(firstUrl).toContain("https://acme.pipedrive.com/api/v2/deals");
-    expect(firstUrl).toContain("status=open");
-    expect(firstUrl).toContain("api_token=tok_secret");
-    const secondUrl = String(fetchImpl.mock.calls[1][0]);
-    expect(secondUrl).toContain("cursor=CUR2");
+    const dealUrls = fetchImpl.mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => u.includes("/api/v2/deals"));
+    expect(dealUrls).toHaveLength(2);
+    expect(dealUrls[0]).toContain("https://acme.pipedrive.com/api/v2/deals");
+    expect(dealUrls[0]).toContain("status=open");
+    expect(dealUrls[0]).toContain("api_token=tok_secret");
+    expect(dealUrls[1]).toContain("cursor=CUR2");
   });
 
   it("never leaks the token in a thrown error on non-2xx", async () => {
@@ -209,8 +215,134 @@ describe("createPipedriveClient", () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
     await client.fetchDealsByStatus("won", "2025-07-01");
-    const url = String(fetchImpl.mock.calls[0][0]);
-    expect(url).toContain("status=won");
-    expect(url).toContain("updated_since=2025-07-01");
+    // The stages join fetches /api/v2/stages first; find the /deals call to assert on it.
+    const dealsUrl = fetchImpl.mock.calls
+      .map((c) => String(c[0]))
+      .find((u) => u.includes("/api/v2/deals"))!;
+    expect(dealsUrl).toContain("status=won");
+    expect(dealsUrl).toContain("updated_since=2025-07-01");
+  });
+});
+
+// ── PSG-622: stage names (fetch /api/v2/stages + join onto deals) ────────────────────
+/** Route a mocked fetch by URL so a deal pull and its stage-name join can be served together. */
+function routeFetch(routes: {
+  stages?: unknown;
+  stagesOk?: boolean;
+  stagesStatus?: number;
+  deals?: unknown;
+}): ReturnType<typeof vi.fn> {
+  return vi.fn(async (url: string) => {
+    const u = String(url);
+    if (u.includes("/api/v2/stages")) {
+      return jsonResponse(routes.stages ?? {}, routes.stagesOk ?? true, routes.stagesStatus ?? 200);
+    }
+    return jsonResponse(routes.deals ?? { success: true, data: [], additional_data: { next_cursor: null } });
+  });
+}
+
+describe("mapRawStage", () => {
+  it("maps a v2 stage payload (id/name/pipeline_id/order_nr)", () => {
+    const s = mapRawStage({ id: 61, name: "Lead In", pipeline_id: 8, order_nr: 1 });
+    expect(s).toEqual({ id: 61, name: "Lead In", pipelineId: 8, orderNr: 1 });
+  });
+  it("maps a v1 nested pipeline relation and defaults a missing name to null", () => {
+    const s = mapRawStage({ id: 5, pipeline_id: { value: 8, name: "Sales" } });
+    expect(s).toMatchObject({ id: 5, name: null, pipelineId: 8, orderNr: null });
+  });
+});
+
+describe("createPipedriveClient — stage names", () => {
+  it("fetchStages paginates /api/v2/stages and maps rows", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          data: [{ id: 56, name: "Contract", pipeline_id: 8, order_nr: 6 }],
+          additional_data: { next_cursor: "S2" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          data: [{ id: 61, name: "Lead In", pipeline_id: 8, order_nr: 1 }],
+          additional_data: { next_cursor: null },
+        }),
+      );
+    const client = createPipedriveClient({
+      apiToken: "tok_secret",
+      companyDomain: "acme",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const stages = await client.fetchStages();
+    expect(stages.map((s) => s.id)).toEqual([56, 61]);
+    expect(stages[0]).toEqual({ id: 56, name: "Contract", pipelineId: 8, orderNr: 6 });
+    const firstUrl = String(fetchImpl.mock.calls[0][0]);
+    expect(firstUrl).toContain("https://acme.pipedrive.com/api/v2/stages");
+    expect(firstUrl).toContain("api_token=tok_secret");
+    expect(String(fetchImpl.mock.calls[1][0])).toContain("cursor=S2");
+  });
+
+  it("joins the stage name onto a v2 deal that omits stage_name", async () => {
+    const fetchImpl = routeFetch({
+      stages: {
+        success: true,
+        data: [{ id: 61, name: "Lead In", pipeline_id: 8, order_nr: 1 }],
+        additional_data: { next_cursor: null },
+      },
+      deals: {
+        success: true,
+        data: [{ id: 1, value: 100, status: "open", stage_id: 61 }],
+        additional_data: { next_cursor: null },
+      },
+    });
+    const client = createPipedriveClient({
+      apiToken: "t",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const [deal] = await client.fetchOpenDeals();
+    expect(deal!.stageId).toBe(61);
+    expect(deal!.stageName).toBe("Lead In");
+  });
+
+  it("does not overwrite a stage_name the deal payload already carries", async () => {
+    const fetchImpl = routeFetch({
+      stages: {
+        success: true,
+        data: [{ id: 61, name: "Lead In", pipeline_id: 8, order_nr: 1 }],
+        additional_data: { next_cursor: null },
+      },
+      deals: {
+        success: true,
+        data: [{ id: 1, value: 100, status: "open", stage_id: 61, stage_name: "Explicit" }],
+        additional_data: { next_cursor: null },
+      },
+    });
+    const client = createPipedriveClient({
+      apiToken: "t",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const [deal] = await client.fetchOpenDeals();
+    expect(deal!.stageName).toBe("Explicit");
+  });
+
+  it("is resilient: a /stages failure leaves deals synced with a null stage name", async () => {
+    const fetchImpl = routeFetch({
+      stagesOk: false,
+      stagesStatus: 500,
+      deals: {
+        success: true,
+        data: [{ id: 1, value: 100, status: "open", stage_id: 61 }],
+        additional_data: { next_cursor: null },
+      },
+    });
+    const client = createPipedriveClient({
+      apiToken: "t",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const deals = await client.fetchOpenDeals();
+    expect(deals).toHaveLength(1);
+    expect(deals[0]!.stageName).toBeNull();
   });
 });
