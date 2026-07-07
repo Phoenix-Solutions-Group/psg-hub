@@ -36,11 +36,9 @@ import type { PipedriveDeal } from "./types";
  * is populated. Callers that need the audit counts (how many were dropped by the roster gate)
  * should use `selectRecurringAccounts()` instead.
  *
- * PSG-825 (opt-in): a separate `RECURRING_MAINTENANCE_SUPPLEMENT` list ADDS accounts that get
- * monthly maintenance despite having NO won deal — the pre-CRM legacy shops whose org record
- * exists in Pipedrive but who were never sold through it (so they can never appear in the
- * won-deal-derived set, and no fake deal is fabricated to distort revenue). This union is
- * additive and independent of the roster gate; when the var is unset it is a fail-safe no-op.
+ * PSG-825 (additive): any accounts on the maintenance SUPPLEMENT list (pre-CRM shops with an
+ * org record but no won deal) are appended after the roster gate — see
+ * `resolveMaintenanceSupplement()` / `selectRecurringAccounts()`.
  */
 export async function activeRecurringAccounts(
   db: MirrorSupabase,
@@ -117,26 +115,34 @@ function isOnRoster(account: RecurringClient, roster: MaintenanceRoster): boolea
 }
 
 /**
- * The dedupe key an account collapses on — the SAME logic `deriveAccountsFromDeals` uses so a
- * supplement account and a won-deal account for the same org can never both provision a board:
- * prefer `orgId`, fall back to the normalized org name for orgless rows.
+ * The dedupe key an account collapses to. IDENTICAL to `deriveAccountsFromDeals` so a
+ * supplement account is never double-provisioned against a won-deal account for the same org.
  */
 function accountKey(account: RecurringClient): string {
   return account.orgId != null
     ? `org:${account.orgId}`
-    : `name:${normalizeRosterName(account.orgName)}`;
+    : `name:${account.orgName.trim().toLowerCase()}`;
 }
 
 /**
- * Parse the opt-in maintenance SUPPLEMENT from env (PSG-825, fail-safe). These are accounts
- * that must get a monthly board even though they have no won deal — the pre-CRM legacy shops.
- * A board is titled and idempotently de-duplicated by ORG NAME, so a bare org id is not enough:
- * every entry must carry both an id and a name. `RECURRING_MAINTENANCE_SUPPLEMENT` is a comma-
- * and/or newline-separated list where each entry is `"<orgId> <name>"`, `"<orgId>=<name>"`,
- * `"<orgId>:<name>"`, or any of those with an optional leading `id:` prefix — e.g.
- * `id:6001 Certified Auto Body, 6002=ITG Glass Company`. Entries that do not carry BOTH a
- * numeric id and a non-empty name are skipped (they cannot title a board); duplicate ids keep
- * the first. Returns `[]` when the var is unset/blank — the fail-safe "no supplement" state.
+ * PSG-825 — parse the maintenance SUPPLEMENT list from env (fail-safe, additive).
+ *
+ * `RECURRING_MAINTENANCE_SUPPLEMENT` folds long-standing maintenance shops that predate our
+ * CRM into the monthly cycle WITHOUT fabricating won deals (Nick's PSG-819 ruling — no
+ * invented amounts/dates that would distort revenue reporting). These orgs have an org record
+ * only and therefore never appear in the won-deal mirror, so — unlike the roster, which
+ * FILTERS the derived set — the supplement ADDS accounts to it.
+ *
+ * Because these accounts are not in the mirror, the engine cannot look up their name there,
+ * so each supplement entry must carry both the org id and the org name (the name is needed to
+ * title and idempotently de-duplicate the monthly board). Format: one entry per LINE (never
+ * comma-separated — org names may contain commas), each `<orgId>|<Org Name>`, e.g.
+ *   `5001|Certified Auto Body`
+ *   `id:5002|Robert Noaker Racing`
+ * A leading `id:` on the id part is tolerated for symmetry with the roster syntax. Lines that
+ * are blank, start with `#`, lack a `|`, carry a non-numeric id, or have an empty name are
+ * skipped (fail-safe — a malformed value must not silently distort the fleet). Duplicate org
+ * ids collapse to the first. Returns `[]` when unset/empty, so no supplement is a clean no-op.
  */
 export function resolveMaintenanceSupplement(
   env: Record<string, string | undefined> = process.env,
@@ -145,17 +151,20 @@ export function resolveMaintenanceSupplement(
   if (raw == null || raw.trim() === "") return [];
   const out: RecurringClient[] = [];
   const seen = new Set<number>();
-  for (const entryRaw of raw.split(/[,\n]/)) {
-    const entry = entryRaw.trim().replace(/^id:\s*/i, "");
-    if (entry === "") continue;
-    // `<id><sep><name>` where sep is `:`/`=` (optionally spaced) or one-or-more spaces.
-    const m = /^(\d+)\s*[:=]\s*(.+)$/.exec(entry) ?? /^(\d+)\s+(.+)$/.exec(entry);
-    if (!m) continue; // id-only or name-only entry: cannot title a board → skip
-    const orgId = Number(m[1]);
-    const orgName = m[2].trim();
-    if (orgName === "" || seen.has(orgId)) continue;
+  for (const lineRaw of raw.split("\n")) {
+    const line = lineRaw.trim();
+    if (line === "" || line.startsWith("#")) continue;
+    const sep = line.indexOf("|");
+    if (sep < 0) continue; // must carry a name — an id alone cannot title a board
+    const idPart = line.slice(0, sep).trim();
+    const orgName = line.slice(sep + 1).trim();
+    const idMatch = /^(?:id:\s*)?(\d+)$/i.exec(idPart);
+    if (!idMatch || orgName === "") continue;
+    const orgId = Number(idMatch[1]);
+    if (seen.has(orgId)) continue;
     seen.add(orgId);
-    out.push({ orgName, orgId });
+    // No won deal → no associated person; the recurring builder tolerates a null personId.
+    out.push({ orgName, orgId, personId: null });
   }
   return out;
 }
@@ -163,8 +172,8 @@ export function resolveMaintenanceSupplement(
 /** Full result of resolving the monthly fleet: the selected accounts plus audit counts. */
 export interface RecurringSelection {
   /**
-   * Accounts a monthly cycle should provision: the won-deal set (post-roster-gate when a
-   * roster is set) UNIONed with the no-won-deal supplement accounts.
+   * Accounts a monthly cycle should provision: the roster-gated won-deal set PLUS any
+   * supplement accounts (post-roster-gate when a roster is set).
    */
   accounts: RecurringClient[];
   /** Won-deal accounts derived from the mirror BEFORE the roster gate. */
@@ -173,23 +182,23 @@ export interface RecurringSelection {
   rosterApplied: boolean;
   /** Accounts dropped by the roster gate (derived-but-not-on-roster). Empty when no roster. */
   excluded: RecurringClient[];
-  /** Whether a no-won-deal supplement list was applied this run (PSG-825). */
+  /** Whether a maintenance supplement was configured this run. */
   supplementApplied: boolean;
-  /**
-   * Supplement accounts actually added this run — those not already selected via a won deal
-   * (deduped by org). Empty when no supplement is configured.
-   */
+  /** Supplement accounts actually appended (i.e. not already in the won-deal/roster set). */
   supplementAdded: RecurringClient[];
 }
 
 /**
  * Resolve the monthly fleet with audit detail. Derives the won-deal accounts, then — when a
- * pinned maintenance roster is configured (PSG-817) — keeps only the accounts on that roster
- * and captures the excluded ones as reviewable evidence (no silent truncation). Finally it
- * UNIONs in the opt-in no-won-deal supplement (PSG-825): legacy shops that must get a monthly
- * board despite having no won deal, deduped by org against the already-selected set so an org
- * is never provisioned twice. When neither var is set, `rosterApplied`/`supplementApplied` are
- * false and every derived account is returned unchanged.
+ * pinned maintenance roster is configured — keeps only the accounts on that roster and
+ * captures the excluded ones as reviewable evidence (no silent truncation). When no roster
+ * is set, `rosterApplied` is false and every derived account is returned unchanged.
+ *
+ * PSG-825: after the roster gate, any configured SUPPLEMENT accounts (pre-CRM maintenance
+ * shops with an org record but no won deal) are appended. This is additive and INDEPENDENT of
+ * the roster gate — a supplement account is included even when it is not on the roster,
+ * because it has no won deal for the roster to keep. Supplement entries already present in the
+ * selected set (same org id / normalized name) are skipped so no org is provisioned twice.
  */
 export async function selectRecurringAccounts(
   db: MirrorSupabase,
@@ -199,26 +208,31 @@ export async function selectRecurringAccounts(
   const deals = await readMirrorDeals(db);
   const derived = deriveAccountsFromDeals(deals);
 
-  // 1. Roster gate (PSG-817): narrow the won-deal set when a roster is pinned.
-  const accounts: RecurringClient[] = [];
-  const excluded: RecurringClient[] = [];
+  let accounts: RecurringClient[];
+  let excluded: RecurringClient[];
+  let rosterApplied: boolean;
   if (!roster) {
-    accounts.push(...derived);
+    accounts = [...derived];
+    excluded = [];
+    rosterApplied = false;
   } else {
+    accounts = [];
+    excluded = [];
+    rosterApplied = true;
     for (const account of derived) {
       if (isOnRoster(account, roster)) accounts.push(account);
       else excluded.push(account);
     }
   }
 
-  // 2. Supplement union (PSG-825): add no-won-deal accounts, deduped by org against the set
-  //    already selected above so an org that somehow has a won deal too is not double-booked.
-  const selectedKeys = new Set(accounts.map(accountKey));
+  // Additive supplement (PSG-825): append pre-CRM maintenance accounts, deduped against the
+  // already-selected set so a supplemented org that later wins a deal is never double-run.
   const supplementAdded: RecurringClient[] = [];
+  const present = new Set(accounts.map(accountKey));
   for (const account of supplement) {
     const key = accountKey(account);
-    if (selectedKeys.has(key)) continue;
-    selectedKeys.add(key);
+    if (present.has(key)) continue;
+    present.add(key);
     accounts.push(account);
     supplementAdded.push(account);
   }
@@ -226,7 +240,7 @@ export async function selectRecurringAccounts(
   return {
     accounts,
     derivedTotal: derived.length,
-    rosterApplied: roster != null,
+    rosterApplied,
     excluded,
     supplementApplied: supplement.length > 0,
     supplementAdded,

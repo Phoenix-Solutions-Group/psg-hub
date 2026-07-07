@@ -198,92 +198,106 @@ describe("recurring roster gate", () => {
   });
 });
 
-// ── resolveMaintenanceSupplement (PSG-825 opt-in no-won-deal supplement parser) ──────
+// ── resolveMaintenanceSupplement parser (PSG-825) ────────────────────────────────────
 
 describe("resolveMaintenanceSupplement", () => {
-  it("returns [] when the env var is unset or blank (fail-safe → no supplement)", () => {
+  it("returns [] when the env var is unset, blank, or has no usable entries (fail-safe)", () => {
     expect(resolveMaintenanceSupplement({})).toEqual([]);
     expect(resolveMaintenanceSupplement({ RECURRING_MAINTENANCE_SUPPLEMENT: "" })).toEqual([]);
-    expect(resolveMaintenanceSupplement({ RECURRING_MAINTENANCE_SUPPLEMENT: "  \n , " })).toEqual([]);
+    expect(resolveMaintenanceSupplement({ RECURRING_MAINTENANCE_SUPPLEMENT: "   \n  " })).toEqual([]);
+    // An id with no name cannot title a board → skipped, not added.
+    expect(resolveMaintenanceSupplement({ RECURRING_MAINTENANCE_SUPPLEMENT: "5001\n5002" })).toEqual(
+      [],
+    );
   });
 
-  it("parses `<id> <name>`, `<id>=<name>`, `<id>:<name>` and an optional id: prefix", () => {
-    const sup = resolveMaintenanceSupplement({
-      RECURRING_MAINTENANCE_SUPPLEMENT:
-        "6001 Certified Auto Body\n6002=ITG Glass Company, id:6003:Superior Collision, id: 6004 Keno Collision",
+  it("parses `orgId|Org Name` lines into org-record-only accounts (null personId)", () => {
+    const supp = resolveMaintenanceSupplement({
+      RECURRING_MAINTENANCE_SUPPLEMENT: "5001|Certified Auto Body\nid:5002|Robert Noaker Racing",
     });
-    expect(sup).toEqual([
-      { orgName: "Certified Auto Body", orgId: 6001 },
-      { orgName: "ITG Glass Company", orgId: 6002 },
-      { orgName: "Superior Collision", orgId: 6003 },
-      { orgName: "Keno Collision", orgId: 6004 },
+    expect(supp).toEqual([
+      { orgName: "Certified Auto Body", orgId: 5001, personId: null },
+      { orgName: "Robert Noaker Racing", orgId: 5002, personId: null },
     ]);
   });
 
-  it("skips entries that lack a name (a board cannot be titled by id alone)", () => {
-    const sup = resolveMaintenanceSupplement({
-      RECURRING_MAINTENANCE_SUPPLEMENT: "6001, id:6002, Nameless Shop, 6003 Real Shop",
+  it("keeps commas inside org names (line-separated, never comma-separated)", () => {
+    const supp = resolveMaintenanceSupplement({
+      RECURRING_MAINTENANCE_SUPPLEMENT: "5003|Central Body Company, Inc",
     });
-    // Only the id+name entry survives.
-    expect(sup).toEqual([{ orgName: "Real Shop", orgId: 6003 }]);
+    expect(supp).toEqual([{ orgName: "Central Body Company, Inc", orgId: 5003, personId: null }]);
   });
 
-  it("dedupes repeated org ids (first entry wins)", () => {
-    const sup = resolveMaintenanceSupplement({
-      RECURRING_MAINTENANCE_SUPPLEMENT: "6001 First Name, 6001 Duplicate Name",
+  it("skips blank lines, comments, malformed ids, and missing names; dedupes by org id", () => {
+    const supp = resolveMaintenanceSupplement({
+      RECURRING_MAINTENANCE_SUPPLEMENT: [
+        "# Group B pre-CRM shops",
+        "",
+        "5004|Superior Collision",
+        "not-a-number|Bad Id",
+        "5005|", // empty name
+        "5004|Superior Collision (dup id)",
+      ].join("\n"),
     });
-    expect(sup).toEqual([{ orgName: "First Name", orgId: 6001 }]);
+    expect(supp).toEqual([{ orgName: "Superior Collision", orgId: 5004, personId: null }]);
   });
 });
 
-// ── selectRecurringAccounts supplement union (PSG-825) ───────────────────────────────
+// ── selectRecurringAccounts supplement (PSG-825) ─────────────────────────────────────
 
-describe("recurring supplement union", () => {
-  it("adds no-won-deal accounts on top of the roster-gated set", async () => {
+describe("recurring supplement (no-fake-deal fold-in)", () => {
+  const supplement = [
+    { orgName: "Certified Auto Body", orgId: 5001, personId: null },
+    { orgName: "Robert Noaker Racing", orgId: 5002, personId: null },
+  ];
+
+  it("appends supplement accounts on top of the roster-gated set", async () => {
     const db = fakeDb([
       deal({ dealId: 1, orgName: "Maint Co", orgId: 10, personId: 100 }),
       deal({ dealId: 2, orgName: "Website-only Co", orgId: 20, personId: 200 }),
     ]);
     const roster = resolveMaintenanceRoster({ RECURRING_MAINTENANCE_ROSTER: "10" })!;
-    const supplement = resolveMaintenanceSupplement({
-      RECURRING_MAINTENANCE_SUPPLEMENT: "6001 Certified Auto Body",
-    });
     const sel = await selectRecurringAccounts(db, roster, supplement);
-    // Roster keeps org 10, excludes 20; supplement adds the legacy shop.
-    expect(sel.accounts.map((a) => a.orgId)).toEqual([10, 6001]);
-    expect(sel.excluded.map((a) => a.orgId)).toEqual([20]);
+    expect(sel.rosterApplied).toBe(true);
     expect(sel.supplementApplied).toBe(true);
-    expect(sel.supplementAdded).toEqual([{ orgName: "Certified Auto Body", orgId: 6001 }]);
+    expect(sel.derivedTotal).toBe(2); // won-deal count is UNCHANGED — no fabricated revenue
+    expect(sel.accounts.map((a) => a.orgId)).toEqual([10, 5001, 5002]);
+    expect(sel.supplementAdded.map((a) => a.orgId)).toEqual([5001, 5002]);
+    // Supplement account carries a title so the monthly board can be named/deduped.
+    expect(sel.accounts.find((a) => a.orgId === 5001)?.orgName).toBe("Certified Auto Body");
   });
 
-  it("adds supplement accounts even when no roster is set (additive, independent of the gate)", async () => {
-    const db = fakeDb([deal({ dealId: 1, orgName: "Won Co", orgId: 10, personId: 1 })]);
-    const supplement = resolveMaintenanceSupplement({
-      RECURRING_MAINTENANCE_SUPPLEMENT: "6001 Legacy Shop",
-    });
+  it("adds supplement accounts even when no roster is set (still no won deal required)", async () => {
+    const db = fakeDb([deal({ dealId: 1, orgName: "Maint Co", orgId: 10, personId: 100 })]);
     const sel = await selectRecurringAccounts(db, null, supplement);
     expect(sel.rosterApplied).toBe(false);
-    expect(sel.accounts.map((a) => a.orgId)).toEqual([10, 6001]);
-    expect(sel.supplementAdded.map((a) => a.orgId)).toEqual([6001]);
+    expect(sel.accounts.map((a) => a.orgId)).toEqual([10, 5001, 5002]);
+    expect(sel.supplementAdded).toHaveLength(2);
   });
 
-  it("does not double-book an org that has both a won deal and a supplement entry", async () => {
-    const db = fakeDb([deal({ dealId: 1, orgName: "Dual Co", orgId: 10, personId: 1 })]);
-    const supplement = resolveMaintenanceSupplement({
-      RECURRING_MAINTENANCE_SUPPLEMENT: "10 Dual Co",
-    });
-    const sel = await selectRecurringAccounts(db, null, supplement);
-    // Org 10 already selected via its won deal → supplement entry is a no-op, not a 2nd board.
-    expect(sel.accounts.map((a) => a.orgId)).toEqual([10]);
-    expect(sel.supplementAdded).toEqual([]);
-  });
-
-  it("supplement unset → no accounts added and supplementApplied is false", async () => {
-    const db = fakeDb([deal({ dealId: 1, orgName: "Won Co", orgId: 10, personId: 1 })]);
+  it("no supplement configured → clean no-op (empty supplementAdded, applied=false)", async () => {
+    const db = fakeDb([deal({ dealId: 1, orgName: "Maint Co", orgId: 10, personId: 100 })]);
     const sel = await selectRecurringAccounts(db, null, []);
     expect(sel.supplementApplied).toBe(false);
     expect(sel.supplementAdded).toEqual([]);
     expect(sel.accounts.map((a) => a.orgId)).toEqual([10]);
+  });
+
+  it("never double-provisions an org that also has a won deal (dedupe by org id)", async () => {
+    // If a supplemented org later wins a deal, it is in the derived set — do NOT add twice.
+    const db = fakeDb([deal({ dealId: 1, orgName: "Certified Auto Body", orgId: 5001, personId: 1 })]);
+    const sel = await selectRecurringAccounts(db, null, supplement);
+    const ids = sel.accounts.map((a) => a.orgId);
+    expect(ids.filter((id) => id === 5001)).toHaveLength(1);
+    expect(sel.supplementAdded.map((a) => a.orgId)).toEqual([5002]); // 5001 already present
+  });
+
+  it("is idempotent-safe: re-running with the same inputs yields the same fleet", async () => {
+    const db = fakeDb([deal({ dealId: 1, orgName: "Maint Co", orgId: 10, personId: 100 })]);
+    const roster = resolveMaintenanceRoster({ RECURRING_MAINTENANCE_ROSTER: "10" })!;
+    const a = await selectRecurringAccounts(db, roster, supplement);
+    const b = await selectRecurringAccounts(db, roster, supplement);
+    expect(a.accounts.map((x) => x.orgId)).toEqual(b.accounts.map((x) => x.orgId));
   });
 });
 
