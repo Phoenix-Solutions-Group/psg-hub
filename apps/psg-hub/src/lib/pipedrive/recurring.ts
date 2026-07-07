@@ -13,6 +13,7 @@ import type {
   PipedriveProjectsClient,
   ProvisionResult,
 } from "./projects";
+import { normalizePhaseName } from "./projects";
 import {
   WHM_RECURRING_SERVICE_TEMPLATE,
   cycleLabelFor,
@@ -81,6 +82,7 @@ export async function provisionRecurringServiceBoard(
       phaseCount: 0,
       taskCount: 0,
       skippedExisting: true,
+      phasedTaskCount: 0,
     };
   }
 
@@ -97,7 +99,35 @@ export async function provisionRecurringServiceBoard(
     ...(account.personId != null ? { person_ids: [account.personId] } : {}),
   });
 
+  // PSG-715 — resolve the board's phases ONCE so each task can be stamped into the phase
+  // matching its workstream group (by normalized name). Degrades gracefully to "no
+  // stamping" when the client lacks the methods or the board has no matching phases, so
+  // the recurring loop never regresses. Mirrors the onboarding builder exactly.
+  const phaseIdByName = new Map<string, number>();
+  try {
+    const boardPhases = await client.listPhases(boardId);
+    for (const bp of boardPhases ?? []) {
+      const key = normalizePhaseName(bp.name);
+      if (key !== "" && !phaseIdByName.has(key)) phaseIdByName.set(key, bp.id);
+    }
+  } catch {
+    // leave the map empty → no stamping
+  }
+  const canStamp = typeof client.setTaskPhaseOrGroup === "function";
+  const stampInto = async (taskId: number, groupName: string): Promise<number> => {
+    if (!canStamp) return 0;
+    const targetPhaseId = phaseIdByName.get(normalizePhaseName(groupName));
+    if (targetPhaseId == null) return 0;
+    try {
+      await client.setTaskPhaseOrGroup!(project.id, taskId, { phaseId: targetPhaseId });
+      return 1;
+    } catch {
+      return 0;
+    }
+  };
+
   let taskCount = 0;
+  let phasedTaskCount = 0;
   for (const group of template) {
     // Parent task = the workstream group; due date is the group's last task offset.
     const groupEndOffset = group.tasks.reduce((m, t) => Math.max(m, t.dayOffset), 0);
@@ -107,10 +137,11 @@ export async function provisionRecurringServiceBoard(
       due_date: dueDateFor(cycleStart, groupEndOffset),
       description: `${group.key} — ${group.tasks.length} task(s).`,
     });
+    phasedTaskCount += await stampInto(parent.id, group.name);
 
     for (const t of group.tasks) {
       const assignee = roleUserMap[t.owner];
-      await client.createTask({
+      const leaf = await client.createTask({
         title: t.title,
         project_id: project.id,
         parent_task_id: parent.id,
@@ -118,6 +149,7 @@ export async function provisionRecurringServiceBoard(
         description: `Owner: ${ROLE_LABELS[t.owner]} (${t.owner})${t.gate ? " · GATE" : ""}`,
         ...(assignee != null ? { assignee_id: assignee } : {}),
       });
+      phasedTaskCount += await stampInto(leaf.id, group.name);
       taskCount += 1;
     }
   }
@@ -128,5 +160,6 @@ export async function provisionRecurringServiceBoard(
     phaseCount: template.length,
     taskCount,
     skippedExisting: false,
+    phasedTaskCount,
   };
 }

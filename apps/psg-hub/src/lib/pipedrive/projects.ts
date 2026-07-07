@@ -215,6 +215,32 @@ export interface PipedriveProjectsClient {
   listProjectTasks?(
     projectId: number,
   ): Promise<Array<{ id: number; title: string; description: string }>>;
+  /**
+   * PSG-715 — place a task into a project phase/group. v2 `POST /tasks` does NOT accept a
+   * `phase_id` (proven live) — the placement lives on the v1 project-plan endpoint
+   * `PUT /projects/{projectId}/plan/tasks/{taskId}` with body `{ phase_id, group_id }`.
+   * Without this, every provisioned task lands in "Phase unassigned" and the board shows
+   * Pipedrive's generic default phase columns instead of the template's phases (the bug
+   * Nick flagged on PSG-611). Optional so existing test fakes stay valid; the concrete
+   * client always implements it. Same "field silently dropped" family as the PSG-680
+   * `assignee_ids[]` fix.
+   */
+  setTaskPhaseOrGroup?(
+    projectId: number,
+    taskId: number,
+    placement: { phaseId?: number; groupId?: number },
+  ): Promise<void>;
+}
+
+/** Normalize a phase name for template↔board matching: strip a leading `<letter><n> —/-`
+ *  label (e.g. `P1 —`, `D1 —`) and lowercase/trim, so a template phase
+ *  `"P1 — Discovery & Planning"` matches a board phase named `"Discovery & Planning"`
+ *  (and an exact-named board phase — with or without the label — still matches). */
+export function normalizePhaseName(name: string): string {
+  return name
+    .replace(/^\s*[a-z]\d+\s*[—–-]\s*/i, "")
+    .trim()
+    .toLowerCase();
 }
 
 /**
@@ -268,7 +294,7 @@ export function createProjectsClient(
   }
 
   async function call<T>(
-    method: "GET" | "POST" | "PATCH",
+    method: "GET" | "POST" | "PATCH" | "PUT",
     version: ApiVersion,
     path: string,
     params: Record<string, string> = {},
@@ -378,6 +404,22 @@ export function createProjectsClient(
         toV2TaskBody(patch),
       );
       return { id: Number(task.id) };
+    },
+    async setTaskPhaseOrGroup(projectId, taskId, placement) {
+      // PSG-715 — task→phase placement is NOT on v2 `POST /tasks`; it lives on the v1
+      // project-plan endpoint `PUT /projects/{projectId}/plan/tasks/{taskId}`. Send only
+      // the placement keys that are present. Token rides the query string (never logged).
+      const body: Record<string, unknown> = {};
+      if (placement.phaseId != null) body.phase_id = placement.phaseId;
+      if (placement.groupId != null) body.group_id = placement.groupId;
+      if (Object.keys(body).length === 0) return;
+      await call<unknown>(
+        "PUT",
+        "v1",
+        `projects/${projectId}/plan/tasks/${taskId}`,
+        {},
+        body,
+      );
     },
     async attachProjectFile(input) {
       // v1 `POST /files` (multipart) — the rare true-file case (PSG-610 §2d). Content-Type
@@ -586,6 +628,14 @@ export interface ProvisionResult {
   taskCount: number;
   /** True when an existing project with the same title was found (no-op). */
   skippedExisting: boolean;
+  /**
+   * PSG-715 — how many created tasks were successfully stamped into a matching board
+   * phase (`setTaskPhaseOrGroup`). `0` when the client doesn't support placement OR the
+   * project's board has no phases matching the template's phase names (graceful: tasks
+   * stay unassigned, no regression). Surfaced so live QA (PSG-673) can assert tasks are
+   * NOT left in "Phase unassigned".
+   */
+  phasedTaskCount: number;
 }
 
 /**
@@ -625,6 +675,7 @@ export async function provisionOnboardingBoard(
       phaseCount: 0,
       taskCount: 0,
       skippedExisting: true,
+      phasedTaskCount: 0,
     };
   }
 
@@ -642,7 +693,40 @@ export async function provisionOnboardingBoard(
     ...(deal.personId != null ? { person_ids: [deal.personId] } : {}),
   });
 
+  // PSG-715 — resolve the project board's phases ONCE so each created task can be stamped
+  // into the phase matching its template phase (by normalized name). A read failure or a
+  // client without `listPhases`/`setTaskPhaseOrGroup` degrades gracefully to "no stamping"
+  // (tasks stay unassigned, exactly today's behaviour) — the deal-won path must not regress.
+  const phaseIdByName = new Map<string, number>();
+  try {
+    const boardPhases = await client.listPhases(boardId);
+    for (const bp of boardPhases ?? []) {
+      const key = normalizePhaseName(bp.name);
+      // First-wins: if two board phases normalize the same, keep the earliest (stable).
+      if (key !== "" && !phaseIdByName.has(key)) phaseIdByName.set(key, bp.id);
+    }
+  } catch {
+    // leave the map empty → no stamping
+  }
+  const canStamp = typeof client.setTaskPhaseOrGroup === "function";
+
+  // Place a created task into its template phase's board phase, if we can resolve one.
+  // Returns 1 when stamped, 0 otherwise. Never throws — a placement failure must not
+  // abort provisioning (the task still exists; it just stays unassigned).
+  const stampInto = async (taskId: number, phaseName: string): Promise<number> => {
+    if (!canStamp) return 0;
+    const targetPhaseId = phaseIdByName.get(normalizePhaseName(phaseName));
+    if (targetPhaseId == null) return 0;
+    try {
+      await client.setTaskPhaseOrGroup!(project.id, taskId, { phaseId: targetPhaseId });
+      return 1;
+    } catch {
+      return 0;
+    }
+  };
+
   let taskCount = 0;
+  let phasedTaskCount = 0;
   for (const phase of template) {
     // Parent task = the D-phase; due date is the phase's last task offset (phase end).
     const phaseEndOffset = phase.tasks.reduce((m, t) => Math.max(m, t.dayOffset), 0);
@@ -652,10 +736,11 @@ export async function provisionOnboardingBoard(
       due_date: dueDateFor(deal.wonDate, phaseEndOffset),
       description: `Phase ${phase.key} — ${phase.tasks.length} task(s).`,
     });
+    phasedTaskCount += await stampInto(parent.id, phase.name);
 
     for (const t of phase.tasks) {
       const assignee = roleUserMap[t.owner];
-      await client.createTask({
+      const leaf = await client.createTask({
         title: t.title,
         project_id: project.id,
         parent_task_id: parent.id,
@@ -663,6 +748,7 @@ export async function provisionOnboardingBoard(
         description: `Owner: ${ROLE_LABELS[t.owner]} (${t.owner})${t.gate ? " · GATE" : ""}`,
         ...(assignee != null ? { assignee_id: assignee } : {}),
       });
+      phasedTaskCount += await stampInto(leaf.id, phase.name);
       taskCount += 1;
     }
   }
@@ -673,6 +759,7 @@ export async function provisionOnboardingBoard(
     phaseCount: template.length,
     taskCount,
     skippedExisting: false,
+    phasedTaskCount,
   };
 }
 

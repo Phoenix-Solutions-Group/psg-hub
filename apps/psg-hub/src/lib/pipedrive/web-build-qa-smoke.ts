@@ -133,6 +133,14 @@ export interface WebBuildQaSmokeEvidence {
     parentTitles: string[];
     gateTitles: string[];
   };
+  /**
+   * PSG-715 — how many created tasks the engine placed into a matching board phase
+   * (`setTaskPhaseOrGroup`). `0` means every task landed in "Phase unassigned" (the bug
+   * Nick flagged) — either the client can't place tasks or the board has no phases named
+   * to match the template. NON-gating today (the live Web Build board must first be given
+   * the template's phases); PSG-673 should promote this to a gating check once configured.
+   */
+  phasedTaskCount: number;
   /** UX + QA (PSG-668 roles) owner→assignee resolution, read off the live board. */
   assigneeChecks: WebBuildAssigneeCheck[];
   dueDateSpotChecks: {
@@ -368,6 +376,7 @@ export async function runWebBuildQaSmoke(
         parentTitles: orderedParents.map((t) => t.title),
         gateTitles: gates.map((t) => t.title),
       },
+      phasedTaskCount: prov.phasedTaskCount, // PSG-715 — 0 ⇒ all tasks "Phase unassigned"
       assigneeChecks,
       dueDateSpotChecks: {
         kickoffD2: {

@@ -7,10 +7,12 @@ import {
   isDealPipelineInScope,
   resolvePipedriveToken,
   createProjectsClient,
+  normalizePhaseName,
   PipedriveProjectsError,
   type PipedriveProjectsClient,
   type CreateProjectInput,
   type CreateTaskInput,
+  type ProjectPhase,
   type WonDeal,
 } from "../projects";
 import { WHM_ONBOARDING_TEMPLATE, templateTaskCount } from "../onboarding-template";
@@ -404,6 +406,153 @@ describe("isDealPipelineInScope", () => {
   it("rejects won deals from other pipelines", () => {
     expect(isDealPipelineInScope({ pipeline_id: 3 }, 8)).toBe(false);
     expect(isDealPipelineInScope({}, 8)).toBe(false);
+  });
+});
+
+describe("normalizePhaseName (PSG-715)", () => {
+  it("strips a leading <letter><n> label so template names match bare board phases", () => {
+    expect(normalizePhaseName("P1 — Discovery & Planning")).toBe("discovery & planning");
+    expect(normalizePhaseName("D4 — Foundation Build")).toBe("foundation build");
+    // hyphen and en-dash variants both strip
+    expect(normalizePhaseName("P2 - Design")).toBe("design");
+    // a bare board phase (no label) normalizes to the same key → matches
+    expect(normalizePhaseName("Discovery & Planning")).toBe("discovery & planning");
+    // no false strip of real words that merely start with a letter
+    expect(normalizePhaseName("Launch")).toBe("launch");
+  });
+});
+
+describe("provisionOnboardingBoard — phase stamping (PSG-715)", () => {
+  // Board phases named to match the template's phases (with the label stripped) so every
+  // task resolves a target phase. The bug: the engine created tasks but never called the
+  // task→phase placement endpoint, so all tasks landed in "Phase unassigned".
+  function phasesMatchingTemplate(boardId: number): ProjectPhase[] {
+    return WHM_ONBOARDING_TEMPLATE.map((p, i) => ({
+      id: 500 + i,
+      name: p.name.replace(/^\s*[a-z]\d+\s*[—–-]\s*/i, ""), // bare board phase name
+      board_id: boardId,
+    }));
+  }
+
+  it("stamps every created task (parents + leaves) into its matching board phase", async () => {
+    const setTaskPhaseOrGroup = vi.fn(async () => {});
+    const listPhases = vi.fn(async (boardId: number) => phasesMatchingTemplate(boardId));
+    const { client } = fakeClient({ listPhases, setTaskPhaseOrGroup });
+
+    const res = await provisionOnboardingBoard({ client, deal: DEAL, boardId: 3, phaseId: 9 });
+
+    const totalTasks = WHM_ONBOARDING_TEMPLATE.length + templateTaskCount(); // parents + leaves
+    expect(res.phasedTaskCount).toBe(totalTasks);
+    expect(setTaskPhaseOrGroup).toHaveBeenCalledTimes(totalTasks);
+    // Each placement targets a real phase id on the project, via phaseId (not group).
+    for (const call of setTaskPhaseOrGroup.mock.calls) {
+      const [projectId, , placement] = call as unknown as [
+        number,
+        number,
+        { phaseId?: number; groupId?: number },
+      ];
+      expect(projectId).toBe(900); // the fake project id
+      expect(placement.phaseId).toBeGreaterThanOrEqual(500);
+      expect(placement.groupId).toBeUndefined();
+    }
+  });
+
+  it("resolves the phase by NORMALIZED name (label-stripped, case-insensitive)", async () => {
+    const setTaskPhaseOrGroup = vi.fn(async () => {});
+    // D1 tasks must land in the phase whose bare name matches "Onboard & Access".
+    const listPhases = vi.fn(async (boardId: number) => phasesMatchingTemplate(boardId));
+    const { client } = fakeClient({ listPhases, setTaskPhaseOrGroup });
+    await provisionOnboardingBoard({ client, deal: DEAL, boardId: 3, phaseId: 9 });
+
+    const d1PhaseId = 500; // first template phase → id 500 in the fake board
+    const d1 = WHM_ONBOARDING_TEMPLATE[0]!;
+    // The D1 parent + all D1 leaves are placed into phase 500.
+    const d1Placements = setTaskPhaseOrGroup.mock.calls.filter(
+      (c) => (c as unknown as [number, number, { phaseId?: number }])[2].phaseId === d1PhaseId,
+    );
+    expect(d1Placements.length).toBe(1 + d1.tasks.length);
+  });
+
+  it("degrades gracefully when the board has NO matching phases (no stamping, no throw)", async () => {
+    const setTaskPhaseOrGroup = vi.fn(async () => {});
+    const listPhases = vi.fn(async () => [
+      { id: 1, name: "Kick-off", board_id: 3 },
+      { id: 2, name: "Closing", board_id: 3 },
+    ]);
+    const { client } = fakeClient({ listPhases, setTaskPhaseOrGroup });
+
+    const res = await provisionOnboardingBoard({ client, deal: DEAL, boardId: 3, phaseId: 9 });
+    expect(res.phasedTaskCount).toBe(0);
+    expect(setTaskPhaseOrGroup).not.toHaveBeenCalled();
+    expect(res.created).toBe(true); // provisioning still succeeds
+  });
+
+  it("degrades gracefully when the client cannot place tasks (no setTaskPhaseOrGroup)", async () => {
+    // fakeClient() without the optional method → today's clients before this fix.
+    const listPhases = vi.fn(async (boardId: number) => phasesMatchingTemplate(boardId));
+    const { client } = fakeClient({ listPhases });
+    const res = await provisionOnboardingBoard({ client, deal: DEAL, boardId: 3, phaseId: 9 });
+    expect(res.phasedTaskCount).toBe(0);
+    expect(res.created).toBe(true);
+  });
+
+  it("a placement failure never aborts provisioning (task still created)", async () => {
+    const setTaskPhaseOrGroup = vi.fn(async () => {
+      throw new Error("pipedrive 500");
+    });
+    const listPhases = vi.fn(async (boardId: number) => phasesMatchingTemplate(boardId));
+    const { client } = fakeClient({ listPhases, setTaskPhaseOrGroup });
+    const res = await provisionOnboardingBoard({ client, deal: DEAL, boardId: 3, phaseId: 9 });
+    expect(res.created).toBe(true);
+    expect(res.taskCount).toBe(templateTaskCount()); // all tasks created
+    expect(res.phasedTaskCount).toBe(0); // none successfully stamped
+  });
+});
+
+describe("createProjectsClient — setTaskPhaseOrGroup wire shape (PSG-715)", () => {
+  const TOKEN = "tok_secret_value";
+  function recordingFetch(data: unknown = { success: true }) {
+    const calls: Array<{ url: string; method: string; body?: string }> = [];
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        method: String(init?.method ?? "GET"),
+        body: init?.body as string | undefined,
+      });
+      return { ok: true, status: 200, json: async () => ({ success: true, data }) } as Response;
+    }) as unknown as typeof fetch;
+    return { fetchImpl, calls };
+  }
+  const client = (fetchImpl: typeof fetch) =>
+    createProjectsClient({ apiKey: TOKEN, companyDomain: "psg", fetchImpl });
+
+  it("PUTs /api/v1/projects/{id}/plan/tasks/{taskId} with phase_id, token in query", async () => {
+    const { fetchImpl, calls } = recordingFetch();
+    await client(fetchImpl).setTaskPhaseOrGroup!(900, 1001, { phaseId: 500 });
+    const u = new URL(calls[0].url);
+    expect(calls[0].method).toBe("PUT");
+    expect(`${u.origin}${u.pathname}`).toBe(
+      "https://psg.pipedrive.com/api/v1/projects/900/plan/tasks/1001",
+    );
+    expect(u.pathname.startsWith("/api/")).toBe(true); // PSG-588 base discipline
+    expect(u.searchParams.get("api_token")).toBe(TOKEN); // token in query, not path
+    expect(JSON.parse(String(calls[0].body))).toEqual({ phase_id: 500 });
+  });
+
+  it("sends only the placement keys provided (group_id, or both)", async () => {
+    const g = recordingFetch();
+    await client(g.fetchImpl).setTaskPhaseOrGroup!(900, 1, { groupId: 7 });
+    expect(JSON.parse(String(g.calls[0].body))).toEqual({ group_id: 7 });
+
+    const both = recordingFetch();
+    await client(both.fetchImpl).setTaskPhaseOrGroup!(900, 1, { phaseId: 5, groupId: 7 });
+    expect(JSON.parse(String(both.calls[0].body))).toEqual({ phase_id: 5, group_id: 7 });
+  });
+
+  it("is a no-op (no HTTP call) when neither phase nor group is given", async () => {
+    const { fetchImpl, calls } = recordingFetch();
+    await client(fetchImpl).setTaskPhaseOrGroup!(900, 1, {});
+    expect(calls.length).toBe(0);
   });
 });
 
