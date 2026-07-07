@@ -12,7 +12,8 @@
 //
 // Pure functions, node-testable. No I/O.
 
-import { scanDenylist } from "./denylist";
+import { scanDenylist, scanRating } from "./denylist";
+import { RATING_STAR_THRESHOLD } from "./types";
 import type {
   ClaimIntegrityResult,
   ClaimManifestEntry,
@@ -131,6 +132,46 @@ function verifyClaim(entry: ClaimManifestEntry, facts: VerifiedFacts): Violation
       return null;
     }
 
+    case "rating": {
+      // C6 — a rating claim may only bind to a verified rating that clears the
+      // ~4.5★ bar, is linkable, and is not over-claimed. Mirrors `scanRating`
+      // so a manifest-declared rating is held to the same bar as one detected
+      // free-text in the copy.
+      const rating = facts.rating;
+      if (!rating) {
+        return {
+          code: "unverified_rating",
+          message: `Claim "${claimText}" cites a rating but the record has no verified rating.`,
+          evidence: claimText,
+        };
+      }
+      if (rating.value < RATING_STAR_THRESHOLD) {
+        return {
+          code: "rating_below_threshold",
+          message: `Claim "${claimText}" surfaces a rating but the verified rating (${rating.value}★) is below the ~${RATING_STAR_THRESHOLD}★ bar.`,
+          evidence: claimText,
+        };
+      }
+      if (!rating.profileUrl) {
+        return {
+          code: "rating_not_linkable",
+          message: `Claim "${claimText}" surfaces a rating but the verified rating has no live profile URL to link to.`,
+          evidence: claimText,
+        };
+      }
+      if (value !== undefined) {
+        const claimed = Number.parseFloat(value.replace(/[^\d.]/g, ""));
+        if (!Number.isNaN(claimed) && claimed > rating.value + 1e-9) {
+          return {
+            code: "overclaimed_rating",
+            message: `Claim "${claimText}" asserts ${claimed}★ but the record verifies only ${rating.value}★.`,
+            evidence: value,
+          };
+        }
+      }
+      return null;
+    }
+
     case "drpDisclosure": {
       const drp = facts.drpDisclosure;
       if (!drp.allowed) {
@@ -196,6 +237,9 @@ export function checkClaimIntegrity({ text, manifest, facts }: CheckInput): Clai
   const violations: Violation[] = [
     ...verifyManifest(manifest, facts),
     ...scanDenylist(text, facts.drpDisclosure, facts.knownCompetitors),
+    // C6 — reviews are the gatekeeper. A rating/review-count mention is a
+    // HARD-FAIL unless the shop's verified rating clears the bar and is linkable.
+    ...scanRating(text, facts.rating),
   ];
 
   if (violations.length > 0) {

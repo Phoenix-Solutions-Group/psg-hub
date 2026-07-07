@@ -52,6 +52,27 @@ export const reviewQuoteSchema = z.object({
 export type ReviewQuote = z.infer<typeof reviewQuoteSchema>;
 
 /**
+ * The shop's verified aggregate star rating (BSM Content-Quality Standard v1,
+ * check C6). A rating may only be surfaced on a page when it is REAL, genuinely
+ * clears the ~4.5★ bar, and is linkable to a live public profile (so a reader can
+ * verify it). Absent this record, ANY rating/review-count mention is unverified
+ * and a HARD-FAIL — the writer must omit it (never invent one).
+ *
+ * `value` is the star average (0–5). `reviewCount` is the number of reviews the
+ * average is drawn from. `profileUrl` is the live, public source the rating links
+ * to (e.g. the shop's Google Business Profile) — required for the rating to be
+ * "linkable"; a rating with no profile URL cannot be surfaced.
+ */
+export const RATING_STAR_THRESHOLD = 4.5;
+export const ratingSchema = z.object({
+  value: z.number().min(0).max(5),
+  reviewCount: z.number().int().nonnegative().optional(),
+  /** Live, public, verifiable source the rating is linked to (C6 "linkable"). */
+  profileUrl: z.string().min(1).optional(),
+});
+export type Rating = z.infer<typeof ratingSchema>;
+
+/**
  * The DRP / carrier-disclosure opt-in block (Content Writer spec §5, v1.3).
  *
  * DEFAULT = never disclose. Naming an insurer/DRP relationship is a Check 2
@@ -81,6 +102,11 @@ export const verifiedFactsSchema = z.object({
   warranty: warrantySchema.optional(),
   yearsInBusiness: z.number().int().nonnegative().optional(),
   approvedReviewQuotes: z.array(reviewQuoteSchema).default([]),
+  /**
+   * The shop's verified aggregate star rating (C6). Absent ⇒ no rating/review
+   * count may be surfaced; any rating mention in copy is then a HARD-FAIL.
+   */
+  rating: ratingSchema.optional(),
   drpDisclosure: drpDisclosureSchema.default({ allowed: false, authorizedCarriers: [] }),
   /**
    * Per-shop competitor names to additionally treat as prohibited mentions
@@ -100,6 +126,7 @@ export const CLAIM_FIELDS = [
   "warranty",
   "yearsInBusiness",
   "approvedReviewQuotes",
+  "rating",
   "drpDisclosure",
 ] as const;
 export type ClaimField = (typeof CLAIM_FIELDS)[number];
@@ -134,7 +161,14 @@ export const claimManifestEntrySchema = z.object({
 });
 export type ClaimManifestEntry = z.infer<typeof claimManifestEntrySchema>;
 
-/** Categories of integrity violation, all of which are Check-2 HARD-FAILs. */
+/**
+ * Categories of integrity violation, all HARD-FAILs. The original set are the
+ * PSG-143 Check-2 claim/denylist violations; the C1/C6 codes extend the same gate
+ * with the BSM Content-Quality Standard v1 honest-claims (C1) and reviews-
+ * gatekeeper (C6) hard blocks. The C2 (conversion-structure) codes are produced
+ * by `checkConversionStructure` and merged into the same result type so a shop
+ * page carries ONE machine-checkable verdict.
+ */
 export type ViolationCode =
   | "unbacked_claim" // claim has no backing field value in the record
   | "missing_backing_field" // claim references a field that is empty/absent
@@ -142,7 +176,20 @@ export type ViolationCode =
   | "carrier_not_authorized" // carrier named but not in authorizedCarriers
   | "competitor_mention" // named/referenced a competitor
   | "absolute_cost_promise" // "no charge" / "rental covered" / "we waive your deductible"
-  | "implies_insurance_claim"; // implies every job is an insurance claim
+  | "implies_insurance_claim" // implies every job is an insurance claim
+  // ── C1 honest claims (BSM Content-Quality Standard v1) ────────────────────
+  | "unprovable_superlative" // "#1 in town", "best in the state", "voted best"
+  | "unverifiable_number" // a hard number the shop can't document (e.g. cars repaired)
+  // ── C6 reviews are the gatekeeper (≥~4.5★, real, linkable) ────────────────
+  | "unverified_rating" // rating/review-count surfaced with no verified rating on record
+  | "rating_below_threshold" // real rating is below the ~4.5★ bar → must be omitted
+  | "rating_not_linkable" // rating has no live public profile URL to verify against
+  | "overclaimed_rating" // copy asserts a higher rating than the record verifies
+  // ── C2 one conversion job, present and reachable ──────────────────────────
+  | "missing_call_action" // no real tel: tap-to-call action in the draft
+  | "call_action_not_early" // tel: action not reachable in the first screen
+  | "missing_estimate_action" // no "get a free estimate" action
+  | "conversion_action_not_repeated"; // primary action not repeated as the reader scrolls
 
 export type Violation = {
   code: ViolationCode;
