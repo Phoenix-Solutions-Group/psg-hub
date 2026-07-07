@@ -73,8 +73,26 @@ function redact(u) {
   return c.toString();
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Pipedrive rate-limits bursts (HTTP 429). Retry 429/5xx with backoff that honours the
+// Retry-After header, so a single --apply run completes cleanly instead of half-provisioning.
+async function fetchRetry(target, init = {}, { tries = 5 } = {}) {
+  let wait = 1000;
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(target, init);
+    if (res.status !== 429 && res.status < 500) return res;
+    if (attempt >= tries) return res; // give up → caller surfaces the HTTP status
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : wait;
+    console.log(`  … HTTP ${res.status}, retrying in ${Math.round(delay / 100) / 10}s (attempt ${attempt}/${tries - 1})`);
+    await sleep(delay);
+    wait = Math.min(wait * 2, 16000);
+  }
+}
+
 async function findExactOrg(name) {
-  const res = await fetch(url("/organizations/search", { term: name, fields: "name", exact_match: "true", limit: 10 }));
+  const res = await fetchRetry(url("/organizations/search", { term: name, fields: "name", exact_match: "true", limit: 10 }));
   if (!res.ok) throw new Error(`search "${name}" → HTTP ${res.status} (${redact(res.url)})`);
   const body = await res.json();
   const items = body?.data?.items ?? [];
@@ -85,7 +103,7 @@ async function findExactOrg(name) {
 }
 
 async function createOrg(name) {
-  const res = await fetch(url("/organizations"), {
+  const res = await fetchRetry(url("/organizations"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
@@ -101,7 +119,8 @@ async function main() {
   console.log(`PSG-825 supplement-org provisioning — ${APPLY ? "APPLY (will create missing orgs)" : "DRY-RUN (no writes)"}`);
   console.log(`Pipedrive base: ${BASE}\n`);
   const resolved = [];
-  for (const shop of SHOPS) {
+  for (const [i, shop] of SHOPS.entries()) {
+    if (i > 0) await sleep(300); // stay under Pipedrive's burst rate limit
     const existing = await findExactOrg(shop.name);
     if (existing) {
       console.log(`  = exists   org ${existing.id}  ${shop.name}`);
