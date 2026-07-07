@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // before any work), the pipedrive/board not-configured 503 guards, the env-default
 // (onboarding) board fallback, aggregation on a clean run (200), and the 502-on-error path.
 
-const { activeRecurringAccounts, runRecurringCycle } = vi.hoisted(() => ({
-  activeRecurringAccounts: vi.fn(),
+const { selectRecurringAccounts, runRecurringCycle } = vi.hoisted(() => ({
+  selectRecurringAccounts: vi.fn(),
   runRecurringCycle: vi.fn(),
 }));
 
@@ -15,7 +15,7 @@ const { activeRecurringAccounts, runRecurringCycle } = vi.hoisted(() => ({
 vi.mock("@/lib/pipedrive/recurring-accounts", async (importActual) => {
   const actual =
     await importActual<typeof import("@/lib/pipedrive/recurring-accounts")>();
-  return { ...actual, activeRecurringAccounts, runRecurringCycle };
+  return { ...actual, selectRecurringAccounts, runRecurringCycle };
 });
 vi.mock("@/lib/supabase/service", () => ({ createServiceClient: () => ({}) }));
 
@@ -35,11 +35,19 @@ const CLEAN = {
   projects: [],
 };
 
+const SELECTION = {
+  accounts: [{ orgName: "Sunrise Collision", orgId: 77, personId: 11 }],
+  derivedTotal: 3,
+  rosterApplied: true,
+  excluded: [
+    { orgName: "Website-only Co", orgId: 20, personId: null },
+    { orgName: "Other Website Co", orgId: 21, personId: null },
+  ],
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
-  activeRecurringAccounts.mockResolvedValue([
-    { orgName: "Sunrise Collision", orgId: 77, personId: 11 },
-  ]);
+  selectRecurringAccounts.mockResolvedValue(SELECTION);
   runRecurringCycle.mockResolvedValue(CLEAN);
   process.env.CRON_SECRET = "cron-secret";
   process.env.PIPEDRIVE_API_TOKEN = "pd-token";
@@ -53,7 +61,7 @@ describe("pipedrive-recurring cron route", () => {
   it("401 with no Authorization (before any work)", async () => {
     const res = await GET(req());
     expect(res.status).toBe(401);
-    expect(activeRecurringAccounts).not.toHaveBeenCalled();
+    expect(selectRecurringAccounts).not.toHaveBeenCalled();
     expect(runRecurringCycle).not.toHaveBeenCalled();
   });
 
@@ -70,7 +78,7 @@ describe("pipedrive-recurring cron route", () => {
     const res = await GET(req({ authorization: "Bearer cron-secret" }));
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({ error: "pipedrive_not_configured" });
-    expect(activeRecurringAccounts).not.toHaveBeenCalled();
+    expect(selectRecurringAccounts).not.toHaveBeenCalled();
   });
 
   it("503 when neither the recurring nor onboarding board/phase pair is set", async () => {
@@ -85,9 +93,17 @@ describe("pipedrive-recurring cron route", () => {
   it("200 on a clean run and falls back to the onboarding board when recurring vars unset", async () => {
     const res = await GET(req({ authorization: "Bearer cron-secret" }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ created: 1, skipped: 1, errored: 0 });
-    expect(activeRecurringAccounts).toHaveBeenCalledTimes(1);
+    expect(await res.json()).toMatchObject({
+      created: 1,
+      skipped: 1,
+      errored: 0,
+      // PSG-817 roster-gate audit surfaced in the response (no silent truncation).
+      roster: { rosterApplied: true, derivedTotal: 3, selected: 1, excluded: 2 },
+    });
+    expect(selectRecurringAccounts).toHaveBeenCalledTimes(1);
     expect(runRecurringCycle).toHaveBeenCalledTimes(1);
+    // Only the roster-selected accounts flow into the cycle.
+    expect(runRecurringCycle.mock.calls[0][0].accounts).toEqual(SELECTION.accounts);
     // env-default fallback: onboarding board/phase (1/1) flowed through.
     expect(runRecurringCycle.mock.calls[0][0]).toMatchObject({ boardId: 1, phaseId: 1 });
   });

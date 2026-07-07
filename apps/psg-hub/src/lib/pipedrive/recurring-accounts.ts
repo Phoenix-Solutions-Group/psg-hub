@@ -18,6 +18,7 @@ import { readMirrorDeals, type MirrorSupabase } from "./mirror";
 import { provisionRecurringServiceBoard, type RecurringClient } from "./recurring";
 import type { PipedriveProjectsClient } from "./projects";
 import type { RecurringRole } from "./recurring-service-template";
+import type { PipedriveDeal } from "./types";
 
 /**
  * The set of active client accounts a monthly recurring cycle should run for, derived from
@@ -27,11 +28,23 @@ import type { RecurringRole } from "./recurring-service-template";
  * name so orgless rows still collapse per client. Rows with no org name are skipped — we
  * cannot title (and therefore cannot idempotently de-duplicate) a board without a client
  * name. First won deal per org wins the dedupe.
+ *
+ * PSG-817 (opt-in): when a pinned maintenance roster is configured, the derived set is
+ * further narrowed to only the orgs on that roster (Ada's PSG-813 Option A — monthly boards
+ * go to the ~88 real maintenance shops, not every won-deal org). When the roster is unset /
+ * empty the derived set is returned unchanged, so this is a fail-safe no-op until a roster
+ * is populated. Callers that need the audit counts (how many were dropped by the roster gate)
+ * should use `selectRecurringAccounts()` instead.
  */
 export async function activeRecurringAccounts(
   db: MirrorSupabase,
+  roster: MaintenanceRoster | null = resolveMaintenanceRoster(),
 ): Promise<RecurringClient[]> {
-  const deals = await readMirrorDeals(db);
+  return (await selectRecurringAccounts(db, roster)).accounts;
+}
+
+/** All won-deal accounts, deduped per org, BEFORE any roster gate is applied. */
+function deriveAccountsFromDeals(deals: PipedriveDeal[]): RecurringClient[] {
   const byKey = new Map<string, RecurringClient>();
   for (const d of deals) {
     if (d.status !== "won") continue;
@@ -42,6 +55,94 @@ export async function activeRecurringAccounts(
     byKey.set(key, { orgName, orgId: d.orgId, personId: d.personId });
   }
   return [...byKey.values()];
+}
+
+/**
+ * Pinned allowlist of maintenance-shop accounts (PSG-813 Option A). Matching an account is
+ * intentionally the SAME key logic the dedupe uses: prefer `orgId`, fall back to the
+ * normalized org name so orgless rows still match. Both sets can be populated at once.
+ */
+export interface MaintenanceRoster {
+  orgIds: Set<number>;
+  orgNames: Set<string>;
+}
+
+/** Normalize an org name for roster matching: trim, lowercase, collapse inner whitespace. */
+function normalizeRosterName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Parse the pinned maintenance roster from env (fail-safe). The value of
+ * `RECURRING_MAINTENANCE_ROSTER` is a comma- and/or newline-separated list of tokens; each
+ * token is either:
+ *   • an org id — a bare all-digits token (`4021`) or an `id:`-prefixed token (`id:4021`), or
+ *   • an org name — anything else (matched case-insensitively, whitespace-collapsed).
+ * The frozen ~88-shop list from PSG-816 (Step 0) populates this. Returns `null` when the var
+ * is unset or contains no usable tokens, which is the fail-safe "no roster → behave as today"
+ * state — the monthly generator will NOT be silently narrowed by a misconfigured value.
+ */
+export function resolveMaintenanceRoster(
+  env: Record<string, string | undefined> = process.env,
+): MaintenanceRoster | null {
+  const raw = env.RECURRING_MAINTENANCE_ROSTER;
+  if (raw == null || raw.trim() === "") return null;
+  const orgIds = new Set<number>();
+  const orgNames = new Set<string>();
+  for (const tokenRaw of raw.split(/[,\n]/)) {
+    const token = tokenRaw.trim();
+    if (token === "") continue;
+    const idMatch = /^id:\s*(\d+)$/i.exec(token) ?? /^(\d+)$/.exec(token);
+    if (idMatch) {
+      orgIds.add(Number(idMatch[1]));
+      continue;
+    }
+    orgNames.add(normalizeRosterName(token));
+  }
+  if (orgIds.size === 0 && orgNames.size === 0) return null;
+  return { orgIds, orgNames };
+}
+
+/** True when this account is on the pinned roster (by org id, or by normalized name). */
+function isOnRoster(account: RecurringClient, roster: MaintenanceRoster): boolean {
+  if (account.orgId != null && roster.orgIds.has(account.orgId)) return true;
+  return roster.orgNames.has(normalizeRosterName(account.orgName));
+}
+
+/** Full result of resolving the monthly fleet: the selected accounts plus audit counts. */
+export interface RecurringSelection {
+  /** Accounts a monthly cycle should provision (post-roster-gate when a roster is set). */
+  accounts: RecurringClient[];
+  /** Won-deal accounts derived from the mirror BEFORE the roster gate. */
+  derivedTotal: number;
+  /** Whether a pinned maintenance roster was applied this run. */
+  rosterApplied: boolean;
+  /** Accounts dropped by the roster gate (derived-but-not-on-roster). Empty when no roster. */
+  excluded: RecurringClient[];
+}
+
+/**
+ * Resolve the monthly fleet with audit detail. Derives the won-deal accounts, then — when a
+ * pinned maintenance roster is configured — keeps only the accounts on that roster and
+ * captures the excluded ones as reviewable evidence (no silent truncation). When no roster
+ * is set, `rosterApplied` is false and every derived account is returned unchanged.
+ */
+export async function selectRecurringAccounts(
+  db: MirrorSupabase,
+  roster: MaintenanceRoster | null = resolveMaintenanceRoster(),
+): Promise<RecurringSelection> {
+  const deals = await readMirrorDeals(db);
+  const derived = deriveAccountsFromDeals(deals);
+  if (!roster) {
+    return { accounts: derived, derivedTotal: derived.length, rosterApplied: false, excluded: [] };
+  }
+  const accounts: RecurringClient[] = [];
+  const excluded: RecurringClient[] = [];
+  for (const account of derived) {
+    if (isOnRoster(account, roster)) accounts.push(account);
+    else excluded.push(account);
+  }
+  return { accounts, derivedTotal: derived.length, rosterApplied: true, excluded };
 }
 
 /** Board + kanban phase the monthly recurring project is dropped into. */

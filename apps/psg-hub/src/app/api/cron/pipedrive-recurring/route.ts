@@ -5,10 +5,10 @@ import { createProjectsClient, resolvePipedriveToken } from "@/lib/pipedrive/pro
 import { loadRoleUserMap } from "@/lib/pipedrive/role-user-map";
 import type { MirrorSupabase } from "@/lib/pipedrive/mirror";
 import {
-  activeRecurringAccounts,
   firstOfCurrentMonthUTC,
   resolveRecurringBoardConfig,
   runRecurringCycle,
+  selectRecurringAccounts,
 } from "@/lib/pipedrive/recurring-accounts";
 
 // PSG-607 — WHM monthly recurring-service trigger (builder = PSG-582).
@@ -59,7 +59,17 @@ async function handle(request: Request): Promise<NextResponse> {
   // Service-role client reads the mirror (RLS bypassed for the cron job); narrow it to the
   // read seam the reader needs.
   const db = createServiceClient() as unknown as MirrorSupabase;
-  const accounts = await activeRecurringAccounts(db);
+  // PSG-817: apply the pinned maintenance roster (Option A). When RECURRING_MAINTENANCE_ROSTER
+  // is unset this is a no-op and the full derived fleet is provisioned exactly as before.
+  const selection = await selectRecurringAccounts(db);
+  const roster = {
+    rosterApplied: selection.rosterApplied,
+    derivedTotal: selection.derivedTotal,
+    selected: selection.accounts.length,
+    excluded: selection.excluded.length,
+  };
+  // Audit trail (no silent truncation): record what the roster gate dropped this run.
+  console.log("[pipedrive-recurring] roster gate", roster);
 
   const client = createProjectsClient({
     companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
@@ -67,7 +77,7 @@ async function handle(request: Request): Promise<NextResponse> {
   const cycleStart = firstOfCurrentMonthUTC();
   const result = await runRecurringCycle({
     client,
-    accounts,
+    accounts: selection.accounts,
     cycleStart,
     boardId: config.boardId,
     phaseId: config.phaseId,
@@ -75,7 +85,7 @@ async function handle(request: Request): Promise<NextResponse> {
   });
 
   // Any per-account failure is a 502 (not a 200) so the monthly cron alerts.
-  return NextResponse.json(result, { status: result.errored > 0 ? 502 : 200 });
+  return NextResponse.json({ ...result, roster }, { status: result.errored > 0 ? 502 : 200 });
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
