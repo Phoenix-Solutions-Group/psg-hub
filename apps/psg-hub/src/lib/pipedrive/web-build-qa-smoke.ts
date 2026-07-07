@@ -258,7 +258,9 @@ export async function runWebBuildQaSmoke(
     projectTitle = deliveryProjectTitle(WEB_BUILD_TEMPLATE_DEF.titlePrefix, deal);
 
     // 3) Provision THROUGH THE REAL SELECTOR with an injected web-build line item.
-    const prov = await provisionForDeal({
+    // The smoke sells exactly ONE delivery template, so the multi-project summary
+    // (PSG-678) carries exactly one project — unwrap it for the read-back checks below.
+    const provSummary = await provisionForDeal({
       client,
       deal,
       defaultBoardId: opts.defaultBoardId,
@@ -267,6 +269,7 @@ export async function runWebBuildQaSmoke(
       products: [WEB_BUILD_TEST_PRODUCT],
       env,
     });
+    const prov = provSummary.projects[0]!;
 
     // 4) Read back the project + task tree.
     const project = await rest.getProject(prov.projectId);
@@ -322,7 +325,7 @@ export async function runWebBuildQaSmoke(
     const finalGateExpected = dueDateFor(wonDate, 63);
 
     // 5) Idempotency: re-provision through the selector → must be a no-op on the same id.
-    const again = await provisionForDeal({
+    const againSummary = await provisionForDeal({
       client,
       deal,
       defaultBoardId: opts.defaultBoardId,
@@ -331,6 +334,7 @@ export async function runWebBuildQaSmoke(
       products: [WEB_BUILD_TEST_PRODUCT],
       env,
     });
+    const again = againSummary.projects[0]!;
     const page = await rest.listProjectsPage(500);
 
     evidence = {

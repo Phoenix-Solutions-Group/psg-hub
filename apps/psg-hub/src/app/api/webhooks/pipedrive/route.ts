@@ -141,17 +141,18 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Role→user map from env: any confirmed role auto-assigns its tasks; unmapped
     // roles stay unassigned (role in the title). Never throws on missing/bad values.
     const roleUserMap = loadRoleUserMap();
-    // PSG-668: select the RIGHT one-time board from the deal's line items. Falls back to
-    // the onboarding board (boardId/phaseId above) whenever the deal cannot be confidently
-    // mapped or the product read fails — no regression on today's onboarding behavior.
-    const result = await provisionForDeal({
+    // PSG-668 / PSG-678: build the RIGHT one-time board(s) from the deal's line items —
+    // one project per DISTINCT delivery template sold. Falls back to a single onboarding
+    // board (boardId/phaseId above) when the deal sold no delivery template or the product
+    // read fails — no regression on today's onboarding behavior.
+    const summary = await provisionForDeal({
       client,
       deal,
       defaultBoardId: boardId,
       defaultPhaseId: phaseId,
       roleUserMap,
     });
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ok: true, ...summary });
   } catch (err) {
     // Never log the error's cause verbatim (Pipedrive URLs carry the token); the
     // client already strips URLs from its messages, but be defensive here too.
