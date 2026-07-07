@@ -20,3 +20,12 @@ repo-root `CONTRIBUTING.md`):
 - **Always stage explicit pathspecs** — `git add path/to/file`, never `git add -A` / `git add .` / `git commit -a`.
 - Every commit message ends with: `Co-Authored-By: Paperclip <noreply@paperclip.ing>`
 <!-- END:psg-worktree-isolation -->
+
+<!-- BEGIN:psg-staging-guard -->
+# Preview builds live only on their feature branch — never commit them to `main`
+
+Staging/preview pages (e.g. `apps/psg-hub/staging/**`) are review aids; keep them on
+their feature branch and never commit them to the production branch `main` (what Vercel
+builds the live site from). CI enforces this on `main` via the **Staging guard**
+(`scripts/check-staging-guard.mjs`); run it locally with `node scripts/check-staging-guard.mjs` (PSG-778).
+<!-- END:psg-staging-guard -->

@@ -44,6 +44,12 @@ review unit. Tear the worktree down when the work merges.
 **5. Every commit message ends with the co-author trailer:**
 `Co-Authored-By: Paperclip <noreply@paperclip.ing>`
 
+**6. Preview builds live only on their feature branch — never commit them to `main`.**
+Staging/preview pages (e.g. `apps/psg-hub/staging/**`) are review aids; keep them on
+their feature branch and out of the production branch `main` (what Vercel builds the live
+site from). CI enforces this on `main` via the **Staging guard** — run it locally with
+`node scripts/check-staging-guard.mjs` (PSG-778).
+
 ## How to do isolated branch work
 
 ### With the helper (recommended)

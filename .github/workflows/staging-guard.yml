@@ -1,0 +1,34 @@
+# Staging/preview-artifact guard (PSG-778).
+#
+# Keeps unfinished "preview" pages off the production branch `main` (the branch Vercel
+# builds the live site from). Preview builds are a review aid and belong ONLY on their
+# feature branch. This job fails if any staging artifact is tracked on `main`, so a
+# stray preview can't slip through and accidentally go live.
+#
+# Runs only on `main` (push + PRs targeting main) — feature branches keep their previews.
+# Enforcement lives in scripts/check-staging-guard.mjs (also runnable locally).
+
+name: Staging guard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: staging-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: no staging artifacts on main
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for staging/preview artifacts
+        run: node scripts/check-staging-guard.mjs
