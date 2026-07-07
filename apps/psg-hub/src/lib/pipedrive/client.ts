@@ -391,6 +391,80 @@ export function createPipedriveClient(
     throw new PipedriveError(`Pipedrive stage pagination exceeded ${maxPages} pages`);
   }
 
+  // PSG-646 — one page of `/api/v2/organizations` (same cursor-pagination shape as /deals
+  // and /stages). Pipedrive v2 `/deals` returns `org_id` as a bare number with NO org name,
+  // so — exactly like stage labels (PSG-622) — we fetch organizations and join the name in.
+  // Without this the deals mirror stores `orgName: null` for every deal, and the recurring
+  // engine's `activeRecurringAccounts()` (which keys the monthly cycle off org name) skips
+  // every account → the monthly cron provisions ZERO boards. Surfaced by the PSG-646 pilot.
+  async function getOrgsPage(
+    cursor: string | null,
+  ): Promise<{ data: Array<Record<string, unknown>>; nextCursor: string | null }> {
+    const url = new URL(`${base}/api/v2/organizations`);
+    url.searchParams.set("limit", String(limit));
+    if (cursor) url.searchParams.set("cursor", cursor);
+    url.searchParams.set("api_token", apiToken);
+
+    const res = await doFetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) {
+      // Never include the URL (it carries the token) in the error.
+      throw new PipedriveError(
+        `Pipedrive /organizations returned HTTP ${res.status}`,
+        res.status,
+      );
+    }
+    const body = (await res.json()) as {
+      success?: boolean;
+      data?: Array<Record<string, unknown>> | null;
+      additional_data?: { next_cursor?: string | null } | null;
+    };
+    if (body.success === false) {
+      throw new PipedriveError("Pipedrive /organizations returned success=false");
+    }
+    return {
+      data: Array.isArray(body.data) ? body.data : [],
+      nextCursor: body.additional_data?.next_cursor ?? null,
+    };
+  }
+
+  async function fetchOrgs(): Promise<Array<{ id: number; name: string | null }>> {
+    const out: Array<{ id: number; name: string | null }> = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < maxPages; page += 1) {
+      const { data, nextCursor } = await getOrgsPage(cursor);
+      for (const raw of data) {
+        const id = asNumber(raw.id);
+        if (id == null) continue;
+        out.push({ id, name: typeof raw.name === "string" ? raw.name : null });
+      }
+      if (!nextCursor) return out;
+      cursor = nextCursor;
+    }
+    throw new PipedriveError(`Pipedrive organization pagination exceeded ${maxPages} pages`);
+  }
+
+  // Fetch org names once per client and memoize. RESILIENT (same discipline as stage names,
+  // PSG-622): an organizations-endpoint failure must NOT break the deal sync — on failure we
+  // fall back to an empty map, so deals still sync with `orgName` null (prior behavior).
+  let orgNamesPromise: Promise<Map<number, string>> | null = null;
+  function loadOrgNames(): Promise<Map<number, string>> {
+    if (!orgNamesPromise) {
+      orgNamesPromise = fetchOrgs()
+        .then((orgs) => {
+          const m = new Map<number, string>();
+          for (const o of orgs) {
+            if (o.name != null && o.name !== "") m.set(o.id, o.name);
+          }
+          return m;
+        })
+        .catch(() => new Map<number, string>());
+    }
+    return orgNamesPromise;
+  }
+
   // Fetch stage names once per client and memoize. RESILIENT (PSG-622): a stages-endpoint
   // failure must NOT break the deal sync — the raw open-pipeline-$ (proven in PSG-446) is
   // the load-bearing number, and it doesn't need names. On failure we fall back to an
@@ -415,8 +489,10 @@ export function createPipedriveClient(
     status: DealStatus,
     updatedSince?: string,
   ): Promise<PipedriveDeal[]> {
-    // Join stage names (PSG-622). Fetched once per client; failure → empty map (names null).
+    // Join stage names (PSG-622) + org names (PSG-646). Both fetched once per client;
+    // failure → empty map (that field stays null, prior behavior).
     const stageNames = await loadStageNames();
+    const orgNames = await loadOrgNames();
     const out: PipedriveDeal[] = [];
     let cursor: string | null = null;
     for (let page = 0; page < maxPages; page += 1) {
@@ -431,6 +507,11 @@ export function createPipedriveClient(
         if (deal.stageName == null && deal.stageId != null) {
           const name = stageNames.get(deal.stageId);
           if (name) deal.stageName = name;
+        }
+        // Same for org names — v2 `/deals` gives `org_id` (number) but no org name.
+        if (deal.orgName == null && deal.orgId != null) {
+          const name = orgNames.get(deal.orgId);
+          if (name) deal.orgName = name;
         }
         out.push(deal);
       }

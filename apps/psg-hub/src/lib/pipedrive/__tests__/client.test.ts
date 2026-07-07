@@ -230,14 +230,21 @@ function routeFetch(routes: {
   stages?: unknown;
   stagesOk?: boolean;
   stagesStatus?: number;
+  orgs?: unknown;
+  orgsOk?: boolean;
+  orgsStatus?: number;
   deals?: unknown;
 }): ReturnType<typeof vi.fn> {
+  const emptyPage = { success: true, data: [], additional_data: { next_cursor: null } };
   return vi.fn(async (url: string) => {
     const u = String(url);
     if (u.includes("/api/v2/stages")) {
       return jsonResponse(routes.stages ?? {}, routes.stagesOk ?? true, routes.stagesStatus ?? 200);
     }
-    return jsonResponse(routes.deals ?? { success: true, data: [], additional_data: { next_cursor: null } });
+    if (u.includes("/api/v2/organizations")) {
+      return jsonResponse(routes.orgs ?? emptyPage, routes.orgsOk ?? true, routes.orgsStatus ?? 200);
+    }
+    return jsonResponse(routes.deals ?? emptyPage);
   });
 }
 
@@ -344,5 +351,110 @@ describe("createPipedriveClient — stage names", () => {
     const deals = await client.fetchOpenDeals();
     expect(deals).toHaveLength(1);
     expect(deals[0]!.stageName).toBeNull();
+  });
+});
+
+// ── PSG-646: org names (fetch /api/v2/organizations + join onto deals) ────────────────
+// v2 `/deals` returns `org_id` as a bare number with no org name; without this join the
+// mirror stores orgName null and the recurring engine can't identify any account.
+describe("createPipedriveClient — org names", () => {
+  it("joins the org name onto a v2 deal that omits org_name (org_id is a bare number)", async () => {
+    const fetchImpl = routeFetch({
+      orgs: {
+        success: true,
+        data: [{ id: 1238, name: "Majestic Auto Body" }],
+        additional_data: { next_cursor: null },
+      },
+      deals: {
+        success: true,
+        data: [{ id: 3534, value: 100, status: "won", org_id: 1238 }],
+        additional_data: { next_cursor: null },
+      },
+    });
+    const client = createPipedriveClient({
+      apiToken: "t",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const [deal] = await client.fetchOpenDeals();
+    expect(deal!.orgId).toBe(1238);
+    expect(deal!.orgName).toBe("Majestic Auto Body");
+  });
+
+  it("does not overwrite an org_name the deal payload already carries (v1 nested)", async () => {
+    const fetchImpl = routeFetch({
+      orgs: {
+        success: true,
+        data: [{ id: 7, name: "From Orgs Endpoint" }],
+        additional_data: { next_cursor: null },
+      },
+      deals: {
+        success: true,
+        data: [{ id: 1, value: 100, status: "open", org_id: { value: 7, name: "Bodyshop A" } }],
+        additional_data: { next_cursor: null },
+      },
+    });
+    const client = createPipedriveClient({
+      apiToken: "t",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const [deal] = await client.fetchOpenDeals();
+    expect(deal!.orgName).toBe("Bodyshop A");
+  });
+
+  it("paginates /api/v2/organizations across cursors when joining", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/v2/stages")) {
+        return jsonResponse({ success: true, data: [], additional_data: { next_cursor: null } });
+      }
+      if (u.includes("/api/v2/organizations")) {
+        if (u.includes("cursor=O2")) {
+          return jsonResponse({
+            success: true,
+            data: [{ id: 8509, name: "Collision Leaders" }],
+            additional_data: { next_cursor: null },
+          });
+        }
+        return jsonResponse({
+          success: true,
+          data: [{ id: 1201, name: "LaMettry's Collision" }],
+          additional_data: { next_cursor: "O2" },
+        });
+      }
+      return jsonResponse({
+        success: true,
+        data: [{ id: 3663, value: 100, status: "won", org_id: 8509 }],
+        additional_data: { next_cursor: null },
+      });
+    });
+    const client = createPipedriveClient({
+      apiToken: "t",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const [deal] = await client.fetchOpenDeals();
+    expect(deal!.orgName).toBe("Collision Leaders");
+    const orgUrls = fetchImpl.mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => u.includes("/api/v2/organizations"));
+    expect(orgUrls).toHaveLength(2);
+  });
+
+  it("is resilient: an /organizations failure leaves deals synced with a null org name", async () => {
+    const fetchImpl = routeFetch({
+      orgsOk: false,
+      orgsStatus: 500,
+      deals: {
+        success: true,
+        data: [{ id: 1, value: 100, status: "won", org_id: 1238 }],
+        additional_data: { next_cursor: null },
+      },
+    });
+    const client = createPipedriveClient({
+      apiToken: "t",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const deals = await client.fetchOpenDeals();
+    expect(deals).toHaveLength(1);
+    expect(deals[0]!.orgName).toBeNull();
   });
 });
