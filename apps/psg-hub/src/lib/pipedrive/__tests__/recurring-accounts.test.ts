@@ -3,6 +3,7 @@ import {
   activeRecurringAccounts,
   firstOfCurrentMonthUTC,
   resolveMaintenanceRoster,
+  resolveMaintenanceSupplement,
   resolveRecurringBoardConfig,
   runRecurringCycle,
   selectRecurringAccounts,
@@ -194,6 +195,95 @@ describe("recurring roster gate", () => {
     const sel = await selectRecurringAccounts(db, roster);
     expect(sel.accounts).toEqual([]);
     expect(sel.excluded.map((a) => a.orgId)).toEqual([42]);
+  });
+});
+
+// ── resolveMaintenanceSupplement (PSG-825 opt-in no-won-deal supplement parser) ──────
+
+describe("resolveMaintenanceSupplement", () => {
+  it("returns [] when the env var is unset or blank (fail-safe → no supplement)", () => {
+    expect(resolveMaintenanceSupplement({})).toEqual([]);
+    expect(resolveMaintenanceSupplement({ RECURRING_MAINTENANCE_SUPPLEMENT: "" })).toEqual([]);
+    expect(resolveMaintenanceSupplement({ RECURRING_MAINTENANCE_SUPPLEMENT: "  \n , " })).toEqual([]);
+  });
+
+  it("parses `<id> <name>`, `<id>=<name>`, `<id>:<name>` and an optional id: prefix", () => {
+    const sup = resolveMaintenanceSupplement({
+      RECURRING_MAINTENANCE_SUPPLEMENT:
+        "6001 Certified Auto Body\n6002=ITG Glass Company, id:6003:Superior Collision, id: 6004 Keno Collision",
+    });
+    expect(sup).toEqual([
+      { orgName: "Certified Auto Body", orgId: 6001 },
+      { orgName: "ITG Glass Company", orgId: 6002 },
+      { orgName: "Superior Collision", orgId: 6003 },
+      { orgName: "Keno Collision", orgId: 6004 },
+    ]);
+  });
+
+  it("skips entries that lack a name (a board cannot be titled by id alone)", () => {
+    const sup = resolveMaintenanceSupplement({
+      RECURRING_MAINTENANCE_SUPPLEMENT: "6001, id:6002, Nameless Shop, 6003 Real Shop",
+    });
+    // Only the id+name entry survives.
+    expect(sup).toEqual([{ orgName: "Real Shop", orgId: 6003 }]);
+  });
+
+  it("dedupes repeated org ids (first entry wins)", () => {
+    const sup = resolveMaintenanceSupplement({
+      RECURRING_MAINTENANCE_SUPPLEMENT: "6001 First Name, 6001 Duplicate Name",
+    });
+    expect(sup).toEqual([{ orgName: "First Name", orgId: 6001 }]);
+  });
+});
+
+// ── selectRecurringAccounts supplement union (PSG-825) ───────────────────────────────
+
+describe("recurring supplement union", () => {
+  it("adds no-won-deal accounts on top of the roster-gated set", async () => {
+    const db = fakeDb([
+      deal({ dealId: 1, orgName: "Maint Co", orgId: 10, personId: 100 }),
+      deal({ dealId: 2, orgName: "Website-only Co", orgId: 20, personId: 200 }),
+    ]);
+    const roster = resolveMaintenanceRoster({ RECURRING_MAINTENANCE_ROSTER: "10" })!;
+    const supplement = resolveMaintenanceSupplement({
+      RECURRING_MAINTENANCE_SUPPLEMENT: "6001 Certified Auto Body",
+    });
+    const sel = await selectRecurringAccounts(db, roster, supplement);
+    // Roster keeps org 10, excludes 20; supplement adds the legacy shop.
+    expect(sel.accounts.map((a) => a.orgId)).toEqual([10, 6001]);
+    expect(sel.excluded.map((a) => a.orgId)).toEqual([20]);
+    expect(sel.supplementApplied).toBe(true);
+    expect(sel.supplementAdded).toEqual([{ orgName: "Certified Auto Body", orgId: 6001 }]);
+  });
+
+  it("adds supplement accounts even when no roster is set (additive, independent of the gate)", async () => {
+    const db = fakeDb([deal({ dealId: 1, orgName: "Won Co", orgId: 10, personId: 1 })]);
+    const supplement = resolveMaintenanceSupplement({
+      RECURRING_MAINTENANCE_SUPPLEMENT: "6001 Legacy Shop",
+    });
+    const sel = await selectRecurringAccounts(db, null, supplement);
+    expect(sel.rosterApplied).toBe(false);
+    expect(sel.accounts.map((a) => a.orgId)).toEqual([10, 6001]);
+    expect(sel.supplementAdded.map((a) => a.orgId)).toEqual([6001]);
+  });
+
+  it("does not double-book an org that has both a won deal and a supplement entry", async () => {
+    const db = fakeDb([deal({ dealId: 1, orgName: "Dual Co", orgId: 10, personId: 1 })]);
+    const supplement = resolveMaintenanceSupplement({
+      RECURRING_MAINTENANCE_SUPPLEMENT: "10 Dual Co",
+    });
+    const sel = await selectRecurringAccounts(db, null, supplement);
+    // Org 10 already selected via its won deal → supplement entry is a no-op, not a 2nd board.
+    expect(sel.accounts.map((a) => a.orgId)).toEqual([10]);
+    expect(sel.supplementAdded).toEqual([]);
+  });
+
+  it("supplement unset → no accounts added and supplementApplied is false", async () => {
+    const db = fakeDb([deal({ dealId: 1, orgName: "Won Co", orgId: 10, personId: 1 })]);
+    const sel = await selectRecurringAccounts(db, null, []);
+    expect(sel.supplementApplied).toBe(false);
+    expect(sel.supplementAdded).toEqual([]);
+    expect(sel.accounts.map((a) => a.orgId)).toEqual([10]);
   });
 });
 

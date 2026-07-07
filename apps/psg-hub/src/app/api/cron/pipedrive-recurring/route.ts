@@ -61,14 +61,18 @@ async function handle(request: Request): Promise<NextResponse> {
   const db = createServiceClient() as unknown as MirrorSupabase;
   // PSG-817: apply the pinned maintenance roster (Option A). When RECURRING_MAINTENANCE_ROSTER
   // is unset this is a no-op and the full derived fleet is provisioned exactly as before.
+  // PSG-825: additionally union the no-won-deal supplement (RECURRING_MAINTENANCE_SUPPLEMENT).
   const selection = await selectRecurringAccounts(db);
   const roster = {
     rosterApplied: selection.rosterApplied,
     derivedTotal: selection.derivedTotal,
     selected: selection.accounts.length,
     excluded: selection.excluded.length,
+    supplementApplied: selection.supplementApplied,
+    supplementAdded: selection.supplementAdded.length,
   };
-  // Audit trail (no silent truncation): record what the roster gate dropped this run.
+  // Audit trail (no silent truncation): record what the roster gate dropped and what the
+  // supplement added this run.
   console.log("[pipedrive-recurring] roster gate", roster);
 
   const client = createProjectsClient({

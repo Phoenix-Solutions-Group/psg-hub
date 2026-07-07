@@ -43,6 +43,8 @@ const SELECTION = {
     { orgName: "Website-only Co", orgId: 20, personId: null },
     { orgName: "Other Website Co", orgId: 21, personId: null },
   ],
+  supplementApplied: false,
+  supplementAdded: [],
 };
 
 beforeEach(() => {
@@ -98,7 +100,14 @@ describe("pipedrive-recurring cron route", () => {
       skipped: 1,
       errored: 0,
       // PSG-817 roster-gate audit surfaced in the response (no silent truncation).
-      roster: { rosterApplied: true, derivedTotal: 3, selected: 1, excluded: 2 },
+      roster: {
+        rosterApplied: true,
+        derivedTotal: 3,
+        selected: 1,
+        excluded: 2,
+        supplementApplied: false,
+        supplementAdded: 0,
+      },
     });
     expect(selectRecurringAccounts).toHaveBeenCalledTimes(1);
     expect(runRecurringCycle).toHaveBeenCalledTimes(1);
