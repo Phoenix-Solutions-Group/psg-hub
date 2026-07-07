@@ -13,6 +13,7 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "migrations:check": "node scripts/check-migration-drift.mjs",
+    "schema:check": "node scripts/check-schema-drift.mjs",
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {

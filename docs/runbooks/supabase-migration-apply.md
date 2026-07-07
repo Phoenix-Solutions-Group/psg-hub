@@ -63,6 +63,31 @@ select name from supabase_migrations.schema_migrations order by version;
 node scripts/check-migration-drift.mjs --applied-file /tmp/applied.txt
 ```
 
+### 1a. Object-parity check (PSG-617) — catches what the ledger check cannot
+
+The ledger check above only reconciles migration **records**. It is blind to objects
+that exist in prod with **no ledger row at all** — exactly how the four `billing_*` /
+`invoiced_*` tables and the `monthly-reports` / `ads-mutation-logs` / `public-assets`
+buckets slipped in unrecorded (PSG-614). The object-parity check closes that gap by
+diffing the live DB's **public tables + storage buckets** against the committed code
+manifest `apps/psg-hub/supabase/schema-manifest.json`:
+
+```bash
+SUPABASE_DB_URL="postgres://...:5432/postgres" \
+  node scripts/check-schema-drift.mjs            # or: pnpm schema:check
+# file mode (paste one JSON row from MCP execute_sql — query is in the script header):
+node scripts/check-schema-drift.mjs --objects-file /tmp/objects.json
+```
+
+Same exit codes (0 / 1 / 2). It reports drift **both** ways: `DB-ONLY` = an object in
+prod but not in code (capture it into a migration); `CODE-ONLY` = an object in code but
+not yet applied (apply it). After any **legitimate** schema change, regenerate the
+manifest from a **clean code-built DB** (a fresh `supabase db reset`, never from prod):
+
+```bash
+node scripts/check-schema-drift.mjs --generate > apps/psg-hub/supabase/schema-manifest.json
+```
+
 ## 2. Apply missing migrations (operator gate)
 
 For **each** drift entry the check lists, **in timestamp order**:
