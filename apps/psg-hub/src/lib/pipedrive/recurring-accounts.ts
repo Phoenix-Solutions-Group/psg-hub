@@ -35,12 +35,19 @@ import type { PipedriveDeal } from "./types";
  * empty the derived set is returned unchanged, so this is a fail-safe no-op until a roster
  * is populated. Callers that need the audit counts (how many were dropped by the roster gate)
  * should use `selectRecurringAccounts()` instead.
+ *
+ * PSG-825 (opt-in): a separate `RECURRING_MAINTENANCE_SUPPLEMENT` list ADDS accounts that get
+ * monthly maintenance despite having NO won deal — the pre-CRM legacy shops whose org record
+ * exists in Pipedrive but who were never sold through it (so they can never appear in the
+ * won-deal-derived set, and no fake deal is fabricated to distort revenue). This union is
+ * additive and independent of the roster gate; when the var is unset it is a fail-safe no-op.
  */
 export async function activeRecurringAccounts(
   db: MirrorSupabase,
   roster: MaintenanceRoster | null = resolveMaintenanceRoster(),
+  supplement: RecurringClient[] = resolveMaintenanceSupplement(),
 ): Promise<RecurringClient[]> {
-  return (await selectRecurringAccounts(db, roster)).accounts;
+  return (await selectRecurringAccounts(db, roster, supplement)).accounts;
 }
 
 /** All won-deal accounts, deduped per org, BEFORE any roster gate is applied. */
@@ -109,9 +116,56 @@ function isOnRoster(account: RecurringClient, roster: MaintenanceRoster): boolea
   return roster.orgNames.has(normalizeRosterName(account.orgName));
 }
 
+/**
+ * The dedupe key an account collapses on — the SAME logic `deriveAccountsFromDeals` uses so a
+ * supplement account and a won-deal account for the same org can never both provision a board:
+ * prefer `orgId`, fall back to the normalized org name for orgless rows.
+ */
+function accountKey(account: RecurringClient): string {
+  return account.orgId != null
+    ? `org:${account.orgId}`
+    : `name:${normalizeRosterName(account.orgName)}`;
+}
+
+/**
+ * Parse the opt-in maintenance SUPPLEMENT from env (PSG-825, fail-safe). These are accounts
+ * that must get a monthly board even though they have no won deal — the pre-CRM legacy shops.
+ * A board is titled and idempotently de-duplicated by ORG NAME, so a bare org id is not enough:
+ * every entry must carry both an id and a name. `RECURRING_MAINTENANCE_SUPPLEMENT` is a comma-
+ * and/or newline-separated list where each entry is `"<orgId> <name>"`, `"<orgId>=<name>"`,
+ * `"<orgId>:<name>"`, or any of those with an optional leading `id:` prefix — e.g.
+ * `id:6001 Certified Auto Body, 6002=ITG Glass Company`. Entries that do not carry BOTH a
+ * numeric id and a non-empty name are skipped (they cannot title a board); duplicate ids keep
+ * the first. Returns `[]` when the var is unset/blank — the fail-safe "no supplement" state.
+ */
+export function resolveMaintenanceSupplement(
+  env: Record<string, string | undefined> = process.env,
+): RecurringClient[] {
+  const raw = env.RECURRING_MAINTENANCE_SUPPLEMENT;
+  if (raw == null || raw.trim() === "") return [];
+  const out: RecurringClient[] = [];
+  const seen = new Set<number>();
+  for (const entryRaw of raw.split(/[,\n]/)) {
+    const entry = entryRaw.trim().replace(/^id:\s*/i, "");
+    if (entry === "") continue;
+    // `<id><sep><name>` where sep is `:`/`=` (optionally spaced) or one-or-more spaces.
+    const m = /^(\d+)\s*[:=]\s*(.+)$/.exec(entry) ?? /^(\d+)\s+(.+)$/.exec(entry);
+    if (!m) continue; // id-only or name-only entry: cannot title a board → skip
+    const orgId = Number(m[1]);
+    const orgName = m[2].trim();
+    if (orgName === "" || seen.has(orgId)) continue;
+    seen.add(orgId);
+    out.push({ orgName, orgId });
+  }
+  return out;
+}
+
 /** Full result of resolving the monthly fleet: the selected accounts plus audit counts. */
 export interface RecurringSelection {
-  /** Accounts a monthly cycle should provision (post-roster-gate when a roster is set). */
+  /**
+   * Accounts a monthly cycle should provision: the won-deal set (post-roster-gate when a
+   * roster is set) UNIONed with the no-won-deal supplement accounts.
+   */
   accounts: RecurringClient[];
   /** Won-deal accounts derived from the mirror BEFORE the roster gate. */
   derivedTotal: number;
@@ -119,30 +173,64 @@ export interface RecurringSelection {
   rosterApplied: boolean;
   /** Accounts dropped by the roster gate (derived-but-not-on-roster). Empty when no roster. */
   excluded: RecurringClient[];
+  /** Whether a no-won-deal supplement list was applied this run (PSG-825). */
+  supplementApplied: boolean;
+  /**
+   * Supplement accounts actually added this run — those not already selected via a won deal
+   * (deduped by org). Empty when no supplement is configured.
+   */
+  supplementAdded: RecurringClient[];
 }
 
 /**
  * Resolve the monthly fleet with audit detail. Derives the won-deal accounts, then — when a
- * pinned maintenance roster is configured — keeps only the accounts on that roster and
- * captures the excluded ones as reviewable evidence (no silent truncation). When no roster
- * is set, `rosterApplied` is false and every derived account is returned unchanged.
+ * pinned maintenance roster is configured (PSG-817) — keeps only the accounts on that roster
+ * and captures the excluded ones as reviewable evidence (no silent truncation). Finally it
+ * UNIONs in the opt-in no-won-deal supplement (PSG-825): legacy shops that must get a monthly
+ * board despite having no won deal, deduped by org against the already-selected set so an org
+ * is never provisioned twice. When neither var is set, `rosterApplied`/`supplementApplied` are
+ * false and every derived account is returned unchanged.
  */
 export async function selectRecurringAccounts(
   db: MirrorSupabase,
   roster: MaintenanceRoster | null = resolveMaintenanceRoster(),
+  supplement: RecurringClient[] = resolveMaintenanceSupplement(),
 ): Promise<RecurringSelection> {
   const deals = await readMirrorDeals(db);
   const derived = deriveAccountsFromDeals(deals);
-  if (!roster) {
-    return { accounts: derived, derivedTotal: derived.length, rosterApplied: false, excluded: [] };
-  }
+
+  // 1. Roster gate (PSG-817): narrow the won-deal set when a roster is pinned.
   const accounts: RecurringClient[] = [];
   const excluded: RecurringClient[] = [];
-  for (const account of derived) {
-    if (isOnRoster(account, roster)) accounts.push(account);
-    else excluded.push(account);
+  if (!roster) {
+    accounts.push(...derived);
+  } else {
+    for (const account of derived) {
+      if (isOnRoster(account, roster)) accounts.push(account);
+      else excluded.push(account);
+    }
   }
-  return { accounts, derivedTotal: derived.length, rosterApplied: true, excluded };
+
+  // 2. Supplement union (PSG-825): add no-won-deal accounts, deduped by org against the set
+  //    already selected above so an org that somehow has a won deal too is not double-booked.
+  const selectedKeys = new Set(accounts.map(accountKey));
+  const supplementAdded: RecurringClient[] = [];
+  for (const account of supplement) {
+    const key = accountKey(account);
+    if (selectedKeys.has(key)) continue;
+    selectedKeys.add(key);
+    accounts.push(account);
+    supplementAdded.push(account);
+  }
+
+  return {
+    accounts,
+    derivedTotal: derived.length,
+    rosterApplied: roster != null,
+    excluded,
+    supplementApplied: supplement.length > 0,
+    supplementAdded,
+  };
 }
 
 /** Board + kanban phase the monthly recurring project is dropped into. */
