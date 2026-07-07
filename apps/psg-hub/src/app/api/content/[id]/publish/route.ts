@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { checkConversionStructure } from "@/lib/content-quality";
+import type { GeneratedAsset } from "@/lib/agent-engine";
 
 // PSG-194 — approved -> published gate hook (route half of defense in depth; the
 // DB trigger content_items_publish_gate is the second layer). Publishing is
@@ -8,6 +10,16 @@ import { createServiceClient } from "@/lib/supabase/service";
 // `ship`: the PSG-143 claim-integrity Check 3 (claim_integrity_verdict) and the
 // PSG-173 8-check publish gate (gate_verdict). A non-ship draft can never reach
 // `published`.
+//
+// PSG-752 — this route is also the C2 enforcement point of the BSM
+// Content-Quality Standard v1 (PSG-746 §Tier-0). C2 ("one conversion job,
+// present and reachable") is scoped to the *finished page* about to go live, not
+// the raw draft copy the writer produces first (a shop's tap-to-call/estimate
+// CTA is added when the page is assembled). Publish is the assembled-page
+// boundary, so a `service_page` is re-checked here: it must carry a real `tel:`
+// tap-to-call action and a free-estimate action before it can reach `published`.
+// Raw drafts stay exempt (C1/C6 only at draft-persist), per Lee's scope call
+// (PSG-765). `checkConversionStructure` is a no-op for non-service_page types.
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -26,7 +38,7 @@ export async function POST(
   // Load content item for tenancy check + gate inputs.
   const { data: item, error: itemErr } = await supabase
     .from("content_items")
-    .select("id, shop_id, status, claim_integrity_verdict, gate_verdict")
+    .select("id, shop_id, status, type, title, body, claim_integrity_verdict, gate_verdict")
     .eq("id", id)
     .maybeSingle();
 
@@ -75,6 +87,32 @@ export async function POST(
         reason: "publish requires claim_integrity_verdict.verdict='ship' AND gate_verdict.verdict='ship'",
         claimIntegrityVerdict: claimVerdict,
         gateVerdict,
+      },
+      { status: 409 }
+    );
+  }
+
+  // 4. C2 (BSM Content-Quality Standard v1) — the assembled page that is about to
+  //    go live must carry a real tap-to-call action and a free-estimate action,
+  //    reachable early and repeated. Enforced at the finished-page boundary only;
+  //    non-service_page types return no violations.
+  const conversionViolations = checkConversionStructure({
+    shopId: item.shop_id as string,
+    contentType: item.type as GeneratedAsset["contentType"],
+    title: (item.title as string | null) ?? "",
+    body: (item.body as string | null) ?? "",
+    claimsManifest: [],
+  });
+  if (conversionViolations.length > 0) {
+    return NextResponse.json(
+      {
+        error: "Conversion structure gate not cleared",
+        reason:
+          "a service_page must carry a real tap-to-call (tel:) action and a free-estimate action before it can go live (BSM Content-Quality Standard C2)",
+        conversionViolations: conversionViolations.map((v) => ({
+          code: v.code,
+          message: v.message,
+        })),
       },
       { status: 409 }
     );

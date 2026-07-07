@@ -186,4 +186,55 @@ describe("POST /api/content/[id]/publish", () => {
     const res = await POST(req(), ctx);
     expect(res.status).toBe(400);
   });
+
+  // PSG-752 — C2 (BSM Content-Quality Standard) enforced at the finished-page
+  // (publish) boundary: a service_page must carry a real tap-to-call + estimate
+  // action before it can go live. Raw draft copy is exempt; this is the assembled
+  // page. Non-service_page types are not subject to C2.
+  const servicePageBody =
+    "Collision repair in Lincoln. [Call us now](tel:+14025551234) or " +
+    "[get a free estimate](/estimate). We work with all insurers.\n\n" +
+    "Certified technicians. [Call (402) 555-1234](tel:+14025551234) to " +
+    "start your repair, or request a free estimate online.";
+
+  it("publishes a service_page whose assembled page carries the tap-to-call + estimate CTA", async () => {
+    mockItem = {
+      ...(mockItem as object),
+      type: "service_page",
+      title: "Collision Repair",
+      body: servicePageBody,
+    } as Record<string, unknown>;
+    const res = await POST(req(), ctx);
+    expect(res.status).toBe(200);
+    expect(updatePayload?.status).toBe("published");
+  });
+
+  it("refuses to publish a service_page with no tap-to-call action (409, no write)", async () => {
+    mockItem = {
+      ...(mockItem as object),
+      type: "service_page",
+      title: "Collision Repair",
+      body: "We fix cars. Get a free estimate today. Get a free estimate online.",
+    } as Record<string, unknown>;
+    const res = await POST(req(), ctx);
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe("Conversion structure gate not cleared");
+    expect(body.conversionViolations.map((v: { code: string }) => v.code)).toContain(
+      "missing_call_action",
+    );
+    expect(updatePayload).toBeNull();
+  });
+
+  it("does not apply C2 to a blog_post (publishes even with no CTA)", async () => {
+    mockItem = {
+      ...(mockItem as object),
+      type: "blog_post",
+      title: "5 Signs You Need Collision Repair",
+      body: "An informational article with no call-to-action of any kind.",
+    } as Record<string, unknown>;
+    const res = await POST(req(), ctx);
+    expect(res.status).toBe(200);
+    expect(updatePayload?.status).toBe("published");
+  });
 });
