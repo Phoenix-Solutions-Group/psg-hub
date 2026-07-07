@@ -8,8 +8,12 @@ import { WEB_BUILD_TEMPLATE_DEF } from "../template-registry";
 // findProjectByTitle + qa-smoke's own deal/read/delete calls) against one coherent fake.
 // No live API is ever hit. This fake — unlike qa-smoke's — STORES assignee_id + description
 // on tasks and returns them, so the UX/QA owner→assignee spot-checks are exercised.
-function fakePipedrive(opts: { wonTime?: string } = {}) {
+function fakePipedrive(opts: { wonTime?: string; skipStamps?: number } = {}) {
   const wonTime = opts.wonTime ?? "2026-07-06T12:00:00Z";
+  // PSG-723: regression seam — no-op the first `skipStamps` phase-stamp PUTs, simulating
+  // the PSG-715 defect where a task never gets stamped into its phase. Used to PROVE the
+  // gate turns red (0 tasks in "Phase unassigned" must not be assumed — it's verified).
+  let stampsToSkip = opts.skipStamps ?? 0;
   let seq = 1;
   const deals = new Map<number, Record<string, unknown>>();
   const projects = new Map<number, Record<string, unknown>>();
@@ -139,6 +143,11 @@ function fakePipedrive(opts: { wonTime?: string } = {}) {
       if (parts[5] === "tasks" && method === "PUT") {
         const taskId = Number(parts[6]);
         const t = tasks.get(taskId);
+        if (stampsToSkip > 0) {
+          // Simulate a dropped stamp: acknowledge the call but leave phase_id unset.
+          stampsToSkip -= 1;
+          return ok({ id: taskId, phase_id: null });
+        }
         if (t) t.phase_id = body.phase_id ?? null;
         return ok({ id: taskId, phase_id: body.phase_id ?? null });
       }
@@ -297,5 +306,38 @@ describe("runWebBuildQaSmoke — selector → New Website Build board, full E2E 
     expect(ev.checks.boardResolvesToExpected).toBe(true);
     expect(ev.checks.phaseResolvesToExpected).toBe(true);
     expect(ev.allChecksPass).toBe(true);
+  });
+
+  // PSG-723 — the gate must BITE: if provisioning leaves even one task unphased (the exact
+  // PSG-715 "Phase unassigned" defect), the smoke's phase checks and allChecksPass must fail.
+  it("FAILS the phase checks (and allChecksPass) when one task is left unphased", async () => {
+    const pd = fakePipedrive({ skipStamps: 1 }); // drop exactly one phase stamp
+    const ev = await runWebBuildQaSmoke({
+      defaultBoardId: 1,
+      defaultPhaseId: 1,
+      salesPipelineId: 8,
+      companyDomain: null,
+      apiKey: "test-token",
+      fetchImpl: pd.fetchImpl,
+      sleep: noSleep,
+      runTag: "wb-unphased",
+      roleUserMap: FULL_MAP,
+      env: {},
+    });
+    // One task landed in "Phase unassigned" → the defect is detected, not masked.
+    expect(ev.phases.tasksInUnassigned).toBe(1);
+    expect(ev.phases.everyTaskStamped).toBe(false);
+    expect(ev.checks.zeroTasksUnassigned).toBe(false);
+    expect(ev.checks.everyTaskInItsPhase).toBe(false);
+    expect(ev.checks.phaseTaskSplitMatches).toBe(false); // 6/5/6/5 no longer holds
+    // The overall gate is RED — this is the assertion that guarantees the bug can't ship.
+    expect(ev.allChecksPass).toBe(false);
+    // Everything else about the build is still sane (structure/selector unaffected), proving
+    // the failure is specifically the phase check, not incidental breakage.
+    expect(ev.selection.matchedTemplate).toBe(true);
+    expect(ev.tree.totalTasks).toBe(22);
+    // Cleanup still runs on the failing path.
+    expect(ev.cleanup.projectDeleted).toBe(true);
+    expect(ev.cleanup.dealDeleted).toBe(true);
   });
 });
