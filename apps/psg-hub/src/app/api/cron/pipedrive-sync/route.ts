@@ -25,10 +25,15 @@ export const runtime = "nodejs";
 // harmless: the UPSERT is idempotent and the export re-windows on closeDate.
 const CLOSED_RECONCILE_WINDOW_DAYS = 90;
 
-/** ISO date `CLOSED_RECONCILE_WINDOW_DAYS` before `now`, for the won/lost pull. */
+/**
+ * RFC3339 timestamp `CLOSED_RECONCILE_WINDOW_DAYS` before `now`, for the won/lost pull.
+ * Pipedrive v2 `/deals?updated_since=` REJECTS a fractional-second datetime with HTTP 400
+ * ("This value is not a valid datetime"), so we strip the milliseconds `toISOString()`
+ * emits and send whole-second UTC (`YYYY-MM-DDTHH:MM:SSZ`). PSG-630.
+ */
 function closedUpdatedSince(now: Date): string {
   const ms = CLOSED_RECONCILE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  return new Date(now.getTime() - ms).toISOString();
+  return new Date(now.getTime() - ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 function authorized(request: Request): boolean {

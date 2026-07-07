@@ -90,6 +90,20 @@ describe("cron/pipedrive-sync run", () => {
     expect(since).toBeLessThanOrEqual(after - 90 * day + day);
   });
 
+  it("closedUpdatedSince is whole-second RFC3339 — no milliseconds (PSG-630)", async () => {
+    // Pipedrive v2 /deals rejects fractional-second datetimes with HTTP 400, which
+    // aborted the whole sync (open + won + lost). The window MUST end in `SSZ`, not `.SSSZ`.
+    syncMock.mockResolvedValue({ ok: true, openDeals: 1, totalDeals: 1 });
+    await POST(req("Bearer test-secret"));
+    const { closedUpdatedSince } = syncMock.mock.calls[0]![0] as {
+      closedUpdatedSince: string;
+    };
+    expect(closedUpdatedSince).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    expect(closedUpdatedSince).not.toContain(".");
+    // Still a valid, parseable instant.
+    expect(Number.isNaN(new Date(closedUpdatedSince).getTime())).toBe(false);
+  });
+
   it("502 when the sync captured a failure (so cron alerts)", async () => {
     syncMock.mockResolvedValue({ ok: false, openDeals: 0, totalDeals: 0, error: "HTTP 500" });
     const res = await GET(req("Bearer test-secret"));
