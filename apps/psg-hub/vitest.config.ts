@@ -60,6 +60,8 @@ export default defineConfig({
         "src/lib/ops/solicitation/publisher.ts", // approval-queue publisher (send on approve)
         "src/app/api/sms/webhook/route.ts", // Twilio inbound STOP/START/HELP
         "src/app/api/unsubscribe/route.ts", // CAN-SPAM unsubscribe
+        "src/lib/production/postcard-registry.ts", // PSG-849 Lob postcard geometry registry
+        "src/lib/production/postcard-proof.ts", // PSG-849 pdf-lib render proof
       ],
       // Excluded v0.2-adjacent surfaces (covered elsewhere / not unit-gateable
       // in env=node), with rationale:
