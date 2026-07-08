@@ -37,8 +37,28 @@ beforeEach(() => {
   vi.clearAllMocks();
   runMonthlyReports.mockResolvedValue({
     period: "2026-05",
-    results: [],
-    counts: { sent: 0, skipped: 0, held: 0, failed: 0 },
+    results: [
+      {
+        shop: {
+          id: "aaaaaaaa-0000-0000-0000-000000000001",
+          name: "Shop A",
+          ownerEmail: "owner@example.com",
+        },
+        status: "held",
+        reason: "schema: no linked sources to report",
+      },
+      {
+        shop: {
+          id: "bbbbbbbb-0000-0000-0000-000000000002",
+          name: "Shop B",
+          ownerEmail: "owner-b@example.com",
+        },
+        status: "failed",
+        error:
+          "render worker responded 400 for owner-b@example.com at https://render.example.com/api?api_token=SECRET123&shop=1234567890",
+      },
+    ],
+    counts: { sent: 0, skipped: 0, held: 1, failed: 1 },
   });
   serviceStub.rpc.mockResolvedValue({ data: true, error: null });
   process.env.CRON_SECRET = "cron-secret";
@@ -72,6 +92,23 @@ describe("monthly-report cron route", () => {
     const body = await res.json();
     expect(body).toHaveProperty("counts");
     expect(body).toHaveProperty("period");
+    expect(body.actionRequired).toEqual([
+      {
+        shopId: "aaaaaaaa-0000-0000-0000-000000000001",
+        shopName: "Shop A",
+        status: "held",
+        reason: "schema: no linked sources to report",
+      },
+      {
+        shopId: "bbbbbbbb-0000-0000-0000-000000000002",
+        shopName: "Shop B",
+        status: "failed",
+        error: "render worker responded 400 for [REDACTED_EMAIL] at [url]",
+      },
+    ]);
+    expect(JSON.stringify(body)).not.toContain("owner@example.com");
+    expect(JSON.stringify(body)).not.toContain("SECRET123");
+    expect(JSON.stringify(body)).not.toContain("1234567890");
   });
 
   it("scheduled GET never forces, even with ?force=1", async () => {

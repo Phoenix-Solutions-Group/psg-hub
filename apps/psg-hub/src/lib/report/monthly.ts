@@ -28,6 +28,8 @@ export type PerShopResult = {
   status: ShopReportStatus;
   /** narrative provenance for a sent report ("model" | "template"). */
   source?: GenerateOutcome["source"];
+  /** actionable non-exception reason, currently used when a report is held. */
+  reason?: string;
   error?: string;
 };
 
@@ -93,7 +95,12 @@ export async function runMonthlyReports(
 
       // Never email an unverified report.
       if (outcome.verdict !== "pass" || !outcome.narrative) {
-        results.push({ shop, status: "held" });
+        const reason = outcome.violations.map((v) => `${v.code}: ${v.detail}`).join("; ");
+        results.push({
+          shop,
+          status: "held",
+          reason: reason || "narrative did not pass the report safety check",
+        });
         continue;
       }
 

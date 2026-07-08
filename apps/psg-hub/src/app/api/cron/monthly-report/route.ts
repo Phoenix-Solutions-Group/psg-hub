@@ -11,7 +11,12 @@ import { storeReportPdf, storeReportNarrative, pdfKey } from "@/lib/report/stora
 import { buildReportEmail } from "@/lib/report/email";
 import { sendEmail } from "@/lib/mail/sendgrid";
 import { priorMonth, monthWindow } from "@/lib/analytics/rollup";
-import { runMonthlyReports, type MonthlyShop } from "@/lib/report/monthly";
+import { sanitizeLastError } from "@/lib/google-ads/sanitize";
+import {
+  runMonthlyReports,
+  type MonthlyShop,
+  type PerShopResult,
+} from "@/lib/report/monthly";
 
 // 12-04: monthly report cron. Vercel Cron fires GET on the 1st (Authorization:
 // Bearer ${CRON_SECRET}); POST supports manual triggers with the same gate. The gate
@@ -42,6 +47,24 @@ function configured(): boolean {
 }
 
 const MONTHLY = "monthly_reports";
+
+function publicReason(raw: string | null | undefined): string {
+  const redacted = sanitizeLastError(raw)
+    .replace(/https?:\/\/\S+/gi, "[url]")
+    .replace(/api_token=[^&\s"']*/gi, "api_token=[redacted]");
+  return redacted || "no reason reported";
+}
+
+function publicResult(result: PerShopResult) {
+  return {
+    shopId: result.shop.id,
+    shopName: result.shop.name,
+    status: result.status,
+    ...(result.source ? { source: result.source } : {}),
+    ...(result.reason ? { reason: publicReason(result.reason) } : {}),
+    ...(result.error ? { error: publicReason(result.error) } : {}),
+  };
+}
 
 /** Eligible shops = those with any analytics_snapshots in the period AND an owner with an email. */
 async function listEligibleShops(
@@ -184,7 +207,15 @@ async function handle(request: Request, allowForce: boolean): Promise<NextRespon
     pdfKey,
   });
 
-  return NextResponse.json({ period, force, counts: result.counts });
+  return NextResponse.json({
+    period,
+    force,
+    counts: result.counts,
+    results: result.results.map(publicResult),
+    actionRequired: result.results
+      .filter((r) => r.status === "held" || r.status === "failed")
+      .map(publicResult),
+  });
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
