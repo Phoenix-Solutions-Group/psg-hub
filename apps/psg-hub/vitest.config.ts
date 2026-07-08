@@ -62,6 +62,9 @@ export default defineConfig({
         "src/app/api/unsubscribe/route.ts", // CAN-SPAM unsubscribe
         "src/lib/production/postcard-registry.ts", // PSG-849 Lob postcard geometry registry
         "src/lib/production/postcard-proof.ts", // PSG-849 pdf-lib render proof
+        "src/lib/production/mail-registry.ts", // PSG-868 unified mail geometry (postcard+letter+self-mailer)
+        "src/lib/production/mail-artwork-doc.ts", // PSG-868 versioned artwork JSON doc model + validation
+        "src/lib/production/mail-artwork-asset.ts", // PSG-868 asset DPI/dimension validation
       ],
       // Excluded v0.2-adjacent surfaces (covered elsewhere / not unit-gateable
       // in env=node), with rationale:

@@ -37,6 +37,13 @@ export const OPS_FUNCTIONS = [
   // (private.current_user_has_fn('view_sales_pipeline'), PSG-434 migration).
   // psg_superadmin passes implicitly; a psg_internal user needs this flag granted.
   "view_sales_pipeline",
+  // Mail-Artwork Studio (PSG-868 / parent PSG-847). Gates the /ops mail-artwork
+  // editor surface + /api/ops/mail-artwork/* routes and backs the PSG-only RLS on
+  // public.mail_artwork_designs + the `mail-artwork` storage bucket. Mirrors the
+  // in-DB `private.current_user_has_fn('design_mail_artwork')` policy (PSG-868
+  // migration). psg_superadmin passes implicitly; a psg_internal user needs this
+  // flag granted.
+  "design_mail_artwork",
 ] as const;
 
 export type OpsFunction = (typeof OPS_FUNCTIONS)[number];
