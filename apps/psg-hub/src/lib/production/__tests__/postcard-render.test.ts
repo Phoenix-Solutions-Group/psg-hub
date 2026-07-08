@@ -1,0 +1,112 @@
+import { describe, it, expect } from "vitest";
+import { PDFDocument } from "pdf-lib";
+import {
+  POSTCARD_SIZE_SPECS,
+  renderPostcardPdf,
+  validatePostcardComposition,
+  renderPostcardCanvas,
+  DEFAULT_CLEAR_ZONES,
+  DEFAULT_ADDRESS_ZONES,
+} from "@/lib/production/postcard-render";
+
+function toPts(inches: number): number {
+  return inches * 72;
+}
+
+async function makeTemplate(size: keyof typeof POSTCARD_SIZE_SPECS): Promise<Uint8Array> {
+  const { trimWidthIn, trimHeightIn } = POSTCARD_SIZE_SPECS[size];
+  const template = await PDFDocument.create();
+  const page = template.addPage([toPts(trimWidthIn), toPts(trimHeightIn)]);
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width: 0.1,
+    height: 0.1,
+  });
+  return new Uint8Array(await template.save());
+}
+
+describe("postcard renderer", () => {
+  it("validates a compliant 4x6 design doc with defaults", async () => {
+    const template = await makeTemplate("4x6");
+    const result = validatePostcardComposition({
+      size: "4x6",
+      front: { template: { bytes: template }, elements: [] },
+      back: { template: { bytes: template }, elements: [] },
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.canvas.withBleed).toEqual({ widthIn: 6.25, heightIn: 4.25 });
+    expect(result.canvas.widthPx).toBe(1875);
+    expect(result.canvas.heightPx).toBe(1275);
+  });
+
+  it("rejects non-300 dpi", async () => {
+    const template = await makeTemplate("6x9");
+    const result = validatePostcardComposition({
+      size: "6x9",
+      dpi: 150,
+      front: { template: { bytes: template }, clearZones: DEFAULT_CLEAR_ZONES["6x9"] },
+      back: { template: { bytes: template }, clearZones: DEFAULT_CLEAR_ZONES["6x9"] },
+    });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some((issue) => issue.message.includes("dpi must be 300"))).toBe(true);
+  });
+
+  it("flags clear-zone and address-zone overlap errors", async () => {
+    const template = await makeTemplate("6x11");
+    const result = validatePostcardComposition({
+      size: "6x11",
+      front: {
+        template: { bytes: template },
+        clearZones: [{ x: 0, y: 0, width: 1, height: 1 }],
+        elements: [{ kind: "rect", x: 0.5, y: 0.5, width: 0.4, height: 0.4, fillColor: "#ff0000" }],
+      },
+      back: {
+        template: { bytes: template },
+        addressZones: [{ x: 0, y: 0, width: 1, height: 1 }],
+        elements: [{ kind: "rect", x: 0.5, y: 0.5, width: 0.4, height: 0.4, fillColor: "#000000" }],
+      },
+    });
+
+    const kinds = new Set(result.issues.map((issue) => issue.kind));
+    expect(kinds.has("clear-zone")).toBe(true);
+    expect(kinds.has("address-zone")).toBe(true);
+  });
+
+  it("renders a two-page PDF with bleed sizing", async () => {
+    const template4x6 = await makeTemplate("4x6");
+    const rendered = await renderPostcardPdf({
+      size: "4x6",
+      front: { template: { bytes: template4x6 }, elements: [] },
+      back: {
+        template: { bytes: template4x6 },
+        elements: [{ kind: "line", x1: 1, y1: 1, x2: 2, y2: 2 }],
+      },
+    });
+    const doc = await PDFDocument.load(rendered.bytes);
+    expect(doc.getPageCount()).toBe(2);
+
+    const page = doc.getPage(0);
+    expect(page.getWidth()).toBeCloseTo(toPts(6.25), 5);
+    expect(page.getHeight()).toBeCloseTo(toPts(4.25), 5);
+    expect(rendered.validation.valid).toBe(true);
+  });
+
+  it("rejects template size mismatch at render", async () => {
+    const wrongTemplate = await makeTemplate("6x11");
+    const expected = makeTemplate("4x6");
+    await expect(
+      renderPostcardPdf({
+        size: "4x6",
+        front: { template: { bytes: await expected } },
+        back: { template: { bytes: wrongTemplate } },
+      })
+    ).rejects.toThrow(/Template page size mismatch/);
+  });
+
+  it("computes canvas metadata from helper", () => {
+    expect(renderPostcardCanvas("6x9", 0.125, 300).withBleed).toEqual({ widthIn: 9.25, heightIn: 6.25 });
+    expect(renderPostcardCanvas("4x6", 0.125, 300).widthPx).toBe(1875);
+  });
+});
