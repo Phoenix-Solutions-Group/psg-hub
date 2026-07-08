@@ -16,7 +16,8 @@
  *   - publish is attempted ONLY on the approve path — a reject never publishes;
  *   - only a `pending` row can be decided (a second decision is rejected);
  *   - a publisher failure is captured (status `publish_failed`) without losing
- *     the recorded approval decision.
+ *     the recorded approval decision;
+ *   - a failed publish can be retried without reopening rejected/published rows.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -187,7 +188,8 @@ export interface DecisionArgs {
 
 /**
  * Approve a pending action, then publish it through the registered publisher for
- * its action_type. Publish is attempted ONLY here (never on reject). On publish
+ * its action_type. A `publish_failed` row may call this again to retry the same
+ * approved action. Publish is attempted ONLY here (never on reject). On publish
  * success → `published`; on publisher throw → `publish_failed` (the approval
  * decision is preserved either way); with no registered publisher → `approved`.
  */
@@ -201,16 +203,21 @@ export async function approveApproval(
   }
   const existing = await store.get(args.id);
   if (!existing) throw new ApprovalDecisionError(`approval ${args.id} not found`);
-  const check = validateApprovalDecision(existing.status);
-  if (!check.ok) throw new ApprovalDecisionError(check.reason);
+  const retryingFailedPublish = existing.status === "publish_failed";
+  if (!retryingFailedPublish) {
+    const check = validateApprovalDecision(existing.status);
+    if (!check.ok) throw new ApprovalDecisionError(check.reason);
+  }
 
   // 1. Record the approval decision first, so it survives a publisher failure.
   const approved = await store.update(args.id, {
     status: "approved",
-    decided_by_profile_id: args.actorProfileId,
-    decided_by_name: args.actorName ?? null,
-    decided_at: args.now,
-    decision_notes: args.notes ?? null,
+    decided_by_profile_id: retryingFailedPublish
+      ? existing.decided_by_profile_id
+      : args.actorProfileId,
+    decided_by_name: retryingFailedPublish ? existing.decided_by_name : args.actorName ?? null,
+    decided_at: retryingFailedPublish ? existing.decided_at : args.now,
+    decision_notes: retryingFailedPublish ? existing.decision_notes : args.notes ?? null,
     publish_error: null,
   });
 
