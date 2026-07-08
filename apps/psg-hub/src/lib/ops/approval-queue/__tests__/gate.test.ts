@@ -174,6 +174,45 @@ describe("approveApproval — publish only on approve", () => {
     expect(publish).toHaveBeenCalledTimes(1);
   });
 
+  it("can retry a publish_failed row without changing the saved approval decision", async () => {
+    const { id } = await seedPending(store);
+    const publish = vi.fn()
+      .mockRejectedValueOnce(new Error("GBP API 503"))
+      .mockResolvedValueOnce({ ref: "gbp-123" });
+
+    const failed = await approveApproval(
+      store,
+      {
+        id: id!,
+        actorProfileId: "p1",
+        actorName: "Owner Olivia",
+        notes: "original approval",
+        now: NOW,
+      },
+      { publishers: { gbp_post: publish } }
+    );
+    expect(failed.status).toBe("publish_failed");
+
+    const retried = await approveApproval(
+      store,
+      {
+        id: id!,
+        actorProfileId: "p2",
+        actorName: "Manager Mia",
+        notes: "retry after Google recovered",
+        now: "2026-06-24T12:05:00.000Z",
+      },
+      { publishers: { gbp_post: publish } }
+    );
+
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(retried.status).toBe("published");
+    expect(retried.publish_error).toBeNull();
+    expect(retried.decided_by_profile_id).toBe("p1");
+    expect(retried.decided_by_name).toBe("Owner Olivia");
+    expect(retried.decision_notes).toBe("original approval");
+  });
+
   it("throws on a missing row and on a missing actor", async () => {
     await expect(
       approveApproval(store, { id: "nope", actorProfileId: "p1", now: NOW })
