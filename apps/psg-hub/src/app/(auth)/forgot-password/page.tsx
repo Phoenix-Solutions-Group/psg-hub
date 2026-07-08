@@ -1,7 +1,7 @@
 import { Logo } from "@/components/brand/logo";
-import { LoginForm } from "@/components/auth/login-form";
+import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
@@ -11,27 +11,19 @@ export default function LoginPage() {
             Phoenix Solutions Group
           </p>
           <h1 className="mt-2 font-heading text-3xl font-bold tracking-tight text-foreground">
-            Welcome back
+            Reset your password
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Sign in to your client hub.
+            Get reset instructions for your client hub.
           </p>
         </div>
-        <LoginForm />
-        <div className="mt-6 space-y-2 text-center text-sm text-muted-foreground">
-          <p>
-            No account?{" "}
-            <a href="/signup" className="font-medium text-primary hover:text-ember">
-              Sign up
-            </a>
-          </p>
-          <p>
-            Forgot your password?{" "}
-            <a href="/forgot-password" className="font-medium text-primary hover:text-ember">
-              Reset it
-            </a>
-          </p>
-        </div>
+        <ForgotPasswordForm />
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          Remembered your password?{" "}
+          <a href="/login" className="font-medium text-primary hover:text-ember">
+            Log in
+          </a>
+        </p>
       </div>
     </div>
   );

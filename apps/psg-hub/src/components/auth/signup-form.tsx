@@ -7,18 +7,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { resolveSignupOutcome } from "@/lib/auth/signup-flow";
 
 export function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setMessage(null);
 
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
@@ -33,19 +36,35 @@ export function SignupForm() {
     setLoading(true);
 
     const supabase = createClient();
-    const { error: authError } = await supabase.auth.signUp({
+    const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options:
+        typeof window === "undefined"
+          ? undefined
+          : {
+              emailRedirectTo: `${window.location.origin}/dashboard`,
+            },
     });
 
-    if (authError) {
-      setError(authError.message);
+    const outcome = resolveSignupOutcome({ data, error: authError });
+
+    if (outcome.kind === "error") {
+      setError(outcome.message);
       setLoading(false);
       return;
     }
 
-    router.push("/dashboard");
-    router.refresh();
+    if (outcome.kind === "signed_in") {
+      router.push("/dashboard");
+      router.refresh();
+      return;
+    }
+
+    setMessage(outcome.message);
+    setPassword("");
+    setConfirmPassword("");
+    setLoading(false);
   }
 
   return (
@@ -84,8 +103,21 @@ export function SignupForm() {
               required
             />
           </div>
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          {message && (
+            <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              <p>{message}</p>
+              <p>
+                <a href="/login" className="font-medium text-primary hover:text-ember">
+                  Log in
+                </a>{" "}
+                or{" "}
+                <a href="/forgot-password" className="font-medium text-primary hover:text-ember">
+                  reset your password
+                </a>
+                .
+              </p>
+            </div>
           )}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Creating account..." : "Create account"}
