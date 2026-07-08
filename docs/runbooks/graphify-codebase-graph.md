@@ -1,6 +1,6 @@
 # Graphify — codebase knowledge graph
 
-**Status:** Installed + validated on `psg-hub` (PSG-285, 2026-06-23; re-verified for Ada's BSM rollout in PSG-897 on 2026-07-08). Tool: `graphifyy` CLI (binary name `graphify`), v0.8.45.
+**Status:** Installed + validated on `psg-hub` (PSG-285, 2026-06-23; re-verified for Ada's BSM rollout in PSG-896 on 2026-07-08). Tool: `graphifyy` CLI (binary name `graphify`), v0.9.10.
 
 Graphify turns the repo into a queryable knowledge graph via tree-sitter AST extraction
 (**fully offline — no API keys**). Use it to orient on the codebase and answer
@@ -15,8 +15,7 @@ It produces three artifacts in `graphify-out/` (gitignored — see below):
 | `GRAPH_REPORT.md` | Plain-language architecture report (communities, god nodes). |
 | `graph.html` / `GRAPH_TREE.html` | Interactive force-directed viz / D3 collapsible tree. |
 
-On our tree the code-only graph is **~10.7k nodes / ~16.2k edges / ~700 communities**,
-built in **~18s**.
+On our current tree the code-only graph is **~12.7k nodes / ~21.9k edges / ~762 communities**.
 
 ---
 
@@ -30,7 +29,20 @@ uv tool install graphifyy        # or: pipx install graphifyy  /  pip install gr
 graphify --version
 ```
 
-**This Paperclip sandbox (no `uv`/`pipx`/system `pip`):** bootstrap pip into a venv first.
+**PSG agent environments — persistent path:** use the shared company Codex-home virtual
+environment so fresh Ada/Ravi/Nora/Tess sessions can reuse one install instead of rebuilding
+from `/tmp` every time.
+```bash
+GRAPHIFY_VENV=/paperclip/instances/default/companies/a38dde7c-f8ee-4901-804d-bf1d6887dbf0/codex-home/tools/graphify-venv
+python3 -m venv --without-pip "$GRAPHIFY_VENV"
+curl -sSL https://bootstrap.pypa.io/get-pip.py | "$GRAPHIFY_VENV/bin/python" -
+"$GRAPHIFY_VENV/bin/pip" install --upgrade graphifyy
+"$GRAPHIFY_VENV/bin/graphify" --version
+```
+If `graphify` is not on `PATH`, call the binary by full path:
+`/paperclip/instances/default/companies/a38dde7c-f8ee-4901-804d-bf1d6887dbf0/codex-home/tools/graphify-venv/bin/graphify`.
+
+**Fallback Paperclip sandbox path (not persistent):** bootstrap pip into a venv first.
 ```bash
 python3 -m venv --without-pip /tmp/graphify-venv
 curl -sSL https://bootstrap.pypa.io/get-pip.py | /tmp/graphify-venv/bin/python -
@@ -38,8 +50,8 @@ curl -sSL https://bootstrap.pypa.io/get-pip.py | /tmp/graphify-venv/bin/python -
 # then call the binary by full path:
 /tmp/graphify-venv/bin/graphify --version
 ```
-> ⚠️ The sandbox venv lives in `/tmp` and is **not persistent** across environments/CI.
-> Each fresh environment must reinstall (and rebuild the graph). See "Operational notes".
+> ⚠️ The `/tmp` sandbox venv is **not persistent** across environments/CI. Prefer the PSG
+> agent environment path above when working as Ada, Ravi, Nora, or Tess.
 
 **Register the Claude Code skill** (so `/graphify` is available; writes to the gitignored
 `.claude/`, so it is local per-environment, not shared via git):
@@ -56,10 +68,15 @@ We intentionally do **not** use the bare `graphify claude install` variant — i
 ```bash
 graphify update .          # AST re-extract + cluster + report + html. No LLM, no API key.
 ```
-Run this after meaningful code changes to keep the graph current (~18s). `graphify update .`
+Run this before broad repo-reading and after meaningful code changes to keep the graph current
+(~18s). `graphify update .`
 is the offline code-only path; it is what we validated. (The `/graphify .` skill flow can
 additionally pull docs/PDFs/images into the graph, but that uses the host agent as the LLM
 and is optional — code extraction alone covers our needs.)
+
+For BSM agents, document/image ingestion stays off unless Steve separately approves it. Do not
+send customer files, customer documents, images, screenshots, or production data through
+Graphify ingestion; use local source-code graphing only.
 
 The HTML viz has a 5000-node default cap; our graph exceeds it, so generate the viz with:
 ```bash
