@@ -59,11 +59,21 @@ describe("runMonthlyReports", () => {
   });
 
   it("holds (no store/render/email) when the narrative did not pass the gate", async () => {
-    const holdOutcome: GenerateOutcome = { verdict: "hold", narrative: null, source: "hold", violations: [] };
+    const holdOutcome: GenerateOutcome = {
+      verdict: "hold",
+      narrative: null,
+      source: "hold",
+      violations: [{ code: "schema", detail: "no linked sources to report" }],
+    };
     const deps = makeDeps({ generateNarrative: vi.fn(async () => holdOutcome) });
     const res = await runMonthlyReports(PERIOD, deps);
 
     expect(res.counts.held).toBe(1);
+    expect(res.results[0]).toMatchObject({
+      shop: shopA,
+      status: "held",
+      reason: "schema: no linked sources to report",
+    });
     expect(deps.storeReportNarrative).not.toHaveBeenCalled();
     expect(deps.renderReportPdf).not.toHaveBeenCalled();
     expect(deps.sendEmail).not.toHaveBeenCalled();

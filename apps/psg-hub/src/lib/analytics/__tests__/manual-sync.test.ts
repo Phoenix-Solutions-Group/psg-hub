@@ -192,7 +192,8 @@ describe("runManualSync — monthly", () => {
         {
           shop: { id: "shop-1", name: "Wallace Collision", ownerEmail: "owner@example.com" },
           status: "failed" as const,
-          error: "render worker responded 500",
+          error:
+            "render worker responded 500 for owner@example.com at https://render.example.com/api?api_token=SECRET123&shop=1234567890",
         },
       ],
     }));
@@ -212,11 +213,14 @@ describe("runManualSync — monthly", () => {
           {
             shop: "Wallace Collision",
             status: "failed",
-            error: "render worker responded 500",
+            error: "render worker responded 500 for [REDACTED_EMAIL] at [url]",
           },
         ],
       },
     });
+    expect(JSON.stringify(res)).not.toContain("owner@example.com");
+    expect(JSON.stringify(res)).not.toContain("SECRET123");
+    expect(JSON.stringify(res)).not.toContain("1234567890");
   });
 
   it("surfaces a held monthly report as an action-needed error", async () => {
@@ -227,6 +231,7 @@ describe("runManualSync — monthly", () => {
         {
           shop: { id: "shop-1", name: "Wallace Collision", ownerEmail: "owner@example.com" },
           status: "held" as const,
+          reason: "schema: no linked sources to report",
         },
       ],
     }));
@@ -237,6 +242,15 @@ describe("runManualSync — monthly", () => {
       status: "error",
       rows_written: 0,
       error: "1 report held for review",
+      detail: {
+        results: [
+          {
+            shop: "Wallace Collision",
+            status: "held",
+            reason: "schema: no linked sources to report",
+          },
+        ],
+      },
     });
   });
 

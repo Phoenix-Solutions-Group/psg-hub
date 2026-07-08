@@ -13,6 +13,7 @@ export type RenderHttpResponse = {
   ok: boolean;
   status: number;
   arrayBuffer(): Promise<ArrayBuffer>;
+  text?(): Promise<string>;
 };
 
 export type RenderHttpPost = (
@@ -70,7 +71,10 @@ export async function renderReportPdf(
         body: JSON.stringify({ url: printUrl }),
       });
       if (!res.ok) {
-        throw new Error(`render worker responded ${res.status}`);
+        const detail = res.text ? (await res.text()).trim().slice(0, 500) : "";
+        throw new Error(
+          `render worker responded ${res.status}${detail ? `: ${detail}` : ""}`
+        );
       }
       return new Uint8Array(await res.arrayBuffer());
     }, deps.retry)

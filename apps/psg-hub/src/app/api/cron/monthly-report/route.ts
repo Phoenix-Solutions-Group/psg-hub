@@ -38,9 +38,15 @@ async function handle(request: Request, allowForce: boolean): Promise<NextRespon
 
   const service = createServiceClient();
   const force = allowForce && new URL(request.url).searchParams.get("force") === "1";
-  const { period, counts } = await runMonthlyReportPipeline(service, { force });
+  const { period, counts, publicResults, actionRequired } = await runMonthlyReportPipeline(service, { force });
 
-  return NextResponse.json({ period, force, counts });
+  return NextResponse.json({
+    period,
+    force,
+    counts,
+    results: publicResults,
+    actionRequired,
+  });
 }
 
 export async function GET(request: Request): Promise<NextResponse> {

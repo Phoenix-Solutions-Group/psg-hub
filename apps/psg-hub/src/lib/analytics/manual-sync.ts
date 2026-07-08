@@ -4,6 +4,7 @@ import { psiConfigured } from "@/lib/perf/psi";
 import type { PerformanceSyncOptions } from "@/lib/perf/perf-sync";
 import type { MonthlyCounts, PerShopResult } from "@/lib/report/monthly";
 import { reportPipelineConfigured } from "@/lib/report/run-cron";
+import { sanitizeLastError } from "@/lib/google-ads/sanitize";
 
 // PSG-645: on-demand analytics sync / monthly-report generation, driven by the
 // superadmin "Sync now" button in /ops. This module dispatches to the EXACT SAME sync
@@ -197,7 +198,8 @@ function describeMonthlyReportOutcome(
       shop: r.shop.name,
       status: r.status,
       source: r.source,
-      error: r.error,
+      reason: r.reason ? publicMonthlyReason(r.reason) : undefined,
+      error: r.error ? publicMonthlyReason(r.error) : undefined,
     }));
   }
 
@@ -226,6 +228,12 @@ function describeMonthlyReportOutcome(
   }
 
   return { status: "success", detail };
+}
+
+function publicMonthlyReason(raw: string): string {
+  return sanitizeLastError(raw)
+    .replace(/https?:\/\/\S+/gi, "[url]")
+    .replace(/api_token=[^&\s"']*/gi, "api_token=[redacted]") || "no reason reported";
 }
 
 /**

@@ -8,6 +8,7 @@ import { storeReportPdf, storeReportNarrative, pdfKey } from "@/lib/report/stora
 import { buildReportEmail } from "@/lib/report/email";
 import { sendEmail } from "@/lib/mail/sendgrid";
 import { priorMonth, monthWindow } from "@/lib/analytics/rollup";
+import { sanitizeLastError } from "@/lib/google-ads/sanitize";
 import {
   runMonthlyReports,
   type MonthlyShop,
@@ -23,6 +24,33 @@ import {
 // This module is auth-agnostic: it assumes the caller has already authorized the run.
 
 const MONTHLY = "monthly_reports";
+
+export type PublicMonthlyReportResult = {
+  shopId: string;
+  shopName: string;
+  status: PerShopResult["status"];
+  source?: PerShopResult["source"];
+  reason?: string;
+  error?: string;
+};
+
+function publicReason(raw: string | null | undefined): string {
+  const redacted = sanitizeLastError(raw)
+    .replace(/https?:\/\/\S+/gi, "[url]")
+    .replace(/api_token=[^&\s"']*/gi, "api_token=[redacted]");
+  return redacted || "no reason reported";
+}
+
+function publicResult(result: PerShopResult): PublicMonthlyReportResult {
+  return {
+    shopId: result.shop.id,
+    shopName: result.shop.name,
+    status: result.status,
+    ...(result.source ? { source: result.source } : {}),
+    ...(result.reason ? { reason: publicReason(result.reason) } : {}),
+    ...(result.error ? { error: publicReason(result.error) } : {}),
+  };
+}
 
 /**
  * The report pipeline's outward dependencies (headless render worker + SendGrid +
@@ -152,7 +180,12 @@ export type MonthlyReportRunResult = {
   period: string;
   force: boolean;
   counts: MonthlyCounts;
+  /** Raw internal results. Do not serialize directly to operators; includes ownerEmail. */
   results: PerShopResult[];
+  /** Sanitized results safe for API responses and admin display. */
+  publicResults: PublicMonthlyReportResult[];
+  /** Sanitized held/failed subset that needs operator attention. */
+  actionRequired: PublicMonthlyReportResult[];
 };
 
 /**
@@ -193,5 +226,13 @@ export async function runMonthlyReportPipeline(
     pdfKey,
   });
 
-  return { period, force, counts: result.counts, results: result.results };
+  const publicResults = result.results.map(publicResult);
+  return {
+    period,
+    force,
+    counts: result.counts,
+    results: result.results,
+    publicResults,
+    actionRequired: publicResults.filter((r) => r.status === "held" || r.status === "failed"),
+  };
 }

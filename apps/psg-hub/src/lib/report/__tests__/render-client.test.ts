@@ -15,8 +15,13 @@ function pdfResponse(bytes = [37, 80, 68, 70]): RenderHttpResponse {
     arrayBuffer: async () => new Uint8Array(bytes).buffer,
   };
 }
-function errorResponse(status = 500): RenderHttpResponse {
-  return { ok: false, status, arrayBuffer: async () => new ArrayBuffer(0) };
+function errorResponse(status = 500, body = ""): RenderHttpResponse {
+  return {
+    ok: false,
+    status,
+    arrayBuffer: async () => new ArrayBuffer(0),
+    text: async () => body,
+  };
 }
 
 beforeEach(() => {
@@ -56,12 +61,12 @@ describe("renderReportPdf", () => {
   });
 
   it("trips the circuit breaker after repeated failure", async () => {
-    const httpPost = vi.fn(async () => errorResponse(500));
+    const httpPost = vi.fn(async () => errorResponse(500, "render failed: page crashed"));
     const breaker = new CircuitBreaker({ failureThreshold: 1 });
     // first call: retries exhausted -> throws, breaker records the failure and opens
     await expect(
       renderReportPdf(SLUG, { httpPost, breaker, retry: { retries: 0 } })
-    ).rejects.toThrow(/render worker responded 500/);
+    ).rejects.toThrow(/render worker responded 500: render failed: page crashed/);
     // second call: breaker is open -> fails fast without calling the transport
     httpPost.mockClear();
     await expect(
