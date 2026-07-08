@@ -1,6 +1,6 @@
 # Graphify — codebase knowledge graph
 
-**Status:** Installed + validated on `psg-hub` (PSG-285, 2026-06-23). Tool: `graphifyy` CLI (binary name `graphify`), v0.8.45.
+**Status:** Installed + validated on `psg-hub` (PSG-285, 2026-06-23; re-verified for Ada's BSM rollout in PSG-897 on 2026-07-08). Tool: `graphifyy` CLI (binary name `graphify`), v0.8.45.
 
 Graphify turns the repo into a queryable knowledge graph via tree-sitter AST extraction
 (**fully offline — no API keys**). Use it to orient on the codebase and answer
@@ -79,6 +79,27 @@ graphify affected "householdKey"                # reverse traversal: what breaks
 All read `graphify-out/graph.json` by default. Example verified on our tree:
 `graphify explain "isSuppressed"` → `apps/psg-hub/src/lib/ops/mail/suppression.ts:154`
 with correct `calls`/`imports` edges.
+
+---
+
+## BSM agent rollout rule
+
+Ada, Ravi, Nora, and Tess must use Graphify before broad BSM repo reading when the task involves code navigation, dependency tracing, impact analysis, or finding existing patterns. No BSM senior engineering or QA agent is excluded.
+
+Use Graphify first, then open the targeted files it identifies. This keeps BSM agents from spending large context windows rereading unrelated repo areas.
+
+Current Paperclip sandbox note: `graphify` may not be on the normal PATH. In that case, run the CLI by full path:
+
+```bash
+/tmp/graphify-venv/bin/graphify explain "isSuppressed"
+/tmp/graphify-venv/bin/graphify query "how does mail suppression skip a recipient" --budget 1500
+```
+
+PSG-897 verification on 2026-07-08:
+
+- `/tmp/graphify-venv/bin/graphify --version` returned `graphify 0.8.45`.
+- `/tmp/graphify-venv/bin/graphify explain "isSuppressed"` returned `apps/psg-hub/src/lib/ops/mail/suppression.ts L154` with call/import relationships.
+- `node scripts/measure-graphify-token-savings.mjs isSuppressed` estimated 322 graph-context tokens versus 4,441 raw-file tokens, a 92.7% reduction for that lookup.
 
 ---
 
