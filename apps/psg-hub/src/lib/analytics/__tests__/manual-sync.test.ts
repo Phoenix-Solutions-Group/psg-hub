@@ -59,7 +59,7 @@ function makeDeps(
     },
     runMonthlyReport: async () => {
       order.push("monthly-report");
-      return { period: "2026-06", counts: { sent: 3, skipped: 1, held: 0, failed: 0 } };
+      return { period: "2026-06", counts: { sent: 3, skipped: 1, held: 0, failed: 0 }, results: [] };
     },
     env,
     nowMonth: "2026-07",
@@ -160,6 +160,7 @@ describe("runManualSync — monthly", () => {
     const report = vi.fn(async () => ({
       period: "2026-07",
       counts: { sent: 1, skipped: 0, held: 0, failed: 0 },
+      results: [],
     }));
     const { deps } = makeDeps(FULL_ENV, { runMonthlyReport: report });
     const res = await runManualSync(
@@ -180,6 +181,83 @@ describe("runManualSync — monthly", () => {
     expect(res.results.find((r) => r.source === "monthly-report")).toMatchObject({
       status: "skipped",
       error: "not_configured",
+    });
+  });
+
+  it("surfaces a monthly-report per-shop failure instead of hiding it behind 0 rows", async () => {
+    const report = vi.fn(async () => ({
+      period: "2026-06",
+      counts: { sent: 0, skipped: 0, held: 0, failed: 1 },
+      results: [
+        {
+          shop: { id: "shop-1", name: "Wallace Collision", ownerEmail: "owner@example.com" },
+          status: "failed" as const,
+          error: "render worker responded 500",
+        },
+      ],
+    }));
+    const { deps } = makeDeps(FULL_ENV, { runMonthlyReport: report });
+    const res = await runManualSync(SERVICE, { cadence: "monthly" }, deps);
+
+    expect(res.results.find((r) => r.source === "monthly-report")).toMatchObject({
+      status: "error",
+      rows_written: 0,
+      error: "1 report failed",
+      detail: {
+        sent: 0,
+        skipped: 0,
+        held: 0,
+        failed: 1,
+        results: [
+          {
+            shop: "Wallace Collision",
+            status: "failed",
+            error: "render worker responded 500",
+          },
+        ],
+      },
+    });
+  });
+
+  it("surfaces a held monthly report as an action-needed error", async () => {
+    const report = vi.fn(async () => ({
+      period: "2026-06",
+      counts: { sent: 0, skipped: 0, held: 1, failed: 0 },
+      results: [
+        {
+          shop: { id: "shop-1", name: "Wallace Collision", ownerEmail: "owner@example.com" },
+          status: "held" as const,
+        },
+      ],
+    }));
+    const { deps } = makeDeps(FULL_ENV, { runMonthlyReport: report });
+    const res = await runManualSync(SERVICE, { cadence: "monthly" }, deps);
+
+    expect(res.results.find((r) => r.source === "monthly-report")).toMatchObject({
+      status: "error",
+      rows_written: 0,
+      error: "1 report held for review",
+    });
+  });
+
+  it("surfaces a fully skipped monthly report distinctly from success", async () => {
+    const report = vi.fn(async () => ({
+      period: "2026-06",
+      counts: { sent: 0, skipped: 1, held: 0, failed: 0 },
+      results: [
+        {
+          shop: { id: "shop-1", name: "Wallace Collision", ownerEmail: "owner@example.com" },
+          status: "skipped" as const,
+        },
+      ],
+    }));
+    const { deps } = makeDeps(FULL_ENV, { runMonthlyReport: report });
+    const res = await runManualSync(SERVICE, { cadence: "monthly" }, deps);
+
+    expect(res.results.find((r) => r.source === "monthly-report")).toMatchObject({
+      status: "skipped",
+      rows_written: 0,
+      error: "1 report skipped",
     });
   });
 

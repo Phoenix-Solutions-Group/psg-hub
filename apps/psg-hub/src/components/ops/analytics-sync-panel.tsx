@@ -52,6 +52,17 @@ function summarize(res: SyncResponse): string {
   return parts.join(" · ");
 }
 
+function detailSummary(detail?: Record<string, unknown>): string | null {
+  if (!detail) return null;
+  const parts = ["sent", "skipped", "held", "failed"]
+    .map((key) => {
+      const value = detail[key];
+      return typeof value === "number" ? `${key}: ${value}` : null;
+    })
+    .filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 export function AnalyticsSyncPanel() {
   const [running, setRunning] = useState<string | null>(null);
   const [result, setResult] = useState<SyncResponse | null>(null);
@@ -159,18 +170,21 @@ export function AnalyticsSyncPanel() {
             <span className="text-xs text-muted-foreground">{summarize(result)}</span>
           </div>
           <ul className="mt-3 space-y-1.5 text-sm">
-            {result.results.map((r) => (
-              <li key={r.source} className="flex items-center justify-between gap-4">
-                <span className="font-mono text-xs">{r.source}</span>
-                <span className={STATUS_STYLES[r.status]}>
-                  {r.status === "success"
-                    ? `${r.rows_written} rows`
-                    : r.status === "skipped"
-                      ? `skipped (${r.error ?? "not run"})`
-                      : `error: ${r.error ?? "unknown"}`}
-                </span>
-              </li>
-            ))}
+            {result.results.map((r) => {
+              const detail = detailSummary(r.detail);
+              return (
+                <li key={r.source} className="flex items-center justify-between gap-4">
+                  <span className="font-mono text-xs">{r.source}</span>
+                  <span className={`text-right ${STATUS_STYLES[r.status]}`}>
+                    {r.status === "success"
+                      ? `${r.rows_written} rows${detail ? ` (${detail})` : ""}`
+                      : r.status === "skipped"
+                        ? `skipped (${r.error ?? "not run"}${detail ? `; ${detail}` : ""})`
+                        : `error: ${r.error ?? "unknown"}${detail ? ` (${detail})` : ""}`}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

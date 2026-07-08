@@ -8,7 +8,12 @@ import { storeReportPdf, storeReportNarrative, pdfKey } from "@/lib/report/stora
 import { buildReportEmail } from "@/lib/report/email";
 import { sendEmail } from "@/lib/mail/sendgrid";
 import { priorMonth, monthWindow } from "@/lib/analytics/rollup";
-import { runMonthlyReports, type MonthlyShop, type MonthlyCounts } from "@/lib/report/monthly";
+import {
+  runMonthlyReports,
+  type MonthlyShop,
+  type MonthlyCounts,
+  type PerShopResult,
+} from "@/lib/report/monthly";
 
 // PSG-645: the monthly-report pipeline wiring, extracted verbatim from
 // src/app/api/cron/monthly-report/route.ts so BOTH the Vercel cron and the
@@ -147,6 +152,7 @@ export type MonthlyReportRunResult = {
   period: string;
   force: boolean;
   counts: MonthlyCounts;
+  results: PerShopResult[];
 };
 
 /**
@@ -187,5 +193,5 @@ export async function runMonthlyReportPipeline(
     pdfKey,
   });
 
-  return { period, force, counts: result.counts };
+  return { period, force, counts: result.counts, results: result.results };
 }

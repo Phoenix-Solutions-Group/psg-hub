@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { priorMonth } from "@/lib/analytics/rollup";
 import { psiConfigured } from "@/lib/perf/psi";
 import type { PerformanceSyncOptions } from "@/lib/perf/perf-sync";
-import type { MonthlyCounts } from "@/lib/report/monthly";
+import type { MonthlyCounts, PerShopResult } from "@/lib/report/monthly";
 import { reportPipelineConfigured } from "@/lib/report/run-cron";
 
 // PSG-645: on-demand analytics sync / monthly-report generation, driven by the
@@ -89,7 +89,7 @@ export type ManualSyncDeps = {
   runMonthlyReport: (
     svc: SupabaseClient,
     opts: { force?: boolean; period?: string }
-  ) => Promise<{ period: string; counts: MonthlyCounts }>;
+  ) => Promise<{ period: string; counts: MonthlyCounts; results?: PerShopResult[] }>;
   /** Env source for the config gates (overridable in tests). */
   env: NodeJS.ProcessEnv;
   /** Current month YYYY-MM (overridable in tests); the monthly steps target its prior month. */
@@ -187,6 +187,47 @@ function runDailySource(
   }
 }
 
+function describeMonthlyReportOutcome(
+  counts: MonthlyCounts,
+  results: PerShopResult[] = []
+): Pick<SourceOutcome, "status" | "error" | "detail"> {
+  const detail: Record<string, unknown> = { ...counts };
+  if (results.length > 0) {
+    detail.results = results.map((r) => ({
+      shop: r.shop.name,
+      status: r.status,
+      source: r.source,
+      error: r.error,
+    }));
+  }
+
+  if (counts.failed > 0) {
+    return {
+      status: "error",
+      error: `${counts.failed} report${counts.failed === 1 ? "" : "s"} failed`,
+      detail,
+    };
+  }
+
+  if (counts.held > 0) {
+    return {
+      status: "error",
+      error: `${counts.held} report${counts.held === 1 ? "" : "s"} held for review`,
+      detail,
+    };
+  }
+
+  if (counts.sent === 0 && counts.skipped > 0) {
+    return {
+      status: "skipped",
+      error: `${counts.skipped} report${counts.skipped === 1 ? "" : "s"} skipped`,
+      detail,
+    };
+  }
+
+  return { status: "success", detail };
+}
+
 /**
  * Run an on-demand sync. Steps run SEQUENTIALLY (each hits external Google/SEMrush APIs
  * and can take many seconds; sequential keeps us under the invocation ceiling and avoids
@@ -240,15 +281,17 @@ export async function runManualSync(
     });
   } else {
     try {
-      const { counts } = await deps.runMonthlyReport(service, {
+      const { counts, results: reportResults } = await deps.runMonthlyReport(service, {
         force: request.force,
         period: month,
       });
+      const outcome = describeMonthlyReportOutcome(counts, reportResults);
       results.push({
         source: "monthly-report",
-        status: "success",
+        status: outcome.status,
         rows_written: counts.sent,
-        detail: { ...counts },
+        error: outcome.error,
+        detail: outcome.detail,
       });
     } catch (err) {
       results.push({
