@@ -15,12 +15,29 @@ const narrative: ReportNarrative = {
   recommendations: ["r"],
 };
 const passOutcome: GenerateOutcome = { verdict: "pass", narrative, source: "model", violations: [] };
+const reportData: ReportData = {
+  shopId: shopA.id,
+  periodMonth: PERIOD,
+  window: { start: "2026-05-01", end: "2026-05-31" },
+  sources: {
+    ga4: {
+      source: "ga4",
+      current: { sessions: 100 },
+      prior: null,
+      momDelta: { sessions: null },
+      trend: { sessions: [] },
+    },
+  },
+  linkedSources: ["ga4"],
+  sourcesWithPriorMonth: [],
+  generatedAt: "2026-06-01T00:00:00Z",
+};
 
 /** Build deps with an injected call-order log + per-test overrides. */
 function makeDeps(over: Partial<MonthlyDeps> = {}, order: string[] = []): MonthlyDeps {
   return {
     listShops: vi.fn(async () => [shopA]),
-    assembleReportData: vi.fn(async () => ({} as ReportData)),
+    assembleReportData: vi.fn(async () => reportData),
     generateNarrative: vi.fn(async () => passOutcome),
     storeReportNarrative: vi.fn(async () => { order.push("storeNarrative"); }),
     renderReportPdf: vi.fn(async () => { order.push("render"); return new Uint8Array([1]); }),
@@ -75,6 +92,27 @@ describe("runMonthlyReports", () => {
       reason: "schema: no linked sources to report",
     });
     expect(deps.storeReportNarrative).not.toHaveBeenCalled();
+    expect(deps.renderReportPdf).not.toHaveBeenCalled();
+    expect(deps.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("skips shops with no linked sources before narrative generation", async () => {
+    const emptyReportData: ReportData = {
+      ...reportData,
+      sources: {},
+      linkedSources: [],
+      sourcesWithPriorMonth: [],
+    };
+    const deps = makeDeps({ assembleReportData: vi.fn(async () => emptyReportData) });
+    const res = await runMonthlyReports(PERIOD, deps);
+
+    expect(res.counts).toEqual({ sent: 0, skipped: 1, held: 0, failed: 0 });
+    expect(res.results[0]).toMatchObject({
+      shop: shopA,
+      status: "skipped",
+      reason: "no linked sources to report",
+    });
+    expect(deps.generateNarrative).not.toHaveBeenCalled();
     expect(deps.renderReportPdf).not.toHaveBeenCalled();
     expect(deps.sendEmail).not.toHaveBeenCalled();
   });
