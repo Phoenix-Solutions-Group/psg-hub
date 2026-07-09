@@ -79,7 +79,7 @@ export function renderBriefingHtml(markdown: string, base?: string): string {
     const items = list.items
       .map(
         (item) =>
-          `<li style="margin:0 0 10px;font-size:15px;line-height:1.6;color:#33404A;padding-left:4px;">${item}</li>`,
+          `<li style="margin:0 0 10px;font-size:15px;line-height:1.6;color:#4B5058;padding-left:4px;">${item}</li>`,
       )
       .join("");
     parts.push(`<${tag} style="margin:4px 0 18px;padding-left:22px;">${items}</${tag}>`);
@@ -95,7 +95,7 @@ export function renderBriefingHtml(markdown: string, base?: string): string {
         `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 18px;"><tr><td style="background:${EMBER_SOFT};border-left:4px solid ${EMBER};border-radius:6px;padding:14px 18px;font-size:15px;line-height:1.6;color:${INK};">${body}</td></tr></table>`,
       );
     } else {
-      parts.push(`<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#33404A;">${body}</p>`);
+      parts.push(`<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#4B5058;">${body}</p>`);
     }
     paragraph = [];
   };
@@ -140,7 +140,7 @@ export function renderBriefingHtml(markdown: string, base?: string): string {
         );
       } else if (level === 2) {
         parts.push(
-          `<h2 style="margin:30px 0 14px;padding-top:18px;border-top:1px solid ${STONE};font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:${EMBER};font-weight:700;">${renderInline(escapeHtml(heading[2]), base)}</h2>`,
+          `<h2 style="margin:30px 0 14px;padding-top:18px;border-top:1px solid ${STONE};font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:${EMBER};font-weight:700;">${renderInline(escapeHtml(heading[2]), base)}</h2>`,
         );
       } else {
         parts.push(
@@ -205,7 +205,7 @@ export function wrapBriefingEmail(options: {
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your daily Phoenix Solutions Group board briefing: the numbers, the risks, and what needs your call.</div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAPER};">
       <tr><td align="center" style="padding:28px 16px;">
-        <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#FFFFFF;border:1px solid ${STONE};border-radius:12px;overflow:hidden;">
+        <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#FFFFFF;border:1px solid ${STONE};border-radius:10px;overflow:hidden;">
           <tr><td style="background:${MIDNIGHT};padding:26px 32px 22px;border-bottom:3px solid ${EMBER};">
             <p style="margin:0 0 6px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#8FA1B2;font-weight:700;">Phoenix Solutions Group</p>
             <h1 style="margin:0;font-size:22px;line-height:1.3;color:#FFFFFF;font-weight:700;">${escapeHtml(subject)}</h1>
