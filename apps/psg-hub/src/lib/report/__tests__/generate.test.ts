@@ -67,6 +67,22 @@ describe("generateNarrative", () => {
     expect(evaluateReport(out.narrative!, reportData()).verdict).toBe("pass");
   });
 
+  it("falls back to the deterministic template when the writer provider is unavailable", async () => {
+    const out = await generateNarrative(reportData(), {
+      generate: async () => {
+        throw new Error("Bring Your Own Key (BYOK) is available only with paid credits");
+      },
+    });
+
+    expect(out.verdict).toBe("pass");
+    expect(out.source).toBe("template");
+    expect(out.violations[0]).toMatchObject({
+      code: "schema",
+      detail: expect.stringContaining("writer unavailable"),
+    });
+    expect(evaluateReport(out.narrative!, reportData()).verdict).toBe("pass");
+  });
+
   it("holds for human when there are no linked sources", async () => {
     const empty: ReportData = {
       ...reportData(),
