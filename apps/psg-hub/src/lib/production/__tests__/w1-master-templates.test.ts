@@ -133,6 +133,9 @@ describe("W1 Piece 1 — Thank-You + ACRB survey (Faithful Letter)", () => {
 
   it("keeps the envelope warranty teaser behind the warranty gate", () => {
     const withWarranty = renderMailContent(defaultTemplate("envelope"), ABC);
+    expect(withWarranty.file).toContain("block:masthead");
+    expect(withWarranty.file).toContain("block:address");
+    expect(withWarranty.file).toContain("block:signature");
     expect(withWarranty.file).toContain("Your repair warranty is enclosed.");
     expect(withWarranty.missing).toEqual([]);
 
@@ -191,6 +194,40 @@ describe("W1 Piece 1 — Thank-You + ACRB survey (Faithful Letter)", () => {
     });
     expect(out.file).toContain("A&amp;B &lt;Body&gt; &quot;Shop&quot;");
     expect(out.file).not.toContain("<Body>");
+  });
+});
+
+describe("W1 warranty + envelope cover-note defaults", () => {
+  it("renders the warranty on the master letterhead with PS105 footer", () => {
+    const out = renderMailContent(defaultTemplate("warranty"), ABC);
+    expect(out.missing).toEqual([]);
+    expect(out.file).toContain("block:masthead");
+    expect(out.file).toContain("block:address");
+    expect(out.file).toContain("block:signature");
+    expect(out.file).toContain("block:footer");
+    expect(out.file).toContain("Your workmanship warranty");
+    expect(out.file).toContain("repaired on 2026-06-10");
+    expect(out.file).toContain("PS105");
+    expect(out.file).toContain("Steve Smith");
+  });
+
+  it("keeps warrantyTerm fail-closed on the warranty letter", () => {
+    const out = renderMailContent(defaultTemplate("warranty"), {
+      ...ABC,
+      program: { ...ABC.program, warrantyTerm: undefined },
+    });
+    expect(out.missing).toContain("program.warrantyTerm");
+    expect(out.file).not.toContain("for as long as you own the vehicle");
+  });
+
+  it("treats envelope as a master-letter cover note for now", () => {
+    const tpl = defaultTemplate("envelope");
+    expect(tpl.pieceType).toBe("letter");
+    expect(tpl.color).toBe(true);
+    expect(tpl.bodyHtml).toContain("block:masthead");
+    expect(tpl.bodyHtml).toContain("block:address");
+    expect(tpl.bodyHtml).toContain("block:signature");
+    expect(tpl.bodyHtml).not.toContain("return-address");
   });
 });
 

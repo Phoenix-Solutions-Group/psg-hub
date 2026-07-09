@@ -621,14 +621,19 @@ function masterSignature(signoff: string, extra = ""): string {
 }
 
 /** `footer` block — real tri-part convention: piece code · tagline · job number. */
-const MASTER_FOOTER =
+function masterFooter(pieceCode = "{{program.pieceCode}}"): string {
+  return (
   `<!-- block:footer -->` +
   `<div class="footer">` +
-  `<span class="code">{{program.pieceCode}}</span>` +
+  `<span class="code">${pieceCode}</span>` +
   `<span class="tagline">{{program.tagline}}</span>` +
   `<span class="job">{{program.jobNumber}}</span>` +
   `</div>` +
-  `<!-- /block:footer -->`;
+    `<!-- /block:footer -->`
+  );
+}
+
+const MASTER_FOOTER = masterFooter();
 
 const SELF_MAILER_DEFAULT_SIZE = "8.5x11";
 
@@ -689,10 +694,15 @@ export const DEFAULT_TEMPLATES: Record<MailProduct, MailTemplate> = {
     product: "warranty",
     pieceType: "letter",
     color: true,
-    bodyHtml: letterDoc(
-      `<div class="masthead">{{company.name}}</div>` +
-        `<div class="recipient">{{customer.fullName}}</div>` +
-        `<p class="greeting">Dear {{customer.firstName}},</p>` +
+    bodyHtml: masterLetterDoc(
+      MASTER_MASTHEAD +
+        MASTER_DATE_ADDRESS +
+        `<p class="salutation">Dear {{customer.firstName}},</p>` +
+        `<!-- block:headline -->` +
+        `<div class="headline">Your workmanship warranty</div>` +
+        `<!-- /block:headline -->` +
+        `<!-- block:body -->` +
+        `<div class="body">` +
         `<p>Thank you again for trusting {{company.name}} with your {{customer.vehicle}}. This letter confirms ` +
         `the written workmanship warranty on that repair.</p>` +
         `<p>Your {{customer.vehicle}}, repaired on {{customer.serviceDate}}, is covered by our written ` +
@@ -700,18 +710,29 @@ export const DEFAULT_TEMPLATES: Record<MailProduct, MailTemplate> = {
         `{{program.warrantyTerm}}.</p>` +
         `<p>If you notice any issue related to our work, contact us at {{company.phone}} and we will ` +
         `schedule an inspection at no charge to you.</p>` +
-        `<p class="signoff">Sincerely,<br /><span class="company">{{company.name}}</span></p>` +
-        `<p class="contact">{{program.footer}} {{company.websiteUrl}} &middot; {{company.email}}</p>`
+        `</div>` +
+        `<!-- /block:body -->` +
+        masterSignature("Sincerely,") +
+        masterFooter("PS105")
     ),
   },
   envelope: {
     product: "envelope",
     pieceType: "letter",
-    color: false,
-    bodyHtml: letterDoc(
-      `<div class="masthead">{{company.name}}</div>` +
-        `<p>{{customer.fullName}}</p>` +
-        `{{#if program.hasWarranty}}<div class="teaser">Your repair warranty is enclosed.</div>{{/if}}`
+    color: true,
+    bodyHtml: masterLetterDoc(
+      MASTER_MASTHEAD +
+        MASTER_DATE_ADDRESS +
+        `<p class="salutation">Dear {{customer.firstName}},</p>` +
+        `<!-- block:body -->` +
+        `<div class="body">` +
+        `<p>Thank you again for choosing {{company.name}}. We appreciate the trust you placed in us ` +
+        `to care for your {{customer.vehicle}}.</p>` +
+        `{{#if program.hasWarranty}}<p>Your repair warranty is enclosed.</p>{{/if}}` +
+        `</div>` +
+        `<!-- /block:body -->` +
+        masterSignature("Sincerely,") +
+        MASTER_FOOTER
     ),
   },
   self_mailer: {

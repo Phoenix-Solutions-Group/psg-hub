@@ -259,9 +259,16 @@ describe("default templates", () => {
     expect(tpl.bodyHtml).not.toContain("block:survey-cta");
   });
 
-  it("warranty default is a letter referencing the service date", () => {
+  it("warranty default uses the W1 master chassis and references the service date", () => {
     const tpl = defaultTemplate("warranty");
     expect(tpl.pieceType).toBe("letter");
+    expect(tpl.color).toBe(true);
+    expect(tpl.bodyHtml).toContain("block:masthead");
+    expect(tpl.bodyHtml).toContain("block:address");
+    expect(tpl.bodyHtml).toContain("block:signature");
+    expect(tpl.bodyHtml).toContain("block:footer");
+    expect(tpl.bodyHtml).toContain("Your workmanship warranty");
+    expect(tpl.bodyHtml).toContain("<span class=\"code\">PS105</span>");
     expect(tpl.bodyHtml).toContain("{{customer.serviceDate}}");
     expect(tpl.bodyHtml).not.toContain("{{program.greeting}}");
 
@@ -279,6 +286,8 @@ describe("default templates", () => {
     expect(out.file).toContain(
       "This letter confirms the written workmanship warranty on that repair."
     );
+    expect(out.file).toContain("Your workmanship warranty");
+    expect(out.file).toContain("PS105");
     expect(out.file).not.toContain("Custom warranty claim copy should not print.");
   });
 
