@@ -1,144 +1,150 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Swap the SendGrid adapter and the briefing fetch; keep the real render +
-// recipient logic so the route wiring is exercised end-to-end.
 const sendEmail = vi.fn();
-vi.mock("@/lib/mail/sendgrid", () => ({
-  sendEmail: (...a: unknown[]) => sendEmail(...a),
+const claimBoardBriefingOutbox = vi.fn();
+const markBoardBriefingOutboxSent = vi.fn();
+const service = { __service: true };
+
+vi.mock("@/lib/mail/sendgrid", () => ({ sendEmail: (...args: unknown[]) => sendEmail(...args) }));
+vi.mock("@/lib/supabase/service", () => ({ createServiceClient: vi.fn(() => service) }));
+vi.mock("@/lib/board-briefing/outbox", () => ({
+  claimBoardBriefingOutbox: (...args: unknown[]) => claimBoardBriefingOutbox(...args),
+  markBoardBriefingOutboxSent: (...args: unknown[]) => markBoardBriefingOutboxSent(...args),
 }));
 
-const fetchBriefing = vi.fn();
-vi.mock("@/lib/board-briefing/briefing", async (importActual) => {
-  const actual =
-    await importActual<typeof import("@/lib/board-briefing/briefing")>();
-  return { ...actual, fetchBriefing: (...a: unknown[]) => fetchBriefing(...a) };
-});
-
 import { GET, POST } from "../route";
-import { BriefingUnavailableError } from "@/lib/board-briefing/briefing";
-
-const GOOD_BRIEFING = {
-  body: "# Daily Briefing\n\n> all good",
-  updatedAt: "2026-07-08T12:03:36.999Z",
-  issueId: "issue-1",
-};
 
 function req(auth?: string): Request {
-  const headers: Record<string, string> = {};
-  if (auth) headers.authorization = auth;
   return new Request("http://localhost/api/cron/board-briefing-email", {
-    method: "POST",
-    headers,
+    method: "GET",
+    headers: auth ? { authorization: auth } : {},
   });
 }
 
 beforeEach(() => {
-  sendEmail.mockReset().mockResolvedValue({ statusCode: 202 });
-  fetchBriefing.mockReset().mockResolvedValue(GOOD_BRIEFING);
+  sendEmail.mockReset().mockResolvedValue({ statusCode: 202, messageId: "msg-1" });
+  claimBoardBriefingOutbox.mockReset().mockResolvedValue({
+    id: "11111111-1111-4111-8111-111111111111",
+    briefingDate: "2026-07-09",
+    subject: "Daily board briefing",
+    bodyMarkdown: "Revenue is up.\nNo blockers.",
+    briefingUrl: "https://paperclip.example/PSG/issues/PSG-209#document-daily-briefing",
+    generatedAt: "2026-07-09T12:00:00Z",
+  });
+  markBoardBriefingOutboxSent.mockReset().mockResolvedValue(undefined);
   vi.stubEnv("CRON_SECRET", "cron-secret");
-  vi.stubEnv("PAPERCLIP_API_URL", "https://home.psgweb.me");
-  vi.stubEnv("PAPERCLIP_READ_TOKEN", "read-tok");
-  vi.stubEnv("BOARD_BRIEFING_RECIPIENTS", "");
+  vi.stubEnv("SENDGRID_FROM_EMAIL", "ops@psgweb.me");
+  vi.stubEnv("BOARD_BRIEFING_RECIPIENTS", "nick@example.com");
 });
+
 afterEach(() => vi.unstubAllEnvs());
 
-describe("board-briefing-email auth gate", () => {
-  it("401 with no credentials — nothing is fetched or sent", async () => {
-    const res = await POST(req());
+describe("GET /api/cron/board-briefing-email auth", () => {
+  it("401 without Authorization and does not read the outbox", async () => {
+    const res = await GET(req());
+
     expect(res.status).toBe(401);
-    expect(fetchBriefing).not.toHaveBeenCalled();
+    expect(await res.json()).toEqual({ error: "unauthorized" });
+    expect(claimBoardBriefingOutbox).not.toHaveBeenCalled();
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
-  it("401 with a wrong secret", async () => {
-    const res = await GET(
-      new Request("http://localhost/api/cron/board-briefing-email", {
-        headers: { authorization: "Bearer wrong" },
-      })
-    );
+  it("401 with the wrong secret", async () => {
+    const res = await GET(req("Bearer wrong"));
+
     expect(res.status).toBe(401);
+    expect(claimBoardBriefingOutbox).not.toHaveBeenCalled();
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
-  it("401 when CRON_SECRET is unset (fail-closed)", async () => {
+  it("401 when CRON_SECRET is unset", async () => {
     vi.stubEnv("CRON_SECRET", "");
-    const res = await POST(req("Bearer anything"));
+
+    const res = await GET(req("Bearer cron-secret"));
+
     expect(res.status).toBe(401);
+    expect(claimBoardBriefingOutbox).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 });
 
-describe("board-briefing-email config gate", () => {
-  it("503 not_configured when API url/token are missing — no send", async () => {
-    vi.stubEnv("PAPERCLIP_READ_TOKEN", "");
-    const res = await POST(req("Bearer cron-secret"));
+describe("GET /api/cron/board-briefing-email delivery", () => {
+  it("returns 503 when no staged briefing is ready and never sends a blank email", async () => {
+    claimBoardBriefingOutbox.mockResolvedValue(null);
+
+    const res = await GET(req("Bearer cron-secret"));
+
     expect(res.status).toBe(503);
-    expect(await res.json()).toMatchObject({ error: "board_briefing_not_configured" });
+    expect(await res.json()).toEqual({ error: "no_board_briefing_ready" });
     expect(sendEmail).not.toHaveBeenCalled();
+    expect(markBoardBriefingOutboxSent).not.toHaveBeenCalled();
   });
-});
 
-describe("board-briefing-email fail-honest empty/missing briefing", () => {
-  it("returns 5xx and does NOT send when the briefing is unavailable", async () => {
-    fetchBriefing.mockRejectedValueOnce(
-      new BriefingUnavailableError("Briefing document is empty", 502)
-    );
-    const res = await POST(req("Bearer cron-secret"));
-    expect(res.status).toBe(502);
-    expect(await res.json()).toMatchObject({ error: "briefing_unavailable" });
-    expect(sendEmail).not.toHaveBeenCalled();
-  });
-});
+  it("sends the freshest claimed briefing and marks that claim sent", async () => {
+    const res = await GET(req("Bearer cron-secret"));
 
-describe("board-briefing-email success", () => {
-  it("sends exactly one dated email per recipient with a live-doc link", async () => {
-    vi.stubEnv(
-      "BOARD_BRIEFING_RECIPIENTS",
-      "nick@x.com, board@y.com"
-    );
-    const res = await POST(req("Bearer cron-secret"));
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({
+    expect(await res.json()).toEqual({
       ok: true,
-      sent: ["nick@x.com", "board@y.com"],
+      briefingDate: "2026-07-09",
+      recipientCount: 1,
+      messageId: "msg-1",
+    });
+    expect(claimBoardBriefingOutbox).toHaveBeenCalledWith(
+      service,
+      expect.objectContaining({ claimToken: expect.any(String) }),
+    );
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: ["nick@example.com"],
+        from: "ops@psgweb.me",
+        subject: "Daily board briefing",
+        clickTracking: false,
+      }),
+    );
+    const claimToken = claimBoardBriefingOutbox.mock.calls[0]![1].claimToken;
+    expect(markBoardBriefingOutboxSent).toHaveBeenCalledWith(
+      service,
+      "11111111-1111-4111-8111-111111111111",
+      claimToken,
+      { messageId: "msg-1" },
+    );
+  });
+
+  it("does not mark sent when SendGrid fails", async () => {
+    sendEmail.mockRejectedValue(new Error("sendgrid down"));
+
+    const res = await GET(req("Bearer cron-secret"));
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "send_failed" });
+    expect(markBoardBriefingOutboxSent).not.toHaveBeenCalled();
+  });
+
+  it("fails honestly and never sends when the staged row has no body", async () => {
+    claimBoardBriefingOutbox.mockResolvedValue({
+      id: "11111111-1111-4111-8111-111111111111",
+      briefingDate: "2026-07-09",
+      bodyMarkdown: " ",
+      briefingUrl: "https://paperclip.example/doc",
     });
 
-    expect(sendEmail).toHaveBeenCalledTimes(2);
-    const first = sendEmail.mock.calls[0][0] as {
-      to: string;
-      subject: string;
-      html: string;
-      text: string;
-    };
-    expect(first.to).toBe("nick@x.com");
-    expect(first.subject).toBe("PSG Board Briefing — Wed, Jul 8, 2026");
-    expect(first.html).toContain("Daily Briefing");
-    expect(first.html).toContain("https://home.psgweb.me/issues/issue-1");
-    expect(first.text).toContain("Open the live briefing:");
+    const res = await GET(req("Bearer cron-secret"));
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({
+      error: "invalid_staged_briefing",
+      message: "body is required",
+    });
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(markBoardBriefingOutboxSent).not.toHaveBeenCalled();
   });
 
-  it("defaults to Nick when no recipients env is set", async () => {
+  it("POST uses the same path for manual operator runs", async () => {
     const res = await POST(req("Bearer cron-secret"));
+
     expect(res.status).toBe(200);
     expect(sendEmail).toHaveBeenCalledTimes(1);
-    expect((sendEmail.mock.calls[0][0] as { to: string }).to).toBe(
-      "nick@phoenixsolutionsgroup.net"
-    );
-  });
-
-  it("returns 502 and alarms if a send fails, reporting which recipients", async () => {
-    vi.stubEnv("BOARD_BRIEFING_RECIPIENTS", "ok@x.com, bad@y.com");
-    sendEmail
-      .mockResolvedValueOnce({ statusCode: 202 })
-      .mockRejectedValueOnce(new Error("bounce"));
-    const res = await POST(req("Bearer cron-secret"));
-    expect(res.status).toBe(502);
-    const body = (await res.json()) as {
-      ok: boolean;
-      sent: string[];
-      failed: { to: string }[];
-    };
-    expect(body.ok).toBe(false);
-    expect(body.sent).toEqual(["ok@x.com"]);
-    expect(body.failed[0].to).toBe("bad@y.com");
   });
 });
