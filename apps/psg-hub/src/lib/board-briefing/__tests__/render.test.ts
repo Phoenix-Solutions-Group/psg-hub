@@ -1,38 +1,49 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   escapeHtml,
-  renderInline,
+  renderBoardBriefingEmail,
   renderBriefingHtml,
+  renderInline,
   wrapBriefingEmail,
 } from "../render";
 
+const BASE_INPUT = {
+  briefingUrl: "https://hub.psgweb.me/PSG/issues/PSG-209/documents/daily-briefing",
+  subject: "PSG Board Briefing - 2026-07-09",
+};
+
 describe("escapeHtml", () => {
   it("escapes all five HTML-significant characters", () => {
-    expect(escapeHtml(`<a href="x">& '`)).toBe(
-      "&lt;a href=&quot;x&quot;&gt;&amp; &#39;"
-    );
+    expect(escapeHtml(`<a href="x">& '`)).toBe("&lt;a href=&quot;x&quot;&gt;&amp; &#39;");
   });
 });
 
 describe("renderInline", () => {
   it("renders bold, italic, and inline code", () => {
-    expect(renderInline("**b** and *i* and `c`")).toContain("<strong>b</strong>");
-    expect(renderInline("**b** and *i* and `c`")).toContain("<em>i</em>");
-    expect(renderInline("**b** and *i* and `c`")).toContain("<code");
+    const html = renderInline("**b** and *i* and `c`");
+    expect(html).toContain("<strong");
+    expect(html).toContain(">b</strong>");
+    expect(html).toContain("<em>i</em>");
+    expect(html).toContain("<code");
   });
 
-  it("renders only http(s) links", () => {
+  it("renders http(s), mailto, and base-resolved relative links only", () => {
     expect(renderInline("[live](https://home.psgweb.me/issues/1)")).toContain(
-      '<a href="https://home.psgweb.me/issues/1"'
+      'href="https://home.psgweb.me/issues/1"',
     );
-    // A non-http scheme is NOT turned into an anchor.
+    expect(renderInline("[email](mailto:nick@example.com)")).toContain(
+      'href="mailto:nick@example.com"',
+    );
+    expect(renderInline("[issue](/PSG/issues/1)", "https://hub.psgweb.me/root")).toContain(
+      'href="https://hub.psgweb.me/PSG/issues/1"',
+    );
     expect(renderInline("[x](javascript:alert(1))")).not.toContain("<a ");
   });
 });
 
 describe("renderBriefingHtml", () => {
   it("renders headings, bold, blockquote, hr, and lists", () => {
-    const md = [
+    const markdown = [
       "# Daily Briefing",
       "",
       "> **Bottom line:** all good",
@@ -48,12 +59,13 @@ describe("renderBriefingHtml", () => {
       "",
       "A closing paragraph.",
     ].join("\n");
-    const html = renderBriefingHtml(md);
-    expect(html).toContain("<h1");
+
+    const html = renderBriefingHtml(markdown);
+
+    expect(html).toContain("<h2");
     expect(html).toContain("Daily Briefing");
     expect(html).toContain("<blockquote");
-    expect(html).toContain("<strong>Bottom line:</strong>");
-    expect(html).toContain("<h2");
+    expect(html).toContain("Bottom line");
     expect(html).toContain("<ol");
     expect(html).toContain("<li");
     expect(html).toContain("First item");
@@ -83,9 +95,76 @@ describe("wrapBriefingEmail", () => {
       docUrl: "https://home.psgweb.me/issues/1",
       dateLabel: "Wednesday, July 8, 2026",
     });
+
     expect(html).toContain("<!doctype html>");
     expect(html).toContain("<p>hi</p>");
     expect(html).toContain('href="https://home.psgweb.me/issues/1"');
     expect(html).toContain("Wednesday, July 8, 2026");
+  });
+});
+
+describe("renderBoardBriefingEmail", () => {
+  it("renders common briefing markdown without leaking raw markers", () => {
+    const { html, text } = renderBoardBriefingEmail({
+      ...BASE_INPUT,
+      body: [
+        "## What changed",
+        "",
+        "**Revenue risk** is visible in [PSG-286](/PSG/issues/PSG-286).",
+        "",
+        "- First action",
+        "- Second action with `owner`",
+        "",
+        "1. Confirm",
+        "2. Ship",
+      ].join("\n"),
+    });
+
+    expect(html).toContain("What changed");
+    expect(html).toContain("<strong");
+    expect(html).toContain("<ul");
+    expect(html).toContain("<ol");
+    expect(html).toContain("<code");
+    expect(html).not.toContain("## What changed");
+    expect(html).not.toContain("**Revenue risk**");
+    expect(html).not.toContain("[PSG-286](/PSG/issues/PSG-286)");
+    expect(text).toContain("## What changed");
+  });
+
+  it("resolves relative briefing links to absolute email-safe links", () => {
+    const { html } = renderBoardBriefingEmail({
+      ...BASE_INPUT,
+      body: "Read [PSG-286](/PSG/issues/PSG-286) today.",
+    });
+
+    expect(html).toContain('href="https://hub.psgweb.me/PSG/issues/PSG-286"');
+    expect(html).not.toContain('href="/PSG/issues/PSG-286"');
+  });
+
+  it("renders the bottom-line paragraph as a styled callout", () => {
+    const { html } = renderBoardBriefingEmail({
+      ...BASE_INPUT,
+      body: "**Bottom line:** Nick can read the daily update cleanly in email.",
+    });
+
+    expect(html).toContain("background:#FAEEEC");
+    expect(html).toContain("border-left:4px solid #B8483E");
+    expect(html).toContain("<strong");
+    expect(html).not.toContain("**Bottom line:**");
+  });
+
+  it("escapes unsafe HTML before rendering markdown", () => {
+    const { html } = renderBoardBriefingEmail({
+      ...BASE_INPUT,
+      subject: "Briefing <Today>",
+      generatedAt: "2026-07-09T12:10:00Z & later",
+      body: "## Risk\n<script>alert('x')</script> & [bad](javascript:<script>)",
+    });
+
+    expect(html).toContain("Briefing &lt;Today&gt;");
+    expect(html).toContain("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt; &amp;");
+    expect(html).toContain("2026-07-09T12:10:00Z &amp; later");
+    expect(html).not.toContain("<script>alert");
+    expect(html).not.toContain("javascript:");
   });
 });

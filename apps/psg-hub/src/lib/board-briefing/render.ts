@@ -1,11 +1,14 @@
 import "server-only";
 
-// PSG-846: minimal, safe Markdown -> HTML renderer for the daily board briefing
-// email. The PSG-768 shared renderer is a React/JSX component (client-oriented
-// and not yet on main), so the email path uses this small server-safe renderer
-// instead. It escapes ALL HTML first, then applies a fixed allow-list of inline
-// and block transforms — so briefing content can never inject markup into the
-// email, even though the source is our own trusted agent.
+const MIDNIGHT = "#1E3A52";
+const EMBER = "#B8483E";
+const EMBER_SOFT = "#FAEEEC";
+const PAPER = "#FAFAFA";
+const INK = "#161616";
+const MIST = "#707070";
+const STONE = "#E0E0E0";
+const BONE = "#F0F0F0";
+const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
 /** Escape the five HTML-significant characters. Applied before any transform. */
 export function escapeHtml(input: string): string {
@@ -17,37 +20,41 @@ export function escapeHtml(input: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function resolveHref(href: string, base?: string): string | null {
+  try {
+    const resolved = base ? new URL(href, base) : new URL(href);
+    if (resolved.protocol !== "http:" && resolved.protocol !== "https:" && resolved.protocol !== "mailto:") {
+      return null;
+    }
+    return resolved.toString();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Inline transforms, applied to already-escaped text:
- *   - `[label](http/https url)` -> anchor (only http/https, to block javascript:)
- *   - `**bold**` / `__bold__`   -> <strong>
- *   - `*italic*` / `_italic_`   -> <em>
- *   - `` `code` ``              -> <code>
- * Order matters: links first (so their text can still be styled), then code
- * (so its contents are not re-styled), then bold before italic.
+ *   - `[label](url)` -> anchor for http(s), mailto, and base-resolved relative URLs
+ *   - `**bold**` / `__bold__` -> <strong>
+ *   - `*italic*` / `_italic_` -> <em>
+ *   - `` `code` `` -> <code>
  */
-export function renderInline(escaped: string): string {
+export function renderInline(escaped: string, base?: string): string {
   let out = escaped;
 
-  // Links — the URL was HTML-escaped, so "&amp;" etc. are safe in href. Only
-  // permit http(s) targets; anything else is left as literal text.
-  out = out.replace(
-    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-    (_m, label: string, url: string) =>
-      `<a href="${url}" style="color:#2563eb;text-decoration:underline">${label}</a>`
-  );
+  out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (match, label: string, href: string) => {
+    const resolved = resolveHref(href.replaceAll("&amp;", "&"), base);
+    if (!resolved) return label;
+    return `<a href="${escapeHtml(resolved)}" style="color:${MIDNIGHT};font-weight:600;text-decoration:none;border-bottom:1px solid ${EMBER};">${label}</a>`;
+  });
 
-  // Inline code
   out = out.replace(
     /`([^`]+)`/g,
-    '<code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.9em">$1</code>'
+    `<code style="background:${BONE};border:1px solid ${STONE};border-radius:4px;padding:1px 5px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:${MIDNIGHT};">$1</code>`,
   );
 
-  // Bold (must run before italic so ** is consumed before *)
-  out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  out = out.replace(/__([^_]+)__/g, "<strong>$1</strong>");
-
-  // Italic
+  out = out.replace(/\*\*([^*]+)\*\*/g, `<strong style="color:${INK};font-weight:700;">$1</strong>`);
+  out = out.replace(/__([^_]+)__/g, `<strong style="color:${INK};font-weight:700;">$1</strong>`);
   out = out.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
   out = out.replace(/(^|[^A-Za-z0-9_])_([^_\n]+)_/g, "$1<em>$2</em>");
 
@@ -59,14 +66,7 @@ interface ListState {
   items: string[];
 }
 
-/**
- * Render a Markdown string to a self-contained HTML fragment. Supports the block
- * constructs the briefing uses: ATX headings (`#`..`######`), unordered lists
- * (`-`/`*`/`+`), ordered lists (`1.`), blockquotes (`>`), horizontal rules
- * (`---`), and paragraphs. Everything else becomes a paragraph. All content is
- * HTML-escaped before inline transforms, so the output is injection-safe.
- */
-export function renderBriefingHtml(markdown: string): string {
+export function renderBriefingHtml(markdown: string, base?: string): string {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const parts: string[] = [];
   let list: ListState | null = null;
@@ -76,28 +76,36 @@ export function renderBriefingHtml(markdown: string): string {
   const flushList = () => {
     if (!list) return;
     const tag = list.type;
-    parts.push(
-      `<${tag} style="margin:0 0 12px 20px;padding:0">` +
-        list.items.map((i) => `<li style="margin:0 0 4px">${i}</li>`).join("") +
-        `</${tag}>`
-    );
+    const items = list.items
+      .map(
+        (item) =>
+          `<li style="margin:0 0 10px;font-size:15px;line-height:1.6;color:#33404A;padding-left:4px;">${item}</li>`,
+      )
+      .join("");
+    parts.push(`<${tag} style="margin:4px 0 18px;padding-left:22px;">${items}</${tag}>`);
     list = null;
   };
 
   const flushParagraph = () => {
     if (paragraph.length === 0) return;
-    parts.push(
-      `<p style="margin:0 0 12px;line-height:1.5">${paragraph.join("<br>")}</p>`
-    );
+    const body = paragraph.join("<br>");
+    const bottomLine = /^<strong[^>]*>Bottom line/i.test(body);
+    if (bottomLine) {
+      parts.push(
+        `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 18px;"><tr><td style="background:${EMBER_SOFT};border-left:4px solid ${EMBER};border-radius:6px;padding:14px 18px;font-size:15px;line-height:1.6;color:${INK};">${body}</td></tr></table>`,
+      );
+    } else {
+      parts.push(`<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#33404A;">${body}</p>`);
+    }
     paragraph = [];
   };
 
   const flushQuote = () => {
     if (quote.length === 0) return;
     parts.push(
-      `<blockquote style="margin:0 0 12px;padding:8px 14px;border-left:4px solid #cbd5e1;background:#f8fafc;color:#334155">` +
+      `<blockquote style="margin:0 0 12px;padding:8px 14px;border-left:4px solid ${EMBER};background:${EMBER_SOFT};color:${INK}">` +
         quote.join("<br>") +
-        `</blockquote>`
+        `</blockquote>`,
     );
     quote = [];
   };
@@ -110,101 +118,115 @@ export function renderBriefingHtml(markdown: string): string {
 
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, "");
-    const escaped = escapeHtml(line);
 
-    // Blank line — close any open inline block.
     if (line.trim() === "") {
       flushInline();
       continue;
     }
 
-    // Horizontal rule
     if (/^ {0,3}(-{3,}|\*{3,}|_{3,})$/.test(line)) {
       flushInline();
-      parts.push(
-        `<hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0">`
-      );
+      parts.push(`<hr style="border:none;border-top:1px solid ${STONE};margin:22px 0;">`);
       continue;
     }
 
-    // Heading
     const heading = /^(#{1,6})\s+(.*)$/.exec(line);
     if (heading) {
       flushInline();
-      const level = heading[1].length;
-      const size = [22, 19, 17, 15, 14, 13][level - 1];
-      parts.push(
-        `<h${level} style="margin:18px 0 8px;font-size:${size}px;font-weight:700;line-height:1.3">` +
-          renderInline(escapeHtml(heading[2])) +
-          `</h${level}>`
-      );
+      const level = Math.min(heading[1].length, 3);
+      if (level === 1) {
+        parts.push(
+          `<h2 style="margin:28px 0 12px;font-size:20px;line-height:1.3;color:${MIDNIGHT};font-weight:700;">${renderInline(escapeHtml(heading[2]), base)}</h2>`,
+        );
+      } else if (level === 2) {
+        parts.push(
+          `<h2 style="margin:30px 0 14px;padding-top:18px;border-top:1px solid ${STONE};font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:${EMBER};font-weight:700;">${renderInline(escapeHtml(heading[2]), base)}</h2>`,
+        );
+      } else {
+        parts.push(
+          `<h3 style="margin:20px 0 8px;font-size:16px;line-height:1.35;color:${MIDNIGHT};font-weight:700;">${renderInline(escapeHtml(heading[2]), base)}</h3>`,
+        );
+      }
       continue;
     }
 
-    // Blockquote
-    const bq = /^\s*>\s?(.*)$/.exec(line);
-    if (bq) {
+    const blockquote = /^\s*>\s?(.*)$/.exec(line);
+    if (blockquote) {
       flushList();
       flushParagraph();
-      quote.push(renderInline(escapeHtml(bq[1])));
+      quote.push(renderInline(escapeHtml(blockquote[1]), base));
       continue;
     }
 
-    // Ordered list item
-    const ol = /^\s*\d+[.)]\s+(.*)$/.exec(line);
-    if (ol) {
+    const orderedItem = /^\s*\d+[.)]\s+(.*)$/.exec(line);
+    if (orderedItem) {
       flushParagraph();
       flushQuote();
       if (!list || list.type !== "ol") {
         flushList();
         list = { type: "ol", items: [] };
       }
-      list.items.push(renderInline(escapeHtml(ol[1])));
+      list.items.push(renderInline(escapeHtml(orderedItem[1]), base));
       continue;
     }
 
-    // Unordered list item
-    const ul = /^\s*[-*+]\s+(.*)$/.exec(line);
-    if (ul) {
+    const unorderedItem = /^\s*(?:[-*+]|\u2022)\s+(.*)$/.exec(line);
+    if (unorderedItem) {
       flushParagraph();
       flushQuote();
       if (!list || list.type !== "ul") {
         flushList();
         list = { type: "ul", items: [] };
       }
-      list.items.push(renderInline(escapeHtml(ul[1])));
+      list.items.push(renderInline(escapeHtml(unorderedItem[1]), base));
       continue;
     }
 
-    // Paragraph text
     flushList();
     flushQuote();
-    paragraph.push(renderInline(escaped));
+    paragraph.push(renderInline(escapeHtml(line), base));
   }
 
   flushInline();
   return parts.join("\n");
 }
 
-/** Wrap the rendered briefing fragment in a complete, email-client-safe HTML doc. */
 export function wrapBriefingEmail(options: {
   bodyHtml: string;
   docUrl: string;
   dateLabel: string;
+  subject?: string;
 }): string {
-  const { bodyHtml, docUrl, dateLabel } = options;
-  return [
-    `<!doctype html><html><body style="margin:0;background:#f1f5f9">`,
-    `<div style="max-width:680px;margin:0 auto;padding:24px;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#0f172a;font-size:15px">`,
-    `<div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Phoenix Solutions Group</div>`,
-    bodyHtml,
-    `<hr style="border:0;border-top:1px solid #e2e8f0;margin:20px 0">`,
-    `<p style="margin:0;font-size:13px;color:#64748b">This is the same briefing that updates each morning on the board. ` +
-      `<a href="${escapeHtml(docUrl)}" style="color:#2563eb;text-decoration:underline">Open the live version</a> ` +
-      `to see the latest.</p>`,
-    `<p style="margin:8px 0 0;font-size:12px;color:#94a3b8">Automated daily send · ${escapeHtml(dateLabel)}</p>`,
-    `</div></body></html>`,
-  ].join("\n");
+  const { bodyHtml, docUrl, dateLabel, subject = "PSG Board Briefing" } = options;
+  const safeUrl = escapeHtml(docUrl);
+  return `<!doctype html>
+<html lang="en">
+  <body style="margin:0;padding:0;background:${PAPER};color:${INK};font-family:${FONT};-webkit-font-smoothing:antialiased;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your daily Phoenix Solutions Group board briefing: the numbers, the risks, and what needs your call.</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAPER};">
+      <tr><td align="center" style="padding:28px 16px;">
+        <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#FFFFFF;border:1px solid ${STONE};border-radius:12px;overflow:hidden;">
+          <tr><td style="background:${MIDNIGHT};padding:26px 32px 22px;border-bottom:3px solid ${EMBER};">
+            <p style="margin:0 0 6px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#8FA1B2;font-weight:700;">Phoenix Solutions Group</p>
+            <h1 style="margin:0;font-size:22px;line-height:1.3;color:#FFFFFF;font-weight:700;">${escapeHtml(subject)}</h1>
+          </td></tr>
+          <tr><td style="padding:26px 32px 8px;">
+            ${bodyHtml}
+          </td></tr>
+          <tr><td style="padding:8px 32px 30px;">
+            <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:${MIDNIGHT};border-radius:6px;">
+              <a href="${safeUrl}" style="display:inline-block;padding:12px 22px;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;">Open the live briefing &rarr;</a>
+            </td></tr></table>
+            <p style="margin:14px 0 0;color:${MIST};font-size:12px;">Automated daily send: ${escapeHtml(dateLabel)}</p>
+          </td></tr>
+          <tr><td style="padding:18px 32px;background:${BONE};border-top:1px solid ${STONE};">
+            <p style="margin:0;font-size:12px;line-height:1.5;color:${MIST};">Sent automatically each morning by Phoenix Hub. Reply to this email to change who receives the briefing.</p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
 }
 
 export interface BoardBriefingRenderInput {
@@ -231,32 +253,13 @@ export function renderBoardBriefingEmail(input: BoardBriefingRenderInput): {
   html: string;
   text: string;
 } {
-  const escapedBody = escapeHtml(input.body.trim()).replaceAll("\n", "<br>");
-  const escapedSubject = escapeHtml(input.subject);
-  const escapedUrl = escapeHtml(input.briefingUrl);
-  const generated = input.generatedAt
-    ? `<p style="margin:16px 0 0;color:#667085;font-size:13px;">Generated: ${escapeHtml(input.generatedAt)}</p>`
-    : "";
-
-  const html = `<!doctype html>
-<html lang="en">
-  <body style="margin:0;background:#f6f7f9;color:#101828;font-family:Arial,Helvetica,sans-serif;">
-    <main style="max-width:720px;margin:0 auto;padding:32px 20px;">
-      <section style="background:#ffffff;border:1px solid #d0d5dd;border-radius:8px;padding:28px;">
-        <p style="margin:0 0 8px;color:#475467;font-size:14px;">Phoenix Solutions Group</p>
-        <h1 style="margin:0 0 20px;font-size:24px;line-height:1.25;color:#101828;">${escapedSubject}</h1>
-        <div style="font-size:16px;line-height:1.6;color:#344054;">${escapedBody}</div>
-        <p style="margin:24px 0 0;">
-          <a href="${escapedUrl}" style="color:#175cd3;font-weight:700;text-decoration:none;">Read the source briefing</a>
-        </p>
-        ${generated}
-      </section>
-    </main>
-  </body>
-</html>`;
-
   return {
-    html,
+    html: wrapBriefingEmail({
+      bodyHtml: renderBriefingHtml(input.body.trim(), input.briefingUrl),
+      docUrl: input.briefingUrl,
+      dateLabel: input.generatedAt ?? new Date().toISOString(),
+      subject: input.subject,
+    }),
     text: textWithLink(input),
   };
 }
