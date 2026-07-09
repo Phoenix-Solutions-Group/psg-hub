@@ -204,7 +204,7 @@ describe("LobAdapter.submit", () => {
     const [url, init] = mockOf(fetchImpl).mock.calls[0] as [string, RequestInit];
     expect(url).toContain("/letters");
     const body = String(init.body);
-    expect(body).toContain("size=8.5x11");
+    expect(body).not.toContain("size=");
     expect(body).toContain("color=true");
     expect(body).toContain("address_placement=top_first_page");
     expect(body).toContain("use_type=marketing");
