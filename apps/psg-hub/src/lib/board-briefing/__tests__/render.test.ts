@@ -153,6 +153,17 @@ describe("renderBoardBriefingEmail", () => {
     expect(html).not.toContain("**Bottom line:**");
   });
 
+  it("renders a plain bottom-line paragraph as a styled callout", () => {
+    const { html } = renderBoardBriefingEmail({
+      ...BASE_INPUT,
+      body: "Bottom line: Nick can read the daily update cleanly in email.",
+    });
+
+    expect(html).toContain("background:#FAEEEC");
+    expect(html).toContain("border-left:4px solid #B8483E");
+    expect(html).toContain("Bottom line:");
+  });
+
   it("escapes unsafe HTML before rendering markdown", () => {
     const { html } = renderBoardBriefingEmail({
       ...BASE_INPUT,

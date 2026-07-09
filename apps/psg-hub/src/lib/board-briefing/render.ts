@@ -89,7 +89,7 @@ export function renderBriefingHtml(markdown: string, base?: string): string {
   const flushParagraph = () => {
     if (paragraph.length === 0) return;
     const body = paragraph.join("<br>");
-    const bottomLine = /^<strong[^>]*>Bottom line/i.test(body);
+    const bottomLine = /^(?:<strong\b[^>]*>)?Bottom line\s*:/i.test(body);
     if (bottomLine) {
       parts.push(
         `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 18px;"><tr><td style="background:${EMBER_SOFT};border-left:4px solid ${EMBER};border-radius:6px;padding:14px 18px;font-size:15px;line-height:1.6;color:${INK};">${body}</td></tr></table>`,
