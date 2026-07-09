@@ -21,22 +21,18 @@
 // lives in this worker's OWN package.json only.
 
 import { createServer } from "node:http";
-import { timingSafeEqual } from "node:crypto";
 import puppeteer from "puppeteer";
+import { authorizedBearer, normalizeRenderToken } from "./auth.mjs";
 import { assertAllowedPrintUrl } from "./url-allowlist.mjs";
 
 const PORT = Number(process.env.PORT ?? 8080);
-const TOKEN = process.env.RENDER_TOKEN ?? "";
+const TOKEN = normalizeRenderToken(process.env.RENDER_TOKEN ?? "");
 const APP_ORIGIN = process.env.REPORT_APP_ORIGIN ?? "";
 
 /** Constant-time bearer check against RENDER_TOKEN. */
 function authorized(req) {
-  if (!TOKEN) return false;
   const header = req.headers["authorization"] ?? "";
-  const expected = `Bearer ${TOKEN}`;
-  const a = Buffer.from(header);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
+  return authorizedBearer(header, TOKEN);
 }
 
 // One shared browser instance, reused across requests (cold start is expensive).
