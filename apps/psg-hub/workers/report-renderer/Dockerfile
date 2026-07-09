@@ -17,7 +17,7 @@ WORKDIR /home/pptruser/app
 COPY --chown=pptruser:pptruser package.json ./
 RUN npm install --omit=dev
 
-COPY --chown=pptruser:pptruser render.mjs ./
+COPY --chown=pptruser:pptruser *.mjs ./
 
 EXPOSE 8080
 CMD ["node", "render.mjs"]
