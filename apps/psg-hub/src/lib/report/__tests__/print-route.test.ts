@@ -71,6 +71,12 @@ describe("print route auth", () => {
     expect(res.status).toBe(401);
   });
 
+  it("accepts normalized token values (trim + outer quotes)", async () => {
+    process.env.RENDER_TOKEN = ' "test-render-token" ';
+    const res = await call({ authorization: "Bearer test-render-token" }, "not-a-valid-slug");
+    expect(res.status).toBe(400);
+  });
+
   it("400 on a malformed slug (valid token, gate passed)", async () => {
     const res = await call({ authorization: "Bearer test-render-token" }, "not-a-valid-slug");
     expect(res.status).toBe(400);

@@ -5,6 +5,7 @@ import {
   type RenderHttpPost,
 } from "@/lib/report/render-client";
 import { CircuitBreaker, CircuitOpenError } from "@/lib/resilience";
+import { authorizedBearer } from "../../../../workers/report-renderer/auth.mjs";
 
 const SLUG = "11111111-1111-1111-1111-111111111111__2026-05";
 
@@ -45,6 +46,16 @@ describe("renderReportPdf", () => {
     });
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(Array.from(bytes)).toEqual([37, 80, 68, 70]);
+  });
+
+  it("normalizes a whitespace/quoted token before constructing the Authorization header", async () => {
+    process.env.RENDER_TOKEN = ' "test-render-token" ';
+    const httpPost = vi.fn<RenderHttpPost>(async () => pdfResponse());
+    await renderReportPdf(SLUG, { httpPost });
+
+    const [, init] = httpPost.mock.calls[0]!;
+    expect(init.headers.Authorization).toBe("Bearer test-render-token");
+    expect(authorizedBearer(init.headers.Authorization, process.env.RENDER_TOKEN)).toBe(true);
   });
 
   it("retries a transient failure then succeeds (wrapped in withRetry)", async () => {

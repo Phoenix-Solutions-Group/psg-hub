@@ -42,6 +42,17 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function normalizeRenderToken(raw: string): string {
+  const trimmed = raw.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
 /**
  * Render the report PDF for `slug` ("{shopId}__{period}") via the controlled-host
  * worker. POSTs `{ url: <print-route URL> }` to REPORT_RENDER_URL with a RENDER_TOKEN
@@ -54,7 +65,7 @@ export async function renderReportPdf(
   deps: RenderDeps = {}
 ): Promise<Uint8Array> {
   const renderUrl = requireEnv("REPORT_RENDER_URL");
-  const token = requireEnv("RENDER_TOKEN");
+  const token = normalizeRenderToken(requireEnv("RENDER_TOKEN"));
   const appUrl = requireEnv("NEXT_PUBLIC_APP_URL");
 
   const printUrl = `${appUrl.replace(/\/$/, "")}/reports/${slug}/print`;
