@@ -18,7 +18,7 @@
 export type MailVendor = "lob" | "inhouse";
 
 /** Physical piece format. Lob maps these to its postcard / letter endpoints. */
-export type MailPieceType = "postcard" | "letter";
+export type MailPieceType = "postcard" | "letter" | "self_mailer";
 
 /** A US mailing address in PSG-canonical shape (vendor payloads derive from this). */
 export interface MailAddress {
@@ -53,9 +53,9 @@ export interface MailDocument {
   front?: string;
   back?: string;
   file?: string;
-  /** Letters only: true = color print, false/undefined = black & white. */
+  /** Letters and self-mailers only: true = color print, false/undefined = black & white. */
   color?: boolean;
-  /** Postcard size, e.g. "4x6" | "6x9" | "6x11". Defaults per vendor. */
+  /** Mail size, e.g. "4x6" | "6x9" | "6x11" | "8.5x11". Defaults per vendor. */
   size?: string;
   /** Human-readable description shown in the vendor dashboard. */
   description?: string;

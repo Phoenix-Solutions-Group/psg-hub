@@ -14,6 +14,7 @@ export type TemplateGateRow = {
   key: string;
   label: string;
   pieceType: string;
+  templateSize?: string;
   contentHash: string;
   missingTokens: string[];
   status: string | null;
@@ -55,7 +56,11 @@ export function TemplateGateCard({ row }: { row: TemplateGateRow }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [selfMailerSize, setSelfMailerSize] = useState(row.templateSize ?? "8.5x11");
   const [showProof, setShowProof] = useState(false);
+
+  const canPickSelfMailerSize = row.pieceType === "self_mailer";
+  const selfMailerSizes = ["4x6", "6x9", "6x11", "8.5x11"] as const;
 
   const base = `/api/ops/production/templates/${row.key}`;
 
@@ -124,6 +129,26 @@ export function TemplateGateCard({ row }: { row: TemplateGateRow }) {
         )}
       </div>
 
+      {canPickSelfMailerSize && (
+        <div className="mt-3">
+          <label className="text-xs text-muted-foreground" htmlFor={`size-${row.key}`}>
+            Self-mailer size
+          </label>
+          <select
+            id={`size-${row.key}`}
+            className="mt-1 h-9 rounded-md border border-border bg-background px-3 text-sm"
+            value={selfMailerSize}
+            onChange={(event) => setSelfMailerSize(event.target.value)}
+          >
+            {selfMailerSizes.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {error && <p className="mt-3 text-sm text-ember">{error}</p>}
       {notice && <p className="mt-3 text-sm text-emerald-700">{notice}</p>}
 
@@ -188,7 +213,8 @@ export function TemplateGateCard({ row }: { row: TemplateGateRow }) {
           disabled={busy !== null}
           onClick={() =>
             run("seed-test", async () => {
-              await postJson(`${base}/seed-test`);
+              const body = canPickSelfMailerSize ? { size: selfMailerSize } : undefined;
+              await postJson(`${base}/seed-test`, body);
               setNotice("Seed test submitted to Lob test mode (free, not mailed).");
             })
           }

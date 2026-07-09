@@ -188,6 +188,27 @@ describe("buildMailDocument", () => {
     expect(document.front).toBeUndefined();
   });
 
+  it("treats self_mailer as a single-file piece like a letter", () => {
+    const { document } = buildMailDocument({
+      template: {
+        product: "warranty",
+        pieceType: "self_mailer",
+        bodyHtml: "Dear {{customer.firstName}}",
+      },
+      data: DATA,
+      documentId: "doc-4",
+      to: TO,
+      from: FROM,
+      metadata: { mode: "self-mailer" },
+    });
+    expect(document.pieceType).toBe("self_mailer");
+    expect(document.file).toBe("Dear Jane");
+    expect(document.color).toBe(false);
+    expect(document.front).toBeUndefined();
+    expect(document.back).toBeUndefined();
+    expect(document.metadata).toEqual({ mode: "self-mailer" });
+  });
+
   it("surfaces unresolved tokens so the caller can block an incomplete piece", () => {
     const { missing } = buildMailDocument({
       template: {
@@ -208,6 +229,7 @@ describe("default templates", () => {
   it("exposes a default for every product", () => {
     expect(Object.keys(DEFAULT_TEMPLATES).sort()).toEqual([
       "envelope",
+      "self_mailer",
       "service_recovery",
       "thank_you",
       "warranty",
@@ -256,6 +278,22 @@ describe("default templates", () => {
     expect(document.file).toContain("<!doctype html>");
     expect(document.file).toContain("Ace Body Shop");
     expect(document.file).toContain("Jane");
+  });
+
+  it("exposes a self-mailer default and sends file output with default 8.5x11", () => {
+    const tpl = defaultTemplate("self_mailer");
+    expect(tpl.pieceType).toBe("self_mailer");
+    expect(tpl.size).toBe("8.5x11");
+
+    const { document } = buildMailDocument({
+      template: tpl,
+      data: DATA,
+      documentId: "doc-self-default",
+      to: TO,
+      from: FROM,
+    });
+    expect(document.file).toContain("Hi Jane");
+    expect(document.size).toBe("8.5x11");
   });
 
   it("escapes merged values inside the default template HTML", () => {

@@ -30,8 +30,14 @@ const addressSchema = z.object({
   zip: z.string().trim().min(5).max(10),
   country: z.string().trim().max(2).nullish(),
 });
+const sizeSchema = z.enum(["4x6", "6x9", "6x11", "8.5x11"]);
 
-const bodySchema = z.object({ to: addressSchema.nullish() }).nullish();
+const bodySchema = z
+  .object({
+    to: addressSchema.nullish(),
+    size: sizeSchema.nullish(),
+  })
+  .nullish();
 
 export async function POST(
   request: NextRequest,
@@ -73,8 +79,12 @@ export async function POST(
     throw error;
   }
 
+  const template = {
+    ...defaultTemplate(key),
+    ...(parsed.data?.size ? { size: parsed.data.size } : {}),
+  };
   const { document, missing } = buildMailDocument({
-    template: defaultTemplate(key),
+    template,
     data: SAMPLE_MERGE_DATA,
     documentId: `seedtest-${key}-${Date.now()}`,
     to,

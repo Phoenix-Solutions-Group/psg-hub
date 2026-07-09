@@ -35,6 +35,7 @@ describe("templateContentHash", () => {
 describe("isTemplateKey", () => {
   it("accepts known keys and rejects others", () => {
     expect(isTemplateKey("warranty")).toBe(true);
+    expect(isTemplateKey("self_mailer")).toBe(true);
     expect(isTemplateKey("postcard")).toBe(false);
     expect(isTemplateKey("")).toBe(false);
   });

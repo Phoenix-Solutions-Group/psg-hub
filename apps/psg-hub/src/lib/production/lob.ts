@@ -304,16 +304,20 @@ export class LobAdapter implements MailAdapter {
     let path: string;
     if (document.pieceType === "postcard") {
       path = "/postcards";
+      // Letter/mailer path can support size directly at the endpoint; postcards
+      // keep their legacy defaults and strict clear-zone sizing.
       params.set("size", document.size ?? "4x6");
       if (document.front) params.set("front", document.front);
       if (document.back) params.set("back", document.back);
     } else {
       path = "/letters";
       if (document.file) params.set("file", document.file);
-      params.set("color", String(document.color ?? false));
-      // Letters require an address-placement choice; PSG envelopes use a window.
+      if (document.color !== undefined) params.set("color", String(document.color));
+      if (document.size) params.set("size", document.size);
+      // Lob requires an address-placement choice; PSG uses the top first-page
+      // envelope placement for all letter-family mailers.
       params.set("address_placement", "top_first_page");
-      // Required by Lob; PSG warranty letters are customer-retention marketing.
+      // Required by Lob; PSG's direct-mail program is retention/marketing.
       params.set("use_type", "marketing");
     }
 

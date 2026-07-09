@@ -181,6 +181,35 @@ describe("LobAdapter.submit", () => {
     expect(String(init.body)).toContain("color=true");
   });
 
+  it("submits a self_mailer to the letters endpoint", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(200, {
+        id: "ltr_self1",
+        expected_delivery_date: "2026-07-03",
+      })
+    ) as unknown as typeof fetch;
+
+    const adapter = makeAdapter(fetchImpl);
+    const result = await adapter.submit({
+      documentId: "doc-self-1",
+      pieceType: "self_mailer",
+      to: TO,
+      from: FROM,
+      file: "https://assets.test/self-mailer.pdf",
+      size: "8.5x11",
+      color: true,
+    });
+
+    expect(result.externalId).toBe("ltr_self1");
+    const [url, init] = mockOf(fetchImpl).mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/letters");
+    const body = String(init.body);
+    expect(body).toContain("size=8.5x11");
+    expect(body).toContain("color=true");
+    expect(body).toContain("address_placement=top_first_page");
+    expect(body).toContain("use_type=marketing");
+  });
+
   it("retries transient 503 then succeeds", async () => {
     const fetchImpl = vi
       .fn()

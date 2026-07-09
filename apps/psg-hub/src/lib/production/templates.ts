@@ -41,7 +41,8 @@ export type MailProduct =
   | "thank_you"
   | "warranty"
   | "envelope"
-  | "service_recovery";
+  | "service_recovery"
+  | "self_mailer";
 
 /**
  * Per-shop customization overrides, sourced from
@@ -200,11 +201,11 @@ export interface MailTemplate {
   frontHtml?: string;
   /** Postcard back HTML. */
   backHtml?: string;
-  /** Letter body HTML. */
+  /** Letter body HTML (including self-mailer content). */
   bodyHtml?: string;
-  /** Postcard size, e.g. "4x6" | "6x9" | "6x11". */
+  /** Mail size, e.g. "4x6" | "6x9" | "6x11" | "8.5x11". */
   size?: string;
-  /** Letters only: color print. */
+  /** Letters and self-mailers only: color print. */
   color?: boolean;
 }
 
@@ -417,6 +418,7 @@ export function renderMailContent(
     out.front = render(template.frontHtml);
     out.back = render(template.backHtml);
   } else {
+    // For both `letter` and `self_mailer`, Lob consumes a single `file` body.
     out.file = render(template.bodyHtml);
   }
   return out;
@@ -437,9 +439,9 @@ export interface BuildMailDocumentArgs {
 
 /**
  * Assemble a fully-rendered `MailDocument` from a template + merge data + the
- * addressing. Wires `front`/`back` (postcard) or `file` (letter), carries the
- * template's `size`/`color`, and returns the unresolved tokens so the batch
- * service / preview can block or flag an incomplete piece before submit.
+ * addressing. Wires `front`/`back` (postcard) or `file` (letter/self-mailer),
+ * carries the template's `size`/`color`, and returns the unresolved tokens so
+ * the batch service / preview can block or flag an incomplete piece before submit.
  */
 export function buildMailDocument(
   args: BuildMailDocumentArgs
@@ -460,8 +462,10 @@ export function buildMailDocument(
     document.back = content.back;
     if (template.size) document.size = template.size;
   } else {
+    // For both `letter` and `self_mailer`.
     document.file = content.file;
     document.color = template.color ?? false;
+    if (template.size) document.size = template.size;
   }
   return { document, missing: content.missing };
 }
@@ -626,6 +630,8 @@ const MASTER_FOOTER =
   `</div>` +
   `<!-- /block:footer -->`;
 
+const SELF_MAILER_DEFAULT_SIZE = "8.5x11";
+
 /**
  * The brand-aligned default templates, one per product. These are the fallback
  * used when a shop has no custom Sanity template; they reference the standard
@@ -704,6 +710,30 @@ export const DEFAULT_TEMPLATES: Record<MailProduct, MailTemplate> = {
     bodyHtml: letterDoc(
       `<div class="masthead">{{company.name}}</div>` +
         `<p>{{customer.fullName}}</p>`
+    ),
+  },
+  self_mailer: {
+    product: "self_mailer",
+    pieceType: "self_mailer",
+    size: SELF_MAILER_DEFAULT_SIZE,
+    color: true,
+    bodyHtml: masterLetterDoc(
+      MASTER_MASTHEAD +
+        MASTER_DATE_ADDRESS +
+        `<p class="salutation">Hi {{customer.firstName}},</p>` +
+        `<!-- block:headline -->` +
+        `<div class="headline">A quick reminder from your repair shop</div>` +
+        `<!-- /block:headline -->` +
+        `<!-- block:body -->` +
+        `<div class="body">` +
+        `<p>Thank you for choosing {{company.name}} for your vehicle service. We wanted to follow up ` +
+        `with a quick update on your repair and the information that might still apply.</p>` +
+        `<p>If you have any questions about what was completed, please call us directly.` +
+        ` We&rsquo;ll help you right away.</p>` +
+        `</div>` +
+        `<!-- /block:body -->` +
+        masterSignature("Sincerely,") +
+        MASTER_FOOTER
     ),
   },
   // W1 Piece 2 — Owner service-recovery, Direction A "The Owner's Direct Line"

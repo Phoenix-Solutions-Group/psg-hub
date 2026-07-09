@@ -37,6 +37,7 @@ export const TEMPLATE_KEYS = [
   "warranty",
   "envelope",
   "service_recovery",
+  "self_mailer",
 ] as const;
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
 
@@ -51,6 +52,7 @@ export const TEMPLATE_LABELS: Record<TemplateKey, string> = {
   warranty: "Warranty letter",
   envelope: "Envelope",
   service_recovery: "Owner service-recovery letter",
+  self_mailer: "Self-mailer letter",
 };
 
 /**
@@ -135,6 +137,7 @@ export interface TemplateProof {
   key: TemplateKey;
   label: string;
   pieceType: MailPieceType;
+  templateSize?: string;
   contentHash: string;
   content: RenderedMailContent;
 }
@@ -153,6 +156,7 @@ export function buildTemplateProof(
     key,
     label: TEMPLATE_LABELS[key],
     pieceType: template.pieceType,
+    templateSize: template.size,
     contentHash: templateContentHash(template),
     content: renderMailContent(template, data),
   };

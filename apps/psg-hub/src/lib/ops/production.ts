@@ -142,6 +142,8 @@ export interface DocumentRow {
   piece_type: MailPieceType;
   to_address: ProductionAddress;
   from_address: ProductionAddress;
+  color?: boolean | null;
+  size?: string | null;
   rendered_url: string | null;
   product_id: string | null;
   /**
@@ -187,10 +189,13 @@ export function buildMailDocument(doc: DocumentRow): MailDocument {
     metadata: { batchId: doc.batch_id },
   };
   if (doc.piece_type === "postcard") {
-    // Size defaults to the adapter's 4x6 when the rendered template doesn't pin one.
+    // Size defaults to the adapter's 4x6 for postcards when the rendered template doesn't pin one.
     return { ...base, front: doc.rendered_url ?? undefined };
   }
-  return { ...base, file: doc.rendered_url ?? undefined };
+  const next: MailDocument = { ...base, file: doc.rendered_url ?? undefined };
+  if (doc.size) next.size = doc.size;
+  if (doc.color !== undefined && doc.color !== null) next.color = doc.color;
+  return next;
 }
 
 /**
@@ -204,7 +209,9 @@ export async function printDocument(
 ): Promise<PrintOutcome> {
   const { data: doc, error } = await client
     .from("production_documents")
-    .select("id, batch_id, piece_type, to_address, from_address, rendered_url, product_id, vendor")
+    .select(
+      "id, batch_id, piece_type, to_address, from_address, color, size, rendered_url, product_id, vendor"
+    )
     .eq("id", documentId)
     .single();
   if (error) throw new Error(`printDocument load failed: ${error.message}`);
@@ -308,6 +315,7 @@ export const MAIL_PRODUCTS = [
   "warranty",
   "envelope",
   "service_recovery",
+  "self_mailer",
 ] as const;
 
 export const generateBatchSchema = z.object({
@@ -356,6 +364,8 @@ export interface GeneratedDocument {
   repair_customer_id: string;
   product_id: string | null;
   piece_type: MailPieceType;
+  color?: boolean | null;
+  size?: string | null;
   to_address: ProductionAddress;
   from_address: ProductionAddress;
   vendor: MailVendor;
@@ -439,8 +449,9 @@ export function buildBatchDocuments(
       program: company.program ?? {},
     };
     const rendered = renderMailContent(template, data);
-    // Letters carry a single `file`; postcards a `front` (the schema stores one
-    // rendered asset, so the Lob round-trip is the single-asset letter path).
+    // Letters and self-mailers carry a single `file`; postcards a `front`
+    // (the schema stores one rendered asset, so the Lob round-trip is the
+    // single-asset letter/self-mailer path).
     const asset = template.pieceType === "postcard" ? rendered.front : rendered.file;
 
     documents.push({
@@ -448,6 +459,8 @@ export function buildBatchDocuments(
       repair_customer_id: c.id,
       product_id: opts.productId ?? null,
       piece_type: template.pieceType,
+      color: template.color ?? null,
+      size: template.size ?? null,
       to_address: toStoredAddress(`${c.first_name} ${c.last_name}`.trim(), c.address),
       from_address: from,
       vendor,

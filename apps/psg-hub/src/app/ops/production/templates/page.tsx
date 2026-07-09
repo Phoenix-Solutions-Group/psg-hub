@@ -49,6 +49,7 @@ export default async function TemplateGatePage() {
       key,
       label: TEMPLATE_LABELS[key],
       pieceType: proof.pieceType,
+      templateSize: proof.templateSize,
       contentHash: proof.contentHash,
       missingTokens: proof.content.missing,
       status: approval?.status ?? null,
