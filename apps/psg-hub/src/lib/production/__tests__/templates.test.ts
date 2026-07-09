@@ -263,6 +263,23 @@ describe("default templates", () => {
     const tpl = defaultTemplate("warranty");
     expect(tpl.pieceType).toBe("letter");
     expect(tpl.bodyHtml).toContain("{{customer.serviceDate}}");
+    expect(tpl.bodyHtml).not.toContain("{{program.greeting}}");
+
+    const out = renderMailContent(tpl, {
+      ...DATA,
+      program: {
+        ...DATA.program,
+        greeting: "Custom warranty claim copy should not print.",
+        warrantyTerm: "for 12 months or 12,000 miles, whichever comes first",
+      },
+    });
+    expect(out.file).toContain(
+      "Thank you again for trusting Ace Body Shop with your 2021 Honda Accord."
+    );
+    expect(out.file).toContain(
+      "This letter confirms the written workmanship warranty on that repair."
+    );
+    expect(out.file).not.toContain("Custom warranty claim copy should not print.");
   });
 
   it("renders a complete, self-contained thank_you letter from the default + real data", () => {

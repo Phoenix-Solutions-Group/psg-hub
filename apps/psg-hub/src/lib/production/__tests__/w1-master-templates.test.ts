@@ -120,14 +120,27 @@ describe("W1 Piece 1 — Thank-You + ACRB survey (Faithful Letter)", () => {
 
   it("shows the warranty variant block only when the shop offers a written warranty", () => {
     const withWarranty = renderMailContent(defaultTemplate("thank_you"), ABC).file!;
-    expect(withWarranty).toContain("comprehensive warranty");
+    expect(withWarranty).toContain("written workmanship warranty");
 
     const noWarranty = renderMailContent(defaultTemplate("thank_you"), {
       ...ABC,
       program: { ...ABC.program, hasWarranty: undefined },
     });
-    expect(noWarranty.file).not.toContain("comprehensive warranty");
+    expect(noWarranty.file).not.toContain("written workmanship warranty");
     // Hiding an optional block leaves no unresolved tokens.
+    expect(noWarranty.missing).toEqual([]);
+  });
+
+  it("keeps the envelope warranty teaser behind the warranty gate", () => {
+    const withWarranty = renderMailContent(defaultTemplate("envelope"), ABC);
+    expect(withWarranty.file).toContain("Your repair warranty is enclosed.");
+    expect(withWarranty.missing).toEqual([]);
+
+    const noWarranty = renderMailContent(defaultTemplate("envelope"), {
+      ...ABC,
+      program: { ...ABC.program, hasWarranty: undefined },
+    });
+    expect(noWarranty.file).not.toContain("Your repair warranty is enclosed.");
     expect(noWarranty.missing).toEqual([]);
   });
 

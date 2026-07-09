@@ -664,8 +664,8 @@ export const DEFAULT_TEMPLATES: Record<MailProduct, MailTemplate> = {
         `{{customer.vehicleShort}}, please notify us immediately. You and your family&rsquo;s safety ` +
         `and peace of mind are more important to us than anything else we do here.</p>` +
         // block:warranty — PS105 variant; renders only when the shop offers a written warranty.
-        `{{#if program.hasWarranty}}<!-- block:warranty --><p>All our repairs carry a comprehensive ` +
-        `warranty designed to deliver total satisfaction and protection for you. Enclosed you will find ` +
+        `{{#if program.hasWarranty}}<!-- block:warranty --><p>All our repairs carry a written ` +
+        `workmanship warranty designed to deliver total satisfaction and protection for you. Enclosed you will find ` +
         `your completed warranty. Review it carefully and, as with any important document, please retain ` +
         `it in a safe place. If you have any questions regarding your warranty, call at any time.</p>` +
         `<!-- /block:warranty -->{{/if}}` +
@@ -693,7 +693,8 @@ export const DEFAULT_TEMPLATES: Record<MailProduct, MailTemplate> = {
       `<div class="masthead">{{company.name}}</div>` +
         `<div class="recipient">{{customer.fullName}}</div>` +
         `<p class="greeting">Dear {{customer.firstName}},</p>` +
-        `<p>{{program.greeting}}</p>` +
+        `<p>Thank you again for trusting {{company.name}} with your {{customer.vehicle}}. This letter confirms ` +
+        `the written workmanship warranty on that repair.</p>` +
         `<p>Your {{customer.vehicle}}, repaired on {{customer.serviceDate}}, is covered by our written ` +
         `workmanship warranty. We guarantee the quality of the repairs performed ` +
         `{{program.warrantyTerm}}.</p>` +
@@ -709,7 +710,8 @@ export const DEFAULT_TEMPLATES: Record<MailProduct, MailTemplate> = {
     color: false,
     bodyHtml: letterDoc(
       `<div class="masthead">{{company.name}}</div>` +
-        `<p>{{customer.fullName}}</p>`
+        `<p>{{customer.fullName}}</p>` +
+        `{{#if program.hasWarranty}}<div class="teaser">Your repair warranty is enclosed.</div>{{/if}}`
     ),
   },
   self_mailer: {
