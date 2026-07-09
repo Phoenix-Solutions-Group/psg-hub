@@ -28,7 +28,7 @@ export type PerShopResult = {
   status: ShopReportStatus;
   /** narrative provenance for a sent report ("model" | "template"). */
   source?: GenerateOutcome["source"];
-  /** actionable non-exception reason, currently used when a report is held. */
+  /** Non-exception reason for held/skipped outcomes. */
   reason?: string;
   error?: string;
 };
@@ -91,6 +91,11 @@ export async function runMonthlyReports(
       }
 
       const reportData = await deps.assembleReportData(shop.id, period);
+      if (reportData.linkedSources.length === 0) {
+        results.push({ shop, status: "skipped", reason: "no linked sources to report" });
+        continue;
+      }
+
       const outcome = await deps.generateNarrative(reportData);
 
       // Never email an unverified report.
