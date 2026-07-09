@@ -1,0 +1,45 @@
+name: Graphify refresh
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Keep the code map fresh daily even when no agent has refreshed it locally.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: graphify-refresh-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    name: refresh graphify code graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Graphify
+        run: python -m pip install --upgrade graphifyy
+
+      - name: Refresh graph
+        run: node scripts/refresh-graphify.mjs
+
+      - name: Upload graph artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: graphify-out-${{ github.sha }}
+          path: graphify-out/
+          retention-days: 14

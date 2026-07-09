@@ -66,13 +66,33 @@ We intentionally do **not** use the bare `graphify claude install` variant — i
 ## Build / refresh the graph (offline)
 
 ```bash
-graphify update .          # AST re-extract + cluster + report + html. No LLM, no API key.
+node scripts/refresh-graphify.mjs  # AST re-extract + cluster + freshness stamp. No LLM, no API key.
 ```
 Run this before broad repo-reading and after meaningful code changes to keep the graph current
-(~18s). `graphify update .`
+(~18s). The script wraps `graphify update .`
 is the offline code-only path; it is what we validated. (The `/graphify .` skill flow can
 additionally pull docs/PDFs/images into the graph, but that uses the host agent as the LLM
 and is optional — code extraction alone covers our needs.)
+
+The refresh writes two visible freshness stamps into the gitignored `graphify-out/` directory:
+
+- `graphify-out/FRESHNESS.md`
+- `graphify-out/freshness.json`
+
+Both include the refresh time, git commit SHA, branch, Graphify version, and exact command.
+
+## Automatic refresh
+
+Two mechanisms keep the graph current without committing generated graph files:
+
+1. **GitHub Actions:** `.github/workflows/graphify-refresh.yml` runs `node scripts/refresh-graphify.mjs`
+   on every push to `main`, once daily, and on manual dispatch. It uploads the gitignored
+   `graphify-out/` directory as a short-lived workflow artifact so the run has auditable
+   output without bloating the repository.
+2. **Paperclip routine:** `Daily Graphify refresh for psg-hub` is assigned to Ada and runs
+   daily against the shared psg-hub workspace. The routine task's required action is to pull
+   latest `main`, run `node scripts/refresh-graphify.mjs`, confirm `graphify-out/FRESHNESS.md`, and close
+   the routine run with the stamped commit SHA.
 
 For BSM agents, document/image ingestion stays off unless Steve separately approves it. Do not
 send customer files, customer documents, images, screenshots, or production data through
@@ -129,6 +149,9 @@ PSG-897 verification on 2026-07-08:
 - **No commit hook.** We did **not** run `graphify hook install`. Rationale: outputs are
   gitignored (so a post-commit rebuild is purely local), the binary isn't on a stable PATH
   for all agents/CI, and it adds latency to every commit/checkout. Rebuild on demand instead.
+- **Automatic refresh without committed graph files.** PSG-991 added the scheduled
+  `graphify-refresh` GitHub Action plus a Paperclip routine. This preserves the original
+  no-hook/no-committed-output decision while making freshness visible and repeatable.
 - **Skill registration is local** (`.claude/` is gitignored). Each environment that wants
   `/graphify` runs `graphify install --project --platform claude` after installing the CLI.
 
