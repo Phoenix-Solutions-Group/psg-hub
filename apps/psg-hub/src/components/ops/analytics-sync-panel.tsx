@@ -16,6 +16,13 @@ type SourceOutcome = {
   error?: string;
   detail?: Record<string, unknown>;
 };
+type MonthlyReportDetail = {
+  shop?: unknown;
+  status?: unknown;
+  source?: unknown;
+  reason?: unknown;
+  error?: unknown;
+};
 type SyncResponse = {
   cadence: "daily" | "monthly";
   scope: string;
@@ -61,6 +68,17 @@ function detailSummary(detail?: Record<string, unknown>): string | null {
     })
     .filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function monthlyReportDetails(detail?: Record<string, unknown>): MonthlyReportDetail[] {
+  if (!detail || !Array.isArray(detail.results)) return [];
+  return detail.results.filter((item): item is MonthlyReportDetail =>
+    item !== null && typeof item === "object"
+  );
+}
+
+function detailText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 export function AnalyticsSyncPanel() {
@@ -172,16 +190,44 @@ export function AnalyticsSyncPanel() {
           <ul className="mt-3 space-y-1.5 text-sm">
             {result.results.map((r) => {
               const detail = detailSummary(r.detail);
+              const monthlyDetails =
+                r.source === "monthly-report" ? monthlyReportDetails(r.detail) : [];
               return (
-                <li key={r.source} className="flex items-center justify-between gap-4">
-                  <span className="font-mono text-xs">{r.source}</span>
-                  <span className={`text-right ${STATUS_STYLES[r.status]}`}>
-                    {r.status === "success"
-                      ? `${r.rows_written} rows${detail ? ` (${detail})` : ""}`
-                      : r.status === "skipped"
-                        ? `skipped (${r.error ?? "not run"}${detail ? `; ${detail}` : ""})`
-                        : `error: ${r.error ?? "unknown"}${detail ? ` (${detail})` : ""}`}
-                  </span>
+                <li key={r.source} className="space-y-2">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="font-mono text-xs">{r.source}</span>
+                    <span className={`text-right ${STATUS_STYLES[r.status]}`}>
+                      {r.status === "success"
+                        ? `${r.rows_written} rows${detail ? ` (${detail})` : ""}`
+                        : r.status === "skipped"
+                          ? `skipped (${r.error ?? "not run"}${detail ? `; ${detail}` : ""})`
+                          : `error: ${r.error ?? "unknown"}${detail ? ` (${detail})` : ""}`}
+                    </span>
+                  </div>
+                  {monthlyDetails.length > 0 && (
+                    <ul className="space-y-1 rounded-md border border-border bg-muted/30 p-3 text-xs">
+                      {monthlyDetails.map((item, index) => {
+                        const shop = detailText(item.shop) ?? `Shop ${index + 1}`;
+                        const status = detailText(item.status) ?? "unknown";
+                        const source = detailText(item.source);
+                        const reason = detailText(item.reason);
+                        const itemError = detailText(item.error);
+                        return (
+                          <li key={`${shop}-${index}`} className="space-y-0.5">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="font-medium text-foreground">{shop}</span>
+                              <span className={STATUS_STYLES[status as SourceStatus] ?? "text-muted-foreground"}>
+                                {status}
+                                {source ? ` · ${source}` : ""}
+                              </span>
+                            </div>
+                            {reason && <p className="text-muted-foreground">Reason: {reason}</p>}
+                            {itemError && <p className="text-destructive">Error: {itemError}</p>}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </li>
               );
             })}
