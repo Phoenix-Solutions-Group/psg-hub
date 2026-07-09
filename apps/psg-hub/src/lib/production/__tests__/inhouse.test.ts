@@ -51,6 +51,19 @@ describe("InHouseAdapter", () => {
     expect(result.proofUrl).toBe("https://assets.test/ltr-9.pdf");
   });
 
+  it("uses the self_mailer file as the print asset", async () => {
+    const adapter = new InHouseAdapter();
+    const result = await adapter.submit({
+      documentId: "sm-7",
+      pieceType: "self_mailer",
+      to: ADDR,
+      from: ADDR,
+      file: "https://assets.test/self-mailer.pdf",
+    });
+    expect(result.externalId).toBe(`${INHOUSE_ID_PREFIX}sm-7`);
+    expect(result.proofUrl).toBe("https://assets.test/self-mailer.pdf");
+  });
+
   it("rejects a piece with no rendered asset as a non-retryable caller bug", async () => {
     const adapter = new InHouseAdapter();
     await expect(

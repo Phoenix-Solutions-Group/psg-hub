@@ -94,9 +94,19 @@ describe("toMailAddress / buildMailDocument", () => {
     expect(postcard.front).toBe("https://assets.test/doc-1.pdf");
     expect(postcard.metadata).toEqual({ batchId: "batch-1" });
 
-    const letter = buildMailDocument({ ...DOC, piece_type: "letter" });
+    const letter = buildMailDocument({ ...DOC, piece_type: "letter", color: true, size: "6x9" });
     expect(letter.file).toBe("https://assets.test/doc-1.pdf");
+    expect(letter.color).toBe(true);
+    expect(letter.size).toBe("6x9");
     expect(letter.front).toBeUndefined();
+  });
+
+  it("maps self_mailers through the same single-file flow as letters", () => {
+    const selfMailer = buildMailDocument({ ...DOC, piece_type: "self_mailer", size: "8.5x11" });
+    expect(selfMailer.file).toBe("https://assets.test/doc-1.pdf");
+    expect(selfMailer.size).toBe("8.5x11");
+    expect(selfMailer.front).toBeUndefined();
+    expect(selfMailer.back).toBeUndefined();
   });
 });
 
@@ -152,6 +162,20 @@ describe("printDocument", () => {
     expect(requested).toEqual(["inhouse"]);
     expect(inhouse.submit).toHaveBeenCalledOnce();
     expect(lob.submit).not.toHaveBeenCalled();
+  });
+
+  it("forwards stored size/color on letter-family rows to the adapter", async () => {
+    const doc: DocumentRow = {
+      ...DOC,
+      piece_type: "self_mailer",
+      color: true,
+      size: "8.5x11",
+    };
+    const { client } = makeClient(doc);
+    const adapter = stubAdapter();
+    await printDocument(client, adapter, "doc-1");
+    const sent = (adapter.submit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(sent).toMatchObject({ size: "8.5x11", color: true, pieceType: "self_mailer" });
   });
 
   it("defaults the resolver to lob when the document has no vendor", async () => {
@@ -326,6 +350,14 @@ describe("buildBatchDocuments", () => {
     // cust-2 has no vehicle/serviceDate — the warranty template flags them missing.
     const missing = built.missingByCustomer.find((m) => m.repairCustomerId === "cust-2");
     expect(missing?.tokens).toEqual(expect.arrayContaining(["customer.vehicle"]));
+  });
+
+  it("persists self_mailer size/color into generated document rows", () => {
+    const built = buildBatchDocuments(company, [customers[0]], { product: "self_mailer" });
+    const doc = built.documents[0];
+    expect(doc.piece_type).toBe("self_mailer");
+    expect(doc.size).toBe("8.5x11");
+    expect(doc.color).toBe(true);
   });
 
   it("returns an empty plan when there are no customers", () => {
