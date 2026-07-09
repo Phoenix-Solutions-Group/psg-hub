@@ -304,8 +304,8 @@ export class LobAdapter implements MailAdapter {
     let path: string;
     if (document.pieceType === "postcard") {
       path = "/postcards";
-      // Letter/mailer path can support size directly at the endpoint; postcards
-      // keep their legacy defaults and strict clear-zone sizing.
+      // Postcards support explicit sizing; the letters endpoint rejects a size
+      // param, including for PSG self-mailer proofs routed through /letters.
       params.set("size", document.size ?? "4x6");
       if (document.front) params.set("front", document.front);
       if (document.back) params.set("back", document.back);
@@ -313,7 +313,6 @@ export class LobAdapter implements MailAdapter {
       path = "/letters";
       if (document.file) params.set("file", document.file);
       if (document.color !== undefined) params.set("color", String(document.color));
-      if (document.size) params.set("size", document.size);
       // Lob requires an address-placement choice; PSG uses the top first-page
       // envelope placement for all letter-family mailers.
       params.set("address_placement", "top_first_page");
