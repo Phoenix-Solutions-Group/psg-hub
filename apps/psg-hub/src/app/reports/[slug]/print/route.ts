@@ -29,10 +29,29 @@ function authorized(request: Request): boolean {
   const token = process.env.RENDER_TOKEN;
   if (!token) return false; // unconfigured = locked
   const header = request.headers.get("authorization") ?? "";
-  const expected = `Bearer ${token}`;
-  const a = Buffer.from(header);
-  const b = Buffer.from(expected);
+  const normalizedToken = normalizeRenderToken(token);
+  const provided = extractBearerToken(header);
+  if (!provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(normalizedToken);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function normalizeRenderToken(raw: string): string {
+  const trimmed = raw.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function extractBearerToken(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed.toLowerCase().startsWith("bearer ")) return null;
+  return normalizeRenderToken(trimmed.slice(7));
 }
 
 /** Parse a print slug into its shopId + period parts (null if malformed). */
