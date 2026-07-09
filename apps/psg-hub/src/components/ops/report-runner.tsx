@@ -44,8 +44,53 @@ type RunState = {
   ranAt: string | null;
 };
 
+type RunResult = Omit<RunState, "loading">;
+
+type ReportRequest = {
+  slug: string;
+  queryString: string;
+  sample: boolean;
+};
+
 function isNumeric(c: ReportColumn) {
   return c.type === "number" || c.type === "currency" || c.type === "percent";
+}
+
+async function fetchReport({
+  slug,
+  queryString,
+  sample,
+}: ReportRequest): Promise<RunResult> {
+  try {
+    const res = await fetch(`/api/ops/reports/${slug}?${queryString}`, {
+      headers: { Accept: "application/json" },
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      const detail = Array.isArray(body?.details)
+        ? body.details.join("; ")
+        : body?.error ?? "Failed to run report";
+      return {
+        error: detail,
+        rows: [],
+        sample,
+        ranAt: null,
+      };
+    }
+    return {
+      error: null,
+      rows: body.rows ?? [],
+      sample: Boolean(body.sample),
+      ranAt: body.generatedAt ?? null,
+    };
+  } catch {
+    return {
+      error: "Network error running report",
+      rows: [],
+      sample,
+      ranAt: null,
+    };
+  }
 }
 
 export function ReportRunner({
@@ -80,41 +125,38 @@ export function ReportRunner({
     return sp.toString();
   }, [hasDateRange, start, end, filterValues]);
 
+  const [initialRequest] = useState<ReportRequest>(() => ({
+    slug,
+    queryString,
+    sample,
+  }));
+
   const run = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
-    try {
-      const res = await fetch(`/api/ops/reports/${slug}?${queryString}`, {
-        headers: { Accept: "application/json" },
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        const detail = Array.isArray(body?.details)
-          ? body.details.join("; ")
-          : body?.error ?? "Failed to run report";
-        setState((s) => ({ ...s, loading: false, error: detail }));
-        return;
-      }
-      setState({
-        loading: false,
-        error: null,
-        rows: body.rows ?? [],
-        sample: Boolean(body.sample),
-        ranAt: body.generatedAt ?? null,
-      });
-    } catch {
-      setState((s) => ({
-        ...s,
-        loading: false,
-        error: "Network error running report",
-      }));
-    }
-  }, [slug, queryString]);
+    const result = await fetchReport({ slug, queryString, sample });
+    setState({
+      loading: false,
+      ...result,
+    });
+  }, [queryString, sample, slug]);
 
   // Initial run on mount.
   useEffect(() => {
-    run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let cancelled = false;
+
+    void fetchReport(initialRequest).then((result) => {
+      if (!cancelled) {
+        setState({
+          loading: false,
+          ...result,
+        });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialRequest]);
 
   const exportHref = (format: string) =>
     `/api/ops/reports/${slug}?${queryString}${queryString ? "&" : ""}format=${format}`;
