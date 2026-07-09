@@ -59,8 +59,11 @@ describe("POST /api/board-briefing/send payload handling", () => {
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
-  it("400 when required pushed fields are missing", async () => {
-    const res = await POST(req({ body: "Brief" }, "Bearer cron-secret"));
+  it.each([
+    ["body", { briefingUrl: "https://paperclip.example/doc" }],
+    ["briefingUrl", { body: "Brief" }],
+  ])("400 when required pushed field %s is missing", async (_field, payload) => {
+    const res = await POST(req(payload, "Bearer cron-secret"));
 
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: "invalid_payload" });
