@@ -74,11 +74,22 @@ export async function generateNarrative(
   let lastViolations: Violation[] = [];
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const raw = await writeNarrative(
-      reportData,
-      deps,
-      attempt === 0 ? undefined : lastViolations.map((v) => v.detail)
-    );
+    let raw: ReportNarrative;
+    try {
+      raw = await writeNarrative(
+        reportData,
+        deps,
+        attempt === 0 ? undefined : lastViolations.map((v) => v.detail)
+      );
+    } catch (err) {
+      lastViolations = [
+        {
+          code: "schema",
+          detail: `writer unavailable: ${err instanceof Error ? err.message : String(err)}`,
+        },
+      ];
+      break;
+    }
     const substituted = substituteNarrative(raw, values);
     const result = evaluateReport(substituted, reportData);
     if (result.verdict === "pass") {
