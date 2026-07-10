@@ -6,183 +6,193 @@ Scope: Body Shop Marketer paid media team setup
 
 ## Bottom Line
 
-The Paid Media team needs one shared operating environment that combines ad account access, website measurement, reporting, creative production, and controlled change approvals. The goal is that the team can audit, plan, improve, and report on client campaigns without waiting on manual handoffs, while still protecting client accounts from accidental or unauthorized changes.
+The Paid Media team should run inside Body Shop Marketer (BSM) and psg-hub first. We should not add a separate stack of tools when BSM already has Google Ads, Google Analytics, Google Search Console, Google Business Profile, reporting, approvals, and controlled Google Ads / Google Tag Manager change tooling.
 
-## Team Roles This Environment Must Support
+The environment we need is mostly access, permissions, process, and documentation around the tools already built.
 
-| Role | Main job | Must be able to access |
+## Operating Principle
+
+Use the simplest tool that already exists.
+
+1. BSM is the working hub for campaign performance, reporting, client visibility, and proof of work.
+2. psg-hub Ads Mutation Studio is the controlled place for Google Ads and Google Tag Manager changes.
+3. Paperclip is the work tracker and board-reporting channel.
+4. Graphify is for finding and understanding BSM code quickly.
+5. Obsidian is only for durable campaign knowledge that does not belong in code or a task thread.
+6. New paid tools require a clear gap, named owner, and board approval.
+
+## What This Means For The Six PPC Roles
+
+| Role | Runs primarily in | Needs access to |
 | --- | --- | --- |
-| Paid Media Auditor | Review each account and identify waste, tracking gaps, and missed opportunity | Google Ads, Google Analytics 4, Google Tag Manager, call tracking, landing pages, Google Business Profile, Search Console, SEMrush |
-| Tracking & Measurement Specialist | Confirm leads, calls, forms, and ads are measured correctly | Google Analytics 4, Google Tag Manager, Google Ads conversions, call tracking, website content management system, Search Console |
-| PPC Campaign Strategist | Redesign account structure, budgets, targeting, and bidding | Google Ads manager account, campaign plans, keyword research, conversion data, landing page inventory |
-| Search Query Analyst | Remove wasted spend and improve keyword quality | Google Ads search terms, negative keyword lists, SEMrush, client service area data |
-| Ad Creative Strategist | Refresh ad copy, extensions, landing page messages, and creative variants | Google Ads assets, Meta assets when used, brand voice docs, customer persona docs, landing page editor, creative tools |
-| Analytics Reporter | Build daily and monthly reporting for the board and client teams | Looker Studio, Google Analytics 4, Google Ads, Search Console, Google Business Profile, call tracking, BigQuery or Supabase reporting data |
+| Paid Media Auditor | BSM analytics and account audit views | Google Ads, Google Analytics 4, Search Console, Google Business Profile, SEMrush data already available to PSG |
+| Tracking & Measurement Specialist | BSM analytics, psg-hub integrations, Ads Mutation Studio | Google Analytics 4, Google Tag Manager, Google Ads conversions, call tracking data if already used by the client |
+| PPC Campaign Strategist | BSM reporting and psg-hub Ads Mutation Studio | Google Ads manager account, campaign structure, conversion data, landing page inventory |
+| Search Query Analyst | BSM paid media reporting and Google Ads data | Search terms, negative keyword lists, keyword performance, client service-area rules |
+| Ad Creative Strategist | BSM content and campaign planning surfaces | Google Ads assets, landing page content, PSG brand/persona guidance, approved creative assets |
+| Analytics Reporter | BSM dashboards and Paperclip board updates | BSM reports, Google Ads, Google Analytics 4, Search Console, Google Business Profile, approved client notes |
 
-## Required Core Access
+## Required Account Access
+
+These are access requirements, not new software purchases.
 
 ### Google Ads
 
-- PSG manager account access for every managed client account.
-- Google Ads API developer token on the PSG manager account.
-- OAuth credentials for the psg-hub Google Ads integration.
-- Standard production access for live campaign data and managed changes.
+- PSG manager account access for each managed client account.
+- Google Ads API developer token on PSG's manager account.
+- OAuth credentials already wired to psg-hub.
 - Read access for auditors and reporters.
 - Edit access only for approved campaign operators.
 - Admin access limited to the account owner and one backup owner.
-- Billing visibility for finance reconciliation, including monthly ad spend and invoices.
-
-Reference: Google states that Google Ads API use needs a manager account and developer token. See the official Google Ads API access documentation: https://support.google.com/google-ads/answer/15235 and https://developers.google.com/google-ads/api/docs/api-policy/developer-token.
+- Billing visibility for ad spend reconciliation.
 
 ### Google Analytics 4
 
-- Account or property access for every client website.
-- Editor access for the tracking specialist.
+- Property access for each client website.
+- Access to real lead events: forms, calls, appointment requests, directions, and other high-value actions.
+- Editor access only for the tracking owner and backup.
 - Viewer or Analyst access for auditors, strategists, and reporters.
-- Confirmed key events for forms, calls, appointment requests, directions, and other real lead actions.
-- Data stream access so the team can verify the installed measurement tag.
 
 ### Google Tag Manager
 
-- Container access for every client website.
-- Publish permission for the tracking specialist and one backup.
-- Edit and approve permissions for team members who build tags but should not publish without review.
+- Container access for each client website.
+- Publish permission for the tracking owner and backup.
+- Edit or approve permission for team members building tags.
 - Read access for auditors and reporters.
-- Two active administrators to avoid lockout.
-
-Reference: Google Tag Manager supports account-level and container-level permissions, including read, edit, approve, and publish rights. See Google Tag Manager permissions: https://support.google.com/tagmanager/answer/6107011.
+- Changes should route through psg-hub / Ads Mutation Studio where BSM already supports the workflow.
 
 ### Google Business Profile
 
 - Owner or manager access for each client location.
-- Permission to view profile performance, reviews, calls, website clicks, direction requests, and local search actions.
-- Posting rights if the campaign includes local posting.
-- Clear owner fallback if a profile is already claimed by another party.
-
-Reference: Google Business Profile can be claimed or access can be requested for an existing profile. See Google's ownership request guide: https://support.google.com/business/answer/4566671.
+- Access to performance, reviews, calls, website clicks, directions, and local search actions.
+- Posting access only when the campaign scope includes local posting.
 
 ### Google Search Console
 
-- Property access for each client website.
-- Access to query, page, location, and device performance.
-- Sitemap and indexing visibility for landing page launch checks.
+- Website property access for each client.
+- Query, page, location, and device data for campaign and landing-page decisions.
+- Sitemap and indexing visibility for landing-page launch checks.
 
 ### Meta Business Suite, Facebook, and Instagram
 
-- Partner access to the client's Meta business portfolio when Meta campaigns or retargeting are in scope.
-- Access to the ad account, Facebook Page, Instagram account, dataset or pixel, custom audiences, and lead forms.
-- Admin rights should stay with the client or PSG account owner; campaign operators get only the permissions needed for their role.
+Meta should stay optional, not part of the default first rollout.
 
-Reference: Meta supports partner access to business assets through Business Suite settings. See Meta's partner access guide: https://www.facebook.com/business/help/1717412048538897.
+Use Meta only when a client is actively running or approving paid social campaigns. When used, PSG needs partner access to the ad account, Facebook Page, Instagram account, pixel or dataset, audiences, and lead forms.
 
-## Required Measurement And Reporting Tools
+## BSM-First Tool Map
 
-| Tool | Why the team needs it | Minimum setup |
+| Need | Use first | Add only if there is a gap |
 | --- | --- | --- |
-| Looker Studio | Client and board dashboards | Shared PSG templates, Google Ads and Google Analytics connectors, named owner |
-| CallRail or WhatConverts | Phone lead tracking and call quality review | Number pools, source tracking, recording policy, lead outcome tags |
-| BigQuery or Supabase reporting tables | Durable reporting history and cross-client analysis | Nightly data pulls, shop-level access controls, backup owner |
-| psg-hub analytics pages | Internal single view of performance | Linked shop records, Google Ads, Google Analytics, Search Console, and Google Business Profile connections |
-| psg-hub Ads Mutation Studio | Controlled Google Ads and Google Tag Manager changes | Dry-run previews, audit logs, approval gate for high-risk changes |
+| Daily campaign work | BSM and psg-hub Ads Mutation Studio | Direct Google Ads UI for emergency/manual work |
+| Campaign reporting | BSM dashboards and monthly report surfaces | Looker Studio only if the board wants an external dashboard view |
+| Work tracking | Paperclip | Asana only for recurring delivery tasks that need calendar-style management |
+| Client campaign knowledge | Paperclip issue documents and repo docs | Obsidian vault for long-lived client notes and process memory |
+| Code lookup and impact checks | Graphify | Manual repo search after Graphify narrows the area |
+| Keyword and competitor research | Existing PSG SEMrush access and BSM artifacts | Additional research tools only by approved exception |
+| Landing page content | BSM / psg-hub content workflow | Sanity or external editor only where the page already lives there |
+| Creative assets | Existing PSG asset library | Canva or Adobe only when a role needs production assets, not for basic campaign operations |
+| Call tracking | Existing client call tracking data in BSM | CallRail or WhatConverts only when the client already uses it or tracking is missing |
 
-## Required Research And Planning Tools
+## Graphify Versus Obsidian
 
-| Tool | Why the team needs it |
-| --- | --- |
-| SEMrush | Keyword research, competitor analysis, wasted spend discovery, local search opportunity |
-| Google Keyword Planner | Search volume, keyword expansion, cost estimates |
-| Google Ads Transparency Center | Competitive ad review |
-| Client intake form | Service areas, preferred jobs, certifications, insurance relationships, capacity limits |
-| Brand and persona library | Keeps ad copy specific to collision repair customers and PSG's positioning |
-| Landing page inventory | Confirms which campaigns have a relevant destination page |
+Use Graphify when the question is about BSM code:
 
-## Required Creative And Landing Page Tools
+- Where does Google Ads reporting live?
+- What code updates a dashboard?
+- What could a tracking change affect?
+- Which files should an engineer open before changing an integration?
 
-| Tool | Why the team needs it |
-| --- | --- |
-| Sanity | Landing page and content management for psg-hub-backed pages |
-| Canva or Adobe | Ad creative, display assets, social variants, and resized formats |
-| Shared PSG asset library | Logos, shop photos, OEM certification badges, before-and-after images, proof points |
-| Grammarly or equivalent review tool | Plain-language copy review before customer-facing launch |
-| Approval queue | Prevents unreviewed copy, offers, or claims from going live |
+Graphify is already approved in `Reference.md` and the repo runbook. It is local, fast, and token-efficient for code navigation. It should not ingest customer files, client documents, screenshots, or production data.
 
-## Required Operations Tools
+Use Obsidian only when the question is about reusable business knowledge:
 
-| Tool | Why the team needs it |
-| --- | --- |
-| Paperclip | Work tracking, daily board updates, ownership, blockers, and approvals |
-| Asana | Client delivery tasks and recurring campaign work |
-| Pipedrive | Sales handoff context and client lifecycle status |
-| PandaDoc | Signed scope of work and contract commitments |
-| invoiced.app | Ad spend billing reconciliation and client invoicing |
-| Obsidian or Notion | Persistent client knowledge base and campaign notes |
-| Slack or email group | Time-sensitive internal alerts |
+- What is the campaign process for a body shop client?
+- What did we learn from this client's last audit?
+- Which objections, offers, and service areas matter for this shop?
+- What should the next Paid Media agent know before continuing work?
 
-## Required Security And Governance
+The linked `AgriciDaniel/claude-obsidian` project is useful because it stores plain Markdown notes in an Obsidian vault, maintains links, and can keep session memory. That is valuable for campaign knowledge, but it is not a replacement for Graphify. It is also not required for the first environment setup unless we decide to create a PSG paid-media knowledge vault.
 
-- Use named user accounts. Do not share passwords.
-- Require multi-factor authentication on every ad, analytics, and business account.
-- Keep at least two administrators for every critical account.
-- Store secrets only in approved secret stores such as Vercel, Supabase, or the password manager. Do not commit secrets to the repository.
-- Separate read-only roles from change-making roles.
-- Use dry-run previews before live ad or tracking changes.
-- Keep audit logs for every Google Ads or Google Tag Manager change.
-- Require board approval for high-risk changes, including large budget changes, campaign launches, account restructures, broad-match expansion, or conversion tracking rewrites.
-- Review user access monthly and remove departed users immediately.
+Recommendation: use Graphify for engineering and BSM code questions now. Use Paperclip issue documents and this repo for the initial PPC process. Add an Obsidian paid-media vault only if the team starts losing reusable campaign knowledge across clients and tasks.
+
+## Minimal Process Capture
+
+Keep the process simple:
+
+1. One BSM client record per shop.
+2. One Paperclip workstream per major campaign initiative.
+3. One BSM dashboard view that shows the team's work and results.
+4. One short daily board update in Paperclip.
+5. One reusable setup checklist per client.
+6. One audit summary per client before major changes.
+7. One approval path for high-risk changes.
+
+Do not create parallel documents unless the information will be reused.
 
 ## Client Onboarding Access Checklist
 
 For each client, collect and confirm:
 
-- Google Ads customer ID and manager-account link.
+- Google Ads customer ID and PSG manager-account link.
 - Google Analytics 4 property ID.
 - Google Tag Manager account and container ID.
 - Google Business Profile location access.
 - Google Search Console property access.
-- Meta business portfolio, ad account, Page, Instagram account, dataset or pixel access when Meta is in scope.
-- Call tracking provider access.
-- Website content management access.
-- Landing page domain and hosting access when PSG owns landing pages.
-- Signed scope of work, billing terms, approved monthly ad budget, and approval owner.
+- Meta access only when paid social is in scope.
+- Existing call tracking provider, if any.
+- Website or landing page access only when PSG must edit the page.
+- Signed scope of work, approved monthly ad budget, and approval owner.
 - Service areas, target repair types, certifications, preferred insurance relationships, excluded work, and capacity limits.
 
 ## Daily Board Reporting
 
-The team should report to the board once per day in plain English:
+The daily report should be short and plain English:
 
-- What changed in the accounts today.
-- Whether spend is on pace or needs attention.
+- What changed today.
+- Whether spend is on pace.
 - Leads, calls, and forms received.
 - Tracking problems found or fixed.
 - Wasted spend removed.
 - New risks, blockers, or approval needs.
 - What the team will do next.
 
+## Required Safety Rules
+
+- Use named user accounts. Do not share passwords.
+- Require multi-factor authentication on ad, analytics, and business accounts.
+- Keep at least two administrators for every critical account.
+- Store secrets only in approved secret stores. Do not commit secrets to the repository.
+- Separate read-only roles from change-making roles.
+- Use dry-run previews before live ad or tracking changes.
+- Keep audit logs for Google Ads and Google Tag Manager changes.
+- Require approval for high-risk changes, including large budget changes, launches, restructures, broad-match expansion, or conversion tracking rewrites.
+
 ## Startup Sequence
 
-1. Confirm PSG-owned admin accounts and backup owners for Google, Meta, reporting, and billing tools.
-2. Create the shared access request bundle for each client.
-3. Connect every client account to psg-hub where the integration already exists.
-4. Verify tracking before making campaign changes.
-5. Build the first dashboard template in Looker Studio and psg-hub.
-6. Run an initial audit for each account and produce the first plain-English board summary.
-7. Only then begin live campaign restructuring or budget changes.
+1. Confirm which BSM surfaces the PPC team will use every day.
+2. Confirm PSG's Google Ads manager account and backup administrator.
+3. Connect each first-batch client account to BSM where the integration already exists.
+4. Verify tracking before campaign changes.
+5. Create the first BSM dashboard view for daily reporting.
+6. Run the initial audit for each account.
+7. Produce the first plain-English board summary from BSM data.
+8. Begin live campaign changes only after tracking and approvals are clean.
 
 ## Current Repo Support
 
-The repo already contains support for several parts of this environment:
+The repo already supports most of this environment:
 
-- `apps/psg-hub` includes Google Ads, Google Analytics 4, Google Search Console, Google Business Profile, reporting, and approval surfaces.
+- `apps/psg-hub` includes Google Ads, Google Analytics 4, Google Search Console, Google Business Profile, reporting, approval, and dashboard surfaces.
 - `apps/psg-ads-mutations` contains controlled Google Ads and Google Tag Manager mutation tooling with dry-run and audit-log safety patterns.
-- `Reference.md` names Google Ads, Google Analytics 4, Google Search Console, SEMrush, BigQuery, Vercel, Supabase, Sanity, SendGrid, Twilio, and Lob as approved PSG engineering tools.
+- `Reference.md` names Graphify, Google Ads, Google Analytics 4, Google Search Console, SEMrush, BigQuery, Vercel, Supabase, Sanity, SendGrid, Twilio, and Lob as approved PSG engineering tools.
+- `docs/runbooks/graphify-codebase-graph.md` confirms Graphify is the approved code-navigation tool for Ada, Ravi, Nora, and Tess.
 
 ## Open Setup Items
 
-These items require account-owner action or a separately assigned implementation task:
+These are the only decisions still needed:
 
 - Confirm PSG's official Google Ads manager account and backup administrator.
-- Confirm whether PSG will run Meta campaigns in the first paid media rollout or keep Meta optional.
-- Confirm the call tracking standard: CallRail, WhatConverts, or both.
-- Confirm the dashboard standard: Looker Studio only, psg-hub only, or both.
-- Grant account access for the first client batch.
-- Confirm which agent or team owns daily board reporting.
+- Confirm the first client batch that needs PPC team access.
+- Confirm whether Meta is in scope for the first rollout or deferred.
+- Confirm whether existing BSM dashboards are enough for board reporting, or whether a Looker Studio export is still wanted later.
+- Confirm whether Paperclip and repo docs are enough for campaign knowledge now, or whether we should create a lightweight Obsidian paid-media vault.
