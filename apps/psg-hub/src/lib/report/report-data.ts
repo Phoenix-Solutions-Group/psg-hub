@@ -24,6 +24,7 @@ import type {
   GbpPresenceReport,
   SentimentReport,
 } from "./types";
+import type { LocalFalconReport } from "../local-falcon/types";
 
 /** The live sources, in report display order. */
 const SOURCES: AnalyticsSource[] = ["semrush", "google_ads", "ga4", "gsc", "gbp"];
@@ -92,6 +93,11 @@ export type AssembleDeps = {
     shopId: string;
     month: string;
   }) => Promise<SentimentReport | null>;
+  /** Optional latest Local Falcon visibility snapshot reader (PSG-1079). */
+  readLocalFalconVisibility?: (query: {
+    shopId: string;
+    month: string;
+  }) => Promise<LocalFalconReport | null>;
 };
 
 /**
@@ -251,6 +257,12 @@ export async function assembleReportData(
     if (s) sentiment = s;
   }
 
+  let localFalcon: LocalFalconReport | undefined;
+  if (deps.readLocalFalconVisibility) {
+    const lf = await deps.readLocalFalconVisibility({ shopId, month: periodMonth });
+    if (lf) localFalcon = lf;
+  }
+
   return {
     shopId,
     periodMonth,
@@ -263,6 +275,7 @@ export async function assembleReportData(
     ...(performance ? { performance } : {}),
     ...(gbpPresence ? { gbpPresence } : {}),
     ...(sentiment ? { sentiment } : {}),
+    ...(localFalcon ? { localFalcon } : {}),
   };
 }
 

@@ -14,6 +14,7 @@ import type {
   MonthlySnapshotRow,
   PerformanceMetrics,
 } from "../../analytics/types";
+import type { LocalFalconReport } from "../../local-falcon/types";
 
 const snap = (
   source: AnalyticsSource,
@@ -408,5 +409,39 @@ describe("assembleReportData", () => {
     expect(data.gbpPresence!.averageRating).toBeNull();
     expect(data.gbpPresence!.totalReviewCount).toBeNull();
     expect(data.gbpPresence!.completenessScore).toBeUndefined();
+  });
+
+  it("adds latest Local Falcon visibility through a separate report reader", async () => {
+    const localFalcon: LocalFalconReport = {
+      capturedAt: "2026-07-10T00:00:00Z",
+      sourceFileName: "wallace-local-falcon-july.csv",
+      campaignName: "Wallace July",
+      gridSize: "7x7",
+      shareOfLocalVoice: 70,
+      averageRank: 2.7,
+      priorityNotes: ["Improve south grid"],
+      keywordSummaries: [
+        {
+          keyword: "collision repair",
+          locations: 2,
+          averageRank: 3.5,
+          topThreeLocations: 1,
+          priorityNotes: ["Improve south grid"],
+        },
+      ],
+    };
+
+    const data = await assembleReportData("shop-1", "2026-06", {
+      readSnapshots: reader(fullMap()),
+      generatedAt: GENERATED_AT,
+      readLocalFalconVisibility: async ({ shopId, month }) => {
+        expect(shopId).toBe("shop-1");
+        expect(month).toBe("2026-06");
+        return localFalcon;
+      },
+    });
+
+    expect(data.localFalcon).toEqual(localFalcon);
+    expect([...data.linkedSources].sort()).toEqual(["ga4", "google_ads", "gsc", "semrush"]);
   });
 });

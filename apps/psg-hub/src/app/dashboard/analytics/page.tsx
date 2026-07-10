@@ -7,6 +7,7 @@ import {
   getSnapshotsForShops,
   getLatestMonthlySnapshot,
 } from "@/lib/analytics/snapshots";
+import { getLatestLocalFalconSnapshot } from "@/lib/local-falcon/store";
 import { getReviewSentimentSummary } from "@/lib/reviews/sentiment-summary";
 import {
   aggregateByDate,
@@ -347,6 +348,12 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         return { rating, reviews, statusLabel, completeness };
       })()
     : null;
+
+  // Local Falcon visibility (PSG-1079) — per-shop only. Share of Local Voice and
+  // average rank are point-in-time scan metrics, so an MSO aggregate would mislead.
+  const localFalcon = scopeAll
+    ? null
+    : await getLatestLocalFalconSnapshot(supabase, { shopId: activeShopId });
 
   // Review sentiment summary (14-03b) — per-shop only (same MSO rule as presence). Reads
   // review_sentiment (the shop's full classified history), not a snapshot. null in all-shops
@@ -846,6 +853,75 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </>
         )}
       </section>
+
+      {!scopeAll ? (
+        <section aria-labelledby="local-falcon-heading" className="space-y-4">
+          <h2
+            id="local-falcon-heading"
+            className="font-heading text-lg font-semibold tracking-tight"
+          >
+            Local map visibility
+          </h2>
+          {localFalcon ? (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Latest Local Falcon scan
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                  <div>
+                    <p className="text-2xl font-bold tracking-tight">
+                      {localFalcon.shareOfLocalVoice === null
+                        ? "—"
+                        : `${localFalcon.shareOfLocalVoice.toFixed(1)}%`}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Share of Local Voice
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold tracking-tight">
+                      {localFalcon.averageRank === null
+                        ? "—"
+                        : localFalcon.averageRank.toFixed(1)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Average map rank
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-base font-medium">
+                      {formatShortDate(localFalcon.capturedAt)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Scan date
+                    </p>
+                  </div>
+                </div>
+                {localFalcon.priorityNotes.length > 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {localFalcon.priorityNotes.join("; ")}
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>No Local Falcon scan imported</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Local Falcon visibility will appear here after PSG imports the
+                  first scan export for this shop.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </section>
+      ) : null}
 
       {!scopeAll ? (
         <section aria-labelledby="sentiment-heading" className="space-y-4">

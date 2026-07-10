@@ -10,6 +10,7 @@ import type {
   PsiResult,
   GtmetrixResult,
 } from "../analytics/types";
+import type { LocalFalconReport } from "../local-falcon/types";
 
 /**
  * One source's monthly block. `current`/`prior` are the rolled-up monthly values
@@ -72,6 +73,13 @@ export type ReportData = {
    * so a SEPARATE reader, not the rollup path. Undefined => the sentiment render block is omitted.
    */
   sentiment?: SentimentReport;
+  /**
+   * Local Falcon local-map visibility block (PSG-1079). ADDITIVE + OPTIONAL:
+   * present only when a shop has an imported Local Falcon snapshot. It stays
+   * outside the daily source union and outside AI narrative grounding because it
+   * is a point-in-time visibility scan, not daily traffic.
+   */
+  localFalcon?: LocalFalconReport;
 };
 
 /**

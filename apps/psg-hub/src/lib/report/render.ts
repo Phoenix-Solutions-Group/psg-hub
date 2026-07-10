@@ -29,6 +29,7 @@ import type {
   GbpPresenceReport,
   SentimentReport,
 } from "./types";
+import type { LocalFalconReport } from "../local-falcon/types";
 import type { ReportNarrative } from "./schema";
 
 /** Per-source display label + section title (per-source order: GSC, GA4, Ads, SEMrush). */
@@ -615,6 +616,63 @@ function renderSentimentBlock(s: SentimentReport): string {
   );
 }
 
+function renderLocalFalconBlock(localFalcon: LocalFalconReport): string {
+  const cards = [
+    {
+      label: "Share of Local Voice",
+      value:
+        typeof localFalcon.shareOfLocalVoice === "number"
+          ? `${localFalcon.shareOfLocalVoice.toFixed(1)}%`
+          : "n/a",
+    },
+    {
+      label: "Average map rank",
+      value:
+        typeof localFalcon.averageRank === "number"
+          ? localFalcon.averageRank.toFixed(1)
+          : "n/a",
+    },
+    {
+      label: "Keywords scanned",
+      value: formatNumber(localFalcon.keywordSummaries.length),
+    },
+  ]
+    .map(
+      (card) =>
+        `<div class="kpi"><div class="n">${escapeHtml(card.value)}</div><div class="l">${escapeHtml(
+          card.label
+        )}</div></div>`
+    )
+    .join("");
+  const keywordRows = localFalcon.keywordSummaries
+    .slice(0, 6)
+    .map(
+      (summary) =>
+        `<tr><td>${escapeHtml(summary.keyword)}</td>` +
+        `<td class="now">${formatNumber(summary.locations)}</td>` +
+        `<td class="tgt">${
+          summary.averageRank === null ? "n/a" : summary.averageRank.toFixed(1)
+        }</td>` +
+        `<td>${formatNumber(summary.topThreeLocations)}</td></tr>`
+    )
+    .join("");
+  const notes = localFalcon.priorityNotes.length
+    ? `<p class="src">Priority notes: ${escapeHtml(localFalcon.priorityNotes.join("; "))}.</p>`
+    : "";
+  return (
+    `<section class="panel"><span class="badge-src">Local Falcon</span>` +
+    `<h2>Local map visibility</h2>` +
+    `<p class="src">Latest scan: ${escapeHtml(formatShortDate(localFalcon.capturedAt))}${
+      localFalcon.campaignName ? ` — ${escapeHtml(localFalcon.campaignName)}` : ""
+    }${localFalcon.gridSize ? ` (${escapeHtml(localFalcon.gridSize)})` : ""}.</p>` +
+    `<div class="kpis">${cards}</div>` +
+    `<table class="psg"><thead><tr><th>Keyword</th><th>Locations</th>` +
+    `<th>Avg. rank</th><th>Top 3</th></tr></thead><tbody>${keywordRows}</tbody></table>` +
+    notes +
+    `</section>`
+  );
+}
+
 /**
  * Render the full branded report HTML for one shop+month. Pure and deterministic
  * over (reportData, narrative). Only linked sources appear; cold-start sources are
@@ -693,6 +751,10 @@ export function renderReportHtml(
     ? renderSentimentBlock(reportData.sentiment)
     : "";
 
+  const localFalconBlock = reportData.localFalcon
+    ? renderLocalFalconBlock(reportData.localFalcon)
+    : "";
+
   // This month vs prior: one headline-KPI row per linked source.
   const momRows = KPI_SET.filter((k) => reportData.linkedSources.includes(k.source))
     .map((k) => {
@@ -767,6 +829,7 @@ export function renderReportHtml(
     performanceBlock +
     gbpPresenceBlock +
     sentimentBlock +
+    localFalconBlock +
     momTable +
     drivers +
     recommendations +

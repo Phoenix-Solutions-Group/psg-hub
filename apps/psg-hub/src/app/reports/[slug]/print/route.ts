@@ -10,6 +10,7 @@ import {
 } from "@/lib/report/report-data";
 import { loadReportNarrative } from "@/lib/report/storage";
 import { getReviewSentimentSummary } from "@/lib/reviews/sentiment-summary";
+import { getLatestLocalFalconSnapshot } from "@/lib/local-falcon/store";
 import { renderReportHtml } from "@/lib/report/render";
 import type { ReportData } from "@/lib/report/types";
 import type { ReportNarrative } from "@/lib/report/schema";
@@ -104,6 +105,8 @@ export const defaultLoader: PrintPayloadLoader = async (shopId, period) => {
     readMonthlyPerformance,
     readMonthlyGbpPresence,
     readReviewSentiment,
+    readLocalFalconVisibility: ({ shopId: s }) =>
+      getLatestLocalFalconSnapshot(service, { shopId: s }),
   });
   return { reportData, narrative };
 };
