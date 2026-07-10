@@ -7,6 +7,12 @@ import { getOpsAccess } from "@/lib/auth/ops-access";
 // matrix, PSG-29) share ONE admin surface rather than duplicating shells.
 const SECTIONS = [
   {
+    href: "/ops/admin/users",
+    label: "User Access",
+    note: "Find users, change roles, assign shops, and update shop tiers.",
+    available: true,
+  },
+  {
     href: "/ops/admin/security-profiles",
     label: "Security Profiles",
     note: "Create capability bundles and assign them to ops staff.",
