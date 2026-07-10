@@ -16,6 +16,7 @@ const MODULES: {
   { fn: "manage_reports", label: "Operational Reports", href: "/ops/reports", note: "Coming in v1.4" },
   { fn: "manage_production", label: "Production", href: "/ops/production", note: "Mail production via Lob — print queue, status, reprint, historical" },
   { fn: "manage_production", label: "Mail Templates", href: "/ops/production/templates", note: "Proof letters and self-mailers, then run Lob test-mode seed proofs" },
+  { fn: "design_mail_artwork", label: "Mail Artwork", href: "/ops/production/artwork", note: "PSG-only freeform mail designer for postcard front/back" },
   { fn: "manage_users", label: "Superadmin", href: "/ops/admin", note: "Security profiles & access matrix", superadminOnly: true },
 ];
 
