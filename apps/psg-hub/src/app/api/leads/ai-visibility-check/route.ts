@@ -131,10 +131,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const inbox =
-    process.env.AI_VISIBILITY_CHECK_INBOX?.trim() || process.env.PSG_LEAD_INBOX?.trim();
+    process.env.AI_VISIBILITY_CHECK_INBOX?.trim() ||
+    process.env.PSG_AI_CHECK_INBOX?.trim() ||
+    process.env.PSG_LEAD_INBOX?.trim();
   if (!inbox) {
     console.error(
-      "[leads/ai-visibility-check] AI_VISIBILITY_CHECK_INBOX or PSG_LEAD_INBOX is not set"
+      "[leads/ai-visibility-check] AI_VISIBILITY_CHECK_INBOX, PSG_AI_CHECK_INBOX, or PSG_LEAD_INBOX is not set"
     );
     return NextResponse.json(
       { error: "Could not submit right now. Please email Phoenix Solutions Group directly." },
