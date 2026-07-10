@@ -74,6 +74,10 @@ export default defineConfig({
     // Port 3100 (not the Next default 3000) to avoid a local squatter on 3000.
     baseURL,
     trace: "on-first-retry",
+    // The Paperclip runtime blocks unprivileged user namespaces (Ubuntu 24.04
+    // AppArmor + docker-default), so Chromium's own sandbox cannot start here.
+    // The Docker container is the isolation boundary; disable the inner sandbox.
+    launchOptions: { chromiumSandbox: false },
   },
   projects: isDemoCapture ? demoProjects : localProjects,
   // Build + start with the LOCAL env injected. reuseExistingServer is false so a
