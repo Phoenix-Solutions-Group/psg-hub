@@ -15,6 +15,7 @@ interface Lead {
   email?: string;
   phone?: string;
   notes?: string;
+  tracking: Record<string, string>;
 }
 
 function cleanField(value: FormDataEntryValue | null): string | undefined {
@@ -44,6 +45,13 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function readTracking(form: FormData): Record<string, string> {
+  const keys = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "referrer"];
+  return Object.fromEntries(
+    keys.map((key) => [key, cleanField(form.get(key)) ?? "(not provided)"])
+  );
+}
+
 function renderText(lead: Lead): string {
   return [
     "New AI Visibility Check request from the PSG whitepaper page",
@@ -54,6 +62,13 @@ function renderText(lead: Lead): string {
     `Email:     ${lead.email ?? "(not provided)"}`,
     `Phone:     ${lead.phone ?? "(not provided)"}`,
     `Notes:     ${lead.notes ?? "(not provided)"}`,
+    "",
+    "Tracking:",
+    `utm_source:   ${lead.tracking.utm_source}`,
+    `utm_medium:   ${lead.tracking.utm_medium}`,
+    `utm_campaign: ${lead.tracking.utm_campaign}`,
+    `utm_content:  ${lead.tracking.utm_content}`,
+    `referrer:     ${lead.tracking.referrer}`,
     "",
     "Source: The New Front Door whitepaper.",
   ].join("\n");
@@ -74,6 +89,11 @@ function renderHtml(lead: Lead): string {
     row("Email", lead.email ? `<a href="mailto:${encodeURIComponent(lead.email)}">${escapeHtml(lead.email)}</a>` : "<em>(not provided)</em>"),
     row("Phone", lead.phone ? `<a href="tel:${encodeURIComponent(lead.phone)}">${escapeHtml(lead.phone)}</a>` : "<em>(not provided)</em>"),
     row("Notes", lead.notes ? escapeHtml(lead.notes) : "<em>(not provided)</em>"),
+    row("utm_source", escapeHtml(lead.tracking.utm_source)),
+    row("utm_medium", escapeHtml(lead.tracking.utm_medium)),
+    row("utm_campaign", escapeHtml(lead.tracking.utm_campaign)),
+    row("utm_content", escapeHtml(lead.tracking.utm_content)),
+    row("referrer", escapeHtml(lead.tracking.referrer)),
     `</table>`,
   ].join("");
 }
@@ -111,12 +131,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const inbox =
-    process.env.AI_VISIBILITY_CHECK_INBOX?.trim() ||
-    process.env.PSG_AI_CHECK_INBOX?.trim() ||
-    process.env.PSG_LEAD_INBOX?.trim();
+    process.env.AI_VISIBILITY_CHECK_INBOX?.trim() || process.env.PSG_LEAD_INBOX?.trim();
   if (!inbox) {
     console.error(
-      "[leads/ai-visibility-check] AI_VISIBILITY_CHECK_INBOX, PSG_AI_CHECK_INBOX, or PSG_LEAD_INBOX is not set"
+      "[leads/ai-visibility-check] AI_VISIBILITY_CHECK_INBOX or PSG_LEAD_INBOX is not set"
     );
     return NextResponse.json(
       { error: "Could not submit right now. Please email Phoenix Solutions Group directly." },
@@ -131,13 +149,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     email,
     phone,
     notes: cleanField(form.get("notes")),
+    tracking: readTracking(form),
   };
 
   try {
     await sendEmail({
       to: inbox,
       replyTo: email ?? inbox,
-      subject: `AI Visibility Check request - ${lead.shopName}`,
+      subject: `AI Visibility Check request - ${lead.shopName} - ${lead.tracking.utm_source}`,
       text: renderText(lead),
       html: renderHtml(lead),
       clickTracking: false,

@@ -35,6 +35,10 @@ describe("AI visibility check lead route", () => {
         location: "Akron, OH",
         email: "pat@example.com",
         phone: "555-0100",
+        utm_source: "linkedin",
+        utm_medium: "social",
+        utm_campaign: "new-front-door",
+        utm_content: "whitepaper-cta",
       }) as never
     );
 
@@ -43,10 +47,13 @@ describe("AI visibility check lead route", () => {
       expect.objectContaining({
         to: "growth@phoenixsolutionsgroup.net",
         replyTo: "pat@example.com",
-        subject: "AI Visibility Check request - Pat's Collision",
+        subject: "AI Visibility Check request - Pat's Collision - linkedin",
         clickTracking: false,
       })
     );
+    const message = sendEmail.mock.calls[0][0];
+    expect(message.text).toContain("utm_source:   linkedin");
+    expect(message.text).toContain("utm_campaign: new-front-door");
   });
 
   it("requires at least one contact method", async () => {

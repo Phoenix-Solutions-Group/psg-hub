@@ -1,21 +1,28 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import type { FormEvent } from "react";
 import { useState } from "react";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 
 type SubmitState = "idle" | "submitting" | "success" | "error";
 
 export function AiVisibilityCheckForm() {
+  const params = useSearchParams();
   const [state, setState] = useState<SubmitState>("idle");
   const [message, setMessage] = useState("");
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setState("submitting");
     setMessage("");
 
     const form = event.currentTarget;
     const body = new FormData(form);
+    for (const key of ["utm_source", "utm_medium", "utm_campaign", "utm_content"]) {
+      body.set(key, params.get(key) ?? "");
+    }
+    body.set("referrer", document.referrer || "");
 
     try {
       const response = await fetch("/api/leads/ai-visibility-check", {
