@@ -25,6 +25,39 @@ const testEnv = loadEnv(path.join(__dirname, ".env.test.local"));
 // global.setup.ts (service-role seed) and the local-only guard see the same
 // LOCAL stack. Local values win — this is the zero-PII guarantee.
 Object.assign(process.env, testEnv);
+const isDemoCapture = process.env.DEMO_CAPTURE === "1";
+const demoBaseURL = process.env.DEMO_BASE_URL?.trim();
+
+if (isDemoCapture && !demoBaseURL) {
+  throw new Error(
+    "[PSG-986] DEMO_CAPTURE=1 requires DEMO_BASE_URL to target the production-like demo host."
+  );
+}
+const baseURL =
+  isDemoCapture && demoBaseURL
+    ? demoBaseURL
+    : "http://localhost:3100";
+
+const localProjects = [
+  // Seeds fixtures (service role) + produces a storageState per role via real
+  // UI login. The chromium project depends on it.
+  { name: "setup", testMatch: /global\.setup\.ts/ },
+  {
+    name: "chromium",
+    testIgnore: /global\.setup\.ts/,
+    dependencies: ["setup"],
+    use: { ...devices["Desktop Chrome"] },
+  },
+];
+const demoProjects = [
+  { name: "demo-session-setup", testMatch: /demo-session-setup\.ts/ },
+  {
+    name: "demo-capture",
+    testMatch: /demo-capture\.spec\.ts/,
+    dependencies: ["demo-session-setup"],
+    use: { ...devices["Desktop Chrome"] },
+  },
+];
 
 export default defineConfig({
   testDir: "./e2e",
@@ -39,27 +72,19 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   use: {
     // Port 3100 (not the Next default 3000) to avoid a local squatter on 3000.
-    baseURL: "http://localhost:3100",
+    baseURL,
     trace: "on-first-retry",
   },
-  projects: [
-    // Seeds fixtures (service role) + produces a storageState per role via real
-    // UI login. The chromium project depends on it.
-    { name: "setup", testMatch: /global\.setup\.ts/ },
-    {
-      name: "chromium",
-      testIgnore: /global\.setup\.ts/,
-      dependencies: ["setup"],
-      use: { ...devices["Desktop Chrome"] },
-    },
-  ],
+  projects: isDemoCapture ? demoProjects : localProjects,
   // Build + start with the LOCAL env injected. reuseExistingServer is false so a
   // stray prod-pointed dev server can never be the E2E target (zero-PII guarantee).
-  webServer: {
-    command: "pnpm build && pnpm start -p 3100",
-    url: "http://localhost:3100/login",
-    timeout: 240_000,
-    reuseExistingServer: false,
-    env: { ...process.env, ...testEnv } as Record<string, string>,
-  },
+  webServer: isDemoCapture
+    ? undefined
+    : {
+        command: "pnpm build && pnpm start -p 3100",
+        url: "http://localhost:3100/login",
+        timeout: 240_000,
+        reuseExistingServer: false,
+        env: { ...process.env, ...testEnv } as Record<string, string>,
+      },
 });

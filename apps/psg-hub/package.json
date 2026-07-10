@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:demo": "DEMO_CAPTURE=1 playwright test --project=demo-capture",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
