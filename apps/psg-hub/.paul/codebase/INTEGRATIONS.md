@@ -88,6 +88,77 @@ Green result: `{ reachable: true, environment: "sandbox", keySource: "<name>",
 httpStatus: 200, account: {...} }`. Red surfaces a reason (e.g. HTTP 401 → key
 rejected; config error → naming the vars checked).
 
+## Yext listings/reviews — PSG-1080
+
+Status: **read-only export import path**. No live Yext API pull or secret-backed
+adapter is active yet. This gives BSM a safe first-batch path once PSG has a Yext
+export containing shop/entity mapping, listing accuracy/status, and review status.
+
+- Code:
+  - `src/lib/yext/import.ts` — validates a `source: "yext_export"` payload,
+    normalizes listing status keys, summarizes listing accuracy/issues and review
+    status, then upserts shop-scoped cache rows.
+  - `src/lib/yext/status.ts` — shop-scoped status reader.
+  - `POST /api/ops/yext/import` — `manage_companies` gated import route using the
+    service-role client. Idempotent by `shop_id`; re-importing an export replaces
+    the same shop's Yext mapping/cache rows.
+  - `GET /api/shops/[shopId]/yext/status` — customer/session route with an explicit
+    `shop_users` membership check before reading through RLS.
+- Storage:
+  - `yext_accounts` maps `shop_id` to `yext_entity_id` and optional
+    `yext_account_id`; `api_key_ref` is a reference only and must never hold a
+    secret value.
+  - `yext_listings_cache` and `yext_reviews_cache` store the latest export payload
+    plus summaries, with 30-day cache metadata.
+- Access control: all three tables enable row-level security and allow reads only
+  when `shop_id in user_shop_ids()`. No customer write policy exists; imports use
+  service role behind the ops route.
+
+### Import payload shape
+
+```json
+{
+  "source": "yext_export",
+  "synced_at": "2026-07-10T19:30:00.000Z",
+  "shops": [
+    {
+      "shop_id": "00000000-0000-4000-8000-000000000000",
+      "yext_account_id": "optional-account-id",
+      "yext_entity_id": "required-yext-entity-id",
+      "listings": [
+        {
+          "publisher": "Google",
+          "listing_id": "optional-listing-id",
+          "status": "Live - Synced",
+          "accuracy": 92,
+          "url": "https://example.com/listing",
+          "issues": ["Phone mismatch"]
+        }
+      ],
+      "reviews": {
+        "average_rating": 4.6,
+        "review_count": 128,
+        "response_rate": 87,
+        "unanswered_count": 3,
+        "latest_review_at": "2026-07-09T12:00:00.000Z",
+        "status": "healthy"
+      }
+    }
+  ]
+}
+```
+
+### Environment variables
+
+Current export import path: **none required**.
+
+Future live API adapter names, if approved later:
+
+| Var | Required | Purpose |
+| --- | --- | --- |
+| `YEXT_API_KEY` | yes for live API pull only | Server-side Yext API credential. Never expose or log. |
+| `YEXT_ACCOUNT_ID` | optional/account-dependent | Account identifier if the selected Yext endpoint requires an account-level id. |
+
 ## Stripe (billing of record)
 
 Mirror logic in `src/lib/billing/stripe-mirror.ts`; webhook at `/api/webhooks/stripe`.
