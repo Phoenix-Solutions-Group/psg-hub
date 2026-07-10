@@ -5,8 +5,8 @@ import {
   renderPostcardPdf,
   validatePostcardComposition,
   renderPostcardCanvas,
+  renderMailArtworkDesignPdf,
   DEFAULT_CLEAR_ZONES,
-  DEFAULT_ADDRESS_ZONES,
 } from "@/lib/production/postcard-render";
 
 function toPts(inches: number): number {
@@ -24,6 +24,15 @@ async function makeTemplate(size: keyof typeof POSTCARD_SIZE_SPECS): Promise<Uin
     height: 0.1,
   });
   return new Uint8Array(await template.save());
+}
+
+function onePixelPng(): Uint8Array {
+  return new Uint8Array(
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+      "base64"
+    )
+  );
 }
 
 describe("postcard renderer", () => {
@@ -91,6 +100,76 @@ describe("postcard renderer", () => {
     expect(page.getWidth()).toBeCloseTo(toPts(6.25), 5);
     expect(page.getHeight()).toBeCloseTo(toPts(4.25), 5);
     expect(rendered.validation.valid).toBe(true);
+  });
+
+  it("renders a freeform mail_artwork_designs document with image, logo, shape, and no base template", async () => {
+    const imageBytes = onePixelPng();
+    const rendered = await renderMailArtworkDesignPdf({
+      size: "6x9",
+      front: {
+        elements: [
+          { kind: "shape", shape: "rect", x: 0.5, y: 4.75, width: 2, height: 0.5, fillColor: "#1E3A52" },
+          { kind: "text", x: 0.75, y: 4.9, text: "Collision Leaders", fontSize: 14, color: "#ffffff" },
+          { kind: "image", x: 0.5, y: 0.75, width: 1, height: 1, source: { bytes: imageBytes, format: "png" } },
+        ],
+      },
+      back: {
+        baseGraphic: { bytes: imageBytes, format: "png" },
+        elements: [
+          { kind: "logo", x: 0.5, y: 4.75, width: 0.75, height: 0.75, source: { bytes: imageBytes, format: "png" } },
+        ],
+      },
+    });
+
+    const doc = await PDFDocument.load(rendered.bytes);
+    expect(doc.getPageCount()).toBe(2);
+    expect(doc.getPage(0).getWidth()).toBeCloseTo(toPts(9.25), 5);
+    expect(doc.getPage(0).getHeight()).toBeCloseTo(toPts(6.25), 5);
+    expect(rendered.validation.canvas).toMatchObject({
+      widthPx: 2775,
+      heightPx: 1875,
+      withBleed: { widthIn: 9.25, heightIn: 6.25 },
+    });
+  });
+
+  it("places freeform coordinates in trim space, not bleed space", () => {
+    const result = validatePostcardComposition({
+      size: "4x6",
+      front: {
+        elements: [{ kind: "rect", x: 6.05, y: 1, width: 0.1, height: 0.1 }],
+      },
+      back: { elements: [] },
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({ surface: "front", kind: "bounds" })
+    );
+  });
+
+  it("rejects image and logo elements that intrude on the Lob address/IMB clear zones", () => {
+    const imageBytes = onePixelPng();
+    const result = validatePostcardComposition({
+      size: "4x6",
+      front: {
+        elements: [
+          { kind: "image", x: 0.1, y: 0.1, width: 0.25, height: 0.25, source: { bytes: imageBytes, format: "png" } },
+        ],
+      },
+      back: {
+        elements: [
+          { kind: "logo", x: 4.75, y: 0.75, width: 0.5, height: 0.5, source: { bytes: imageBytes, format: "png" } },
+        ],
+      },
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ surface: "front", kind: "clear-zone" }),
+        expect.objectContaining({ surface: "back", kind: "address-zone" }),
+      ])
+    );
   });
 
   it("rejects template size mismatch at render", async () => {

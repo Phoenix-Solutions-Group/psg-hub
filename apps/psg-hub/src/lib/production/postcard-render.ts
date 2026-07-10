@@ -12,6 +12,7 @@ import "server-only";
 import {
   PDFDocument,
   StandardFonts,
+  type PDFImage,
   type PDFDocument as PDFLibDocument,
   type PDFPage,
   rgb,
@@ -63,6 +64,14 @@ export interface SourcePdf {
   page?: number;
 }
 
+export type ArtworkAssetFormat = "pdf" | "png" | "jpg" | "jpeg";
+
+export interface ArtworkAsset {
+  bytes?: Uint8Array;
+  url?: string;
+  format: ArtworkAssetFormat;
+}
+
 export interface TextElement {
   kind: "text";
   x: number;
@@ -106,13 +115,55 @@ export interface PolylineElement {
   opacity?: number;
 }
 
-export type RenderElement = TextElement | RectElement | LineElement | PolylineElement;
+export interface ImageElement {
+  kind: "image";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  source: ArtworkAsset;
+  opacity?: number;
+}
+
+export interface LogoElement extends Omit<ImageElement, "kind"> {
+  kind: "logo";
+}
+
+export interface ShapeElement extends Omit<RectElement, "kind"> {
+  kind: "shape";
+  shape: "rect";
+}
+
+export type RenderElement =
+  | TextElement
+  | RectElement
+  | ShapeElement
+  | LineElement
+  | PolylineElement
+  | ImageElement
+  | LogoElement;
 
 export interface RenderSurfaceInput {
-  template: SourcePdf;
+  template?: SourcePdf;
+  baseGraphic?: ArtworkAsset;
   elements?: readonly RenderElement[];
   clearZones?: readonly RectInches[];
   addressZones?: readonly RectInches[];
+}
+
+export interface MailArtworkSurfaceDesign {
+  baseGraphic?: ArtworkAsset;
+  elements?: readonly RenderElement[];
+  clearZones?: readonly RectInches[];
+  addressZones?: readonly RectInches[];
+}
+
+export interface MailArtworkDesignDocument {
+  size: PostcardSize;
+  front: MailArtworkSurfaceDesign;
+  back: MailArtworkSurfaceDesign;
+  bleedInches?: number;
+  dpi?: number;
 }
 
 export interface RenderPostcardInput {
@@ -122,6 +173,7 @@ export interface RenderPostcardInput {
   bleedInches?: number;
   dpi?: number;
   fetchPdf?: (url: string) => Promise<Uint8Array>;
+  fetchAsset?: (url: string) => Promise<Uint8Array>;
 }
 
 export interface PostcardCanvas {
@@ -221,6 +273,22 @@ function elementBounds(element: RenderElement): RectInches {
       height: element.height,
     };
   }
+  if (element.kind === "shape") {
+    return {
+      x: element.x,
+      y: element.y,
+      width: element.width,
+      height: element.height,
+    };
+  }
+  if (element.kind === "image" || element.kind === "logo") {
+    return {
+      x: element.x,
+      y: element.y,
+      width: element.width,
+      height: element.height,
+    };
+  }
   if (element.kind === "line") {
     const minX = Math.min(element.x1, element.x2);
     const maxX = Math.max(element.x1, element.x2);
@@ -278,7 +346,8 @@ function normalizeSurface(
   };
 }
 
-function validateSourceSpec(surface: RenderSurface, source: SourcePdf, issues: RenderValidationIssue[]) {
+function validateSourceSpec(surface: RenderSurface, source: SourcePdf | undefined, issues: RenderValidationIssue[]) {
+  if (!source) return;
   const hasBytes = Boolean(source.bytes);
   const hasUrl = Boolean(source.url);
   if (!hasBytes && !hasUrl) {
@@ -304,6 +373,42 @@ function validateSourceSpec(surface: RenderSurface, source: SourcePdf, issues: R
   }
 }
 
+function validateAssetSpec(
+  surface: RenderSurface,
+  asset: ArtworkAsset | undefined,
+  label: string,
+  issues: RenderValidationIssue[],
+  element?: RenderElement
+) {
+  if (!asset) return;
+  const hasBytes = Boolean(asset.bytes);
+  const hasUrl = Boolean(asset.url);
+  if (!hasBytes && !hasUrl) {
+    issues.push({
+      surface,
+      kind: "input",
+      message: `${surface}: ${label} missing both bytes and url`,
+      element,
+    });
+  }
+  if (hasBytes && hasUrl) {
+    issues.push({
+      surface,
+      kind: "input",
+      message: `${surface}: ${label} must include exactly one of bytes or url`,
+      element,
+    });
+  }
+  if (!["pdf", "png", "jpg", "jpeg"].includes(asset.format)) {
+    issues.push({
+      surface,
+      kind: "input",
+      message: `${surface}: ${label} has unsupported format ${asset.format}`,
+      element,
+    });
+  }
+}
+
 function validateSurface(
   surface: RenderSurface,
   input: RenderSurfaceInput,
@@ -312,6 +417,7 @@ function validateSurface(
 ) {
   const clearZones = input.clearZones ?? [];
   const addressZones = input.addressZones ?? [];
+  validateAssetSpec(surface, input.baseGraphic, "baseGraphic", issues);
   for (const zone of [...clearZones, ...addressZones]) {
     if (!isFiniteRect(zone) || zone.width <= 0 || zone.height <= 0) {
       issues.push({
@@ -328,6 +434,18 @@ function validateSurface(
         surface,
         kind: "input",
         message: `${surface}: polyline requires at least two points`,
+        element,
+      });
+      continue;
+    }
+    if ((element.kind === "image" || element.kind === "logo") && element.source) {
+      validateAssetSpec(surface, element.source, `${element.kind} source`, issues, element);
+    }
+    if (element.kind === "shape" && element.shape !== "rect") {
+      issues.push({
+        surface,
+        kind: "input",
+        message: `${surface}: unsupported shape ${element.shape}`,
         element,
       });
       continue;
@@ -416,8 +534,8 @@ export function validatePostcardComposition(
   const pageRect: RectInches = {
     x: 0,
     y: 0,
-    width: (sizeSpec?.trimWidthIn ?? 0) + bleedInches * 2,
-    height: (sizeSpec?.trimHeightIn ?? 0) + bleedInches * 2,
+    width: sizeSpec?.trimWidthIn ?? 0,
+    height: sizeSpec?.trimHeightIn ?? 0,
   };
 
   validateSourceSpec("front", input.front.template, issues);
@@ -453,12 +571,13 @@ export function validatePostcardComposition(
 function drawText(
   page: PDFPage,
   element: TextElement,
-  font: Awaited<ReturnType<PDFLibDocument["embedFont"]>>
+  font: Awaited<ReturnType<PDFLibDocument["embedFont"]>>,
+  bleedInches: number
 ) {
   const size = element.fontSize ?? 12;
   page.drawText(element.text, {
-    x: toPoints(element.x),
-    y: toPoints(element.y),
+    x: toPoints(element.x + bleedInches),
+    y: toPoints(element.y + bleedInches),
     size,
     color: parseColor(element.color),
     opacity: element.opacity,
@@ -468,11 +587,12 @@ function drawText(
 
 function drawRect(
   page: PDFPage,
-  element: RectElement
+  element: RectElement | ShapeElement,
+  bleedInches: number
 ) {
   page.drawRectangle({
-    x: toPoints(element.x),
-    y: toPoints(element.y),
+    x: toPoints(element.x + bleedInches),
+    y: toPoints(element.y + bleedInches),
     width: toPoints(element.width),
     height: toPoints(element.height),
     color: element.fillColor ? parseColor(element.fillColor) : undefined,
@@ -484,11 +604,12 @@ function drawRect(
 
 function drawLine(
   page: PDFPage,
-  element: LineElement
+  element: LineElement,
+  bleedInches: number
 ) {
   page.drawLine({
-    start: { x: toPoints(element.x1), y: toPoints(element.y1) },
-    end: { x: toPoints(element.x2), y: toPoints(element.y2) },
+    start: { x: toPoints(element.x1 + bleedInches), y: toPoints(element.y1 + bleedInches) },
+    end: { x: toPoints(element.x2 + bleedInches), y: toPoints(element.y2 + bleedInches) },
     thickness: element.lineWidth,
     color: parseColor(element.color),
     opacity: element.opacity,
@@ -497,11 +618,12 @@ function drawLine(
 
 function drawPolyline(
   page: PDFPage,
-  element: PolylineElement
+  element: PolylineElement,
+  bleedInches: number
 ) {
   const points = element.points.map((point) => ({
-    x: toPoints(point.x),
-    y: toPoints(point.y),
+    x: toPoints(point.x + bleedInches),
+    y: toPoints(point.y + bleedInches),
   }));
   for (let i = 1; i < points.length; i++) {
     const prev = points[i - 1];
@@ -525,6 +647,74 @@ function drawPolyline(
   }
 }
 
+async function resolveAssetBytes(
+  asset: ArtworkAsset,
+  fetchAsset: (url: string) => Promise<Uint8Array>
+): Promise<Uint8Array> {
+  if (asset.bytes) return asset.bytes;
+  if (!asset.url) throw new Error("Asset source missing url");
+  return fetchAsset(asset.url);
+}
+
+async function embedFetchedImage(
+  outputDocument: PDFLibDocument,
+  asset: ArtworkAsset,
+  fetchAsset: (url: string) => Promise<Uint8Array>
+): Promise<PDFImage> {
+  const bytes = await resolveAssetBytes(asset, fetchAsset);
+  return asset.format === "png" ? outputDocument.embedPng(bytes) : outputDocument.embedJpg(bytes);
+}
+
+async function drawImage(
+  outputDocument: PDFLibDocument,
+  page: PDFPage,
+  element: ImageElement | LogoElement,
+  bleedInches: number,
+  fetchAsset: (url: string) => Promise<Uint8Array>
+) {
+  const image = await embedFetchedImage(outputDocument, element.source, fetchAsset);
+  page.drawImage(image, {
+    x: toPoints(element.x + bleedInches),
+    y: toPoints(element.y + bleedInches),
+    width: toPoints(element.width),
+    height: toPoints(element.height),
+    opacity: element.opacity,
+  });
+}
+
+async function drawBaseGraphic(
+  outputDocument: PDFLibDocument,
+  page: PDFPage,
+  baseGraphic: ArtworkAsset,
+  opts: {
+    bleedInches: number;
+    canvas: PostcardCanvas;
+    fetchAsset: (url: string) => Promise<Uint8Array>;
+  }
+) {
+  if (baseGraphic.format === "pdf") {
+    const bytes = await resolveAssetBytes(baseGraphic, opts.fetchAsset);
+    const sourceDoc = await PDFDocument.load(bytes);
+    const sourcePage = sourceDoc.getPage(0);
+    const embedded = await outputDocument.embedPage(sourcePage);
+    page.drawPage(embedded, {
+      x: toPoints(opts.bleedInches),
+      y: toPoints(opts.bleedInches),
+      width: toPoints(opts.canvas.trim.widthIn),
+      height: toPoints(opts.canvas.trim.heightIn),
+    });
+    return;
+  }
+
+  const image = await embedFetchedImage(outputDocument, baseGraphic, opts.fetchAsset);
+  page.drawImage(image, {
+    x: toPoints(opts.bleedInches),
+    y: toPoints(opts.bleedInches),
+    width: toPoints(opts.canvas.trim.widthIn),
+    height: toPoints(opts.canvas.trim.heightIn),
+  });
+}
+
 async function renderSurface(
   outputDocument: PDFLibDocument,
   input: RenderSurfaceInput,
@@ -533,62 +723,75 @@ async function renderSurface(
     dpi: number;
     canvas: PostcardCanvas;
     fetchPdf: (url: string) => Promise<Uint8Array>;
+    fetchAsset: (url: string) => Promise<Uint8Array>;
   }
 ) {
-  const bytes = await (async () => {
-    if (input.template.bytes) return input.template.bytes;
-    if (!input.template.url) throw new Error("Template source missing url");
-    return opts.fetchPdf(input.template.url);
-  })();
-
-  const sourceDoc = await PDFDocument.load(bytes);
-  if (sourceDoc.getPageCount() === 0) {
-    throw new Error("Template PDF has no pages");
-  }
-  const pageIndex = input.template.page ?? 0;
-  if (pageIndex >= sourceDoc.getPageCount()) {
-    throw new Error(`Template PDF missing page index ${pageIndex}`);
-  }
-
-  const sourcePage = sourceDoc.getPage(pageIndex);
-  const sourceWidthIn = fromPoints(sourcePage.getWidth());
-  const sourceHeightIn = fromPoints(sourcePage.getHeight());
-  const embeddedSourcePage = await outputDocument.embedPage(sourcePage);
-  if (
-    Math.abs(sourceWidthIn - opts.canvas.trim.widthIn) > SOURCE_SIZE_TOLERANCE_IN ||
-    Math.abs(sourceHeightIn - opts.canvas.trim.heightIn) > SOURCE_SIZE_TOLERANCE_IN
-  ) {
-    throw new Error(
-      `Template page size mismatch: expected ${opts.canvas.trim.widthIn}x${opts.canvas.trim.heightIn}in, ` +
-        `received ${sourceWidthIn.toFixed(3)}x${sourceHeightIn.toFixed(3)}in`
-    );
-  }
-
   const targetPage = outputDocument.addPage([
     toPoints(opts.canvas.withBleed.widthIn),
     toPoints(opts.canvas.withBleed.heightIn),
   ]);
-  targetPage.drawPage(embeddedSourcePage, {
-    x: toPoints(opts.bleedInches),
-    y: toPoints(opts.bleedInches),
-    width: toPoints(opts.canvas.trim.widthIn),
-    height: toPoints(opts.canvas.trim.heightIn),
-  });
+
+  if (input.template) {
+    const bytes = await (async () => {
+      if (input.template?.bytes) return input.template.bytes;
+      if (!input.template?.url) throw new Error("Template source missing url");
+      return opts.fetchPdf(input.template.url);
+    })();
+
+    const sourceDoc = await PDFDocument.load(bytes);
+    if (sourceDoc.getPageCount() === 0) {
+      throw new Error("Template PDF has no pages");
+    }
+    const pageIndex = input.template.page ?? 0;
+    if (pageIndex >= sourceDoc.getPageCount()) {
+      throw new Error(`Template PDF missing page index ${pageIndex}`);
+    }
+
+    const sourcePage = sourceDoc.getPage(pageIndex);
+    const sourceWidthIn = fromPoints(sourcePage.getWidth());
+    const sourceHeightIn = fromPoints(sourcePage.getHeight());
+    const embeddedSourcePage = await outputDocument.embedPage(sourcePage);
+    if (
+      Math.abs(sourceWidthIn - opts.canvas.trim.widthIn) > SOURCE_SIZE_TOLERANCE_IN ||
+      Math.abs(sourceHeightIn - opts.canvas.trim.heightIn) > SOURCE_SIZE_TOLERANCE_IN
+    ) {
+      throw new Error(
+        `Template page size mismatch: expected ${opts.canvas.trim.widthIn}x${opts.canvas.trim.heightIn}in, ` +
+          `received ${sourceWidthIn.toFixed(3)}x${sourceHeightIn.toFixed(3)}in`
+      );
+    }
+
+    targetPage.drawPage(embeddedSourcePage, {
+      x: toPoints(opts.bleedInches),
+      y: toPoints(opts.bleedInches),
+      width: toPoints(opts.canvas.trim.widthIn),
+      height: toPoints(opts.canvas.trim.heightIn),
+    });
+  }
+
+  if (input.baseGraphic) {
+    await drawBaseGraphic(outputDocument, targetPage, input.baseGraphic, opts);
+  }
 
   const font = await outputDocument.embedFont(StandardFonts.Helvetica);
   for (const element of input.elements ?? []) {
     switch (element.kind) {
       case "text":
-        drawText(targetPage, element, font);
+        drawText(targetPage, element, font, opts.bleedInches);
         break;
       case "rect":
-        drawRect(targetPage, element);
+      case "shape":
+        drawRect(targetPage, element, opts.bleedInches);
         break;
       case "line":
-        drawLine(targetPage, element);
+        drawLine(targetPage, element, opts.bleedInches);
         break;
       case "polyline":
-        drawPolyline(targetPage, element);
+        drawPolyline(targetPage, element, opts.bleedInches);
+        break;
+      case "image":
+      case "logo":
+        await drawImage(outputDocument, targetPage, element, opts.bleedInches, opts.fetchAsset);
         break;
     }
   }
@@ -596,6 +799,18 @@ async function renderSurface(
 
 function resolveFetchPdf(fetchPdf?: (url: string) => Promise<Uint8Array>): (url: string) => Promise<Uint8Array> {
   if (fetchPdf) return fetchPdf;
+  return async (url) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${url} (${response.status})`);
+    }
+    const array = await response.arrayBuffer();
+    return new Uint8Array(array);
+  };
+}
+
+function resolveFetchAsset(fetchAsset?: (url: string) => Promise<Uint8Array>): (url: string) => Promise<Uint8Array> {
+  if (fetchAsset) return fetchAsset;
   return async (url) => {
     const response = await fetch(url);
     if (!response.ok) {
@@ -621,6 +836,7 @@ export async function renderPostcardPdf(input: RenderPostcardInput): Promise<Ren
   const bleedInches = input.bleedInches ?? DEFAULT_BLEED_IN;
   const dpi = input.dpi ?? ACCEPTED_DPI;
   const fetchPdf = resolveFetchPdf(input.fetchPdf);
+  const fetchAsset = resolveFetchAsset(input.fetchAsset);
   const canvas = validation.canvas;
   const useDefaults =
     !input.front.clearZones?.length && !input.front.addressZones?.length;
@@ -631,16 +847,40 @@ export async function renderPostcardPdf(input: RenderPostcardInput): Promise<Ren
   await renderSurface(
     outputPdf,
     normalizeSurface(input.front, input.size, useDefaults),
-    { bleedInches, dpi, canvas, fetchPdf }
+    { bleedInches, dpi, canvas, fetchPdf, fetchAsset }
   );
   await renderSurface(
     outputPdf,
     normalizeSurface(input.back, input.size, useBackDefaults),
-    { bleedInches, dpi, canvas, fetchPdf }
+    { bleedInches, dpi, canvas, fetchPdf, fetchAsset }
   );
   const bytes = await outputPdf.save();
 
   return { bytes: new Uint8Array(bytes), validation };
+}
+
+export async function renderMailArtworkDesignPdf(
+  design: MailArtworkDesignDocument,
+  options: Pick<RenderPostcardInput, "fetchPdf" | "fetchAsset"> = {}
+): Promise<RenderPostcardResult> {
+  return renderPostcardPdf({
+    size: design.size,
+    bleedInches: design.bleedInches,
+    dpi: design.dpi,
+    front: {
+      baseGraphic: design.front.baseGraphic,
+      elements: design.front.elements,
+      clearZones: design.front.clearZones,
+      addressZones: design.front.addressZones,
+    },
+    back: {
+      baseGraphic: design.back.baseGraphic,
+      elements: design.back.elements,
+      clearZones: design.back.clearZones,
+      addressZones: design.back.addressZones,
+    },
+    ...options,
+  });
 }
 
 export function renderPostcardCanvas(
