@@ -37,6 +37,9 @@ export const OPS_FUNCTIONS = [
   // (private.current_user_has_fn('view_sales_pipeline'), PSG-434 migration).
   // psg_superadmin passes implicitly; a psg_internal user needs this flag granted.
   "view_sales_pipeline",
+  // PSG-870 — Mail-artwork freeform editor (Phase 2). Gates the PSG-only
+  // production-editor surface under /ops/production/artwork.
+  "design_mail_artwork",
 ] as const;
 
 export type OpsFunction = (typeof OPS_FUNCTIONS)[number];

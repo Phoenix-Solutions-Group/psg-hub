@@ -81,6 +81,20 @@ export default async function ProductionPage() {
           Mail production via Lob. {queue.length} active {queue.length === 1 ? "batch" : "batches"} ·{" "}
           {historical.length} historical.
         </p>
+        {hasOpsFn(access, "design_mail_artwork") ? (
+          <div className="mt-4 rounded-lg border border-border p-4">
+            <p className="text-sm text-muted-foreground">
+              Need a manual front/back build for postcards? Open the PSG freeform artwork
+              canvas.
+            </p>
+            <a
+              href="/ops/production/artwork"
+              className="mt-2 inline-flex rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Open Mail Artwork Editor
+            </a>
+          </div>
+        ) : null}
       </div>
 
       <section className="space-y-3">

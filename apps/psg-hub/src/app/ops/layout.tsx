@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Logo } from "@/components/brand/logo";
-import { getOpsAccess, isOpsStaff } from "@/lib/auth/ops-access";
+import { getOpsAccess, hasOpsFn, isOpsStaff, type OpsAccess } from "@/lib/auth/ops-access";
 
 // Internal-ops backbone shell (v1.1 / PSG-25). psg_internal + psg_superadmin only;
 // fine-grained module access is enforced per-route via requireOpsFn() + RLS.
@@ -20,6 +20,7 @@ const OPS_NAV: { href: string; label: string; superadminOnly?: boolean }[] = [
   { href: "/ops/surveys", label: "Surveys" },
   { href: "/ops/production", label: "Production" },
   { href: "/ops/production/templates", label: "Mail Templates" },
+  { href: "/ops/production/artwork", label: "Mail Artwork" },
   { href: "/ops/ads-mutations", label: "Ads Mutations" },
   { href: "/ops/sitemap", label: "Sitemap", superadminOnly: true },
   { href: "/ops/sales-pipeline", label: "Sales Pipeline", superadminOnly: true },
@@ -27,6 +28,9 @@ const OPS_NAV: { href: string; label: string; superadminOnly?: boolean }[] = [
   { href: "/ops/admin/integrations/ccc", label: "CCC Connections", superadminOnly: true },
   { href: "/ops/sys-config", label: "System Config" },
 ];
+
+const canSeeArtwork = (item: { href: string }, access: OpsAccess) =>
+  item.href !== "/ops/production/artwork" || hasOpsFn(access, "design_mail_artwork");
 
 export default async function OpsLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -57,7 +61,8 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
         </div>
         <nav className="flex-1 space-y-1 p-3">
           {OPS_NAV.filter(
-            (item) => !item.superadminOnly || access.role === "psg_superadmin",
+            (item) =>
+              (!item.superadminOnly || access.role === "psg_superadmin") && canSeeArtwork(item, access),
           ).map((item) => (
             <a
               key={item.href}
