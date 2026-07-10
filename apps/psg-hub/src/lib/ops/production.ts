@@ -190,7 +190,15 @@ export function buildMailDocument(doc: DocumentRow): MailDocument {
   };
   if (doc.piece_type === "postcard") {
     // Size defaults to the adapter's 4x6 for postcards when the rendered template doesn't pin one.
-    return { ...base, front: doc.rendered_url ?? undefined };
+    // Phase 3 renders a single two-page postcard PDF. Lob's postcard endpoint
+    // still requires explicit front/back params, so submit the same hosted proof
+    // asset for both sides rather than dropping the back during ops handoff.
+    return {
+      ...base,
+      front: doc.rendered_url ?? undefined,
+      back: doc.rendered_url ?? undefined,
+      size: doc.size ?? undefined,
+    };
   }
   const next: MailDocument = { ...base, file: doc.rendered_url ?? undefined };
   if (doc.size) next.size = doc.size;

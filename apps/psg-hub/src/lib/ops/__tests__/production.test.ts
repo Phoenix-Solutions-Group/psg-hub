@@ -92,6 +92,7 @@ describe("toMailAddress / buildMailDocument", () => {
   it("puts the rendered asset in front for postcards and file for letters", () => {
     const postcard = buildMailDocument(DOC);
     expect(postcard.front).toBe("https://assets.test/doc-1.pdf");
+    expect(postcard.back).toBe("https://assets.test/doc-1.pdf");
     expect(postcard.metadata).toEqual({ batchId: "batch-1" });
 
     const letter = buildMailDocument({ ...DOC, piece_type: "letter", color: true, size: "6x9" });
@@ -107,6 +108,23 @@ describe("toMailAddress / buildMailDocument", () => {
     expect(selfMailer.size).toBe("8.5x11");
     expect(selfMailer.front).toBeUndefined();
     expect(selfMailer.back).toBeUndefined();
+  });
+
+  it("forwards stored postcard size and both sides to the adapter", async () => {
+    const doc: DocumentRow = {
+      ...DOC,
+      size: "6x9",
+    };
+    const { client } = makeClient(doc);
+    const adapter = stubAdapter();
+    await printDocument(client, adapter, "doc-1");
+    const sent = (adapter.submit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(sent).toMatchObject({
+      pieceType: "postcard",
+      front: "https://assets.test/doc-1.pdf",
+      back: "https://assets.test/doc-1.pdf",
+      size: "6x9",
+    });
   });
 });
 

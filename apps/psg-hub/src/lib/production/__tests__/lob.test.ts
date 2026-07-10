@@ -156,6 +156,8 @@ describe("LobAdapter.submit", () => {
     const body = String(init.body);
     expect(body).toContain("to%5Bname%5D=Jane+Customer");
     expect(body).toContain("from%5Baddress_state%5D=AZ");
+    expect(body).toContain("front=%3Chtml%3Efront%3C%2Fhtml%3E");
+    expect(body).toContain("back=%3Chtml%3Eback%3C%2Fhtml%3E");
     expect(body).toContain("size=6x9");
     expect(body).toContain("metadata%5BbatchId%5D=batch-9");
   });
