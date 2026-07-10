@@ -25,13 +25,15 @@ export async function GET(
   const format = (request.nextUrl.searchParams.get("format") ?? "json").toLowerCase();
 
   if (format === "html") {
-    // The first rendered surface (postcard front, or letter body). Surface=back
-    // can be requested explicitly for postcards.
+    // The first rendered surface (postcard front, letter body, or self-mailer
+    // inside). Surface=back/outside can be requested explicitly where present.
     const surface = request.nextUrl.searchParams.get("surface");
     const html =
       surface === "back"
         ? proof.content.back
-        : proof.content.front ?? proof.content.file;
+        : surface === "outside"
+          ? proof.content.outside
+          : proof.content.front ?? proof.content.file ?? proof.content.inside;
     if (!html) {
       return NextResponse.json({ error: "No rendered surface for this template" }, { status: 404 });
     }

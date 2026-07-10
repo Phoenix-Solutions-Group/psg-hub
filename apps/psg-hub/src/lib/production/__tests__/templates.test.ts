@@ -188,12 +188,13 @@ describe("buildMailDocument", () => {
     expect(document.front).toBeUndefined();
   });
 
-  it("treats self_mailer as a single-file piece like a letter", () => {
+  it("wires inside/outside surfaces for a self_mailer", () => {
     const { document } = buildMailDocument({
       template: {
         product: "warranty",
         pieceType: "self_mailer",
-        bodyHtml: "Dear {{customer.firstName}}",
+        insideHtml: "Inside {{customer.firstName}}",
+        outsideHtml: "Outside {{company.name}}",
       },
       data: DATA,
       documentId: "doc-4",
@@ -202,7 +203,9 @@ describe("buildMailDocument", () => {
       metadata: { mode: "self-mailer" },
     });
     expect(document.pieceType).toBe("self_mailer");
-    expect(document.file).toBe("Dear Jane");
+    expect(document.inside).toBe("Inside Jane");
+    expect(document.outside).toBe("Outside Ace Body Shop");
+    expect(document.file).toBeUndefined();
     expect(document.color).toBe(false);
     expect(document.front).toBeUndefined();
     expect(document.back).toBeUndefined();
@@ -306,10 +309,12 @@ describe("default templates", () => {
     expect(document.file).toContain("Jane");
   });
 
-  it("exposes a self-mailer default and sends file output with default 8.5x11", () => {
+  it("exposes a self-mailer default and sends inside/outside output with default Lob size", () => {
     const tpl = defaultTemplate("self_mailer");
     expect(tpl.pieceType).toBe("self_mailer");
-    expect(tpl.size).toBe("8.5x11");
+    expect(tpl.size).toBe("6x18_bifold");
+    expect(tpl.insideHtml).toContain("grid-template-columns");
+    expect(tpl.outsideHtml).toContain("address-clear-zone");
 
     const { document } = buildMailDocument({
       template: tpl,
@@ -318,8 +323,10 @@ describe("default templates", () => {
       to: TO,
       from: FROM,
     });
-    expect(document.file).toContain("Hi Jane");
-    expect(document.size).toBe("8.5x11");
+    expect(document.inside).toContain("Thank you for choosing Ace Body Shop");
+    expect(document.outside).toContain("Address and postage clear zone");
+    expect(document.file).toBeUndefined();
+    expect(document.size).toBe("6x18_bifold");
   });
 
   it("escapes merged values inside the default template HTML", () => {

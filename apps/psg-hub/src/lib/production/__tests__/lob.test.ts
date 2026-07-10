@@ -183,10 +183,10 @@ describe("LobAdapter.submit", () => {
     expect(String(init.body)).toContain("color=true");
   });
 
-  it("submits a self_mailer to the letters endpoint", async () => {
+  it("submits a self_mailer to the self-mailers endpoint with inside/outside art", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse(200, {
-        id: "ltr_self1",
+        id: "sfm_self1",
         expected_delivery_date: "2026-07-03",
       })
     ) as unknown as typeof fetch;
@@ -197,19 +197,22 @@ describe("LobAdapter.submit", () => {
       pieceType: "self_mailer",
       to: TO,
       from: FROM,
-      file: "https://assets.test/self-mailer.pdf",
-      size: "8.5x11",
+      inside: "https://assets.test/self-mailer-inside.pdf",
+      outside: "https://assets.test/self-mailer-outside.pdf",
+      size: "12x9_bifold",
       color: true,
     });
 
-    expect(result.externalId).toBe("ltr_self1");
+    expect(result.externalId).toBe("sfm_self1");
     const [url, init] = mockOf(fetchImpl).mock.calls[0] as [string, RequestInit];
-    expect(url).toContain("/letters");
+    expect(url).toContain("/self_mailers");
     const body = String(init.body);
-    expect(body).not.toContain("size=");
-    expect(body).toContain("color=true");
-    expect(body).toContain("address_placement=top_first_page");
+    expect(body).toContain("inside=https%3A%2F%2Fassets.test%2Fself-mailer-inside.pdf");
+    expect(body).toContain("outside=https%3A%2F%2Fassets.test%2Fself-mailer-outside.pdf");
+    expect(body).toContain("size=12x9_bifold");
     expect(body).toContain("use_type=marketing");
+    expect(body).not.toContain("address_placement=");
+    expect(body).not.toContain("color=");
   });
 
   it("retries transient 503 then succeeds", async () => {
@@ -251,6 +254,16 @@ describe("LobAdapter.cancel", () => {
     await makeAdapter(fetchImpl).cancel("ltr_1");
     const [url, init] = mockOf(fetchImpl).mock.calls[0] as [string, RequestInit];
     expect(url).toContain("/letters/ltr_1");
+    expect(init.method).toBe("DELETE");
+  });
+
+  it("DELETEs the self-mailers collection for an sfm_ id", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(200, { id: "sfm_1", deleted: true })
+    ) as unknown as typeof fetch;
+    await makeAdapter(fetchImpl).cancel("sfm_1");
+    const [url, init] = mockOf(fetchImpl).mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/self_mailers/sfm_1");
     expect(init.method).toBe("DELETE");
   });
 });

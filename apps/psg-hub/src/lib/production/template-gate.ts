@@ -69,6 +69,8 @@ export function templateContentHash(template: MailTemplate): string {
     frontHtml: template.frontHtml ?? null,
     backHtml: template.backHtml ?? null,
     bodyHtml: template.bodyHtml ?? null,
+    insideHtml: template.insideHtml ?? null,
+    outsideHtml: template.outsideHtml ?? null,
     size: template.size ?? null,
     color: template.color ?? null,
   });

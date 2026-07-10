@@ -201,9 +201,13 @@ export interface MailTemplate {
   frontHtml?: string;
   /** Postcard back HTML. */
   backHtml?: string;
-  /** Letter body HTML (including self-mailer content). */
+  /** Letter body HTML. Legacy self-mailer templates may fall back to this as inside art. */
   bodyHtml?: string;
-  /** Mail size, e.g. "4x6" | "6x9" | "6x11" | "8.5x11". */
+  /** Self-mailer inside-panel HTML. */
+  insideHtml?: string;
+  /** Self-mailer outside-panel HTML, including the address/postage clear panel. */
+  outsideHtml?: string;
+  /** Mail size, e.g. "4x6" | "6x9" | "6x11" | "6x18_bifold". */
   size?: string;
   /** Letters and self-mailers only: color print. */
   color?: boolean;
@@ -214,6 +218,8 @@ export interface RenderedMailContent {
   front?: string;
   back?: string;
   file?: string;
+  inside?: string;
+  outside?: string;
   /** Merge tokens referenced by the template that had no value. */
   missing: string[];
 }
@@ -417,8 +423,10 @@ export function renderMailContent(
   if (template.pieceType === "postcard") {
     out.front = render(template.frontHtml);
     out.back = render(template.backHtml);
+  } else if (template.pieceType === "self_mailer") {
+    out.inside = render(template.insideHtml ?? template.bodyHtml);
+    out.outside = render(template.outsideHtml);
   } else {
-    // For both `letter` and `self_mailer`, Lob consumes a single `file` body.
     out.file = render(template.bodyHtml);
   }
   return out;
@@ -439,9 +447,10 @@ export interface BuildMailDocumentArgs {
 
 /**
  * Assemble a fully-rendered `MailDocument` from a template + merge data + the
- * addressing. Wires `front`/`back` (postcard) or `file` (letter/self-mailer),
- * carries the template's `size`/`color`, and returns the unresolved tokens so
- * the batch service / preview can block or flag an incomplete piece before submit.
+ * addressing. Wires `front`/`back` (postcard), `file` (letter), or
+ * `inside`/`outside` (self-mailer), carries the template's `size`/`color`, and
+ * returns unresolved tokens so the batch service / preview can block or flag an
+ * incomplete piece before submit.
  */
 export function buildMailDocument(
   args: BuildMailDocumentArgs
@@ -461,8 +470,12 @@ export function buildMailDocument(
     document.front = content.front;
     document.back = content.back;
     if (template.size) document.size = template.size;
+  } else if (template.pieceType === "self_mailer") {
+    document.inside = content.inside;
+    document.outside = content.outside;
+    document.color = template.color ?? false;
+    if (template.size) document.size = template.size;
   } else {
-    // For both `letter` and `self_mailer`.
     document.file = content.file;
     document.color = template.color ?? false;
     if (template.size) document.size = template.size;
@@ -515,6 +528,35 @@ export function letterDoc(inner: string): string {
     `<!doctype html><html lang="en"><head><meta charset="UTF-8" />` +
     letterStyle() +
     `</head><body><div class="page">${inner}</div></body></html>`
+  );
+}
+
+/** Base print CSS for Lob's default 6x18 bifold self-mailer. */
+function selfMailerStyle(): string {
+  return `<style>
+@page { size: 18in 6in; margin: 0; }
+html, body { margin: 0; padding: 0; }
+.sheet { box-sizing: border-box; width: 18in; height: 6in; display: grid; grid-template-columns: repeat(3, 1fr); -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: ${BRAND.fontBody}; color: ${BRAND.graphite}; background: #fff; }
+.panel { box-sizing: border-box; padding: 0.45in; border-right: 1px dashed #cbd5e1; }
+.panel:last-child { border-right: 0; }
+.masthead { font-family: ${BRAND.fontDisplay}; font-weight: 700; color: ${BRAND.midnight}; font-size: 20pt; border-bottom: 2px solid ${BRAND.ember}; padding-bottom: 0.08in; margin-bottom: 0.22in; }
+.eyebrow { font-family: ${BRAND.fontDisplay}; text-transform: uppercase; font-size: 8pt; color: ${BRAND.ember}; letter-spacing: 0.05em; }
+.headline { font-family: ${BRAND.fontDisplay}; font-weight: 700; font-size: 18pt; line-height: 1.12; color: ${BRAND.midnight}; margin: 0.1in 0 0.2in; }
+p { margin: 0 0 0.13in; font-size: 10.5pt; line-height: 1.42; }
+.signature { margin-top: 0.2in; font-family: ${BRAND.fontDisplay}; color: ${BRAND.midnight}; font-weight: 700; }
+.address-clear-zone { min-height: 2.15in; border: 1px dashed #94a3b8; background: #fff; margin-bottom: 0.2in; }
+.address-note { font-family: ${BRAND.fontDisplay}; color: #64748b; font-size: 8pt; text-transform: uppercase; }
+.return { font-size: 9pt; color: ${BRAND.graphite}; }
+.cta { font-family: ${BRAND.fontDisplay}; font-weight: 700; color: ${BRAND.ember}; }
+</style>`;
+}
+
+/** Wrap one self-mailer side in a self-contained, panelized 6x18 document. */
+function selfMailerDoc(inner: string): string {
+  return (
+    `<!doctype html><html lang="en"><head><meta charset="UTF-8" />` +
+    selfMailerStyle() +
+    `</head><body><div class="sheet">${inner}</div></body></html>`
   );
 }
 
@@ -635,7 +677,7 @@ function masterFooter(pieceCode = "{{program.pieceCode}}"): string {
 
 const MASTER_FOOTER = masterFooter();
 
-const SELF_MAILER_DEFAULT_SIZE = "8.5x11";
+const SELF_MAILER_DEFAULT_SIZE = "6x18_bifold";
 
 /**
  * The brand-aligned default templates, one per product. These are the fallback
@@ -740,23 +782,40 @@ export const DEFAULT_TEMPLATES: Record<MailProduct, MailTemplate> = {
     pieceType: "self_mailer",
     size: SELF_MAILER_DEFAULT_SIZE,
     color: true,
-    bodyHtml: masterLetterDoc(
-      MASTER_MASTHEAD +
-        MASTER_DATE_ADDRESS +
-        `<p class="salutation">Hi {{customer.firstName}},</p>` +
-        `<!-- block:headline -->` +
-        `<div class="headline">A quick reminder from your repair shop</div>` +
-        `<!-- /block:headline -->` +
-        `<!-- block:body -->` +
-        `<div class="body">` +
-        `<p>Thank you for choosing {{company.name}} for your vehicle service. We wanted to follow up ` +
-        `with a quick update on your repair and the information that might still apply.</p>` +
-        `<p>If you have any questions about what was completed, please call us directly.` +
-        ` We&rsquo;ll help you right away.</p>` +
-        `</div>` +
-        `<!-- /block:body -->` +
-        masterSignature("Sincerely,") +
-        MASTER_FOOTER
+    insideHtml: selfMailerDoc(
+      `<section class="panel">` +
+        `<div class="eyebrow">Thank you</div>` +
+        `<div class="headline">We appreciate your trust.</div>` +
+        `<p>Thank you for choosing {{company.name}} for your {{customer.vehicle}}.</p>` +
+        `<p>Your feedback helps us keep improving the repair experience for every customer.</p>` +
+        `</section>` +
+        `<section class="panel">` +
+        `<div class="eyebrow">Questions</div>` +
+        `<div class="headline">Call us directly.</div>` +
+        `<p>If anything about your repair needs attention, call {{company.phone}} and we will help right away.</p>` +
+        `<p class="signature">{{program.ownerName}}<br />{{program.ownerTitle}}</p>` +
+        `</section>` +
+        `<section class="panel">` +
+        `<div class="eyebrow">Survey</div>` +
+        `<div class="headline">Tell us how we did.</div>` +
+        `<p>Visit <span class="cta">{{program.surveyUrl}}</span> and enter security code ` +
+        `<strong>{{customer.surveySecurityCode}}</strong> and survey ID <strong>{{customer.surveyId}}</strong>.</p>` +
+        `</section>`
+    ),
+    outsideHtml: selfMailerDoc(
+      `<section class="panel">` +
+        `<div class="masthead">{{company.name}}</div>` +
+        `<p class="return">{{program.addressLine1}}<br />{{program.addressLine2}}</p>` +
+        `<p>{{company.phone}}</p>` +
+        `</section>` +
+        `<section class="panel">` +
+        `<div class="address-clear-zone"></div>` +
+        `<p class="address-note">Address and postage clear zone</p>` +
+        `</section>` +
+        `<section class="panel">` +
+        `<div class="headline">A note from your repair team</div>` +
+        `<p>Open for a short follow-up from {{company.name}} about your recent repair.</p>` +
+        `</section>`
     ),
   },
   // W1 Piece 2 — Owner service-recovery, Direction A "The Owner's Direct Line"

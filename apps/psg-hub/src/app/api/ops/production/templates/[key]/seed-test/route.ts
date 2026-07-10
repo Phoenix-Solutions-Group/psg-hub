@@ -30,7 +30,7 @@ const addressSchema = z.object({
   zip: z.string().trim().min(5).max(10),
   country: z.string().trim().max(2).nullish(),
 });
-const sizeSchema = z.enum(["4x6", "6x9", "6x11", "8.5x11"]);
+const sizeSchema = z.enum(["6x18_bifold", "11x9_bifold", "12x9_bifold", "17.75x9_trifold"]);
 
 const bodySchema = z
   .object({

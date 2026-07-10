@@ -23,8 +23,8 @@ import {
  * circuit breaker + retry (PROJECT.md: retry + circuit breaker on every external
  * call, no bare catches). It talks Lob's REST API directly via `fetch` rather
  * than pulling the `lob` SDK — the surface we need (us_verifications, postcards,
- * letters) is three endpoints, and a dependency-free adapter keeps the bundle
- * lean and the auth model explicit.
+ * letters, self_mailers) is small, and a dependency-free adapter keeps the
+ * bundle lean and the auth model explicit.
  *
  * AUTH: HTTP Basic, API key as the username, empty password. A `test_*` key
  * targets Lob test mode (free, no per-piece spend) — that is what the build
@@ -304,11 +304,17 @@ export class LobAdapter implements MailAdapter {
     let path: string;
     if (document.pieceType === "postcard") {
       path = "/postcards";
-      // Postcards support explicit sizing; the letters endpoint rejects a size
-      // param, including for PSG self-mailer proofs routed through /letters.
+      // Postcards support explicit sizing.
       params.set("size", document.size ?? "4x6");
       if (document.front) params.set("front", document.front);
       if (document.back) params.set("back", document.back);
+    } else if (document.pieceType === "self_mailer") {
+      path = "/self_mailers";
+      params.set("size", document.size ?? "6x18_bifold");
+      if (document.inside) params.set("inside", document.inside);
+      if (document.outside) params.set("outside", document.outside);
+      // Required by Lob; PSG's direct-mail program is retention/marketing.
+      params.set("use_type", "marketing");
     } else {
       path = "/letters";
       if (document.file) params.set("file", document.file);
@@ -341,9 +347,13 @@ export class LobAdapter implements MailAdapter {
 
   async cancel(externalId: string): Promise<void> {
     const apiKey = this.apiKey();
-    // Lob cancels via DELETE on the resource collection; postcards vs letters
-    // share the same id-prefix convention (psc_ / ltr_).
-    const collection = externalId.startsWith("ltr_") ? "letters" : "postcards";
+    // Lob cancels via DELETE on the resource collection; id prefixes identify
+    // postcards, letters, and self-mailers.
+    const collection = externalId.startsWith("ltr_")
+      ? "letters"
+      : externalId.startsWith("sfm_")
+        ? "self_mailers"
+        : "postcards";
     const run = async (): Promise<void> => {
       let response: Response;
       try {

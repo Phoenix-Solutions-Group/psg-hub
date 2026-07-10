@@ -56,11 +56,16 @@ export function TemplateGateCard({ row }: { row: TemplateGateRow }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [selfMailerSize, setSelfMailerSize] = useState(row.templateSize ?? "8.5x11");
+  const [selfMailerSize, setSelfMailerSize] = useState(row.templateSize ?? "6x18_bifold");
   const [showProof, setShowProof] = useState(false);
 
   const canPickSelfMailerSize = row.pieceType === "self_mailer";
-  const selfMailerSizes = ["4x6", "6x9", "6x11", "8.5x11"] as const;
+  const selfMailerSizes = [
+    "6x18_bifold",
+    "11x9_bifold",
+    "12x9_bifold",
+    "17.75x9_trifold",
+  ] as const;
 
   const base = `/api/ops/production/templates/${row.key}`;
 
