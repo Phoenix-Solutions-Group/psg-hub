@@ -426,6 +426,125 @@ async function seedCcc({ shop }) {
   }
 }
 
+async function findProfileByEmail(email) {
+  if (!email) return null;
+  const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) throw new Error(`auth user lookup failed: ${error.message}`);
+  const user = data?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+  if (!user) return null;
+  const profile = await findFirst("profiles", "id, display_name", { id: user.id });
+  return profile ?? { id: user.id, display_name: email };
+}
+
+async function findDemoActor() {
+  const fromEnv = await findProfileByEmail(process.env.DEMO_OPERATOR_EMAIL);
+  if (fromEnv) return fromEnv;
+
+  const roleRows = await supabase
+    .from("app_user_roles")
+    .select("profile_id")
+    .eq("role", "psg_superadmin")
+    .limit(1);
+  if (roleRows.error) throw new Error(`superadmin role lookup failed: ${roleRows.error.message}`);
+  const profileId = roleRows.data?.[0]?.profile_id;
+  if (!profileId) throw new Error("No psg_superadmin profile found for demo audit seed.");
+  return (await findFirst("profiles", "id, display_name", { id: profileId })) ?? { id: profileId };
+}
+
+async function findTargetProfile(actorId) {
+  const shopUser = await supabase
+    .from("shop_users")
+    .select("user_id")
+    .neq("user_id", actorId)
+    .limit(1);
+  if (shopUser.error) throw new Error(`shop user lookup failed: ${shopUser.error.message}`);
+  const targetId = shopUser.data?.[0]?.user_id;
+  if (!targetId) return null;
+  return (await findFirst("profiles", "id, display_name", { id: targetId })) ?? { id: targetId };
+}
+
+async function insertAuditIfMissing(row) {
+  const existing = await supabase
+    .from("access_audit")
+    .select("id")
+    .eq("actor_profile_id", row.actor_profile_id)
+    .eq("action", row.action)
+    .eq("payload_jsonb->>demoSeed", "psg-1198")
+    .eq("payload_jsonb->>demoKey", row.payload_jsonb.demoKey)
+    .limit(1);
+  if (existing.error) throw new Error(`audit lookup failed: ${existing.error.message}`);
+
+  if (!APPLY) {
+    logStep(`${existing.data?.length ? "would keep" : "would insert"} access audit ${row.payload_jsonb.demoKey}`);
+    return;
+  }
+  if (existing.data?.length) {
+    logStep(`kept access audit ${row.payload_jsonb.demoKey}`);
+    return;
+  }
+
+  const { error } = await supabase.from("access_audit").insert(row);
+  if (error) throw new Error(`access audit ${row.payload_jsonb.demoKey} insert failed: ${error.message}`);
+  logStep(`inserted access audit ${row.payload_jsonb.demoKey}`);
+}
+
+async function seedAccessAudit({ shop }) {
+  const actor = await findDemoActor();
+  const targetProfile = await findTargetProfile(actor.id);
+  const base = {
+    actor_profile_id: actor.id,
+    target_shop_id: shop.id,
+  };
+
+  const rows = [
+    {
+      ...base,
+      target_profile_id: targetProfile?.id ?? null,
+      action: "role.grant",
+      payload_jsonb: {
+        demoSeed: "psg-1198",
+        demoKey: "role-grant-demo-manager",
+        name: targetProfile?.display_name || "Demo shop manager",
+        role: "shop_admin",
+        fromRole: "viewer",
+        toRole: "shop_admin",
+        reason: "Prepared demo manager access for Body Shop Marketer walkthrough.",
+      },
+      ts: "2026-07-11T20:44:00.000Z",
+    },
+    {
+      ...base,
+      target_profile_id: targetProfile?.id ?? null,
+      action: "module_access.grant",
+      payload_jsonb: {
+        demoSeed: "psg-1198",
+        demoKey: "module-grant-analytics",
+        slug: "analytics",
+        effect: "allow",
+        name: targetProfile?.display_name || "Demo shop manager",
+        reason: "Enabled analytics module for demo account.",
+      },
+      ts: "2026-07-11T20:46:00.000Z",
+    },
+    {
+      ...base,
+      target_profile_id: null,
+      action: "production.template.release",
+      payload_jsonb: {
+        demoSeed: "psg-1198",
+        demoKey: "template-release-thank-you",
+        slug: "thank_you",
+        name: "Demo Thank-You Letter Program",
+        status: "released",
+        reason: "Released demo mail template after proof review.",
+      },
+      ts: "2026-07-11T20:48:00.000Z",
+    },
+  ];
+
+  for (const row of rows) await insertAuditIfMissing(row);
+}
+
 async function main() {
   console.log(`Target Supabase host: ${new URL(url).host}`);
   if (!APPLY) {
@@ -435,6 +554,7 @@ async function main() {
   const core = await seedCoreRows();
   await seedProduction(core);
   await seedCcc(core);
+  await seedAccessAudit(core);
 
   console.log("Done.");
   console.log("Recapture:");
