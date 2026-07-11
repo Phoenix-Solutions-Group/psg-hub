@@ -9,7 +9,7 @@
       "type": "http",
       "url": "https://mcp.supabase.com/mcp?project_ref=gylkkzmcmbdftxieyabw&read_only=true&features=database,docs",
       "headers": {
-        "Authorization": "Bearer ${SUPABASE_ACCESS_TOKEN}"
+        "Authorization": "Bearer ${SUPABASE_MCP_ACCESS_TOKEN}"
       }
     }
   }
