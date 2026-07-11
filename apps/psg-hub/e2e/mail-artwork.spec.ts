@@ -56,7 +56,7 @@ test.describe("mail artwork editor", () => {
 
     await page.getByRole("button", { name: "Add image" }).click();
     await expect(page.getByText(/^Image /)).toBeVisible();
-    await page.getByLabel("X (in)").fill("0.3");
+    await page.getByLabel("X (in)").fill("2");
     await page.getByLabel("Y (in)").fill("2");
     await page.getByLabel("Width (in)").fill("1");
     await page.getByLabel("Height (in)").fill("1");
