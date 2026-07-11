@@ -41,7 +41,7 @@ test.describe("PSG-986 demo capture (operator session)", () => {
     test(`operator ${route.name}`, async ({ page }) => {
       await page.goto(route.path, { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle");
-      await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+      await expect(page.getByText("PSG Internal Operations")).toBeVisible();
       await page.screenshot({
         path: path.join(DEMO_SHOTS_DIR, `${route.name}.png`),
         fullPage: true,

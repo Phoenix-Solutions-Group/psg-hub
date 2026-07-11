@@ -27,9 +27,26 @@ async function login(page: import("@playwright/test").Page, role: DemoSessionRol
   await typeIntoField(page, "Email", creds.email);
   await typeIntoField(page, "Password", creds.password);
   await page.getByRole("button", { name: /sign in/i }).click();
-  await page.waitForURL(/\/(ops|dashboard)\b/, { timeout: 20_000 });
+  try {
+    await page.waitForURL(/\/(ops|dashboard)\b/, { timeout: 20_000 });
+  } catch (error) {
+    await page.getByLabel("Email").fill("").catch(() => undefined);
+    await page.getByLabel("Password").fill("").catch(() => undefined);
+    const rejected = await page
+      .getByText(/email and password don't match/i)
+      .isVisible()
+      .catch(() => false);
+    throw new Error(
+      `[PSG-986] ${role} demo login did not reach a protected route` +
+        (rejected ? "; the app rejected the supplied credentials." : ".")
+    );
+  }
   await page.goto(session.defaultPath, { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible({ timeout: 20_000 });
+  if (role === "operator") {
+    await expect(page.getByText("PSG Internal Operations")).toBeVisible({ timeout: 20_000 });
+  } else {
+    await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible({ timeout: 20_000 });
+  }
 }
 
 setup("create short-lived demo sessions", async ({ browser }) => {
