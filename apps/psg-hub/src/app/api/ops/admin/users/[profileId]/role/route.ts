@@ -3,7 +3,7 @@ import { z } from "zod";
 import { recordAuditEvent } from "@/lib/audit/access-audit";
 import { requireSuperadmin } from "@/lib/auth/ops-access";
 import { createServiceClient } from "@/lib/supabase/service";
-import { ADMIN_APP_ROLES, auditActionForRoleChange } from "@/lib/ops/user-management";
+import { ADMIN_APP_ROLES, asAdminAppRole, auditActionForRoleChange } from "@/lib/ops/user-management";
 
 const roleSchema = z.object({
   role: z.enum(ADMIN_APP_ROLES),
@@ -42,7 +42,7 @@ export async function PATCH(
     return NextResponse.json({ error: "User profile not found" }, { status: 404 });
   }
 
-  const beforeRole = (existing?.role as string | undefined) ?? null;
+  const beforeRole = asAdminAppRole(existing?.role) ?? null;
   const nextRole = parsed.data.role;
 
   const { data, error } = await service
@@ -58,7 +58,7 @@ export async function PATCH(
 
   await recordAuditEvent({
     actorProfileId: gate.userId,
-    action: auditActionForRoleChange(nextRole),
+    action: auditActionForRoleChange(nextRole, beforeRole),
     targetProfileId: profileId,
     payload: {
       beforeRole,

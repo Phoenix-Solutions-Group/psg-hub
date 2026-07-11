@@ -1,5 +1,4 @@
 import type { AppRole } from "@/lib/auth/shop-access";
-import type { Tier } from "@/lib/tier/gate";
 
 /**
  * Pure helpers for the Superadmin user-management surface (PSG-1128).
@@ -52,6 +51,15 @@ export function asAdminTier(raw: unknown): AdminTier | null {
     : null;
 }
 
-export function auditActionForRoleChange(nextRole: AppRole): "role.grant" | "role.revoke" {
+export function auditActionForRoleChange(
+  nextRole: AppRole,
+  beforeRole: AppRole | null = null
+): "role.grant" | "role.revoke" | "superadmin.add" | "superadmin.remove" {
+  if (nextRole === "psg_superadmin" && beforeRole !== "psg_superadmin") {
+    return "superadmin.add";
+  }
+  if (beforeRole === "psg_superadmin" && nextRole !== "psg_superadmin") {
+    return "superadmin.remove";
+  }
   return nextRole === "customer" ? "role.revoke" : "role.grant";
 }
