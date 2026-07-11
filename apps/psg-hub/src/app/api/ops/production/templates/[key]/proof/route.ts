@@ -7,7 +7,11 @@ export const runtime = "nodejs";
 
 import { type NextRequest, NextResponse } from "next/server";
 import { requireOpsFn } from "@/lib/auth/ops-access";
-import { buildTemplateProof, isTemplateKey } from "@/lib/production/template-gate";
+import {
+  buildTemplateProof,
+  isTemplateKey,
+  templateProofDataForSeed,
+} from "@/lib/production/template-gate";
 
 export async function GET(
   request: NextRequest,
@@ -21,7 +25,8 @@ export async function GET(
     return NextResponse.json({ error: "Unknown template key" }, { status: 404 });
   }
 
-  const proof = buildTemplateProof(key);
+  const seed = (request.nextUrl.searchParams.get("seed") ?? "sample").toLowerCase();
+  const proof = buildTemplateProof(key, templateProofDataForSeed(seed));
   const format = (request.nextUrl.searchParams.get("format") ?? "json").toLowerCase();
 
   if (format === "html") {
@@ -42,5 +47,5 @@ export async function GET(
     });
   }
 
-  return NextResponse.json({ proof });
+  return NextResponse.json({ proof, seed: seed === "riverside" ? "riverside" : "sample" });
 }
