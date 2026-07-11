@@ -19,13 +19,13 @@ function loadEnv(file: string): Record<string, string> {
   return out;
 }
 
-const testEnv = loadEnv(path.join(__dirname, ".env.test.local"));
+const isDemoCapture = process.env.DEMO_CAPTURE === "1";
+const testEnv = isDemoCapture ? {} : loadEnv(path.join(__dirname, ".env.test.local"));
 
 // Also expose the local target to the Playwright runner process itself, so
 // global.setup.ts (service-role seed) and the local-only guard see the same
 // LOCAL stack. Local values win — this is the zero-PII guarantee.
 Object.assign(process.env, testEnv);
-const isDemoCapture = process.env.DEMO_CAPTURE === "1";
 const demoBaseURL = process.env.DEMO_BASE_URL?.trim();
 
 if (isDemoCapture && !demoBaseURL) {
