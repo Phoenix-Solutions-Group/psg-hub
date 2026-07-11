@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed:bsm-demo": "node scripts/seed-bsm-governance-demo.mjs",
+    "seed:superadmin-qa": "node scripts/seed-superadmin-qa-env.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:demo": "DEMO_CAPTURE=1 playwright test --project=demo-capture",

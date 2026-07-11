@@ -52,6 +52,12 @@ const localProjects = [
 const demoProjects = [
   { name: "demo-session-setup", testMatch: /demo-session-setup\.ts/ },
   {
+    name: "superadmin-walkthrough",
+    testMatch: /superadmin-walkthrough\.spec\.ts/,
+    dependencies: ["demo-session-setup"],
+    use: { ...devices["Desktop Chrome"] },
+  },
+  {
     name: "demo-capture",
     testMatch: /demo-capture\.spec\.ts/,
     dependencies: ["demo-session-setup"],
