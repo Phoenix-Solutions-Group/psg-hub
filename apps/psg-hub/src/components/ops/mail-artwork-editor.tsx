@@ -685,7 +685,10 @@ export function MailArtworkEditor() {
   }, []);
 
   useEffect(() => {
-    void loadDesigns();
+    const timer = window.setTimeout(() => {
+      void loadDesigns();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadDesigns]);
 
   const hydrateDesign = useCallback((design: SavedDesign) => {
