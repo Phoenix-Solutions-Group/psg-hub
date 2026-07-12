@@ -74,10 +74,15 @@ describe("AI visibility check lead route", () => {
         trigger_ref: expect.stringMatching(/^ai_visibility_check:em_/),
         email_contact_hash: expect.stringMatching(/^em_/),
         sms_contact_hash: null,
+        contact_jsonb: expect.objectContaining({
+          firstName: "Pat Owner",
+          shopName: "Pat's Collision",
+          email: "pat@example.com",
+          phone: "555-0100",
+        }),
       }),
       { onConflict: "path,trigger_ref" }
     );
-    expect(JSON.stringify(upsert.mock.calls[0])).not.toContain("pat@example.com");
   });
 
   it("records checked text-message consent and enrolls the lead as SMS-eligible", async () => {
@@ -111,6 +116,12 @@ describe("AI visibility check lead route", () => {
         trigger_ref: expect.stringMatching(/^ai_visibility_check:em_/),
         email_contact_hash: expect.stringMatching(/^em_/),
         sms_contact_hash: expect.stringMatching(/^ph_/),
+        contact_jsonb: expect.objectContaining({
+          firstName: "Pat Owner",
+          shopName: "Pat's Collision",
+          email: "pat@example.com",
+          phone: "(555) 867-5309",
+        }),
       }),
       { onConflict: "path,trigger_ref" }
     );

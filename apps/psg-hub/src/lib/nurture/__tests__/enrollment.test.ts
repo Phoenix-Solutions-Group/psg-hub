@@ -133,8 +133,13 @@ describe("nurture enrollment writer", () => {
     });
     expect(calls.upserts[0]!.row.email_contact_hash).toMatch(/^em_/);
     expect(calls.upserts[0]!.row.sms_contact_hash).toMatch(/^ph_/);
-    expect(JSON.stringify(calls.upserts[0]!.row)).not.toContain("Owner@Shop.com");
-    expect(JSON.stringify(calls.upserts[0]!.row)).not.toContain("555");
+    expect(calls.upserts[0]!.row.contact_jsonb).toEqual({
+      firstName: null,
+      shopName: null,
+      email: "Owner@Shop.com ",
+      phone: "(555) 867-5309",
+    });
+    expect(calls.upserts[0]!.row.template_jsonb).toEqual({});
   });
 
   it("uses one idempotency key for repeated stalled-deal enrollment", async () => {

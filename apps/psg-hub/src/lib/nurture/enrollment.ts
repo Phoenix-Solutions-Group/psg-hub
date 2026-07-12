@@ -2,7 +2,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { contactHash } from "@/lib/ops/solicitation/contact";
 import { pathForTrigger } from "./sequences";
-import type { NurtureContact, NurtureExitReason, NurturePath, NurtureTrigger } from "./types";
+import type {
+  NurtureContact,
+  NurtureExitReason,
+  NurturePath,
+  NurtureTrigger,
+} from "./types";
 
 type DbError = { message: string };
 
@@ -37,6 +42,7 @@ export interface EnrollNurtureArgs {
   pipedriveOrgId?: number | null;
   companyId?: string | null;
   enrolledAt?: string;
+  templateJsonb?: Record<string, unknown>;
 }
 
 export interface EnrollNurtureResult {
@@ -77,6 +83,15 @@ function hashesFor(contact: NurtureContact): {
   return { emailContactHash, smsContactHash };
 }
 
+function contactPayload(contact: NurtureContact): Record<string, unknown> {
+  return {
+    firstName: contact.firstName ?? null,
+    shopName: contact.shopName ?? null,
+    email: contact.email ?? null,
+    phone: contact.phone ?? null,
+  };
+}
+
 export async function enrollNurturePath(
   service: SupabaseClient | NurtureSupabase,
   args: EnrollNurtureArgs
@@ -101,6 +116,8 @@ export async function enrollNurturePath(
         email_contact_hash: emailContactHash,
         sms_contact_hash: smsContactHash,
         trigger_ref: triggerRef,
+        contact_jsonb: contactPayload(args.contact),
+        template_jsonb: args.templateJsonb ?? {},
         company_id: args.companyId ?? null,
         enrolled_at: args.enrolledAt ?? new Date().toISOString(),
         exit_reason: null,
