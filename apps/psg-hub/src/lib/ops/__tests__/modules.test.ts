@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BASELINE_MODULES,
   asAudience,
   asGrantEffect,
   asGrantRole,
@@ -12,6 +13,20 @@ import {
   targetedOverrideCount,
   type GrantRow,
 } from "@/lib/ops/modules";
+
+describe("BASELINE_MODULES", () => {
+  it("keeps the QA module matrix seeded with real app modules", () => {
+    expect(BASELINE_MODULES).toHaveLength(5);
+    expect(BASELINE_MODULES.map((module) => module.slug)).toEqual([
+      "client-hub",
+      "analytics",
+      "ads-mutations",
+      "production",
+      "superadmin",
+    ]);
+    expect(BASELINE_MODULES.every((module) => module.display_name.length > 0)).toBe(true);
+  });
+});
 
 describe("normalizeModuleSlug", () => {
   it("lowercases, trims, and hyphenates whitespace", () => {

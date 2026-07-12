@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getOpsAccess } from "@/lib/auth/ops-access";
 import { ModuleAccessMatrix } from "@/components/ops/module-access-matrix";
-import type { GrantRow, ModuleRow } from "@/lib/ops/modules";
+import { BASELINE_MODULES, type GrantRow, type ModuleRow } from "@/lib/ops/modules";
 
 // Module Access Matrix surface (v1.5 / PSG-29). Superadmin-only — matches the
 // RLS on modules + module_access_grants. Loads the registry + role grants and
@@ -44,6 +44,16 @@ async function readMatrixData(client: SupabaseReadClient): Promise<MatrixData> {
   };
 }
 
+async function seedBaselineModules(client: ReturnType<typeof createServiceClient>) {
+  const { error } = await client
+    .from("modules")
+    .upsert([...BASELINE_MODULES], { onConflict: "slug" });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export default async function ModulesAdminPage() {
   const supabase = await createClient();
   const {
@@ -65,11 +75,14 @@ export default async function ModulesAdminPage() {
 
   let matrix: MatrixData;
   try {
-    const serviceMatrix = await readMatrixData(createServiceClient());
+    const service = createServiceClient();
+    const serviceMatrix = await readMatrixData(service);
     if (serviceMatrix.modules.length === 0) {
-      throw new Error("Service-role module query returned no rows");
+      await seedBaselineModules(service);
+      matrix = await readMatrixData(service);
+    } else {
+      matrix = serviceMatrix;
     }
-    matrix = serviceMatrix;
   } catch (error) {
     console.error("[ops/admin/modules] service-role load failed; falling back to user session", error);
     matrix = await readMatrixData(supabase);

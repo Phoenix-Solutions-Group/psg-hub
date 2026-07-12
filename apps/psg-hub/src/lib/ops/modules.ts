@@ -49,6 +49,50 @@ export type ModuleRow = {
   default_visibility: ModuleVisibility;
 };
 
+export type BaselineModule = Omit<ModuleRow, "id">;
+
+/**
+ * Deterministic module registry baseline used by the migration seed and by the
+ * superadmin QA page self-heal when a preview database is empty.
+ */
+export const BASELINE_MODULES: readonly BaselineModule[] = [
+  {
+    slug: "client-hub",
+    display_name: "Client Hub",
+    audience: "customer",
+    min_tier_slug: null,
+    default_visibility: "visible",
+  },
+  {
+    slug: "analytics",
+    display_name: "Analytics",
+    audience: "customer",
+    min_tier_slug: "essentials",
+    default_visibility: "visible",
+  },
+  {
+    slug: "ads-mutations",
+    display_name: "Ads Mutations",
+    audience: "ops",
+    min_tier_slug: null,
+    default_visibility: "hidden",
+  },
+  {
+    slug: "production",
+    display_name: "Production Mail",
+    audience: "ops",
+    min_tier_slug: null,
+    default_visibility: "hidden",
+  },
+  {
+    slug: "superadmin",
+    display_name: "Superadmin",
+    audience: "ops",
+    min_tier_slug: null,
+    default_visibility: "hidden",
+  },
+];
+
 export type GrantRow = {
   id: string;
   module_id: string;
