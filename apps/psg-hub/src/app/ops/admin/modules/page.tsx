@@ -28,14 +28,41 @@ export default async function ModulesAdminPage() {
     );
   }
 
-  const service = createServiceClient();
-  const [{ data: modules }, { data: grants }] = await Promise.all([
-    service
-      .from("modules")
-      .select("id, slug, display_name, audience, min_tier_slug, default_visibility")
-      .order("display_name", { ascending: true }),
-    service.from("module_access_grants").select("id, module_id, profile_id, shop_id, role, effect"),
-  ]);
+  let modules: ModuleRow[] = [];
+  let grants: GrantRow[] = [];
+
+  try {
+    const service = createServiceClient();
+    const [{ data: moduleRows, error: moduleError }, { data: grantRows, error: grantError }] =
+      await Promise.all([
+        service
+          .from("modules")
+          .select("id, slug, display_name, audience, min_tier_slug, default_visibility")
+          .order("display_name", { ascending: true }),
+        service
+          .from("module_access_grants")
+          .select("id, module_id, profile_id, shop_id, role, effect"),
+      ]);
+
+    if (moduleError ?? grantError) {
+      throw moduleError ?? grantError;
+    }
+
+    modules = (moduleRows ?? []) as ModuleRow[];
+    grants = (grantRows ?? []) as GrantRow[];
+  } catch (error) {
+    console.error("[ops/admin/modules] service-role load failed; falling back to user session", error);
+    const [{ data: moduleRows }, { data: grantRows }] = await Promise.all([
+      supabase
+        .from("modules")
+        .select("id, slug, display_name, audience, min_tier_slug, default_visibility")
+        .order("display_name", { ascending: true }),
+      supabase.from("module_access_grants").select("id, module_id, profile_id, shop_id, role, effect"),
+    ]);
+
+    modules = (moduleRows ?? []) as ModuleRow[];
+    grants = (grantRows ?? []) as GrantRow[];
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -53,8 +80,8 @@ export default async function ModulesAdminPage() {
       </div>
 
       <ModuleAccessMatrix
-        modules={(modules ?? []) as ModuleRow[]}
-        grants={(grants ?? []) as GrantRow[]}
+        modules={modules}
+        grants={grants}
       />
     </div>
   );
