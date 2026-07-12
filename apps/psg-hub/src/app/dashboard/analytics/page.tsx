@@ -20,6 +20,7 @@ import {
   trailingWindow,
   type DatedMetrics,
 } from "@/lib/analytics/aggregate";
+import { readAnalyticsSection } from "@/lib/analytics/safe-read";
 import {
   LineChartCard,
   BarChartCard,
@@ -167,22 +168,29 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   // Date window: trailing 30 days. Clock read lives in trailingWindow (server
   // helper) — client islands receive plain props so hydration stays deterministic.
   const { from, to } = trailingWindow(WINDOW_DAYS);
+  const readWarnings: { section: string; message: string }[] = [];
 
-  const snapshots = scopeAll
-    ? await getSnapshotsForShops(supabase, {
-        shopIds: shops.map((s) => s.id),
-        source: SOURCE,
-        period: PERIOD,
-        from,
-        to,
-      })
-    : await getSnapshots(supabase, {
-        shopId: activeShopId,
-        source: SOURCE,
-        period: PERIOD,
-        from,
-        to,
-      });
+  const snapshots = await readAnalyticsSection(
+    "organic search",
+    () =>
+      scopeAll
+        ? getSnapshotsForShops(supabase, {
+            shopIds: shops.map((s) => s.id),
+            source: SOURCE,
+            period: PERIOD,
+            from,
+            to,
+          })
+        : getSnapshots(supabase, {
+            shopId: activeShopId,
+            source: SOURCE,
+            period: PERIOD,
+            from,
+            to,
+          }),
+    [],
+    readWarnings
+  );
 
   // Per-shop rows pass through; the MSO view sums numeric metrics per date.
   const rows: DatedMetrics[] = scopeAll ? aggregateByDate(snapshots) : snapshots;
@@ -200,21 +208,27 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   // Paid (Google Ads) — same source-agnostic snapshot read, source='google_ads'.
   // Its own empty/unlinked state below; the organic blocks above are untouched.
-  const paidSnapshots = scopeAll
-    ? await getSnapshotsForShops(supabase, {
-        shopIds: shops.map((s) => s.id),
-        source: PAID_SOURCE,
-        period: PERIOD,
-        from,
-        to,
-      })
-    : await getSnapshots(supabase, {
-        shopId: activeShopId,
-        source: PAID_SOURCE,
-        period: PERIOD,
-        from,
-        to,
-      });
+  const paidSnapshots = await readAnalyticsSection(
+    "Google Ads",
+    () =>
+      scopeAll
+        ? getSnapshotsForShops(supabase, {
+            shopIds: shops.map((s) => s.id),
+            source: PAID_SOURCE,
+            period: PERIOD,
+            from,
+            to,
+          })
+        : getSnapshots(supabase, {
+            shopId: activeShopId,
+            source: PAID_SOURCE,
+            period: PERIOD,
+            from,
+            to,
+          }),
+    [],
+    readWarnings
+  );
   const paidRows: DatedMetrics[] = scopeAll
     ? aggregateByDate(paidSnapshots)
     : paidSnapshots;
@@ -231,21 +245,27 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   // GA4 website traffic (11-02) — same source-agnostic snapshot read, source='ga4'.
   // Own unlinked state below; the organic + paid blocks above are untouched.
-  const gaSnapshots = scopeAll
-    ? await getSnapshotsForShops(supabase, {
-        shopIds: shops.map((s) => s.id),
-        source: GA4_SOURCE,
-        period: PERIOD,
-        from,
-        to,
-      })
-    : await getSnapshots(supabase, {
-        shopId: activeShopId,
-        source: GA4_SOURCE,
-        period: PERIOD,
-        from,
-        to,
-      });
+  const gaSnapshots = await readAnalyticsSection(
+    "Google Analytics",
+    () =>
+      scopeAll
+        ? getSnapshotsForShops(supabase, {
+            shopIds: shops.map((s) => s.id),
+            source: GA4_SOURCE,
+            period: PERIOD,
+            from,
+            to,
+          })
+        : getSnapshots(supabase, {
+            shopId: activeShopId,
+            source: GA4_SOURCE,
+            period: PERIOD,
+            from,
+            to,
+          }),
+    [],
+    readWarnings
+  );
   const gaRows: DatedMetrics[] = scopeAll
     ? aggregateByDate(gaSnapshots)
     : gaSnapshots;
@@ -262,21 +282,27 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   // GSC search performance (11-03) — same source-agnostic snapshot read, source='gsc'.
   // Own unlinked state below; the organic + paid + GA4 blocks above are untouched.
-  const gscSnapshots = scopeAll
-    ? await getSnapshotsForShops(supabase, {
-        shopIds: shops.map((s) => s.id),
-        source: GSC_SOURCE,
-        period: PERIOD,
-        from,
-        to,
-      })
-    : await getSnapshots(supabase, {
-        shopId: activeShopId,
-        source: GSC_SOURCE,
-        period: PERIOD,
-        from,
-        to,
-      });
+  const gscSnapshots = await readAnalyticsSection(
+    "Search Console",
+    () =>
+      scopeAll
+        ? getSnapshotsForShops(supabase, {
+            shopIds: shops.map((s) => s.id),
+            source: GSC_SOURCE,
+            period: PERIOD,
+            from,
+            to,
+          })
+        : getSnapshots(supabase, {
+            shopId: activeShopId,
+            source: GSC_SOURCE,
+            period: PERIOD,
+            from,
+            to,
+          }),
+    [],
+    readWarnings
+  );
   const gscRows: DatedMetrics[] = scopeAll
     ? aggregateByDate(gscSnapshots)
     : gscSnapshots;
@@ -293,21 +319,27 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   // GBP local presence (13-02b) — same source-agnostic snapshot read, source='gbp'.
   // Own unlinked state below; the organic + paid + GA4 + GSC blocks above are untouched.
-  const gbpSnapshots = scopeAll
-    ? await getSnapshotsForShops(supabase, {
-        shopIds: shops.map((s) => s.id),
-        source: GBP_SOURCE,
-        period: PERIOD,
-        from,
-        to,
-      })
-    : await getSnapshots(supabase, {
-        shopId: activeShopId,
-        source: GBP_SOURCE,
-        period: PERIOD,
-        from,
-        to,
-      });
+  const gbpSnapshots = await readAnalyticsSection(
+    "Business Profile",
+    () =>
+      scopeAll
+        ? getSnapshotsForShops(supabase, {
+            shopIds: shops.map((s) => s.id),
+            source: GBP_SOURCE,
+            period: PERIOD,
+            from,
+            to,
+          })
+        : getSnapshots(supabase, {
+            shopId: activeShopId,
+            source: GBP_SOURCE,
+            period: PERIOD,
+            from,
+            to,
+          }),
+    [],
+    readWarnings
+  );
   const gbpRows: DatedMetrics[] = scopeAll
     ? aggregateByDate(gbpSnapshots)
     : gbpSnapshots;
@@ -328,10 +360,16 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   // the query is skipped entirely in the all-shops scope.
   const presenceRow = scopeAll
     ? null
-    : await getLatestMonthlySnapshot(supabase, {
-        shopId: activeShopId,
-        source: "gbp_presence",
-      });
+    : await readAnalyticsSection(
+        "Business Profile status",
+        () =>
+          getLatestMonthlySnapshot(supabase, {
+            shopId: activeShopId,
+            source: "gbp_presence",
+          }),
+        null,
+        readWarnings
+      );
   const presence = presenceRow
     ? (() => {
         const m = presenceRow.metrics as Record<string, unknown>;
@@ -353,7 +391,12 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   // average rank are point-in-time scan metrics, so an MSO aggregate would mislead.
   const localFalcon = scopeAll
     ? null
-    : await getLatestLocalFalconSnapshot(supabase, { shopId: activeShopId });
+    : await readAnalyticsSection(
+        "Local Falcon",
+        () => getLatestLocalFalconSnapshot(supabase, { shopId: activeShopId }),
+        null,
+        readWarnings
+      );
 
   // Review sentiment summary (14-03b) — per-shop only (same MSO rule as presence). Reads
   // review_sentiment (the shop's full classified history), not a snapshot. null in all-shops
@@ -361,7 +404,12 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const sentiment =
     scopeAll || !activeShopId
       ? null
-      : await getReviewSentimentSummary(supabase, { shopId: activeShopId });
+      : await readAnalyticsSection(
+          "review sentiment",
+          () => getReviewSentimentSummary(supabase, { shopId: activeShopId }),
+          null,
+          readWarnings
+        );
 
   // Header status reflects the most recent sync across ALL sources, not just
   // organic. A shop with only GA4/GSC/GBP linked is "Last synced", not "Awaiting".
@@ -420,6 +468,17 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </nav>
         ) : null}
       </div>
+
+      {readWarnings.length > 0 ? (
+        <Card>
+          <CardContent className="py-4">
+            <p className="text-sm text-muted-foreground">
+              Some analytics panels could not refresh right now. You can still
+              connect Google accounts and use the rest of the dashboard.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {rows.length === 0 ? (
         <Card>
