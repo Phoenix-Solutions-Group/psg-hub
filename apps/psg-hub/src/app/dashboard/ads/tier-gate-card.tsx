@@ -1,6 +1,10 @@
 import Link from "next/link";
 
-export function TierGateCard() {
+type Props = {
+  shopId: string;
+};
+
+export function TierGateCard({ shopId }: Props) {
   return (
     <div className="rounded-md border bg-card p-6">
       <h2 className="text-lg font-semibold">Performance tier required</h2>
@@ -10,7 +14,7 @@ export function TierGateCard() {
         approval gate.
       </p>
       <Link
-        href="/dashboard/billing#performance"
+        href={`/dashboard/billing?shop_id=${encodeURIComponent(shopId)}#performance`}
         className="mt-4 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         Upgrade to Performance

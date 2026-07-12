@@ -92,18 +92,24 @@ async function handleEvent(
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      const { user_id, tier } = session.metadata || {};
+      const { user_id, shop_id, tier } = session.metadata || {};
       const customerId = session.customer as string;
       const subscriptionId = session.subscription as string;
 
       if (!user_id || !tier) break;
 
-      const { data: membership } = await supabase
+      const membershipQuery = supabase
         .from("shop_users")
         .select("shop_id")
-        .eq("user_id", user_id)
-        .limit(1)
-        .single();
+        .eq("user_id", user_id);
+
+      if (shop_id) {
+        membershipQuery.eq("shop_id", shop_id);
+      } else {
+        membershipQuery.limit(1);
+      }
+
+      const { data: membership } = await membershipQuery.single();
 
       if (!membership) break;
 

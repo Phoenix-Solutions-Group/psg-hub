@@ -1,7 +1,9 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PricingCard } from "@/components/dashboard/pricing-card";
 import { Badge } from "@/components/ui/badge";
 import { UpgradeBanner } from "./upgrade-banner";
+import { getActiveShopContext } from "@/lib/shop/context";
 
 const TIERS = [
   {
@@ -46,18 +48,32 @@ const TIERS = [
 ];
 
 type Props = {
-  searchParams: Promise<{ success?: string }>;
+  searchParams: Promise<{ shop_id?: string; success?: string }>;
 };
 
 export default async function BillingPage({ searchParams }: Props) {
   const supabase = await createClient();
   const params = await searchParams;
   const justReturnedFromStripe = params.success === "true";
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { shops, activeShopId } = await getActiveShopContext(user.id);
+  const shopId = params.shop_id ?? activeShopId;
+
+  if (!shopId || !shops.some((shop) => shop.id === shopId)) {
+    redirect("/dashboard");
+  }
 
   const { data: subscription } = await supabase
     .from("subscriptions")
     .select("tier, status, current_period_end")
-    .limit(1)
+    .eq("shop_id", shopId)
     .maybeSingle();
 
   return (
@@ -103,6 +119,7 @@ export default async function BillingPage({ searchParams }: Props) {
           <div key={tier.tier} id={tier.tier} className="scroll-mt-20">
             <PricingCard
               {...tier}
+              shopId={shopId}
               current={subscription?.tier === tier.tier}
             />
           </div>
