@@ -9,7 +9,7 @@ import type { MailWebhookEvent } from "./types";
  * Mirrors the SendGrid / Twilio webhook discipline (PROJECT.md: every webhook
  * verifies a signature and fails closed). Lob signs each delivery with:
  *
- *   - `Lob-Signature-Timestamp`: unix-ms timestamp string
+ *   - `Lob-Signature-Timestamp`: unix timestamp string
  *   - `Lob-Signature`: hex HMAC-SHA256 of `${timestamp}.${rawBody}`, keyed by
  *     the endpoint's webhook secret (Lob Dashboard → Webhooks).
  *
@@ -38,6 +38,17 @@ export type LobVerifyResult =
   | { valid: true }
   | { valid: false; reason: "missing" | "stale" | "mismatch" };
 
+function lobTimestampToMs(timestamp: string): number | null {
+  const value = Number(timestamp);
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  // Lob signs the timestamp as an opaque string. Current live webhooks use Unix
+  // seconds, while earlier tests used Unix milliseconds. Use the parsed value
+  // only for replay-window age checks; the HMAC input still uses the raw string.
+  return value < 1_000_000_000_000 ? value * 1000 : value;
+}
+
 /** Verify a Lob webhook signature. Returns a typed result; never throws on bad input. */
 export function verifyLobSignature(input: LobSignatureInput): LobVerifyResult {
   const { rawBody, signature, timestamp, secret } = input;
@@ -47,8 +58,8 @@ export function verifyLobSignature(input: LobSignatureInput): LobVerifyResult {
 
   const toleranceSeconds = input.toleranceSeconds ?? 300;
   const nowMs = input.nowMs ?? Date.now();
-  const tsMs = Number(timestamp);
-  if (!Number.isFinite(tsMs)) {
+  const tsMs = lobTimestampToMs(timestamp);
+  if (tsMs === null) {
     return { valid: false, reason: "missing" };
   }
   // Reject timestamps outside the tolerance window (replay defense). Guard both

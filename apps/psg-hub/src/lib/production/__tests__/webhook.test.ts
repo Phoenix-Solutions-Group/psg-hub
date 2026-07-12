@@ -13,10 +13,24 @@ describe("verifyLobSignature", () => {
   const rawBody = JSON.stringify({ event_type: { id: "postcard.delivered" } });
   const ts = String(NOW);
 
-  it("accepts a valid signature within tolerance", () => {
+  it("accepts a valid millisecond timestamp signature within tolerance", () => {
     const sig = sign(rawBody, ts);
     expect(verifyLobSignature({ rawBody, signature: sig, timestamp: ts, secret: SECRET, nowMs: NOW }))
       .toEqual({ valid: true });
+  });
+
+  it("accepts a valid live Lob seconds timestamp without changing the HMAC input", () => {
+    const secondsTs = String(Math.floor(NOW / 1000));
+    const sig = sign(rawBody, secondsTs);
+    expect(
+      verifyLobSignature({
+        rawBody,
+        signature: sig,
+        timestamp: secondsTs,
+        secret: SECRET,
+        nowMs: NOW,
+      })
+    ).toEqual({ valid: true });
   });
 
   it("rejects a tampered body", () => {
