@@ -31,8 +31,20 @@ async function readJson(request: NextRequest) {
 }
 
 function inviteRedirectTo() {
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
-  return appUrl ? `${appUrl}/login` : undefined;
+  const configuredUrl =
+    process.env.SUPABASE_INVITE_REDIRECT_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = configuredUrl.replace(/\/+$/, "");
+  if (!appUrl) return undefined;
+
+  try {
+    const url = new URL(appUrl);
+    if (process.env.VERCEL_ENV === "preview" && url.hostname.endsWith(".vercel.app")) {
+      return undefined;
+    }
+    return `${url.origin}/login`;
+  } catch {
+    return undefined;
+  }
 }
 
 async function findAuthUserByEmail(

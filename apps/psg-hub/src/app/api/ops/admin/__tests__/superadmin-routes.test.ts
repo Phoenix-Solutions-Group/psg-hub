@@ -143,6 +143,9 @@ function params<T extends Record<string, string>>(value: T) {
 
 beforeEach(() => {
   gate = { ok: true, userId: "super-1", access: {} };
+  delete process.env.NEXT_PUBLIC_APP_URL;
+  delete process.env.SUPABASE_INVITE_REDIRECT_URL;
+  delete process.env.VERCEL_ENV;
   auditEvents.length = 0;
   operations.length = 0;
   responses.clear();
@@ -449,6 +452,46 @@ describe("admin user routes", () => {
         }),
       }),
     ]);
+  });
+
+  it("does not pass random Vercel preview URLs to Supabase invites", async () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://psg-iurj8xdbv-psg-digital.vercel.app";
+    process.env.VERCEL_ENV = "preview";
+    queue("profiles", "upsert", { data: null, error: null });
+    queue("app_user_roles", "upsert", { data: null, error: null });
+
+    const res = await userInviteRoute.POST(
+      req("POST", "/api/ops/admin/users/invite", {
+        email: "preview@example.com",
+        role: "psg_internal",
+      })
+    );
+
+    expect(res.status).toBe(201);
+    expect(inviteUserByEmailMock).toHaveBeenCalledWith("preview@example.com", {
+      data: { display_name: "preview@example.com" },
+    });
+  });
+
+  it("uses an explicit stable invite redirect when configured", async () => {
+    process.env.SUPABASE_INVITE_REDIRECT_URL = "https://hub.psgweb.me";
+    process.env.NEXT_PUBLIC_APP_URL = "https://psg-iurj8xdbv-psg-digital.vercel.app";
+    process.env.VERCEL_ENV = "preview";
+    queue("profiles", "upsert", { data: null, error: null });
+    queue("app_user_roles", "upsert", { data: null, error: null });
+
+    const res = await userInviteRoute.POST(
+      req("POST", "/api/ops/admin/users/invite", {
+        email: "stable@example.com",
+        role: "psg_internal",
+      })
+    );
+
+    expect(res.status).toBe(201);
+    expect(inviteUserByEmailMock).toHaveBeenCalledWith("stable@example.com", {
+      data: { display_name: "stable@example.com" },
+      redirectTo: "https://hub.psgweb.me/login",
+    });
   });
 
   it("rejects invalid invite payloads before sending an invite", async () => {
