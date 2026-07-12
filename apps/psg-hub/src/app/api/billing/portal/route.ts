@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 
-export async function POST() {
+export async function POST(request: Request) {
   const stripe = getStripe();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -11,12 +11,19 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Find stripe customer ID from shop membership
+  const formData = await request.formData();
+  const shopId = formData.get("shop_id") as string;
+
+  if (!shopId) {
+    return NextResponse.json({ error: "Missing shop_id" }, { status: 400 });
+  }
+
+  // Find stripe customer ID from the selected shop membership.
   const { data: membership } = await supabase
     .from("shop_users")
     .select("shops(stripe_customer_id)")
     .eq("user_id", user.id)
-    .limit(1)
+    .eq("shop_id", shopId)
     .maybeSingle();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,7 +41,7 @@ export async function POST() {
 
   const session = await stripe.billingPortal.sessions.create({
     customer: customerId,
-    return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/billing`,
+    return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/billing?shop_id=${shopId}`,
   });
 
   return NextResponse.redirect(session.url, 303);

@@ -6,6 +6,7 @@ type PricingCardProps = {
   price: number;
   features: string[];
   tier: string;
+  shopId: string;
   current?: boolean;
 };
 
@@ -14,6 +15,7 @@ export function PricingCard({
   price,
   features,
   tier,
+  shopId,
   current,
 }: PricingCardProps) {
   return (
@@ -38,6 +40,7 @@ export function PricingCard({
         </ul>
         {current ? (
           <form action="/api/billing/portal" method="POST">
+            <input type="hidden" name="shop_id" value={shopId} />
             <Button variant="outline" className="w-full">
               Manage subscription
             </Button>
@@ -45,6 +48,7 @@ export function PricingCard({
         ) : (
           <form action="/api/billing/checkout" method="POST">
             <input type="hidden" name="tier" value={tier} />
+            <input type="hidden" name="shop_id" value={shopId} />
             <Button className="w-full">Subscribe</Button>
           </form>
         )}

@@ -49,7 +49,7 @@ export default async function AdsPage({ searchParams }: Props) {
 
   // Tier check: shared gate (Performance subscription OR override allowlist).
   if (!(await shopHasTier(shopId, "performance"))) {
-    return <TierGateCard />;
+    return <TierGateCard shopId={shopId} />;
   }
 
   // Phase 10 / 10-01: the Google Ads tables are now provisioned (migration
