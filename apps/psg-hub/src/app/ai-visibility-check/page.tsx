@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { AiVisibilityCheckForm } from "./request-form";
@@ -42,7 +43,9 @@ export default function AiVisibilityCheckPage() {
         </div>
 
         <div className="rounded-lg border border-[#D9D3CA] bg-white p-6 shadow-[0_18px_60px_rgba(30,58,82,0.12)] md:p-8">
-          <AiVisibilityCheckForm />
+          <Suspense fallback={null}>
+            <AiVisibilityCheckForm />
+          </Suspense>
         </div>
       </section>
     </main>
