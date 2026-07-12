@@ -13,6 +13,7 @@
  */
 export const AUDIT_ACTIONS = [
   // users / roles / shops
+  "user.invite",
   "role.grant",
   "role.revoke",
   "shop.assign",

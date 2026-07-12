@@ -27,6 +27,7 @@ export type AuditCategory =
   | "other";
 
 const ACTION_LABELS: Record<AuditAction, string> = {
+  "user.invite": "Invited user",
   "role.grant": "Granted role",
   "role.revoke": "Revoked role",
   "shop.assign": "Assigned to shop",
@@ -67,7 +68,12 @@ export function auditActionLabel(action: string): string {
 
 /** Coarse category for an action, used by the viewer filter. */
 export function auditCategory(action: string): AuditCategory {
-  if (action.startsWith("role.") || action.startsWith("shop.") || action === "tier.change") {
+  if (
+    action.startsWith("user.") ||
+    action.startsWith("role.") ||
+    action.startsWith("shop.") ||
+    action === "tier.change"
+  ) {
     return "users";
   }
   if (action.startsWith("module")) return "modules";
@@ -119,6 +125,7 @@ export function summarizePayload(payload: unknown): string {
     parts.push(`${label ?? key}: ${String(v)}`);
   };
   pick("name");
+  pick("email");
   pick("slug");
   pick("role");
   pick("effect");
@@ -133,6 +140,7 @@ export function summarizePayload(payload: unknown): string {
 /** Keys that `summarizePayload` surfaces in the one-line summary. */
 const SUMMARIZED_KEYS = new Set([
   "name",
+  "email",
   "slug",
   "role",
   "effect",

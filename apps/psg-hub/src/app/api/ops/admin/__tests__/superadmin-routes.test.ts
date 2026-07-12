@@ -13,6 +13,8 @@ let gate: Gate = { ok: true, userId: "super-1", access: {} };
 const auditEvents: Array<Record<string, unknown>> = [];
 const operations: Operation[] = [];
 const responses = new Map<string, DbResponse[]>();
+const listUsersMock = vi.fn();
+const inviteUserByEmailMock = vi.fn();
 
 function key(table: string, op: string) {
   return `${table}:${op}`;
@@ -93,7 +95,15 @@ vi.mock("@/lib/auth/ops-access", () => ({
 }));
 
 vi.mock("@/lib/supabase/service", () => ({
-  createServiceClient: () => ({ from: fromMock }),
+  createServiceClient: () => ({
+    from: fromMock,
+    auth: {
+      admin: {
+        listUsers: listUsersMock,
+        inviteUserByEmail: inviteUserByEmailMock,
+      },
+    },
+  }),
 }));
 
 vi.mock("@/lib/audit/access-audit", () => ({
@@ -109,6 +119,7 @@ const grantsRoute = await import("@/app/api/ops/modules/grants/route");
 const securityProfilesRoute = await import("@/app/api/ops/security-profiles/route");
 const securityProfileRoute = await import("@/app/api/ops/security-profiles/[id]/route");
 const securityAssignmentsRoute = await import("@/app/api/ops/security-profiles/assignments/route");
+const userInviteRoute = await import("@/app/api/ops/admin/users/invite/route");
 const userRoleRoute = await import("@/app/api/ops/admin/users/[profileId]/role/route");
 const userShopsRoute = await import("@/app/api/ops/admin/users/[profileId]/shops/route");
 const shopTierRoute = await import("@/app/api/ops/admin/shops/[shopId]/tier/route");
@@ -136,12 +147,29 @@ beforeEach(() => {
   operations.length = 0;
   responses.clear();
   fromMock.mockClear();
+  listUsersMock.mockReset();
+  inviteUserByEmailMock.mockReset();
+  listUsersMock.mockResolvedValue({ data: { users: [] }, error: null });
+  inviteUserByEmailMock.mockResolvedValue({
+    data: { user: { id: PROFILE_ID, email: "new@example.com" } },
+    error: null,
+  });
 });
 
 describe("superadmin-gated admin API routes", () => {
   it.each([
     ["modules", () => modulesRoute.GET()],
     ["security profiles", () => securityProfilesRoute.GET()],
+    [
+      "admin user invites",
+      () =>
+        userInviteRoute.POST(
+          req("POST", "/api/ops/admin/users/invite", {
+            email: "new@example.com",
+            role: "customer",
+          })
+        ),
+    ],
     [
       "admin users",
       () =>
@@ -370,6 +398,93 @@ describe("security profile routes", () => {
 });
 
 describe("admin user routes", () => {
+  it("invites a new user, grants starting access, and audits the invite", async () => {
+    queue("shops", "select", { data: { id: SHOP_ID, name: "Wallace", slug: "wallace" }, error: null });
+    queue("profiles", "upsert", { data: null, error: null });
+    queue("app_user_roles", "upsert", { data: null, error: null });
+    queue("shop_users", "upsert", { data: null, error: null });
+
+    const res = await userInviteRoute.POST(
+      req("POST", "/api/ops/admin/users/invite", {
+        email: "NEW@Example.com",
+        role: "psg_internal",
+        shopId: SHOP_ID,
+        shopRole: "manager",
+      })
+    );
+
+    expect(res.status).toBe(201);
+    expect(inviteUserByEmailMock).toHaveBeenCalledWith(
+      "new@example.com",
+      expect.objectContaining({ data: { display_name: "new@example.com" } })
+    );
+    expect(operations).toEqual([
+      {
+        table: "profiles",
+        op: "upsert",
+        payload: { id: PROFILE_ID, display_name: "new@example.com" },
+      },
+      {
+        table: "app_user_roles",
+        op: "upsert",
+        payload: { profile_id: PROFILE_ID, role: "psg_internal" },
+      },
+      {
+        table: "shop_users",
+        op: "upsert",
+        payload: { user_id: PROFILE_ID, shop_id: SHOP_ID, role: "manager" },
+      },
+    ]);
+    expect(auditEvents).toEqual([
+      expect.objectContaining({
+        actorProfileId: "super-1",
+        action: "user.invite",
+        targetProfileId: PROFILE_ID,
+        targetShopId: SHOP_ID,
+        payload: expect.objectContaining({
+          email: "new@example.com",
+          role: "psg_internal",
+          shopRole: "manager",
+          shopName: "Wallace",
+        }),
+      }),
+    ]);
+  });
+
+  it("rejects invalid invite payloads before sending an invite", async () => {
+    const res = await userInviteRoute.POST(
+      req("POST", "/api/ops/admin/users/invite", {
+        email: "",
+        role: "admin",
+        shopRole: "owner",
+      })
+    );
+
+    expect(res.status).toBe(422);
+    expect(inviteUserByEmailMock).not.toHaveBeenCalled();
+    expect(operations).toHaveLength(0);
+    expect(auditEvents).toHaveLength(0);
+  });
+
+  it("rejects duplicate invite emails before mutating access", async () => {
+    listUsersMock.mockResolvedValue({
+      data: { users: [{ id: "existing-user", email: "new@example.com" }] },
+      error: null,
+    });
+
+    const res = await userInviteRoute.POST(
+      req("POST", "/api/ops/admin/users/invite", {
+        email: "new@example.com",
+        role: "customer",
+      })
+    );
+
+    expect(res.status).toBe(409);
+    expect(inviteUserByEmailMock).not.toHaveBeenCalled();
+    expect(operations).toHaveLength(0);
+    expect(auditEvents).toHaveLength(0);
+  });
+
   it("audits granting and removing superadmin explicitly", async () => {
     queue("profiles", "select", { data: { id: PROFILE_ID, display_name: "Ada" }, error: null });
     queue("app_user_roles", "select", { data: { role: "psg_internal" }, error: null });
