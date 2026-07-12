@@ -103,7 +103,9 @@ async function handle(request: Request): Promise<NextResponse> {
     closedUpdatedSince: resolveClosedSince(request.url, new Date()),
   });
   const stalled = result.ok
-    ? await enrollStalledPipedriveDeals(service as unknown as NurtureSupabase)
+    ? await enrollStalledPipedriveDeals(service as unknown as NurtureSupabase, {
+        pipedriveClient: client,
+      })
     : null;
   // A captured sync failure (e.g. Pipedrive 5xx) is a 502, not a 200 — so cron alerts.
   return NextResponse.json({ ...result, stalledNurture: stalled }, { status: result.ok ? 200 : 502 });

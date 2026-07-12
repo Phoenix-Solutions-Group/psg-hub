@@ -193,6 +193,69 @@ describe("nurture enrollment writer", () => {
     });
   });
 
+  it("hydrates stalled Pipedrive deals from the person contact before hashing", async () => {
+    const { service, calls } = fakeDb({
+      pipedrive_deals: [
+        { deal_id: 42, person_id: 7, org_id: 9, last_activity_date: "2026-06-20" },
+      ],
+    });
+    const pipedriveClient = {
+      fetchPersonContact: vi.fn(async () => ({
+        firstName: "Pat",
+        email: "Pat@shop.com",
+        phone: "(555) 867-5309",
+      })),
+    };
+
+    const result = await enrollStalledPipedriveDeals(service, {
+      now: new Date("2026-07-12T00:00:00.000Z"),
+      pipedriveClient,
+    });
+
+    expect(result).toEqual({ scanned: 1, enrolled: 1 });
+    expect(pipedriveClient.fetchPersonContact).toHaveBeenCalledWith(7);
+    expect(calls.upserts[0]!.row.email_contact_hash).toMatch(/^em_/);
+    expect(calls.upserts[0]!.row.sms_contact_hash).toMatch(/^ph_/);
+    expect(calls.upserts[0]!.row.contact_jsonb).toEqual({
+      firstName: "Pat",
+      shopName: null,
+      email: "Pat@shop.com",
+      phone: "(555) 867-5309",
+    });
+  });
+
+  it("keeps a Pipedrive enrollment safely no-contact when the person has no usable detail", async () => {
+    const { service, calls } = fakeDb();
+
+    await enrollNurturePath(service, {
+      trigger: "deal_won",
+      triggerRef: "pipedrive:deal:42:won",
+      contact: {},
+      pipedriveDealId: 42,
+      pipedrivePersonId: 7,
+      pipedriveClient: {
+        fetchPersonContact: vi.fn(async () => ({
+          firstName: "Pat",
+          email: null,
+          phone: null,
+        })),
+      },
+    });
+
+    expect(calls.upserts[0]!.row).toMatchObject({
+      path: "onboarding_retention",
+      pipedrive_deal_id: 42,
+      email_contact_hash: null,
+      sms_contact_hash: null,
+      contact_jsonb: {
+        firstName: "Pat",
+        shopName: null,
+        email: null,
+        phone: null,
+      },
+    });
+  });
+
   it("models exit and suppression inputs as active-enrollment exits", async () => {
     const { service, calls } = fakeDb();
 

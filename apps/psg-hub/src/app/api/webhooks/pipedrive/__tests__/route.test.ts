@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createProjectsClient = vi.fn();
+const createPipedriveClient = vi.fn();
 const resolvePipedriveToken = vi.fn();
 const isDealWonTransition = vi.fn();
 const isDealPipelineInScope = vi.fn();
@@ -15,6 +16,9 @@ vi.mock("@/lib/pipedrive/projects", () => ({
   isDealWonTransition: (...args: unknown[]) => isDealWonTransition(...args),
   isDealPipelineInScope: (...args: unknown[]) => isDealPipelineInScope(...args),
   dealPipelineId: (...args: unknown[]) => dealPipelineId(...args),
+}));
+vi.mock("@/lib/pipedrive/client", () => ({
+  createPipedriveClient: (...args: unknown[]) => createPipedriveClient(...args),
 }));
 vi.mock("@/lib/pipedrive/template-registry", () => ({
   provisionForDeal: (...args: unknown[]) => provisionForDeal(...args),
@@ -68,6 +72,7 @@ beforeEach(() => {
   vi.stubEnv("PIPEDRIVE_COMPANY_DOMAIN", "psg");
 
   createProjectsClient.mockReturnValue({ projectsClient: true });
+  createPipedriveClient.mockReturnValue({ contactClient: true });
   createServiceClient.mockReturnValue({ serviceClient: true });
   resolvePipedriveToken.mockReturnValue("token");
   isDealWonTransition.mockReturnValue(true);
@@ -113,6 +118,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
         pipedriveDealId: 42,
         pipedrivePersonId: 7,
         pipedriveOrgId: 9,
+        pipedriveClient: { contactClient: true },
       })
     );
   });

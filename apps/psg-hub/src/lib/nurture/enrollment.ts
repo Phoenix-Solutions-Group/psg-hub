@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { contactHash } from "@/lib/ops/solicitation/contact";
+import type { PipedrivePersonContact } from "@/lib/pipedrive/client";
 import { pathForTrigger } from "./sequences";
 import type {
   NurtureContact,
@@ -32,6 +33,10 @@ export interface NurtureSupabase {
   from<T = unknown>(table: string): QueryBuilder<T>;
 }
 
+export interface NurturePipedriveContactClient {
+  fetchPersonContact(personId: number): Promise<PipedrivePersonContact | null>;
+}
+
 export interface EnrollNurtureArgs {
   trigger: NurtureTrigger;
   triggerRef: string;
@@ -43,6 +48,7 @@ export interface EnrollNurtureArgs {
   companyId?: string | null;
   enrolledAt?: string;
   templateJsonb?: Record<string, unknown>;
+  pipedriveClient?: NurturePipedriveContactClient | null;
 }
 
 export interface EnrollNurtureResult {
@@ -92,13 +98,36 @@ function contactPayload(contact: NurtureContact): Record<string, unknown> {
   };
 }
 
+function hasContactDetail(contact: NurtureContact): boolean {
+  return Boolean(contact.email?.trim() || contact.phone?.trim());
+}
+
+async function hydratePipedriveContact(args: EnrollNurtureArgs): Promise<NurtureContact> {
+  const contact = args.contact;
+  if (hasContactDetail(contact) || !args.pipedriveClient || args.pipedrivePersonId == null) {
+    return contact;
+  }
+
+  const person = await args.pipedriveClient
+    .fetchPersonContact(args.pipedrivePersonId)
+    .catch(() => null);
+  if (!person) return contact;
+  return {
+    ...contact,
+    firstName: contact.firstName ?? person.firstName,
+    email: contact.email ?? person.email,
+    phone: contact.phone ?? person.phone,
+  };
+}
+
 export async function enrollNurturePath(
   service: SupabaseClient | NurtureSupabase,
   args: EnrollNurtureArgs
 ): Promise<EnrollNurtureResult> {
   const path = assertPath(args.trigger, args.path);
   const triggerRef = normalizeTriggerRef(args.triggerRef);
-  const { emailContactHash, smsContactHash } = hashesFor(args.contact);
+  const contact = await hydratePipedriveContact(args);
+  const { emailContactHash, smsContactHash } = hashesFor(contact);
 
   if (!emailContactHash && !smsContactHash && args.pipedriveDealId == null) {
     throw new Error("Nurture enrollment requires a contact hash or Pipedrive deal id");
@@ -116,7 +145,7 @@ export async function enrollNurturePath(
         email_contact_hash: emailContactHash,
         sms_contact_hash: smsContactHash,
         trigger_ref: triggerRef,
-        contact_jsonb: contactPayload(args.contact),
+        contact_jsonb: contactPayload(contact),
         template_jsonb: args.templateJsonb ?? {},
         company_id: args.companyId ?? null,
         enrolled_at: args.enrolledAt ?? new Date().toISOString(),
@@ -173,7 +202,11 @@ export function stalledDealCutoff(now = new Date(), days = 14): string {
 
 export async function enrollStalledPipedriveDeals(
   service: SupabaseClient | NurtureSupabase,
-  args: { now?: Date; daysWithoutMovement?: number } = {}
+  args: {
+    now?: Date;
+    daysWithoutMovement?: number;
+    pipedriveClient?: NurturePipedriveContactClient | null;
+  } = {}
 ): Promise<{ scanned: number; enrolled: number }> {
   const cutoff = stalledDealCutoff(args.now, args.daysWithoutMovement ?? 14);
   const { data, error } = await (service as NurtureSupabase)
@@ -193,6 +226,7 @@ export async function enrollStalledPipedriveDeals(
       pipedriveDealId: deal.deal_id,
       pipedrivePersonId: deal.person_id,
       pipedriveOrgId: deal.org_id,
+      pipedriveClient: args.pipedriveClient,
     });
     enrolled += 1;
   }

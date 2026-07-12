@@ -4,6 +4,7 @@ import {
   deriveMonthlyValue,
   deriveRevenueType,
   mapRawDeal,
+  mapRawPersonContact,
   mapRawStage,
   pipedriveBaseUrl,
   PipedriveError,
@@ -259,6 +260,36 @@ describe("mapRawStage", () => {
   });
 });
 
+describe("mapRawPersonContact", () => {
+  it("uses the primary email and phone values from Pipedrive person arrays", () => {
+    expect(
+      mapRawPersonContact({
+        name: "Pat Owner",
+        email: [
+          { value: "secondary@example.com", primary: false },
+          { value: "owner@example.com", primary: true },
+        ],
+        phone: [
+          { value: "(555) 000-0000", primary: false },
+          { value: "(555) 867-5309", primary: true },
+        ],
+      }),
+    ).toEqual({
+      firstName: "Pat",
+      email: "owner@example.com",
+      phone: "(555) 867-5309",
+    });
+  });
+
+  it("returns nulls for blank contact arrays", () => {
+    expect(mapRawPersonContact({ name: "", email: [{ value: " " }], phone: [] })).toEqual({
+      firstName: null,
+      email: null,
+      phone: null,
+    });
+  });
+});
+
 describe("createPipedriveClient — stage names", () => {
   it("fetchStages paginates /api/v2/stages and maps rows", async () => {
     const fetchImpl = vi
@@ -351,6 +382,46 @@ describe("createPipedriveClient — stage names", () => {
     const deals = await client.fetchOpenDeals();
     expect(deals).toHaveLength(1);
     expect(deals[0]!.stageName).toBeNull();
+  });
+});
+
+describe("createPipedriveClient — person contact", () => {
+  it("fetches one person without leaking the token in errors", async () => {
+    const fetchImpl = vi.fn(async (_url: string) =>
+      jsonResponse({
+        success: true,
+        data: {
+          name: "Pat Owner",
+          email: [{ value: "owner@example.com", primary: true }],
+          phone: [{ value: "(555) 867-5309", primary: true }],
+        },
+      }),
+    );
+    const client = createPipedriveClient({
+      apiToken: "tok_secret",
+      companyDomain: "acme",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await expect(client.fetchPersonContact(7)).resolves.toEqual({
+      firstName: "Pat",
+      email: "owner@example.com",
+      phone: "(555) 867-5309",
+    });
+    const url = String(fetchImpl.mock.calls[0][0]);
+    expect(url).toContain("https://acme.pipedrive.com/api/v1/persons/7");
+    expect(url).toContain("api_token=tok_secret");
+
+    const failingFetch = vi.fn().mockResolvedValue(jsonResponse({}, false, 403));
+    const failingClient = createPipedriveClient({
+      apiToken: "tok_secret",
+      fetchImpl: failingFetch as unknown as typeof fetch,
+    });
+    await expect(failingClient.fetchPersonContact(8)).rejects.toMatchObject({
+      name: "PipedriveError",
+      status: 403,
+    });
+    await expect(failingClient.fetchPersonContact(8)).rejects.not.toThrow(/tok_secret/);
   });
 });
 

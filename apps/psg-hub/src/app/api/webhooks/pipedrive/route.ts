@@ -8,6 +8,7 @@ import {
   resolvePipedriveToken,
   type WonDeal,
 } from "@/lib/pipedrive/projects";
+import { createPipedriveClient } from "@/lib/pipedrive/client";
 import { provisionForDeal } from "@/lib/pipedrive/template-registry";
 import { loadRoleUserMap } from "@/lib/pipedrive/role-user-map";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -140,6 +141,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     const client = createProjectsClient({
       companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
     });
+    const contactClient = createPipedriveClient({
+      companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
+    });
     // Role→user map from env: any confirmed role auto-assigns its tasks; unmapped
     // roles stay unassigned (role in the title). Never throws on missing/bad values.
     const roleUserMap = loadRoleUserMap();
@@ -163,6 +167,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         pipedriveDealId: deal.id,
         pipedrivePersonId: deal.personId,
         pipedriveOrgId: deal.orgId,
+        pipedriveClient: contactClient,
       });
     } catch (nurtureErr) {
       nurtureEnrollment = "failed";
