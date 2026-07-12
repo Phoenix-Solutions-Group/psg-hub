@@ -119,6 +119,17 @@ export function AiVisibilityCheckForm() {
         />
       </label>
 
+      <label className="flex items-start gap-3 rounded-md border border-[#D9D3CA] bg-white px-4 py-3 text-sm leading-6 text-[#1E3A52]">
+        <input
+          name="smsConsent"
+          type="checkbox"
+          className="mt-1 size-4 rounded border-[#D9D3CA] accent-[#B8483E]"
+        />
+        <span>
+          I agree that Phoenix Solutions Group may text me about this request at the phone number I provided. Reply STOP to opt out.
+        </span>
+      </label>
+
       <button
         type="submit"
         disabled={state === "submitting" || state === "success"}

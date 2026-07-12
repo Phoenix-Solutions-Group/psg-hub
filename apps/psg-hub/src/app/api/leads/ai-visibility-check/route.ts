@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/lib/mail/sendgrid";
+import { createServiceClient } from "@/lib/supabase/service";
+import { recordSmsConsent } from "@/lib/nurture/consent";
 
 export const runtime = "nodejs";
 
@@ -15,6 +17,7 @@ interface Lead {
   email?: string;
   phone?: string;
   notes?: string;
+  smsConsent: boolean;
   tracking: Record<string, string>;
 }
 
@@ -61,6 +64,7 @@ function renderText(lead: Lead): string {
     `City/ZIP:  ${lead.location}`,
     `Email:     ${lead.email ?? "(not provided)"}`,
     `Phone:     ${lead.phone ?? "(not provided)"}`,
+    `Text opt-in:${lead.smsConsent ? " yes" : " no"}`,
     `Notes:     ${lead.notes ?? "(not provided)"}`,
     "",
     "Tracking:",
@@ -88,6 +92,7 @@ function renderHtml(lead: Lead): string {
     row("City/ZIP", escapeHtml(lead.location)),
     row("Email", lead.email ? `<a href="mailto:${encodeURIComponent(lead.email)}">${escapeHtml(lead.email)}</a>` : "<em>(not provided)</em>"),
     row("Phone", lead.phone ? `<a href="tel:${encodeURIComponent(lead.phone)}">${escapeHtml(lead.phone)}</a>` : "<em>(not provided)</em>"),
+    row("Text opt-in", lead.smsConsent ? "Yes" : "No"),
     row("Notes", lead.notes ? escapeHtml(lead.notes) : "<em>(not provided)</em>"),
     row("utm_source", escapeHtml(lead.tracking.utm_source)),
     row("utm_medium", escapeHtml(lead.tracking.utm_medium)),
@@ -121,6 +126,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const location = cleanField(form.get("location"));
   const email = cleanField(form.get("email"));
   const phone = cleanField(form.get("phone"));
+  const smsConsent = form.get("smsConsent") === "on";
 
   if (!name || !shopName || !location) {
     return NextResponse.json({ error: "Name, shop name, and city or ZIP are required" }, { status: 400 });
@@ -150,11 +156,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     location,
     email,
     phone,
+    smsConsent,
     notes: cleanField(form.get("notes")),
     tracking: readTracking(form),
   };
 
   try {
+    if (lead.smsConsent) {
+      await recordSmsConsent(createServiceClient(), {
+        phone: lead.phone,
+        source: "ai_visibility_check_form",
+        formData: {
+          name: lead.name,
+          shopName: lead.shopName,
+          location: lead.location,
+          tracking: lead.tracking,
+        },
+      });
+    }
+
     await sendEmail({
       to: inbox,
       replyTo: email ?? inbox,
@@ -165,7 +185,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
   } catch (error) {
     console.error(
-      "[leads/ai-visibility-check] lead email failed:",
+      "[leads/ai-visibility-check] lead capture failed:",
       error instanceof Error ? error.message : error
     );
     return NextResponse.json(
