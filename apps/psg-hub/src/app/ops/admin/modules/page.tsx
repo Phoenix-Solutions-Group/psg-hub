@@ -9,6 +9,41 @@ import type { GrantRow, ModuleRow } from "@/lib/ops/modules";
 // RLS on modules + module_access_grants. Loads the registry + role grants and
 // hands them to the client editor.
 
+export const dynamic = "force-dynamic";
+
+type SupabaseReadClient =
+  | Awaited<ReturnType<typeof createClient>>
+  | ReturnType<typeof createServiceClient>;
+
+type MatrixData = {
+  modules: ModuleRow[];
+  grants: GrantRow[];
+};
+
+const MODULE_SELECT = "id, slug, display_name, audience, min_tier_slug, default_visibility";
+const GRANT_SELECT = "id, module_id, profile_id, shop_id, role, effect";
+
+async function readMatrixData(client: SupabaseReadClient): Promise<MatrixData> {
+  const [{ data: modules, error: moduleError }, { data: grants, error: grantError }] =
+    await Promise.all([
+      client.from("modules").select(MODULE_SELECT).order("display_name", { ascending: true }),
+      client.from("module_access_grants").select(GRANT_SELECT),
+    ]);
+
+  if (moduleError) {
+    throw moduleError;
+  }
+
+  if (grantError) {
+    console.error("[ops/admin/modules] grant load failed; rendering registry without grants", grantError);
+  }
+
+  return {
+    modules: (modules ?? []) as ModuleRow[],
+    grants: grantError ? [] : ((grants ?? []) as GrantRow[]),
+  };
+}
+
 export default async function ModulesAdminPage() {
   const supabase = await createClient();
   const {
@@ -28,14 +63,17 @@ export default async function ModulesAdminPage() {
     );
   }
 
-  const service = createServiceClient();
-  const [{ data: modules }, { data: grants }] = await Promise.all([
-    service
-      .from("modules")
-      .select("id, slug, display_name, audience, min_tier_slug, default_visibility")
-      .order("display_name", { ascending: true }),
-    service.from("module_access_grants").select("id, module_id, profile_id, shop_id, role, effect"),
-  ]);
+  let matrix: MatrixData;
+  try {
+    const serviceMatrix = await readMatrixData(createServiceClient());
+    if (serviceMatrix.modules.length === 0) {
+      throw new Error("Service-role module query returned no rows");
+    }
+    matrix = serviceMatrix;
+  } catch (error) {
+    console.error("[ops/admin/modules] service-role load failed; falling back to user session", error);
+    matrix = await readMatrixData(supabase);
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -53,8 +91,8 @@ export default async function ModulesAdminPage() {
       </div>
 
       <ModuleAccessMatrix
-        modules={(modules ?? []) as ModuleRow[]}
-        grants={(grants ?? []) as GrantRow[]}
+        modules={matrix.modules}
+        grants={matrix.grants}
       />
     </div>
   );
