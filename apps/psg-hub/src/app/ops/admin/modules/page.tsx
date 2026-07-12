@@ -48,7 +48,11 @@ export default async function ModulesAdminPage() {
       throw moduleError ?? grantError;
     }
 
-    modules = (moduleRows ?? []) as ModuleRow[];
+    if ((moduleRows ?? []).length === 0) {
+      throw new Error("Service-role module query returned no rows");
+    }
+
+    modules = moduleRows as ModuleRow[];
     grants = (grantRows ?? []) as GrantRow[];
   } catch (error) {
     console.error("[ops/admin/modules] service-role load failed; falling back to user session", error);
