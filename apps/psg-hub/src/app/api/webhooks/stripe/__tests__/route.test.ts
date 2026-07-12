@@ -30,6 +30,7 @@ const subUpdate = vi.fn();
 const eventProcessedUpdate = vi.fn();
 const invoiceUpsert = vi.fn();
 const paymentUpsert = vi.fn();
+const shopUsersEq = vi.fn();
 
 function webhookEventsBuilder() {
   return {
@@ -51,12 +52,16 @@ function webhookEventsBuilder() {
 }
 
 function shopUsersBuilder() {
-  return {
+  const builder = {
     select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockImplementation((field: string, value: unknown) => {
+      shopUsersEq(field, value);
+      return builder;
+    }),
     limit: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue({ data: membership, error: null }),
   };
+  return builder;
 }
 
 function shopsBuilder() {
@@ -140,7 +145,7 @@ const checkoutEvent = {
   created: 1_700_000_000,
   data: {
     object: {
-      metadata: { user_id: "user_1", tier: "growth" },
+      metadata: { user_id: "user_1", shop_id: "shop_1", tier: "growth" },
       customer: "cus_1",
       subscription: "sub_1",
     },
@@ -214,6 +219,7 @@ describe("stripe webhook route", () => {
     const [vals, opts] = subUpsert.mock.calls[0];
     expect(vals).toMatchObject({ shop_id: "shop_1", tier: "growth", status: "active" });
     expect(opts).toEqual({ onConflict: "shop_id" }); // updates the shop's single row in place
+    expect(shopUsersEq).toHaveBeenCalledWith("shop_id", "shop_1");
     expect(eventProcessedUpdate).toHaveBeenCalled(); // processed_at set after success
   });
 
