@@ -89,6 +89,11 @@ export interface RunNurturePublisherArgs {
   publicBaseUrl?: string;
   senderPostalAddress?: string;
   hashSalt?: string;
+  /**
+   * Fail-closed release gate. Nick's 2026-07-12 instruction: no nurture email or SMS
+   * may leave the system until the board approves outbound sending.
+   */
+  outboundApproved?: boolean;
 }
 
 export interface RunNurturePublisherResult {
@@ -140,6 +145,10 @@ function senderPostalAddress(enrollment: NurtureEnrollmentRow, args: RunNurtureP
     process.env.NURTURE_SENDER_POSTAL_ADDRESS ??
     ""
   ).trim();
+}
+
+function outboundApproved(args: RunNurturePublisherArgs): boolean {
+  return args.outboundApproved ?? process.env.NURTURE_OUTBOUND_APPROVED === "true";
 }
 
 function unsubscribeUrl(enrollment: NurtureEnrollmentRow, email: string, args: RunNurturePublisherArgs): string {
@@ -205,6 +214,9 @@ async function sendStep(
   channel: SolicitationChannel,
   args: RunNurturePublisherArgs
 ): Promise<{ status: StepStatus; skipReason?: NurtureSkipReason; providerRef?: string; error?: string }> {
+  if (!outboundApproved(args)) {
+    return { status: "skipped", skipReason: "board_approval_required" };
+  }
   const storedHash = expectedHash(enrollment, channel);
   const normalized = normalizeContact(channel, rawContact(enrollment, channel));
   const computedHash = contactHash(channel, normalized, { salt: args.hashSalt });

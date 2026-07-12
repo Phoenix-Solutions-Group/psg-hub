@@ -58,6 +58,7 @@ export type NurtureSkipReason =
   | "no_consent"
   | "opted_out"
   | "do_not_contact"
+  | "board_approval_required"
   | "already_audited"
   | "missing_template"
   | "non_compliant_template";

@@ -80,6 +80,26 @@ function fakeStore(opts: {
 }
 
 describe("runNurturePublisher", () => {
+  it("blocks every outbound email and text until board approval is explicitly enabled", async () => {
+    const { store, events } = fakeStore({ smsConsent: "opted_in" });
+    const sendEmail = vi.fn(async () => ({ statusCode: 202, messageId: "email-1" }));
+    const sendSms = vi.fn(async () => ({ sid: "SM1", status: "queued" }));
+
+    const result = await runNurturePublisher({
+      store,
+      sendEmail,
+      sendSms,
+      asOf: AS_OF,
+      hashSalt: SALT,
+    });
+
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(sendSms).not.toHaveBeenCalled();
+    expect(events).toHaveLength(2);
+    expect(events.every((e) => e.status === "skipped" && e.skip_reason === "board_approval_required")).toBe(true);
+    expect(result).toMatchObject({ sent: 0, skipped: 2, failed: 0 });
+  });
+
   it("skips SMS when no recorded text-message consent exists", async () => {
     const { store, events } = fakeStore({ smsConsent: null });
     const sendEmail = vi.fn(async () => ({ statusCode: 202, messageId: "email-1" }));
@@ -91,6 +111,7 @@ describe("runNurturePublisher", () => {
       sendSms,
       asOf: AS_OF,
       hashSalt: SALT,
+      outboundApproved: true,
     });
 
     expect(sendEmail).toHaveBeenCalledOnce();
@@ -113,6 +134,7 @@ describe("runNurturePublisher", () => {
       sendSms,
       asOf: AS_OF,
       hashSalt: SALT,
+      outboundApproved: true,
     });
 
     expect(sendEmail).not.toHaveBeenCalled();
@@ -134,6 +156,7 @@ describe("runNurturePublisher", () => {
       sendSms,
       asOf: AS_OF,
       hashSalt: SALT,
+      outboundApproved: true,
     });
 
     expect(sendEmail).not.toHaveBeenCalled();
