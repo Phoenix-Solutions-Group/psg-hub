@@ -13,6 +13,7 @@ import {
   targetedOverrideCount,
   type GrantRow,
 } from "@/lib/ops/modules";
+import { loadModuleMatrix, type MatrixData } from "@/lib/ops/module-matrix-loader";
 
 describe("BASELINE_MODULES", () => {
   it("keeps the QA module matrix seeded with real app modules", () => {
@@ -25,6 +26,61 @@ describe("BASELINE_MODULES", () => {
       "superadmin",
     ]);
     expect(BASELINE_MODULES.every((module) => module.display_name.length > 0)).toBe(true);
+  });
+});
+
+describe("loadModuleMatrix", () => {
+  const empty: MatrixData = { modules: [], grants: [] };
+  const seeded: MatrixData = {
+    modules: [
+      {
+        id: "module-1",
+        slug: "client-hub",
+        display_name: "Client Hub",
+        audience: "customer",
+        min_tier_slug: null,
+        default_visibility: "visible",
+      },
+    ],
+    grants: [],
+  };
+
+  it("seeds through the user session when the service client is unavailable and the registry is empty", async () => {
+    let userSeeded = false;
+
+    const matrix = await loadModuleMatrix({
+      readFromService: async () => {
+        throw new Error("missing service key");
+      },
+      seedWithService: async () => {
+        throw new Error("missing service key");
+      },
+      readFromUser: async () => (userSeeded ? seeded : empty),
+      seedWithUser: async () => {
+        userSeeded = true;
+      },
+      log: () => {},
+    });
+
+    expect(matrix.modules).toHaveLength(1);
+    expect(matrix.modules[0]?.slug).toBe("client-hub");
+  });
+
+  it("falls back to user-session seeding when service seeding still leaves the registry empty", async () => {
+    let userSeeded = false;
+
+    const matrix = await loadModuleMatrix({
+      readFromService: async () => empty,
+      seedWithService: async () => {},
+      readFromUser: async () => (userSeeded ? seeded : empty),
+      seedWithUser: async () => {
+        userSeeded = true;
+      },
+      log: () => {},
+    });
+
+    expect(matrix.modules).toHaveLength(1);
+    expect(matrix.modules[0]?.display_name).toBe("Client Hub");
   });
 });
 
