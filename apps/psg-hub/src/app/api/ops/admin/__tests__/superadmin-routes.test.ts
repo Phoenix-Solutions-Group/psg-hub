@@ -485,6 +485,42 @@ describe("admin user routes", () => {
     expect(auditEvents).toHaveLength(0);
   });
 
+  it("rejects duplicate invite emails found after the first auth user page", async () => {
+    listUsersMock
+      .mockResolvedValueOnce({
+        data: {
+          users: Array.from({ length: 1000 }, (_value, index) => ({
+            id: `page-1-user-${index}`,
+            email: `page-1-user-${index}@example.com`,
+          })),
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          users: [
+            { id: "existing-user", email: "NEW@example.com" },
+            { id: "other-user", email: "other@example.com" },
+          ],
+        },
+        error: null,
+      });
+
+    const res = await userInviteRoute.POST(
+      req("POST", "/api/ops/admin/users/invite", {
+        email: "new@example.com",
+        role: "customer",
+      })
+    );
+
+    expect(res.status).toBe(409);
+    expect(listUsersMock).toHaveBeenNthCalledWith(1, { page: 1, perPage: 1000 });
+    expect(listUsersMock).toHaveBeenNthCalledWith(2, { page: 2, perPage: 1000 });
+    expect(inviteUserByEmailMock).not.toHaveBeenCalled();
+    expect(operations).toHaveLength(0);
+    expect(auditEvents).toHaveLength(0);
+  });
+
   it("audits granting and removing superadmin explicitly", async () => {
     queue("profiles", "select", { data: { id: PROFILE_ID, display_name: "Ada" }, error: null });
     queue("app_user_roles", "select", { data: { role: "psg_internal" }, error: null });

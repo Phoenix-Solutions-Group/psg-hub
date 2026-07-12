@@ -35,6 +35,26 @@ function inviteRedirectTo() {
   return appUrl ? `${appUrl}/login` : undefined;
 }
 
+async function findAuthUserByEmail(
+  service: ReturnType<typeof createServiceClient>,
+  email: string
+) {
+  const perPage = 1000;
+  let page = 1;
+
+  while (true) {
+    const existingAuthUsers = await service.auth.admin.listUsers({ page, perPage });
+    if (existingAuthUsers.error) return { error: existingAuthUsers.error };
+
+    const users = existingAuthUsers.data.users;
+    const existingUser = users.find((user) => user.email?.toLowerCase() === email);
+    if (existingUser) return { user: existingUser };
+    if (users.length < perPage) return { user: null };
+
+    page += 1;
+  }
+}
+
 export async function POST(request: NextRequest) {
   const gate = await requireSuperadmin();
   if (!gate.ok) return gate.response;
@@ -54,16 +74,12 @@ export async function POST(request: NextRequest) {
   const shopRole = shopId ? parsed.data.shopRole ?? "viewer" : null;
   const service = createServiceClient();
 
-  const existingAuthUsers = await service.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  if (existingAuthUsers.error) {
-    console.error("[api/ops/admin/users invite POST] listUsers failed:", existingAuthUsers.error.message);
+  const existingAuthUser = await findAuthUserByEmail(service, email);
+  if (existingAuthUser.error) {
+    console.error("[api/ops/admin/users invite POST] listUsers failed:", existingAuthUser.error.message);
     return NextResponse.json({ error: "Failed to check existing users" }, { status: 500 });
   }
-
-  const existingUser = existingAuthUsers.data.users.find(
-    (user) => user.email?.toLowerCase() === email
-  );
-  if (existingUser) {
+  if (existingAuthUser.user) {
     return NextResponse.json({ error: "A user with that email already exists" }, { status: 409 });
   }
 
