@@ -2,9 +2,20 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { POST } from "../route";
 
 const sendEmail = vi.fn();
+const upsert = vi.fn();
+const insert = vi.fn();
 
 vi.mock("@/lib/mail/sendgrid", () => ({
   sendEmail: (...args: unknown[]) => sendEmail(...args),
+}));
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => ({
+    from: (table: string) => ({
+      upsert: (row: Record<string, unknown>, options?: Record<string, unknown>) =>
+        upsert(table, row, options),
+      insert: (row: Record<string, unknown>) => insert(table, row),
+    }),
+  }),
 }));
 
 function request(form: Record<string, string>, ip = "203.0.113.10") {
@@ -22,6 +33,8 @@ function request(form: Record<string, string>, ip = "203.0.113.10") {
 describe("AI visibility check lead route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    upsert.mockResolvedValue({ error: null });
+    insert.mockResolvedValue({ error: null });
     process.env.AI_VISIBILITY_CHECK_INBOX = "growth@phoenixsolutionsgroup.net";
   });
 
@@ -54,6 +67,17 @@ describe("AI visibility check lead route", () => {
     const message = sendEmail.mock.calls[0][0];
     expect(message.text).toContain("utm_source:   linkedin");
     expect(message.text).toContain("utm_campaign: new-front-door");
+    expect(upsert).toHaveBeenCalledWith(
+      "nurture_enrollments",
+      expect.objectContaining({
+        path: "hot_inbound",
+        trigger_ref: expect.stringMatching(/^ai_visibility_check:em_/),
+        email_contact_hash: expect.stringMatching(/^em_/),
+        sms_contact_hash: null,
+      }),
+      { onConflict: "path,trigger_ref" }
+    );
+    expect(JSON.stringify(upsert.mock.calls[0])).not.toContain("pat@example.com");
   });
 
   it("requires at least one contact method", async () => {

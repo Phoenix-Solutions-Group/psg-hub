@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createPipedriveClient } from "@/lib/pipedrive/client";
 import { syncPipedriveDeals, type SyncSupabase } from "@/lib/pipedrive/sync";
+import { enrollStalledPipedriveDeals, type NurtureSupabase } from "@/lib/nurture/enrollment";
 
 // PSG-446 — Pipedrive deals sync trigger (durable mirror, PSG-434).
 // Vercel Cron fires GET daily with `Authorization: Bearer ${CRON_SECRET}`; POST is
@@ -101,8 +102,11 @@ async function handle(request: Request): Promise<NextResponse> {
     service,
     closedUpdatedSince: resolveClosedSince(request.url, new Date()),
   });
+  const stalled = result.ok
+    ? await enrollStalledPipedriveDeals(service as unknown as NurtureSupabase)
+    : null;
   // A captured sync failure (e.g. Pipedrive 5xx) is a 502, not a 200 — so cron alerts.
-  return NextResponse.json(result, { status: result.ok ? 200 : 502 });
+  return NextResponse.json({ ...result, stalledNurture: stalled }, { status: result.ok ? 200 : 502 });
 }
 
 export async function GET(request: Request): Promise<NextResponse> {

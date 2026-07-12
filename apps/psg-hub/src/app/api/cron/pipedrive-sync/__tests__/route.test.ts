@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const syncMock = vi.fn();
+const enrollStalledPipedriveDeals = vi.fn();
 vi.mock("@/lib/pipedrive/sync", () => ({
   syncPipedriveDeals: (...args: unknown[]) => syncMock(...args),
+}));
+vi.mock("@/lib/nurture/enrollment", () => ({
+  enrollStalledPipedriveDeals: (...args: unknown[]) => enrollStalledPipedriveDeals(...args),
 }));
 vi.mock("@/lib/pipedrive/client", () => ({
   createPipedriveClient: vi.fn(() => ({ __client: true })),
@@ -21,6 +25,8 @@ function req(auth?: string, url = "http://localhost/api/cron/pipedrive-sync"): R
 
 beforeEach(() => {
   syncMock.mockReset();
+  enrollStalledPipedriveDeals.mockReset();
+  enrollStalledPipedriveDeals.mockResolvedValue({ scanned: 0, enrolled: 0 });
   vi.stubEnv("CRON_SECRET", "test-secret");
   vi.stubEnv("PIPEDRIVE_API_TOKEN", "tok");
 });
@@ -63,7 +69,12 @@ describe("cron/pipedrive-sync run", () => {
     syncMock.mockResolvedValue({ ok: true, openDeals: 12, totalDeals: 15 });
     const res = await POST(req("Bearer test-secret"));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, openDeals: 12, totalDeals: 15 });
+    expect(await res.json()).toEqual({
+      ok: true,
+      openDeals: 12,
+      totalDeals: 15,
+      stalledNurture: { scanned: 0, enrolled: 0 },
+    });
     // PSG-623 — the cron now passes a rolling won/lost window so the won/booked line has data.
     expect(syncMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -72,6 +83,7 @@ describe("cron/pipedrive-sync run", () => {
         closedUpdatedSince: expect.any(String),
       }),
     );
+    expect(enrollStalledPipedriveDeals).toHaveBeenCalledWith({ __service: true });
   });
 
   it("passes a ~90-day rolling closedUpdatedSince window (PSG-623)", async () => {
@@ -109,6 +121,7 @@ describe("cron/pipedrive-sync run", () => {
     const res = await GET(req("Bearer test-secret"));
     expect(res.status).toBe(502);
     expect((await res.json()).ok).toBe(false);
+    expect(enrollStalledPipedriveDeals).not.toHaveBeenCalled();
   });
 
   it("passes the widened window when `?since=` is supplied (PSG-760 backfill)", async () => {

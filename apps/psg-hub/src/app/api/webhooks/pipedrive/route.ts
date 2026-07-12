@@ -10,6 +10,8 @@ import {
 } from "@/lib/pipedrive/projects";
 import { provisionForDeal } from "@/lib/pipedrive/template-registry";
 import { loadRoleUserMap } from "@/lib/pipedrive/role-user-map";
+import { createServiceClient } from "@/lib/supabase/service";
+import { enrollNurturePath } from "@/lib/nurture/enrollment";
 
 // PSG-584 / PSG-576 Move 1 — Pipedrive deal-won webhook → auto-create delivery board.
 //
@@ -152,7 +154,25 @@ export async function POST(request: Request): Promise<NextResponse> {
       defaultPhaseId: phaseId,
       roleUserMap,
     });
-    return NextResponse.json({ ok: true, ...summary });
+    let nurtureEnrollment: "enrolled" | "failed" = "enrolled";
+    try {
+      await enrollNurturePath(createServiceClient(), {
+        trigger: "deal_won",
+        triggerRef: `pipedrive:deal:${deal.id}:won`,
+        contact: {},
+        pipedriveDealId: deal.id,
+        pipedrivePersonId: deal.personId,
+        pipedriveOrgId: deal.orgId,
+      });
+    } catch (nurtureErr) {
+      nurtureEnrollment = "failed";
+      console.error(
+        "[pipedrive-webhook] nurture enrollment failed for won deal",
+        deal.id,
+        nurtureErr instanceof Error ? nurtureErr.message : "unknown",
+      );
+    }
+    return NextResponse.json({ ok: true, ...summary, nurtureEnrollment });
   } catch (err) {
     // Never log the error's cause verbatim (Pipedrive URLs carry the token); the
     // client already strips URLs from its messages, but be defensive here too.

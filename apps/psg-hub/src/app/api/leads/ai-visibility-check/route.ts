@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/lib/mail/sendgrid";
 import { createServiceClient } from "@/lib/supabase/service";
 import { recordSmsConsent } from "@/lib/nurture/consent";
+import { enrollNurturePath } from "@/lib/nurture/enrollment";
+import { contactHash } from "@/lib/ops/solicitation/contact";
 
 export const runtime = "nodejs";
 
@@ -162,8 +164,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   };
 
   try {
+    const service = createServiceClient();
     if (lead.smsConsent) {
-      await recordSmsConsent(createServiceClient(), {
+      await recordSmsConsent(service, {
         phone: lead.phone,
         source: "ai_visibility_check_form",
         formData: {
@@ -174,6 +177,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         },
       });
     }
+
+    const leadContactRef =
+      contactHash("email", lead.email) || contactHash("sms", lead.phone);
+    await enrollNurturePath(service, {
+      trigger: "web_lead",
+      triggerRef: `ai_visibility_check:${leadContactRef}`,
+      contact: {
+        firstName: lead.name,
+        shopName: lead.shopName,
+        email: lead.email,
+        phone: lead.phone,
+        smsConsent: lead.smsConsent,
+        emailConsent: Boolean(lead.email),
+      },
+    });
 
     await sendEmail({
       to: inbox,
