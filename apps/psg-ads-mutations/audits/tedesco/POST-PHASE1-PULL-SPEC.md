@@ -38,6 +38,8 @@ Once either lands, this spec is fill-in-the-blanks and the report ships same-day
 
 > Use an **explicit start/end range**, not `LAST_30_DAYS`, so the pull is reproducible and traces exactly to the case study.
 
+> ⚠️ **Baseline contamination caveat (important):** The 74 Phase-1 mutations landed **2026-05-12** (`ops/tedesco/HANDOFF.md`), which falls *inside* the Apr 18 – May 18 baseline window — so the baseline's last ~6 days already contain post-fix behavior + peak learning-phase volatility. For the cleanest public "before," prefer a window **fully before May 12** (e.g. **Apr 11 – May 11, 2026**) as the true pre-fix baseline; the locked Apr 18 – May 18 numbers remain the "audit-time" reference but are *not purely pre-fix*. State which baseline the public lift figure uses.
+
 ## 3. Top-line metrics to pull (same basis as baseline)
 
 | Metric | Baseline (Apr 18 – May 18) | Post-Phase-1 (Jun 8 – Jul 8) | YoY (Jun 8 – Jul 8, 2025) |
@@ -88,6 +90,9 @@ Phase-1 itself was configuration (geo PRESENCE_OR_INTEREST→PRESENCE, shared ne
 Collision-repair demand is **seasonally higher in summer (Jun–Jul) than spring (Apr–May)**: summer is the industry's peak driving/repair season (more miles driven → more accidents); spring is not a demand peak. So a naive Jun–Jul-vs-Apr–May comparison would **credit Phase-1 for lift that is partly seasonal.** This is why the **YoY Jun–Jul 2025 control (§2) matters** — it isolates the seasonal component. If YoY is unavailable (account too new), the public claim must be caveated as "not seasonally adjusted" and lean on **account-quality (health score) and efficiency (CTR/CPA) deltas** rather than raw volume. Sources: CCC Crash Course; industry seasonality reporting (summer = peak collision-repair season).
 
 ---
+
+### 5e. Clicks/CPC will look WORSE by design — don't let the story lead with clicks
+Phase-1 deliberately removed junk traffic: 506 negatives/campaign, tighter PRESENCE geo, Search Partners off. Expect **fewer clicks and higher CPC** in the after window — that's the fix working, not a regression (junk partner/out-of-market clicks were cut). The honest success metric for a public claim is **conversions + CPA (lead quality)**, NOT click volume or CPC. Frame the narrative around lead efficiency/quality and account-health-score improvement.
 
 ## 6. Data provenance (record on every pull)
 
