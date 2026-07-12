@@ -80,6 +80,42 @@ describe("AI visibility check lead route", () => {
     expect(JSON.stringify(upsert.mock.calls[0])).not.toContain("pat@example.com");
   });
 
+  it("records checked text-message consent and enrolls the lead as SMS-eligible", async () => {
+    sendEmail.mockResolvedValue({ statusCode: 202 });
+
+    const res = await POST(
+      request({
+        name: "Pat Owner",
+        shopName: "Pat's Collision",
+        location: "Akron, OH",
+        email: "pat@example.com",
+        phone: "(555) 867-5309",
+        smsConsent: "on",
+      }) as never
+    );
+
+    expect(res.status).toBe(200);
+    expect(insert).toHaveBeenCalledWith(
+      "nurture_consent_events",
+      expect.objectContaining({
+        channel: "sms",
+        contact_hash: expect.stringMatching(/^ph_/),
+        state: "opted_in",
+        source: "ai_visibility_check_form",
+      })
+    );
+    expect(upsert).toHaveBeenCalledWith(
+      "nurture_enrollments",
+      expect.objectContaining({
+        path: "hot_inbound",
+        trigger_ref: expect.stringMatching(/^ai_visibility_check:em_/),
+        email_contact_hash: expect.stringMatching(/^em_/),
+        sms_contact_hash: expect.stringMatching(/^ph_/),
+      }),
+      { onConflict: "path,trigger_ref" }
+    );
+  });
+
   it("requires at least one contact method", async () => {
     const res = await POST(
       request({
