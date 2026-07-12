@@ -7,6 +7,8 @@ test.describe("superadmin walkthrough QA environment", () => {
   test("operator can reach user access, module access, and audit pages", async ({ page }) => {
     await page.goto("/ops/admin/users", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "User Access" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Invite user" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send invite" })).toBeVisible();
     await expect(page.getByText("Users and shop access")).toBeVisible();
     await expect(page.getByPlaceholder("Search users")).toBeVisible();
     await expect(page.getByRole("button", { name: "Save role" }).first()).toBeVisible();
