@@ -57,7 +57,10 @@ export type NurtureSkipReason =
   | "no_contact"
   | "no_consent"
   | "opted_out"
-  | "do_not_contact";
+  | "do_not_contact"
+  | "already_audited"
+  | "missing_template"
+  | "non_compliant_template";
 
 export interface NurtureStepDecision {
   stepId: string;
