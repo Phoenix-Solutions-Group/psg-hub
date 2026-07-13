@@ -478,14 +478,14 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           readWarnings
         );
 
-  const directMailShopNames = scopeAll
-    ? shops.map((shop) => shop.name)
-    : [activeShopName];
+  const directMailShopIds = scopeAll
+    ? shops.map((shop) => shop.id)
+    : [activeShopId];
   const directMail = await readAnalyticsSection(
     "direct mail",
     () =>
       getDirectMailMetrics({
-        authorizedShopNames: directMailShopNames,
+        authorizedShopIds: directMailShopIds,
         from,
       }),
     EMPTY_DIRECT_MAIL_METRICS,
