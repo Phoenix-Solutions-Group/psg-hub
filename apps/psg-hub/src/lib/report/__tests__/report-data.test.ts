@@ -138,6 +138,62 @@ describe("assembleReportData", () => {
     expect(data.dimensions).toBeUndefined();
   });
 
+  it("adds direct mail only when the reader returns activity or ready results", async () => {
+    const empty = await assembleReportData("shop-1", "2026-06", {
+      readSnapshots: reader(fullMap()),
+      generatedAt: GENERATED_AT,
+      readDirectMailMetrics: async ({ shopId, from, to }) => {
+        expect(shopId).toBe("shop-1");
+        expect(from).toBe("2026-06-01");
+        expect(to).toBe("2026-06-30");
+        return null;
+      },
+    });
+    expect(empty.directMail).toBeUndefined();
+
+    const data = await assembleReportData("shop-1", "2026-06", {
+      readSnapshots: reader(fullMap()),
+      generatedAt: GENERATED_AT,
+      readDirectMailMetrics: async () => ({
+        shopIds: ["shop-1"],
+        range: { from: "2026-06-01", to: "2026-06-30" },
+        activity: {
+          lettersMailed: 12,
+          householdsReached: 10,
+          piecesByType: [],
+          recentSendActivity: [],
+          latestSentDate: "2026-06-20",
+          lastUpdatedAt: "2026-06-20T00:00:00Z",
+        },
+        results: {
+          status: "unavailable",
+          responsesOrOutcomes: 0,
+          responseRate: null,
+          bestPerformingPiece: null,
+          lastUpdatedAt: null,
+          message: "Direct-mail results are waiting on shop-scoped mined send-history outcomes.",
+        },
+        sources: {
+          sendHistoryRows: 12,
+          productionRows: 0,
+          resultRows: 0,
+          legacyNameFallbackUsed: false,
+        },
+        privacy: { rawRecipientFieldsIncluded: false },
+        totalSent: 12,
+        recentSent: 12,
+        latestSentDate: "2026-06-20",
+        recentTopPiece: null,
+        totalOutcomes: 0,
+        outcomeRate: null,
+        bestPiece: null,
+      }),
+    });
+
+    expect(data.directMail?.activity.lettersMailed).toBe(12);
+    expect(data.directMail?.privacy.rawRecipientFieldsIncluded).toBe(false);
+  });
+
   it("leaves dimensions undefined when the reader returns null (no monthly row)", async () => {
     const data = await assembleReportData("shop-1", "2026-06", {
       readSnapshots: reader(fullMap()),

@@ -21,6 +21,7 @@
 import { formatNumber, formatShortDate } from "../analytics/aggregate";
 import type { SeriesPoint } from "../analytics/aggregate";
 import type { AnalyticsSource, Ga4DimensionRow } from "../analytics/types";
+import type { DirectMailMetrics, DirectMailPieceSummary } from "../analytics/direct-mail";
 import type {
   ReportData,
   SourceReportBlock,
@@ -673,6 +674,81 @@ function renderLocalFalconBlock(localFalcon: LocalFalconReport): string {
   );
 }
 
+function renderDirectMailBlock(directMail: DirectMailMetrics): string {
+  const cards = [
+    { label: "Letters mailed", value: formatNumber(directMail.activity.lettersMailed) },
+    {
+      label: "Households reached",
+      value:
+        directMail.activity.householdsReached === null
+          ? "n/a"
+          : formatNumber(directMail.activity.householdsReached),
+    },
+    {
+      label: "Responses and outcomes",
+      value:
+        directMail.results.status === "ready"
+          ? formatNumber(directMail.results.responsesOrOutcomes)
+          : "n/a",
+    },
+    {
+      label: "Outcome rate",
+      value:
+        directMail.results.responseRate === null
+          ? "n/a"
+          : `${(directMail.results.responseRate * 100).toFixed(1)}%`,
+    },
+  ]
+    .map(
+      (card) =>
+        `<div class="kpi"><div class="n">${escapeHtml(card.value)}</div><div class="l">${escapeHtml(
+          card.label
+        )}</div></div>`
+    )
+    .join("");
+  const pieceRows = directMail.activity.piecesByType
+    .slice(0, 6)
+    .map(
+      (piece) =>
+        `<tr><td>${escapeHtml(formatDirectMailPiece(piece))}</td>` +
+        `<td class="now">${formatNumber(piece.sent)}</td>` +
+        `<td class="tgt">${
+          piece.outcomes > 0 ? formatNumber(piece.outcomes) : "n/a"
+        }</td></tr>`
+    )
+    .join("");
+  const recent = directMail.activity.recentSendActivity
+    .slice(0, 5)
+    .map(
+      (day) =>
+        `<li>${escapeHtml(formatShortDate(day.date))}: ${formatNumber(day.sent)} mailed</li>`
+    )
+    .join("");
+  const resultNote = directMail.results.message
+    ? `<p class="src">${escapeHtml(directMail.results.message)}</p>`
+    : directMail.results.bestPerformingPiece
+      ? `<p class="src">Top-performing piece: ${escapeHtml(
+          formatDirectMailPiece(directMail.results.bestPerformingPiece)
+        )}.</p>`
+      : "";
+  return (
+    `<section class="panel"><span class="badge-src">Direct mail</span>` +
+    `<h2>Direct-mail activity and results</h2>` +
+    `<p class="src">Shop-level mail totals only. Private customer details are not included.</p>` +
+    `<div class="kpis">${cards}</div>` +
+    (pieceRows
+      ? `<table class="psg"><thead><tr><th>Piece</th><th>Mailed</th><th>Outcomes</th></tr></thead><tbody>${pieceRows}</tbody></table>`
+      : "") +
+    (recent ? `<ul class="takeaways">${recent}</ul>` : "") +
+    resultNote +
+    `</section>`
+  );
+}
+
+function formatDirectMailPiece(piece: DirectMailPieceSummary): string {
+  return piece.variant ? `${piece.label} (${piece.variant})` : piece.label;
+}
+
 /**
  * Render the full branded report HTML for one shop+month. Pure and deterministic
  * over (reportData, narrative). Only linked sources appear; cold-start sources are
@@ -755,6 +831,10 @@ export function renderReportHtml(
     ? renderLocalFalconBlock(reportData.localFalcon)
     : "";
 
+  const directMailBlock = reportData.directMail
+    ? renderDirectMailBlock(reportData.directMail)
+    : "";
+
   // This month vs prior: one headline-KPI row per linked source.
   const momRows = KPI_SET.filter((k) => reportData.linkedSources.includes(k.source))
     .map((k) => {
@@ -830,6 +910,7 @@ export function renderReportHtml(
     gbpPresenceBlock +
     sentimentBlock +
     localFalconBlock +
+    directMailBlock +
     momTable +
     drivers +
     recommendations +

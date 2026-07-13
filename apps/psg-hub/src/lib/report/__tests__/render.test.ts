@@ -196,6 +196,73 @@ describe("renderReportHtml", () => {
     // never the path-relative trap the worker cannot resolve
     expect(html).not.toMatch(/url\("fonts\//);
   });
+
+  it("renders direct mail summary without recipient-level fields", () => {
+    const html = renderReportHtml(
+      {
+        ...fullData,
+        directMail: {
+          shopIds: [fullData.shopId],
+          range: { from: "2026-05-01", to: "2026-05-31" },
+          activity: {
+            lettersMailed: 42,
+            householdsReached: 31,
+            piecesByType: [
+              {
+                pieceCode: "07",
+                label: "Thank-you, warranty, and survey notice",
+                variant: "A",
+                sent: 30,
+                outcomes: 9,
+                outcomeRate: 0.3,
+              },
+            ],
+            recentSendActivity: [{ date: "2026-05-20", sent: 12, pieces: [] }],
+            latestSentDate: "2026-05-20",
+            lastUpdatedAt: "2026-05-20T00:00:00Z",
+          },
+          results: {
+            status: "ready",
+            responsesOrOutcomes: 9,
+            responseRate: 0.3,
+            bestPerformingPiece: {
+              pieceCode: "07",
+              label: "Thank-you, warranty, and survey notice",
+              variant: "A",
+              sent: 30,
+              outcomes: 9,
+              outcomeRate: 0.3,
+            },
+            lastUpdatedAt: "2026-05-20T00:00:00Z",
+            message: null,
+          },
+          sources: {
+            sendHistoryRows: 42,
+            productionRows: 0,
+            resultRows: 1,
+            legacyNameFallbackUsed: false,
+          },
+          privacy: { rawRecipientFieldsIncluded: false },
+          totalSent: 42,
+          recentSent: 42,
+          latestSentDate: "2026-05-20",
+          recentTopPiece: null,
+          totalOutcomes: 9,
+          outcomeRate: 0.3,
+          bestPiece: null,
+        },
+      },
+      narrative
+    );
+
+    expect(html).toContain("Direct-mail activity and results");
+    expect(html).toContain("Letters mailed");
+    expect(html).toContain("42");
+    expect(html).toContain("Households reached");
+    expect(html).toContain("Thank-you, warranty, and survey notice (A)");
+    expect(html).toContain("30.0%");
+    expect(html).not.toMatch(/street|phone|email|household key|recipient row/i);
+  });
 });
 
 // ── GA4 dimensional sections (12-05a) ────────────────────────────────────────

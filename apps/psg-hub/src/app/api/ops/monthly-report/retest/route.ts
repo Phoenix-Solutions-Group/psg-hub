@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSnapshots } from "@/lib/analytics/snapshots";
+import { getDirectMailMetrics } from "@/lib/analytics/direct-mail";
 import { assembleReportData, type SnapshotReader } from "@/lib/report/report-data";
 import { generateNarrative } from "@/lib/report/generate";
 import { gatewayGenerate } from "@/lib/report/narrative";
@@ -180,6 +181,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       return assembleReportData(shopId, p, {
         readSnapshots,
         generatedAt: new Date().toISOString(),
+        readDirectMailMetrics: ({ shopId: directMailShopId, from, to }) =>
+          getDirectMailMetrics({
+            authorizedShopIds: [directMailShopId],
+            from,
+            to,
+            client: service,
+          }),
       });
     },
     generateNarrative: (reportData) => generateNarrative(reportData, { generate: gatewayGenerate }),
