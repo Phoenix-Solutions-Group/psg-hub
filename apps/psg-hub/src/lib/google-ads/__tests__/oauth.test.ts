@@ -109,18 +109,19 @@ describe("buildAuthorizeUrl", () => {
     expect(rows[0].shop_id).toBe("s1");
   });
 
-  it("falls back to the shared OAuth client when Ads-specific env vars are absent", async () => {
+  it("does not fall back to the shared OAuth client when Ads-specific env vars are absent", async () => {
     const adsClientId = process.env.GOOGLE_ADS_CLIENT_ID;
     const adsClientSecret = process.env.GOOGLE_ADS_CLIENT_SECRET;
     delete process.env.GOOGLE_ADS_CLIENT_ID;
     delete process.env.GOOGLE_ADS_CLIENT_SECRET;
 
     try {
-      const { url } = await buildAuthorizeUrl({
-        userId: "u1",
-        shopId: "s1",
-      });
-      expect(url).toContain("client_id=test-client-id");
+      await expect(
+        buildAuthorizeUrl({
+          userId: "u1",
+          shopId: "s1",
+        })
+      ).rejects.toThrow("Server missing Google Ads OAuth client credentials");
     } finally {
       process.env.GOOGLE_ADS_CLIENT_ID = adsClientId;
       process.env.GOOGLE_ADS_CLIENT_SECRET = adsClientSecret;
