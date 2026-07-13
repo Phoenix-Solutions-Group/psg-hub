@@ -17,6 +17,10 @@ import {
   shouldUseRiversidePreviewDemoFallback,
 } from "@/lib/bsm/demo-analytics-context";
 import {
+  EMPTY_DIRECT_MAIL_METRICS,
+  getDirectMailMetrics,
+} from "@/lib/analytics/direct-mail";
+import {
   aggregateByDate,
   latestSnapshot,
   latestSyncedAt,
@@ -474,6 +478,20 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           readWarnings
         );
 
+  const directMailShopNames = scopeAll
+    ? shops.map((shop) => shop.name)
+    : [activeShopName];
+  const directMail = await readAnalyticsSection(
+    "direct mail",
+    () =>
+      getDirectMailMetrics({
+        authorizedShopNames: directMailShopNames,
+        from,
+      }),
+    EMPTY_DIRECT_MAIL_METRICS,
+    readWarnings
+  );
+
   // Header status reflects the most recent sync across ALL sources, not just
   // organic. A shop with only GA4/GSC/GBP linked is "Last synced", not "Awaiting".
   const syncedAt = latestSyncedAt([
@@ -691,6 +709,116 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 color="var(--chart-2)"
               />
             </div>
+          </>
+        )}
+      </section>
+
+      <section aria-labelledby="direct-mail-heading" className="space-y-4">
+        <h2
+          id="direct-mail-heading"
+          className="font-heading text-lg font-semibold tracking-tight"
+        >
+          Direct mail
+        </h2>
+
+        {directMail.totalSent === 0 && directMail.totalOutcomes === 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>No direct-mail data imported yet</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Direct-mail activity and historical results will appear here
+                after PSG imports send history for this shop.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Total pieces sent
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold tracking-tight">
+                    {formatNumber(directMail.totalSent)}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {directMail.latestSentDate
+                      ? `Latest send ${formatShortDate(directMail.latestSentDate)}`
+                      : "No send date available"}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Sent in last 30 days
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold tracking-tight">
+                    {formatNumber(directMail.recentSent)}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {directMail.recentTopPiece
+                      ? `Most sent: ${formatPieceLabel(directMail.recentTopPiece)}`
+                      : "No recent sends"}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Positive outcomes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold tracking-tight">
+                    {formatNumber(directMail.totalOutcomes)}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    From mined historical mail results
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Historical outcome rate
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold tracking-tight">
+                    {directMail.outcomeRate === null
+                      ? "—"
+                      : formatPercent(directMail.outcomeRate)}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {directMail.bestPiece
+                      ? `Best piece: ${formatPieceLabel(directMail.bestPiece)}`
+                      : "Best piece not available yet"}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Mail results snapshot</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Send counts are scoped to {scopeAll ? "your authorized shops" : activeShopName}.
+                  Outcome counts and rate come from PSG&rsquo;s mined historical
+                  direct-mail results, so they are a program benchmark rather
+                  than a live-mail action.
+                </p>
+              </CardContent>
+            </Card>
           </>
         )}
       </section>
@@ -1097,4 +1225,17 @@ export default async function AnalyticsPage({ searchParams }: Props) {
       ) : null}
     </div>
   );
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatPieceLabel(piece: {
+  pieceCode: string;
+  variant: string | null;
+}): string {
+  return piece.variant
+    ? `Piece ${piece.pieceCode} (${piece.variant})`
+    : `Piece ${piece.pieceCode}`;
 }
