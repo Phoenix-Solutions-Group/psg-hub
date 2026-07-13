@@ -15,10 +15,16 @@ export {
   scanCarrierDisclosure,
   scanAbsoluteCost,
   scanInsuranceImplication,
+  scanSuperlatives,
+  scanUnverifiableNumbers,
+  scanRating,
+  scanTestimonials,
   CONSOLIDATOR_COMPETITORS,
   KNOWN_CARRIERS,
   ALLOWED_GENERIC_INSURER_PHRASES,
   ABSOLUTE_COST_PATTERNS,
   INSURANCE_CLAIM_IMPLICATION_PATTERNS,
+  UNPROVABLE_SUPERLATIVE_PATTERNS,
+  UNVERIFIABLE_NUMBER_PATTERNS,
 } from "./denylist";
 export { checkClaimIntegrity, verifyManifest, type CheckInput } from "./validator";
