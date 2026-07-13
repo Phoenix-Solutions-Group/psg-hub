@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { PROD_OPS } from "./fixtures";
 import { checkA11y, shoot } from "./_helpers";
+import { currentTemplateHash } from "@/lib/production/template-gate";
 
 /**
  * PSG-52 — v1.3 Production happy path (the one E2E the v1.3 Quality Gate and the
@@ -49,9 +50,40 @@ function adminClient() {
   });
 }
 
+async function seedReleasedWarrantyTemplate(): Promise<void> {
+  const admin = adminClient();
+  const { data: user, error: userError } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("display_name", "E2E Ops Staff")
+    .single();
+  expect(userError, userError?.message).toBeNull();
+  expect(user?.id, "E2E ops profile id").toBeTruthy();
+
+  const now = new Date().toISOString();
+  const { error } = await admin.from("mail_template_approvals").upsert(
+    {
+      template_key: "warranty",
+      content_hash: currentTemplateHash("warranty"),
+      status: "released",
+      approved_by_profile_id: user!.id,
+      approved_by_name: "E2E Ops Staff",
+      approved_at: now,
+      released_by_profile_id: user!.id,
+      released_at: now,
+      created_by_profile_id: user!.id,
+      notes: "E2E test-mode release for production happy path.",
+    },
+    { onConflict: "template_key,content_hash" }
+  );
+  expect(error, error?.message).toBeNull();
+}
+
 test("production happy path: generate -> print (Lob test) -> historical -> reprint (audited)", async ({
   page,
 }) => {
+  await seedReleasedWarrantyTemplate();
+
   // --- /ops/production landing: staff has the manage_production surface --------
   await page.goto("/ops/production");
   await expect(page.getByRole("heading", { name: "Production", exact: true })).toBeVisible();
