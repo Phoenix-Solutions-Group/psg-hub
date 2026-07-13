@@ -2,7 +2,7 @@
 
 Owner: Engineering release readiness is owned by Ada. QA signoff is owned by Tess. Production deployment confirmation is owned by the engineer who merges or hotfixes the change. Board retest requests are owned by Ada unless she explicitly hands them to another named owner.
 
-Status: draft for Noelle operations review before this becomes the standard team process.
+Status: approved by Noelle for operations clarity on 2026-07-13; standard after merge to `main`.
 
 Production project note: operators should look for the existing Vercel project currently named `psg-advantage-portal` for PSG Hub production deploys. The production domain is `hub.psgweb.me`. After the planned rename is completed, update this runbook and the pull request template to use the new Vercel project name `psg-digital/psg-hub`.
 
