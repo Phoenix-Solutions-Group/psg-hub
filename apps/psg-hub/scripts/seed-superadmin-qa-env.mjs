@@ -17,15 +17,24 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const operatorEmail = process.env.DEMO_OPERATOR_EMAIL;
 const operatorPassword = process.env.DEMO_OPERATOR_PASSWORD;
+const internalEmail = process.env.DEMO_INTERNAL_EMAIL ?? "qa-internal-staff@psg.test";
+const internalPassword = process.env.DEMO_INTERNAL_PASSWORD ?? operatorPassword;
 const shopEmail = process.env.DEMO_SHOP_EMAIL;
 const shopPassword = process.env.DEMO_SHOP_PASSWORD;
 
 if (!url || !serviceKey) {
   throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
 }
-if (!operatorEmail || !operatorPassword || !shopEmail || !shopPassword) {
+if (
+  !operatorEmail ||
+  !operatorPassword ||
+  !internalEmail ||
+  !internalPassword ||
+  !shopEmail ||
+  !shopPassword
+) {
   throw new Error(
-    "Missing DEMO_OPERATOR_EMAIL, DEMO_OPERATOR_PASSWORD, DEMO_SHOP_EMAIL, or DEMO_SHOP_PASSWORD."
+    "Missing DEMO_OPERATOR_EMAIL, DEMO_OPERATOR_PASSWORD, DEMO_INTERNAL_EMAIL, DEMO_INTERNAL_PASSWORD, DEMO_SHOP_EMAIL, or DEMO_SHOP_PASSWORD."
   );
 }
 
@@ -127,9 +136,15 @@ async function main() {
     password: shopPassword,
     displayName: "QA Shop User",
   });
+  const internalUser = await ensureAuthUser({
+    email: internalEmail,
+    password: internalPassword,
+    displayName: "QA Internal Staff",
+  });
 
   await upsertProfile(operator, "QA Superadmin", "admin");
   await upsertProfile(shopUser, "QA Shop User", "viewer");
+  await upsertProfile(internalUser, "QA Internal Staff", "viewer");
 
   const client = await upsertByLookup({
     table: "clients",
@@ -178,6 +193,7 @@ async function main() {
   const { error: roleError } = await supabase.from("app_user_roles").upsert(
     [
       { profile_id: operator.id, role: "psg_superadmin" },
+      { profile_id: internalUser.id, role: "psg_internal" },
       { profile_id: shopUser.id, role: "customer" },
     ],
     { onConflict: "profile_id" }
@@ -223,6 +239,7 @@ async function main() {
 
   console.log("Seeded QA superadmin walkthrough environment.");
   console.log(`Operator: ${operatorEmail}`);
+  console.log(`Internal staff: ${internalEmail}`);
   console.log(`Shop user: ${shopEmail}`);
   console.log(`Shop: ${shop.id}`);
 }
