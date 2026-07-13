@@ -10,6 +10,7 @@ import type {
   PsiResult,
   GtmetrixResult,
 } from "../analytics/types";
+import type { DirectMailMetrics } from "../analytics/direct-mail";
 
 /**
  * One source's monthly block. `current`/`prior` are the rolled-up monthly values
@@ -72,6 +73,12 @@ export type ReportData = {
    * so a SEPARATE reader, not the rollup path. Undefined => the sentiment render block is omitted.
    */
   sentiment?: SentimentReport;
+  /**
+   * Aggregated direct-mail activity and result summary. This report block must
+   * never include recipient names, addresses, phone numbers, emails, household
+   * keys, recipient hashes, or individual recipient rows.
+   */
+  directMail?: DirectMailMetrics;
 };
 
 /**

@@ -92,6 +92,12 @@ export type AssembleDeps = {
     shopId: string;
     month: string;
   }) => Promise<SentimentReport | null>;
+  /** Optional direct-mail summary reader for the report month; null => block omitted. */
+  readDirectMailMetrics?: (query: {
+    shopId: string;
+    from: string;
+    to: string;
+  }) => Promise<ReportData["directMail"] | null>;
 };
 
 /**
@@ -251,6 +257,18 @@ export async function assembleReportData(
     if (s) sentiment = s;
   }
 
+  let directMail: ReportData["directMail"] | undefined;
+  if (deps.readDirectMailMetrics) {
+    const dm = await deps.readDirectMailMetrics({
+      shopId,
+      from: cur.start,
+      to: cur.end,
+    });
+    if (dm && (dm.activity.lettersMailed > 0 || dm.results.status === "ready")) {
+      directMail = dm;
+    }
+  }
+
   return {
     shopId,
     periodMonth,
@@ -263,6 +281,7 @@ export async function assembleReportData(
     ...(performance ? { performance } : {}),
     ...(gbpPresence ? { gbpPresence } : {}),
     ...(sentiment ? { sentiment } : {}),
+    ...(directMail ? { directMail } : {}),
   };
 }
 
