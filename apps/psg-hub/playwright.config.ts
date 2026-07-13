@@ -22,6 +22,17 @@ function loadEnv(file: string): Record<string, string> {
 const isDemoCapture = process.env.DEMO_CAPTURE === "1";
 const testEnv = isDemoCapture ? {} : loadEnv(path.join(__dirname, ".env.test.local"));
 
+// The focused customer walkthrough uses the seeded OWNER shop and must exercise
+// the Google Ads setup/link state, not the billing upgrade gate. Keep this
+// deterministic even when a local, gitignored .env.test.local omits the override.
+if (
+  !isDemoCapture &&
+  !process.env.SHOP_ADS_TIER_OVERRIDE &&
+  !testEnv.SHOP_ADS_TIER_OVERRIDE
+) {
+  testEnv.SHOP_ADS_TIER_OVERRIDE = "e2e-owner-auto-body";
+}
+
 // Also expose the local target to the Playwright runner process itself, so
 // global.setup.ts (service-role seed) and the local-only guard see the same
 // LOCAL stack. Local values win — this is the zero-PII guarantee.
