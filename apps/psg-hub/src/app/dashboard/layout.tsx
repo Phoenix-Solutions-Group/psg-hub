@@ -7,20 +7,7 @@ import { MobileNav } from "@/components/dashboard/mobile-nav";
 import { getDashboardAccess, decideDashboardAccess } from "@/lib/auth/shop-access";
 import { getOpsAccess, isOpsStaff } from "@/lib/auth/ops-access";
 import { getActiveShopContext } from "@/lib/shop/context";
-
-const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/analytics", label: "Analytics" },
-  { href: "/dashboard/audit", label: "SEO Audit" },
-  { href: "/dashboard/content", label: "Content" },
-  { href: "/dashboard/approvals", label: "Approvals" },
-  { href: "/dashboard/reviews", label: "Reviews" },
-  { href: "/dashboard/ads", label: "Ads" },
-  // Invoices nav removed with the Invoiced.com vertical (PSG-58). Stripe-native
-  // invoices UI is rebuilt in Phase 17 (PSG-59) and will re-add this link.
-  { href: "/dashboard/agents", label: "Agents" },
-  { href: "/dashboard/settings", label: "Settings" },
-];
+import { buildDashboardNav } from "@/lib/dashboard/nav";
 
 export default async function DashboardLayout({
   children,
@@ -46,6 +33,7 @@ export default async function DashboardLayout({
 
   // Active-shop context for the switcher (additive; the gate above is unchanged).
   const { shops, activeShopId } = await getActiveShopContext(user.id);
+  const nav = buildDashboardNav(activeShopId);
 
   // Internal-ops staff (psg_internal / psg_superadmin) land here on /dashboard with
   // no visible path to the /ops backbone (PSG-107 / PSG-111). Surface an "Internal
@@ -68,7 +56,7 @@ export default async function DashboardLayout({
           </div>
         )}
         <nav className="flex-1 space-y-1 p-3">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <a
               key={item.href}
               href={item.href}
@@ -89,7 +77,7 @@ export default async function DashboardLayout({
       <div className="flex flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-border px-6">
           <div className="flex items-center gap-3">
-            <MobileNav nav={NAV} shops={shops} activeShopId={activeShopId} />
+            <MobileNav nav={nav} shops={shops} activeShopId={activeShopId} />
             <Logo variant="primary" className="h-5 w-auto lg:hidden" />
             <span className="hidden font-heading text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground lg:inline">
               Client Hub
