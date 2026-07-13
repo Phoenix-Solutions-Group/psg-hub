@@ -14,9 +14,7 @@ test("settings renders scoped to the active shop", async ({ page }) => {
 
   // Active-shop scoping: the main content shows THIS owner's shop, not an
   // arbitrary/other-tenant shop, and no "no shop linked" empty state.
-  await expect(
-    page.getByRole("main").getByText(OWNER.shopName)
-  ).toBeVisible();
+  await expect(page.getByLabel("Shop name")).toHaveValue(OWNER.shopName);
   await expect(
     page.getByText("No shop linked to your account yet.")
   ).toHaveCount(0);
