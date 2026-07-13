@@ -32,6 +32,10 @@ scripts/psg-worktree.sh cleanup PSG-123       # after merge
 
 Full rules + script reference: **[docs/runbooks/git-worktree-workflow.md](docs/runbooks/git-worktree-workflow.md)**.
 
+Before asking Nick, QA, the board, or a customer to retest production behavior, use
+**[docs/runbooks/psg-hub-release-retest.md](docs/runbooks/psg-hub-release-retest.md)**. It defines
+the required commit, push, review, QA, production deployment, and post-deploy checks for PSG Hub.
+
 ## Active development
 
 `apps/psg-hub/` is the unified PSG platform target — customer portal + internal ops backbone + agentic market intelligence. See `apps/psg-hub/.paul/` for current PAUL state and `projects/psg-hub/PLANNING.md` for the SEED ideation v7 (71 design decisions, 10 milestones).
