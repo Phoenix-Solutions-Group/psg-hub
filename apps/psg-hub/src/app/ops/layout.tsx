@@ -23,6 +23,7 @@ const OPS_NAV: { href: string; label: string; superadminOnly?: boolean }[] = [
   { href: "/ops/production/artwork", label: "Mail Artwork" },
   { href: "/ops/ads-mutations", label: "Ads Mutations" },
   { href: "/ops/sitemap", label: "Sitemap", superadminOnly: true },
+  { href: "/ops/bsm-progress", label: "BSM Progress", superadminOnly: true },
   { href: "/ops/sales-pipeline", label: "Sales Pipeline", superadminOnly: true },
   { href: "/ops/intel", label: "Competitor Intel", superadminOnly: true },
   { href: "/ops/admin/integrations/ccc", label: "CCC Connections", superadminOnly: true },
