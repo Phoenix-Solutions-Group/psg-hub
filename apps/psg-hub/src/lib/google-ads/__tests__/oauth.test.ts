@@ -100,12 +100,31 @@ describe("buildAuthorizeUrl", () => {
       shopId: "s1",
     });
     expect(url).toContain("https://accounts.google.com/o/oauth2/v2/auth");
+    expect(url).toContain("client_id=test-ads-client-id");
     expect(url).toContain(encodeURIComponent("https://www.googleapis.com/auth/adwords"));
     expect(url).toContain(`state=${encodeURIComponent(stateToken)}`);
     expect(rows.length).toBe(1);
     expect(rows[0].state_token).toBe(stateToken);
     expect(rows[0].user_id).toBe("u1");
     expect(rows[0].shop_id).toBe("s1");
+  });
+
+  it("falls back to the shared OAuth client when Ads-specific env vars are absent", async () => {
+    const adsClientId = process.env.GOOGLE_ADS_CLIENT_ID;
+    const adsClientSecret = process.env.GOOGLE_ADS_CLIENT_SECRET;
+    delete process.env.GOOGLE_ADS_CLIENT_ID;
+    delete process.env.GOOGLE_ADS_CLIENT_SECRET;
+
+    try {
+      const { url } = await buildAuthorizeUrl({
+        userId: "u1",
+        shopId: "s1",
+      });
+      expect(url).toContain("client_id=test-client-id");
+    } finally {
+      process.env.GOOGLE_ADS_CLIENT_ID = adsClientId;
+      process.env.GOOGLE_ADS_CLIENT_SECRET = adsClientSecret;
+    }
   });
 });
 

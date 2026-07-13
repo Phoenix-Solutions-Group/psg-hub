@@ -1,6 +1,7 @@
 import "server-only";
 import { GoogleAdsApi } from "google-ads-api";
 import { mapGoogleAdsError } from "./client";
+import { getGoogleAdsOAuthCredentials } from "./credentials";
 import { AdsApiError } from "./types";
 
 /** A selectable (non-manager) Google Ads client account under the MCC. */
@@ -62,10 +63,15 @@ export async function listManagedAccounts(
 }
 
 function buildMccQuery(refreshToken: string, mccId: string): AdsQueryFn {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
   const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
-  if (!clientId || !clientSecret || !developerToken) {
+  if (!developerToken) {
+    throw new AdsApiError("upstream", "Server missing Google Ads credentials");
+  }
+  let clientId: string;
+  let clientSecret: string;
+  try {
+    ({ clientId, clientSecret } = getGoogleAdsOAuthCredentials());
+  } catch {
     throw new AdsApiError("upstream", "Server missing Google Ads credentials");
   }
   if (!/^\d{10}$/.test(mccId)) {
