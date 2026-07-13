@@ -43,13 +43,17 @@ type PaperclipIssueRecord = Record<string, unknown>;
 
 export function getBsmProgressConfig(): BsmProgressConfig {
   return {
-    apiUrl: process.env.BSM_PROGRESS_PAPERCLIP_API_URL ?? process.env.PAPERCLIP_API_URL ?? null,
-    apiKey: process.env.BSM_PROGRESS_PAPERCLIP_API_KEY ?? process.env.PAPERCLIP_API_KEY ?? null,
-    companyId: process.env.BSM_PROGRESS_COMPANY_ID ?? DEFAULT_COMPANY_ID,
-    projectId: process.env.BSM_PROGRESS_PROJECT_ID ?? DEFAULT_PROJECT_ID,
-    goalId: process.env.BSM_PROGRESS_GOAL_ID ?? DEFAULT_GOAL_ID,
-    parentIssueId: process.env.BSM_PROGRESS_PARENT_ISSUE_ID ?? DEFAULT_PARENT_ISSUE_ID,
-    adaAgentId: process.env.BSM_PROGRESS_ADA_AGENT_ID ?? ADA_AGENT_ID,
+    apiUrl: envValue(process.env.BSM_PROGRESS_PAPERCLIP_API_URL) ?? envValue(process.env.PAPERCLIP_API_URL),
+    apiKey:
+      envValue(process.env.BSM_PROGRESS_PAPERCLIP_API_KEY) ??
+      envValue(process.env.PAPERCLIP_READ_TOKEN) ??
+      envValue(process.env.PAPERCLIP_API_KEY) ??
+      null,
+    companyId: envValue(process.env.BSM_PROGRESS_COMPANY_ID) ?? DEFAULT_COMPANY_ID,
+    projectId: envValue(process.env.BSM_PROGRESS_PROJECT_ID) ?? DEFAULT_PROJECT_ID,
+    goalId: envValue(process.env.BSM_PROGRESS_GOAL_ID) ?? DEFAULT_GOAL_ID,
+    parentIssueId: envValue(process.env.BSM_PROGRESS_PARENT_ISSUE_ID) ?? DEFAULT_PARENT_ISSUE_ID,
+    adaAgentId: envValue(process.env.BSM_PROGRESS_ADA_AGENT_ID) ?? ADA_AGENT_ID,
   };
 }
 
@@ -198,6 +202,10 @@ function assigneeLabel(record: PaperclipIssueRecord) {
 
 function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function envValue(value: string | undefined): string | null {
+  return value?.trim() || null;
 }
 
 function isObjectRecord(value: unknown): value is PaperclipIssueRecord {
