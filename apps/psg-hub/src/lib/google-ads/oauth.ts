@@ -1,6 +1,7 @@
 import "server-only";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getGoogleAdsOAuthCredentials } from "./credentials";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const SCOPE = "https://www.googleapis.com/auth/adwords";
@@ -93,13 +94,11 @@ export async function buildAuthorizeUrl(input: {
     throw new Error(`state insert failed: ${error.message}`);
   }
 
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
   const redirectUri = process.env.GOOGLE_ADS_OAUTH_REDIRECT_URI;
-  if (!clientId || !redirectUri) {
-    throw new Error(
-      "GOOGLE_OAUTH_CLIENT_ID or GOOGLE_ADS_OAUTH_REDIRECT_URI missing"
-    );
+  if (!redirectUri) {
+    throw new Error("GOOGLE_ADS_OAUTH_REDIRECT_URI missing");
   }
+  const { clientId } = getGoogleAdsOAuthCredentials();
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -277,12 +276,11 @@ export async function exchangeCodeForTokens(code: string): Promise<{
   scope: string;
   expires_in: number;
 }> {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
   const redirectUri = process.env.GOOGLE_ADS_OAUTH_REDIRECT_URI;
-  if (!clientId || !clientSecret || !redirectUri) {
-    throw new Error("OAuth env vars missing");
+  if (!redirectUri) {
+    throw new Error("GOOGLE_ADS_OAUTH_REDIRECT_URI missing");
   }
+  const { clientId, clientSecret } = getGoogleAdsOAuthCredentials();
 
   const body = new URLSearchParams({
     code,

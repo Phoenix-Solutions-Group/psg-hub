@@ -16,6 +16,8 @@ process.env.ADS_READ_LIMIT_PER_HOUR = "500";
 process.env.ADS_MAX_DAILY_MICROS = "500000000";
 process.env.GOOGLE_OAUTH_CLIENT_ID = "test-client-id";
 process.env.GOOGLE_OAUTH_CLIENT_SECRET = "test-client-secret";
+process.env.GOOGLE_ADS_CLIENT_ID = "test-ads-client-id";
+process.env.GOOGLE_ADS_CLIENT_SECRET = "test-ads-client-secret";
 process.env.GOOGLE_ADS_OAUTH_REDIRECT_URI =
   "https://test.example.com/api/ads/google/callback";
 // Phase 11 (GA4 + GSC): the one new env this flow adds (the combined-consent

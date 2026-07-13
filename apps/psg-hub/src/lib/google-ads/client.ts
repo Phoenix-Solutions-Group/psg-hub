@@ -1,6 +1,7 @@
 import "server-only";
 import { GoogleAdsApi, errors as googleAdsErrors } from "google-ads-api";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getGoogleAdsOAuthCredentials } from "./credentials";
 import { decryptRefreshToken } from "./crypto";
 import { sanitizeLastError } from "./sanitize";
 import {
@@ -155,10 +156,18 @@ export async function getGoogleAdsClient(
   account: GoogleAdsAccountRow;
 }> {
   const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
 
-  if (!developerToken || !clientId || !clientSecret) {
+  if (!developerToken) {
+    throw new AdsApiError(
+      "upstream",
+      "Server missing Google Ads credentials"
+    );
+  }
+  let clientId: string;
+  let clientSecret: string;
+  try {
+    ({ clientId, clientSecret } = getGoogleAdsOAuthCredentials());
+  } catch {
     throw new AdsApiError(
       "upstream",
       "Server missing Google Ads credentials"
