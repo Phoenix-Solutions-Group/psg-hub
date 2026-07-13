@@ -9,11 +9,15 @@ import {
   Route,
   Wrench,
 } from "lucide-react";
+import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { createClient } from "@/lib/supabase/server";
+import { getOpsAccess } from "@/lib/auth/ops-access";
 import { getBsmProgressSnapshot, type BsmProgressIssue } from "@/lib/bsm-progress";
 import { BsmIdeaForm } from "./idea-form";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const ROADMAP = [
   {
@@ -74,6 +78,24 @@ const COST_LINES = [
 ];
 
 export default async function BsmProgressPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const access = await getOpsAccess(user.id);
+  if (access.role !== "psg_superadmin") {
+    return (
+      <div className="mx-auto max-w-2xl rounded-lg border border-border p-6">
+        <h1 className="font-heading text-lg font-semibold">BSM build progress</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This area is restricted to superadmins.
+        </p>
+      </div>
+    );
+  }
+
   const snapshot = await getBsmProgressSnapshot();
   const counts = countByStatus(snapshot.issues);
   const updatedToday = snapshot.issues.filter((issue) => isToday(issue.updatedAt)).length;

@@ -1,22 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getOpsAccess, isOpsStaff } from "@/lib/auth/ops-access";
+import { requireSuperadmin } from "@/lib/auth/ops-access";
 import { createBsmIdeaIssue } from "@/lib/bsm-progress";
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const access = await getOpsAccess(user.id);
-  if (!isOpsStaff(access.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const gate = await requireSuperadmin();
+  if (!gate.ok) return gate.response;
 
   const body = (await request.json().catch(() => null)) as unknown;
   if (!body || typeof body !== "object") {
@@ -41,7 +31,6 @@ export async function POST(request: Request) {
   const result = await createBsmIdeaIssue({
     title,
     description,
-    requesterEmail: user.email,
   });
 
   if (!result.ok) {
