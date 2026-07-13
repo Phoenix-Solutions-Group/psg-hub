@@ -3,6 +3,7 @@ import {
   CalendarClock,
   CircleDollarSign,
   Clock3,
+  ExternalLink,
   GitBranch,
   ListChecks,
   RefreshCw,
@@ -24,26 +25,56 @@ const ROADMAP = [
     label: "Foundation",
     status: "Complete",
     note: "Core Next.js app, PSG brand, account gates, and customer dashboard shell are in place.",
+    features: [
+      "Unified PSG Hub app shell with protected customer, operations, and superadmin areas.",
+      "PSG brand system, navigation, and responsive dashboard layout.",
+      "Signed-in access with shop-aware permissions so customers see only their own shop.",
+      "Shared build tracking through Paperclip so roadmap work has owners, blockers, and review history.",
+    ],
   },
   {
     label: "Customer MVP",
     status: "In progress",
     note: "Shop access, onboarding, content review, billing, and analytics surfaces are being hardened.",
+    features: [
+      "Shop switcher and tier gates for single-shop owners and multi-shop operators.",
+      "Customer onboarding checks for shop profile, website, Google accounts, and baseline marketing data.",
+      "Content brief, draft, review, and approval flow for shop-facing marketing work.",
+      "Stripe invoice and payment view so shops can see what they owe PSG in one place.",
+    ],
   },
   {
     label: "Analytics",
     status: "In progress",
     note: "Google Ads, Google Analytics, Search Console, reviews, and local visibility roll into one story-led view.",
+    features: [
+      "Google Ads performance summaries with spend, leads, and campaign health.",
+      "Google Analytics and Search Console trend cards for website visits, search clicks, and top pages.",
+      "Google Business Profile presence and reviews intake for rating, review volume, and sentiment signals.",
+      "Monthly report renderer that turns raw marketing data into board- and customer-readable summaries.",
+    ],
   },
   {
     label: "Operations",
     status: "Building next",
     note: "Internal PSG workflows, imports, production, reports, and customer support tools expand after customer MVP.",
+    features: [
+      "Repair order, estimate, repair customer, company, employee, and master-data management.",
+      "FileMaker replacement import flow for repair orders and estimates with repeatable validation.",
+      "Production module for mail batches, artwork/templates, print status, reprints, and vendor handoff.",
+      "Operational reports for PSG staff, including production, survey, billing, and account-service views.",
+    ],
   },
   {
     label: "Agentic intelligence",
     status: "Queued",
     note: "Market intelligence, competitor tracking, and multi-tool research agents arrive after core launch readiness.",
+    features: [
+      "Competitor monitoring and local market scoring for each shop's service area.",
+      "Automated research agents that gather evidence before drafting recommendations.",
+      "AI-assisted content and report generation with claim checks before anything customer-facing ships.",
+      "Audit trail for agent actions, tool usage, approvals, and follow-up tasks.",
+    ],
   },
 ];
 
@@ -51,22 +82,32 @@ const TOOL_ACTIONS = [
   {
     tool: "Paperclip",
     action: "Tracks the live build tasks, blockers, approvals, owners, and board-ready status updates.",
+    href: "/PSG/issues?projectId=a9ae4312-c9b0-4481-a2aa-bbea9c3dbd6c&q=BSM",
+    destination: "Live BSM task board inside Paperclip. Login required.",
   },
   {
     tool: "Graphify",
     action: "Maps the codebase so engineers can find the right files before changing the product.",
+    href: "https://github.com/Phoenix-Solutions-Group/psg-hub/actions/workflows/graphify-refresh.yml",
+    destination: "Codebase graph refresh runs and downloadable Graphify report artifacts. GitHub login may be required.",
   },
   {
     tool: "Supabase",
     action: "Stores account, shop, billing, operations, and analytics data with customer-safe access rules.",
+    href: "https://supabase.com/dashboard/project/gylkkzmcmbdftxieyabw",
+    destination: "Real PSG Hub Supabase project dashboard. Admin login required; no secrets are shown here.",
   },
   {
     tool: "Vercel",
     action: "Publishes the PSG Hub web app and confirms production builds after approved milestones.",
+    href: "https://vercel.com/psg-digital/psg-hub",
+    destination: "Real PSG Hub Vercel project view. Team login required.",
   },
   {
     tool: "QA",
     action: "Verifies customer-facing behavior before work is marked ready to ship.",
+    href: "https://github.com/Phoenix-Solutions-Group/psg-hub/tree/main/apps/psg-hub/src/lib",
+    destination: "Current repository test and verification source area. GitHub login may be required.",
   },
 ];
 
@@ -164,10 +205,20 @@ export default async function BsmProgressPage() {
           <Panel title="Roadmap" icon={Route}>
             <div className="space-y-4">
               {ROADMAP.map((item) => (
-                <div key={item.label} className="grid gap-3 rounded-lg border border-border p-4 sm:grid-cols-[150px_120px_1fr]">
-                  <div className="font-heading text-sm font-semibold">{item.label}</div>
-                  <Badge variant={item.status === "Complete" ? "default" : "outline"}>{item.status}</Badge>
-                  <p className="text-sm leading-6 text-muted-foreground">{item.note}</p>
+                <div key={item.label} className="rounded-lg border border-border p-4">
+                  <div className="grid gap-3 sm:grid-cols-[150px_120px_1fr]">
+                    <div className="font-heading text-sm font-semibold">{item.label}</div>
+                    <Badge variant={item.status === "Complete" ? "default" : "outline"}>{item.status}</Badge>
+                    <p className="text-sm leading-6 text-muted-foreground">{item.note}</p>
+                  </div>
+                  <ul className="mt-4 grid gap-2 border-t border-border pt-4 text-sm leading-6 text-muted-foreground md:grid-cols-2">
+                    {item.features.map((feature) => (
+                      <li key={feature} className="flex gap-2">
+                        <span className="mt-2 size-1.5 shrink-0 rounded-full bg-ember" aria-hidden="true" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ))}
             </div>
@@ -191,9 +242,18 @@ export default async function BsmProgressPage() {
           <Panel title="Tools and actions" icon={Wrench}>
             <div className="space-y-3">
               {TOOL_ACTIONS.map((item) => (
-                <div key={item.tool}>
-                  <div className="font-heading text-sm font-semibold">{item.tool}</div>
+                <div key={item.tool} className="rounded-lg border border-border p-3">
+                  <a
+                    href={item.href}
+                    target={item.href.startsWith("http") ? "_blank" : undefined}
+                    rel={item.href.startsWith("http") ? "noreferrer" : undefined}
+                    className="inline-flex items-center gap-2 font-heading text-sm font-semibold text-primary hover:text-ember"
+                  >
+                    {item.tool}
+                    <ExternalLink className="size-3.5" aria-hidden="true" />
+                  </a>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.action}</p>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">{item.destination}</p>
                 </div>
               ))}
             </div>
