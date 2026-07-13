@@ -68,6 +68,9 @@ type SentEvent = {
 };
 
 type PriorRow = {
+  id?: string | null;
+  company_id?: string | null;
+  shop_name?: string | null;
   piece_code: string | null;
   ab_variant: string | null;
   n_sent: number | null;
@@ -348,9 +351,10 @@ export async function getDirectMailMetrics({
     return { ...EMPTY_DIRECT_MAIL_METRICS, shopIds, range: { from, to } };
   }
 
-  const [sendHistoryRows, productionRows] = await Promise.all([
+  const [sendHistoryRows, productionRows, priorRows] = await Promise.all([
     getSendHistoryRows(db, { companyIds, shopNames: scopedNames, from, to }),
     getProductionRows(db, { companyIds, from, to }),
+    getPriorRows(db, { companyIds, shopNames: scopedNames }),
   ]);
 
   return summarizeDirectMailMetrics({
@@ -359,9 +363,7 @@ export async function getDirectMailMetrics({
     to,
     sendHistoryRows,
     productionRows,
-    // mail_send_priors is currently program-level, not shop-scoped. Keep result
-    // metrics honest until shop-scoped mined priors land.
-    priorRows: [],
+    priorRows,
     legacyNameFallbackUsed: scopedNames.length > 0,
   });
 }
@@ -456,6 +458,54 @@ async function getProductionRows(
     .limit(10000);
   if (error) throw new Error(`getProductionRows failed: ${error.message}`);
   return (data ?? []) as ProductionRow[];
+}
+
+async function getPriorRows(
+  db: SupabaseClient,
+  {
+    companyIds,
+    shopNames,
+  }: {
+    companyIds: string[];
+    shopNames: string[];
+  }
+): Promise<PriorRow[]> {
+  const [companyRows, legacyRows] = await Promise.all([
+    companyIds.length > 0
+      ? selectPriors(db, "company_id", companyIds)
+      : Promise.resolve([]),
+    shopNames.length > 0
+      ? selectPriors(db, "shop_name", shopNames)
+      : Promise.resolve([]),
+  ]);
+
+  const deduped = new Map<string, PriorRow>();
+  for (const row of [...companyRows, ...legacyRows]) {
+    deduped.set(
+      row.id ??
+        `${row.company_id ?? ""}:${row.shop_name ?? ""}:${row.piece_code}:${row.ab_variant}`,
+      row
+    );
+  }
+  return [...deduped.values()];
+}
+
+async function selectPriors(
+  db: SupabaseClient,
+  scopeColumn: "company_id" | "shop_name",
+  scopeValues: string[]
+): Promise<PriorRow[]> {
+  const { data, error } = await db
+    .from("mail_send_priors")
+    .select(
+      "id,company_id,shop_name,piece_code,ab_variant,n_sent,n_outcome,outcome_rate,computed_at"
+    )
+    .in(scopeColumn, scopeValues)
+    .order("computed_at", { ascending: false })
+    .limit(10000);
+
+  if (error) throw new Error(`selectPriors failed: ${error.message}`);
+  return (data ?? []) as PriorRow[];
 }
 
 function summarizePriors(priorRows: PriorRow[]): DirectMailPieceSummary[] {
