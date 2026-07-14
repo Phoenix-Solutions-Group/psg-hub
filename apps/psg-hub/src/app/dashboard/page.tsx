@@ -10,6 +10,13 @@ import {
   type FirstLoginValueState,
 } from "@/lib/bsm/first-login-value";
 
+type DashboardStat = {
+  label: string;
+  value: number;
+  emptyLabel: string;
+  helper: string;
+};
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const {
@@ -53,10 +60,25 @@ export default async function DashboardPage() {
     }
   }
 
-  const stats = [
-    { label: "Content Items", value: total },
-    { label: "Pending Review", value: pendingReview },
-    { label: "Published", value: published },
+  const stats: DashboardStat[] = [
+    {
+      label: "Content Items",
+      value: total,
+      emptyLabel: "Not started yet",
+      helper: "Drafts will appear after BSM has enough shop signals to create them.",
+    },
+    {
+      label: "Pending Review",
+      value: pendingReview,
+      emptyLabel: "None waiting",
+      helper: "New content will land here for approval before anything is published.",
+    },
+    {
+      label: "Published",
+      value: published,
+      emptyLabel: "Nothing live yet",
+      helper: "Approved work will show here after it has been published.",
+    },
   ];
 
   return (
@@ -66,21 +88,6 @@ export default async function DashboardPage() {
         <p className="text-muted-foreground">
           Welcome back, {user?.email?.split("@")[0]}.
         </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {stats.map((s) => (
-          <Card key={s.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {s.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{s.value}</p>
-            </CardContent>
-          </Card>
-        ))}
       </div>
 
       {firstLoginValue && (
@@ -96,7 +103,7 @@ export default async function DashboardPage() {
               {firstLoginValue.detail}
             </p>
             <Link
-              className={buttonVariants({ variant: "outline" })}
+              className={buttonVariants()}
               href={firstLoginValue.nextStepHref}
             >
               {firstLoginValue.nextStepLabel}
@@ -104,6 +111,31 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       )}
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {stats.map((s) => {
+          const isEmpty = s.value === 0;
+          return (
+            <Card key={s.label}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {s.label}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-2xl font-bold">
+                  {isEmpty ? s.emptyLabel : s.value}
+                </p>
+                {isEmpty && (
+                  <p className="text-sm leading-5 text-muted-foreground">
+                    {s.helper}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }
