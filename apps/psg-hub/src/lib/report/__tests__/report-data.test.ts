@@ -158,6 +158,16 @@ describe("assembleReportData", () => {
         range: { from: "2026-06-01", to: "2026-06-30" },
         activity: {
           lettersMailed: 12,
+          lettersMailedMonthToDate: 12,
+          lettersMailedYearToDate: 12,
+          lettersMailedLifetime: 12,
+          estimatedReferralReach: {
+            monthToDate: 36,
+            yearToDate: 36,
+            lifetime: 36,
+            multiplier: 3,
+            label: "Estimated reach: letters mailed x 3 people told",
+          },
           householdsReached: 10,
           piecesByType: [],
           recentSendActivity: [],
@@ -171,6 +181,14 @@ describe("assembleReportData", () => {
           bestPerformingPiece: null,
           lastUpdatedAt: null,
           message: "Direct-mail results are waiting on shop-scoped mined send-history outcomes.",
+        },
+        postRepairSalesShare: {
+          status: "unavailable",
+          repairSalesCents: null,
+          overallShopSalesCents: null,
+          share: null,
+          message:
+            "Post-repair sales share is waiting on repair sales and package pricing.",
         },
         sources: {
           sendHistoryRows: 12,

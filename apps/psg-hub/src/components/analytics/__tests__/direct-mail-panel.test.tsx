@@ -27,6 +27,16 @@ describe("DirectMailPanel", () => {
       ...EMPTY_DIRECT_MAIL_METRICS,
       activity: {
         lettersMailed: 42,
+        lettersMailedMonthToDate: 12,
+        lettersMailedYearToDate: 30,
+        lettersMailedLifetime: 42,
+        estimatedReferralReach: {
+          monthToDate: 36,
+          yearToDate: 90,
+          lifetime: 126,
+          multiplier: 3,
+          label: "Estimated reach: letters mailed x 3 people told",
+        },
         householdsReached: 31,
         latestSentDate: "2026-07-10",
         lastUpdatedAt: "2026-07-11T00:00:00Z",
@@ -72,6 +82,13 @@ describe("DirectMailPanel", () => {
         lastUpdatedAt: "2026-07-11T00:00:00Z",
         message: null,
       },
+      postRepairSalesShare: {
+        status: "ready",
+        repairSalesCents: 120000,
+        overallShopSalesCents: 200000,
+        share: 0.6,
+        message: null,
+      },
       totalSent: 42,
       recentSent: 42,
       latestSentDate: "2026-07-10",
@@ -81,6 +98,15 @@ describe("DirectMailPanel", () => {
 
     expect(html).toContain("Letters mailed");
     expect(html).toContain("42");
+    expect(html).toContain("Letters mailed this month");
+    expect(html).toContain("12");
+    expect(html).toContain("Letters mailed this year");
+    expect(html).toContain("90 estimated people reached");
+    expect(html).toContain("Estimated referral reach");
+    expect(html).toContain("each mailed letter leads to 3 people");
+    expect(html).toContain("Post-repair sales share");
+    expect(html).toContain("60.0%");
+    expect(html).toContain("$1,200 post-repair sales");
     expect(html).toContain("Households reached");
     expect(html).toContain("31");
     expect(html).toContain("Thank-you, warranty, and survey notice (A)");
@@ -94,6 +120,16 @@ describe("DirectMailPanel", () => {
       activity: {
         ...EMPTY_DIRECT_MAIL_METRICS.activity,
         lettersMailed: 8,
+        lettersMailedMonthToDate: 8,
+        lettersMailedYearToDate: 8,
+        lettersMailedLifetime: 8,
+        estimatedReferralReach: {
+          monthToDate: 24,
+          yearToDate: 24,
+          lifetime: 24,
+          multiplier: 3,
+          label: "Estimated reach: letters mailed x 3 people told",
+        },
         householdsReached: null,
         latestSentDate: "2026-07-09",
         piecesByType: [
@@ -119,6 +155,7 @@ describe("DirectMailPanel", () => {
     expect(html).toContain("Waiting on history");
     expect(html).toContain("Not enough mailed pieces yet.");
     expect(html).toContain("Not available yet");
+    expect(html).toContain("waiting on repair sales and package pricing");
   });
 
   it("formats percentages to one decimal place", () => {
