@@ -44,9 +44,16 @@ export type RunShopAuditDeps = {
 export type RunShopAuditResult = {
   report: ShopAuditReport;
   html: string;
-  /** The id of the persisted audit row, or null when persist=false / insert failed. */
+  /** The id of the persisted audit row, or null when persist=false. */
   auditId: string | null;
 };
+
+export class ShopAuditPersistError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ShopAuditPersistError";
+  }
+}
 
 /** Build the engine's ShopBrief from a shops row. */
 export function shopRowToBrief(row: ShopRow): ShopBrief {
@@ -125,9 +132,10 @@ export async function runShopAudit(deps: RunShopAuditDeps): Promise<RunShopAudit
       .select("id")
       .single<{ id: string }>();
     if (insErr) {
-      // The audit succeeded; only the history write failed. Surface, don't throw —
-      // the customer still gets their report.
       console.error("[seo-audit] persist failed:", insErr.message);
+      throw new ShopAuditPersistError(
+        "shop_seo_audit: audit completed but could not be saved",
+      );
     } else {
       auditId = row?.id ?? null;
     }

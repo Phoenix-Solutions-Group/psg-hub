@@ -21,6 +21,7 @@ import { getActiveShopContext } from "@/lib/shop/context";
 import {
   runShopAudit,
   getLatestShopAudit,
+  ShopAuditPersistError,
 } from "@/lib/seo-audit/run";
 import { renderShopAuditReportHtml } from "@/lib/seo-audit/render";
 
@@ -53,12 +54,27 @@ export async function POST() {
   if (!gate.ok) return gate.response;
 
   const service = createServiceClient();
-  const { report, auditId } = await runShopAudit({
-    service,
-    shopId: gate.shopId,
-    userId: gate.userId,
-  });
+  let auditResult: Awaited<ReturnType<typeof runShopAudit>>;
+  try {
+    auditResult = await runShopAudit({
+      service,
+      shopId: gate.shopId,
+      userId: gate.userId,
+    });
+  } catch (err) {
+    if (err instanceof ShopAuditPersistError) {
+      return NextResponse.json(
+        {
+          error:
+            "The online presence check ran, but BSM could not save it. Please retry before relying on the result.",
+        },
+        { status: 503 },
+      );
+    }
+    throw err;
+  }
 
+  const { report, auditId } = auditResult;
   return NextResponse.json({
     auditId,
     shopId: report.shopId,

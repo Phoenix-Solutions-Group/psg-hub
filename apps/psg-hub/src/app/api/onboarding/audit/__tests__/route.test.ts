@@ -21,6 +21,7 @@ vi.mock("@/lib/shop/context", () => ({
 const runShopAudit = vi.fn();
 const getLatestShopAudit = vi.fn();
 vi.mock("@/lib/seo-audit/run", () => ({
+  ShopAuditPersistError: class ShopAuditPersistError extends Error {},
   runShopAudit: (...a: unknown[]) => runShopAudit(...a),
   getLatestShopAudit: (...a: unknown[]) => getLatestShopAudit(...a),
 }));
@@ -78,6 +79,19 @@ describe("POST /api/onboarding/audit", () => {
     expect(body).toMatchObject({ auditId: "a1", grade: "B", healthScore: 82 });
     // the run is bound to the caller's shop + id (never an attacker-supplied id)
     expect(runShopAudit).toHaveBeenCalledWith(expect.objectContaining({ shopId: "s1", userId: "u1" }));
+  });
+
+  it("returns a retry state when the audit runs but cannot be saved", async () => {
+    const { ShopAuditPersistError } = await import("@/lib/seo-audit/run");
+    mockUser = { id: "u1" };
+    mockActiveShopId = "s1";
+    runShopAudit.mockRejectedValue(new ShopAuditPersistError("save failed"));
+    const res = await POST();
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toContain("could not save");
+    expect(body).not.toHaveProperty("auditId");
+    expect(body).not.toHaveProperty("summary");
   });
 });
 
