@@ -14,7 +14,8 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
-  const next = safeNext(searchParams.get("next"));
+  const type = searchParams.get("type");
+  const next = safeNext(searchParams.get("next"), type === "recovery" ? "/reset-password" : "/dashboard");
 
   if (!code) {
     // No code to exchange — likely a stale or hand-typed URL. Send them to
@@ -38,9 +39,9 @@ export async function GET(request: NextRequest) {
  * Only allow same-app relative redirect targets, to avoid an open-redirect via
  * the `next` param. Anything unexpected falls back to the dashboard.
  */
-function safeNext(next: string | null): string {
+function safeNext(next: string | null, fallback = "/dashboard"): string {
   if (next && next.startsWith("/") && !next.startsWith("//")) {
     return next;
   }
-  return "/dashboard";
+  return fallback;
 }

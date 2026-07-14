@@ -57,14 +57,58 @@ jobs:
       # Edits are runner-local (never committed) so blast radius is zero.
       - name: Configure local Supabase for this leg
         working-directory: apps/psg-hub
+        env:
+          CONFIRM: ${{ matrix.confirm }}
         run: |
-          CONFIRM='${{ matrix.confirm }}'
-          if [ "$CONFIRM" = "on" ]; then VAL=true; else VAL=false; fi
-          # Scope to the [auth.email] section only — there is a second
-          # enable_confirmations under [auth.sms] that must stay false.
-          sed -i "/^\[auth\.email\]/,/^\[/ s/^enable_confirmations = .*/enable_confirmations = ${VAL}/" supabase/config.toml
-          sed -i 's#^site_url = .*#site_url = "http://localhost:3100"#' supabase/config.toml
-          sed -i 's#^additional_redirect_urls = .*#additional_redirect_urls = ["http://localhost:3100", "http://localhost:3100/**", "http://127.0.0.1:3100", "http://127.0.0.1:3100/**", "https://127.0.0.1:3000"]#' supabase/config.toml
+          python3 - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          confirm = os.environ["CONFIRM"]
+          val = "true" if confirm == "on" else "false"
+          path = Path("supabase/config.toml")
+          text = path.read_text()
+
+          text, n = re.subn(
+              r'(?m)^site_url = ".*"$',
+              'site_url = "http://localhost:3100"',
+              text,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit("Could not rewrite auth.site_url")
+
+          redirects = """additional_redirect_urls = [
+            "http://localhost:3100",
+            "http://localhost:3100/**",
+            "http://127.0.0.1:3100",
+            "http://127.0.0.1:3100/**",
+            "https://127.0.0.1:3000",
+          ]
+          """
+          text, n = re.subn(
+              r'(?ms)^additional_redirect_urls = \[.*?^\]\n',
+              redirects,
+              text,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit("Could not rewrite auth.additional_redirect_urls")
+
+          text, n = re.subn(
+              r'(?ms)(^\[auth\.email\]\n(?:(?!^\[).)*?^enable_confirmations = )(?:true|false)',
+              r'\g<1>' + val,
+              text,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit("Could not rewrite auth.email.enable_confirmations")
+
+          tomllib.loads(text)
+          path.write_text(text)
+          PY
           echo "--- effective auth config ---"
           grep -E "^(site_url|enable_confirmations|additional_redirect_urls) " supabase/config.toml || true
 

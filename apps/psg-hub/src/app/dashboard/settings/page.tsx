@@ -55,6 +55,7 @@ export default async function SettingsPage() {
         <CardContent>
           {shop ? (
             <SettingsForm
+              key={activeShopId}
               initial={initial}
               email={user?.email ?? ""}
               canEdit={canEdit}
