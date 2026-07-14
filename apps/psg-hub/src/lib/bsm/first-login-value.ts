@@ -17,8 +17,8 @@ export function buildFirstLoginValueState(
       eyebrow: "Online presence check",
       title: "Your first check has not run yet.",
       detail:
-        "Finish setup to run a shop-specific check. Until then, BSM will not show scores or claims.",
-      nextStepLabel: "Finish setup",
+        "Run a quick, free shop check first. This does not connect Google, publish anything, or change your public listing.",
+      nextStepLabel: "Start free check",
       nextStepHref: "/dashboard/onboarding",
       status: "pending",
     };

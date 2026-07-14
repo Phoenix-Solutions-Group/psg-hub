@@ -32,6 +32,9 @@ describe("buildFirstLoginValueState", () => {
     expect(buildFirstLoginValueState(null)).toMatchObject({
       status: "pending",
       title: "Your first check has not run yet.",
+      detail:
+        "Run a quick, free shop check first. This does not connect Google, publish anything, or change your public listing.",
+      nextStepLabel: "Start free check",
       nextStepHref: "/dashboard/onboarding",
     });
   });

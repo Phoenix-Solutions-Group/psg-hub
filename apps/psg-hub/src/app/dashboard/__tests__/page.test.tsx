@@ -115,7 +115,13 @@ describe("DashboardPage first-login trust state", () => {
   it("shows a useful setup state before empty activity metrics", async () => {
     const html = renderToStaticMarkup(await DashboardPage());
 
+    expect(html).toContain("Welcome, owner.");
+    expect(html).not.toContain("Welcome back");
     expect(html).toContain("Your first check has not run yet.");
+    expect(html).toContain(
+      "Run a quick, free shop check first. This does not connect Google, publish anything, or change your public listing.",
+    );
+    expect(html).toContain("Start free check");
     expect(html).toContain("Not started yet");
     expect(html).toContain("None waiting");
     expect(html).toContain("Nothing live yet");

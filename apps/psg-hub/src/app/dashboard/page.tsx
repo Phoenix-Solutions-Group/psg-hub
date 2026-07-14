@@ -88,12 +88,14 @@ export default async function DashboardPage() {
     },
   ];
 
+  const displayName = user?.email?.split("@")[0] ?? "there";
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">
-          Welcome back, {user?.email?.split("@")[0]}.
+          Welcome, {displayName}.
         </p>
       </div>
 
