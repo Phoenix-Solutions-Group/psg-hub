@@ -170,8 +170,9 @@ test("production happy path: generate -> print (Lob test) -> historical -> repri
 
   // The queued batch shows up in the /ops/production print queue.
   await page.goto("/ops/production");
+  const batchRow = page.locator("tr").filter({ hasText: PROD_OPS.batchName });
   await expect(page.getByText(PROD_OPS.batchName)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Print batch" })).toBeVisible();
+  await expect(batchRow.getByRole("button", { name: "Print batch" })).toBeVisible();
 
   // --- Step 5: print the batch through the Lob TEST API ------------------------
   const printRes = await page.request.post(`/api/production/batches/${batchId}/print`);

@@ -34,9 +34,10 @@ export async function POST(request: Request) {
   }
 
   const response = NextResponse.json({ shop_id: shopId });
+  const isSecureContext = new URL(request.url).protocol === "https:";
   response.cookies.set(ACTIVE_SHOP_COOKIE, shopId, {
     httpOnly: true,
-    secure: true,
+    secure: isSecureContext,
     sameSite: "lax",
     path: "/",
   });

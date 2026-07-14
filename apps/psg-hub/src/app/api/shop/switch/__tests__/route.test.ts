@@ -48,6 +48,14 @@ function req(body?: unknown) {
   });
 }
 
+function reqSecure(body?: unknown) {
+  return new Request("https://localhost/api/shop/switch", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
 beforeEach(() => {
   mockUser = null;
   mockMemberships = [];
@@ -88,5 +96,21 @@ describe("POST /api/shop/switch", () => {
     expect(setCookie.toLowerCase()).toContain("httponly");
     expect(setCookie.toLowerCase()).toContain("samesite=lax");
     expect(setCookie).toContain("Path=/");
+  });
+
+  it("sets secure cookie on HTTPS callbacks and not on HTTP callbacks", async () => {
+    mockUser = { id: "u1" };
+    mockMemberships = [
+      { shop_id: "s1", role: "owner", shops: { name: "A" } },
+      { shop_id: "s2", role: "viewer", shops: { name: "B" } },
+    ];
+
+    const httpRes = await POST(req({ shop_id: "s2" }));
+    const httpCookie = (httpRes.headers.get("set-cookie") ?? "").toLowerCase();
+    expect(httpCookie).not.toContain("secure");
+
+    const httpsRes = await POST(reqSecure({ shop_id: "s2" }));
+    const httpsCookie = (httpsRes.headers.get("set-cookie") ?? "").toLowerCase();
+    expect(httpsCookie).toContain("secure");
   });
 });
