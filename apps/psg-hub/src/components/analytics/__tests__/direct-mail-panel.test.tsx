@@ -19,6 +19,7 @@ describe("DirectMailPanel", () => {
   it("renders the empty state without recipient details", () => {
     const html = renderPanel();
     expect(html).toContain("No direct-mail data imported yet");
+    expect(html).toContain("customer reach will appear here");
     expect(html).not.toMatch(/address|phone|email|household key/i);
   });
 
@@ -107,6 +108,10 @@ describe("DirectMailPanel", () => {
     expect(html).toContain("Post-repair sales share");
     expect(html).toContain("60.0%");
     expect(html).toContain("$1,200 post-repair sales");
+    expect(html).toContain("Customer response signals");
+    expect(html).toContain("Response signal rate");
+    expect(html).toContain("Best-performing letter");
+    expect(html).toContain("Letters by campaign type");
     expect(html).toContain("Households reached");
     expect(html).toContain("31");
     expect(html).toContain("Thank-you, warranty, and survey notice (A)");
@@ -154,7 +159,7 @@ describe("DirectMailPanel", () => {
 
     expect(html).toContain("Waiting on history");
     expect(html).toContain("Not enough mailed pieces yet.");
-    expect(html).toContain("Not available yet");
+    expect(html).toContain("Building history");
     expect(html).toContain("waiting on repair sales and package pricing");
   });
 
