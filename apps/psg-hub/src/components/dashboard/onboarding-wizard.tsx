@@ -89,6 +89,7 @@ export function OnboardingWizard() {
       return;
     }
 
+    await fetch("/api/onboarding/audit", { method: "POST" }).catch(() => null);
     router.push("/dashboard");
     router.refresh();
   }

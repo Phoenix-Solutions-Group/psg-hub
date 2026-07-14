@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockExchangeCode = vi.fn();
@@ -17,7 +18,7 @@ vi.mock("@supabase/ssr", () => ({
 const { GET } = await import("@/app/auth/callback/route");
 
 function req(url: string) {
-  return new Request(url);
+  return new NextRequest(url);
 }
 
 beforeEach(() => {

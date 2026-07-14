@@ -1,7 +1,14 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
+import { getLatestShopAudit } from "@/lib/seo-audit/run";
+import {
+  buildFirstLoginValueState,
+  type FirstLoginValueState,
+} from "@/lib/bsm/first-login-value";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -17,6 +24,7 @@ export default async function DashboardPage() {
   let total = 0;
   let pendingReview = 0;
   let published = 0;
+  let firstLoginValue: FirstLoginValueState | null = null;
 
   if (user) {
     const { activeShopId } = await getActiveShopContext(user.id);
@@ -38,6 +46,10 @@ export default async function DashboardPage() {
       total = all.count ?? 0;
       pendingReview = pend.count ?? 0;
       published = pub.count ?? 0;
+      const latestAudit = await getLatestShopAudit(service, activeShopId);
+      firstLoginValue = buildFirstLoginValueState(latestAudit?.report ?? null);
+    } else {
+      firstLoginValue = buildFirstLoginValueState(null);
     }
   }
 
@@ -70,6 +82,28 @@ export default async function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {firstLoginValue && (
+        <Card>
+          <CardHeader>
+            <p className="font-heading text-xs font-medium uppercase tracking-[0.18em] text-ember">
+              {firstLoginValue.eyebrow}
+            </p>
+            <CardTitle>{firstLoginValue.title}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              {firstLoginValue.detail}
+            </p>
+            <Link
+              className={buttonVariants({ variant: "outline" })}
+              href={firstLoginValue.nextStepHref}
+            >
+              {firstLoginValue.nextStepLabel}
+            </Link>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
