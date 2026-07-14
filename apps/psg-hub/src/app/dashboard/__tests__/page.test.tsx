@@ -13,6 +13,7 @@ let mockCounts = {
   published: 0,
 };
 let mockLatestAudit: { report: ShopAuditReport } | null = null;
+const recordBsmPilotEvent = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -67,6 +68,10 @@ vi.mock("@/lib/seo-audit/run", () => ({
   getLatestShopAudit: vi.fn(async () => mockLatestAudit),
 }));
 
+vi.mock("@/lib/bsm/pilot-events", () => ({
+  recordBsmPilotEvent: (...a: unknown[]) => recordBsmPilotEvent(...a),
+}));
+
 const DashboardPage = (await import("@/app/dashboard/page")).default;
 
 function report(overrides: Partial<ShopAuditReport> = {}): ShopAuditReport {
@@ -103,6 +108,7 @@ beforeEach(() => {
     published: 0,
   };
   mockLatestAudit = null;
+  recordBsmPilotEvent.mockReset();
 });
 
 describe("DashboardPage first-login trust state", () => {
@@ -118,6 +124,15 @@ describe("DashboardPage first-login trust state", () => {
     );
     expect(html.indexOf("Your first check has not run yet.")).toBeLessThan(
       html.indexOf("Content Items"),
+    );
+    expect(recordBsmPilotEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        eventName: "first_login_card_viewed",
+        shopId: "shop_1",
+        userId: "user_1",
+        properties: { state: "pending" },
+      },
     );
   });
 

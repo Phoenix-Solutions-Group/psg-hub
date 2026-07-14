@@ -24,6 +24,7 @@ import {
   ShopAuditPersistError,
 } from "@/lib/seo-audit/run";
 import { renderShopAuditReportHtml } from "@/lib/seo-audit/render";
+import { recordBsmPilotEvent } from "@/lib/bsm/pilot-events";
 
 async function resolveCallerShop(): Promise<
   | { ok: true; userId: string; shopId: string }
@@ -63,6 +64,11 @@ export async function POST() {
     });
   } catch (err) {
     if (err instanceof ShopAuditPersistError) {
+      await recordBsmPilotEvent(service, {
+        eventName: "audit_save_failed",
+        shopId: gate.shopId,
+        userId: gate.userId,
+      });
       return NextResponse.json(
         {
           error:

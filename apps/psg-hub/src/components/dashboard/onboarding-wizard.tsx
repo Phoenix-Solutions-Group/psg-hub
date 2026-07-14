@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { trackBsmPilotEvent } from "@/lib/bsm/pilot-events-client";
 
 export function OnboardingWizard() {
   const [step, setStep] = useState(1);
@@ -22,6 +23,13 @@ export function OnboardingWizard() {
   const [state, setState] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [phone, setPhone] = useState("");
+  const trackedOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (trackedOpenRef.current) return;
+    trackedOpenRef.current = true;
+    void trackBsmPilotEvent("setup_started");
+  }, []);
 
   // PSG-144 smart auto-discovery: name + address -> suggested profile fields.
   // Suggestions are pre-filled but always editable; the user confirms before the

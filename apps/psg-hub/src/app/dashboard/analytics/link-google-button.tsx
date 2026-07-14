@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { trackBsmPilotEvent } from "@/lib/bsm/pilot-events-client";
 
 const TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -58,6 +59,7 @@ export function LinkGoogleButton({ shopId, userRole }: Props) {
     setErrorMessage(null);
     setPopupBlockedUrl(null);
     setPending(true);
+    void trackBsmPilotEvent("connect_google_clicked", { source: "analytics" });
 
     let authorizeRes: Response;
     try {

@@ -9,6 +9,7 @@ import {
   buildFirstLoginValueState,
   type FirstLoginValueState,
 } from "@/lib/bsm/first-login-value";
+import { recordBsmPilotEvent } from "@/lib/bsm/pilot-events";
 
 type DashboardStat = {
   label: string;
@@ -55,6 +56,12 @@ export default async function DashboardPage() {
       published = pub.count ?? 0;
       const latestAudit = await getLatestShopAudit(service, activeShopId);
       firstLoginValue = buildFirstLoginValueState(latestAudit?.report ?? null);
+      await recordBsmPilotEvent(service, {
+        eventName: "first_login_card_viewed",
+        shopId: activeShopId,
+        userId: user.id,
+        properties: { state: firstLoginValue.status },
+      });
     } else {
       firstLoginValue = buildFirstLoginValueState(null);
     }

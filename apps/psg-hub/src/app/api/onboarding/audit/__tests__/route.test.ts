@@ -20,10 +20,14 @@ vi.mock("@/lib/shop/context", () => ({
 
 const runShopAudit = vi.fn();
 const getLatestShopAudit = vi.fn();
+const recordBsmPilotEvent = vi.fn();
 vi.mock("@/lib/seo-audit/run", () => ({
   ShopAuditPersistError: class ShopAuditPersistError extends Error {},
   runShopAudit: (...a: unknown[]) => runShopAudit(...a),
   getLatestShopAudit: (...a: unknown[]) => getLatestShopAudit(...a),
+}));
+vi.mock("@/lib/bsm/pilot-events", () => ({
+  recordBsmPilotEvent: (...a: unknown[]) => recordBsmPilotEvent(...a),
 }));
 
 const { POST, GET } = await import("@/app/api/onboarding/audit/route");
@@ -53,6 +57,7 @@ beforeEach(() => {
   mockActiveShopId = null;
   runShopAudit.mockReset();
   getLatestShopAudit.mockReset();
+  recordBsmPilotEvent.mockReset();
 });
 
 describe("POST /api/onboarding/audit", () => {
@@ -92,6 +97,14 @@ describe("POST /api/onboarding/audit", () => {
     expect(body.error).toContain("could not save");
     expect(body).not.toHaveProperty("auditId");
     expect(body).not.toHaveProperty("summary");
+    expect(recordBsmPilotEvent).toHaveBeenCalledWith(
+      {},
+      {
+        eventName: "audit_save_failed",
+        shopId: "s1",
+        userId: "u1",
+      },
+    );
   });
 });
 

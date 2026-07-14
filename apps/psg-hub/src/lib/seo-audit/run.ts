@@ -48,6 +48,12 @@ export type RunShopAuditResult = {
   auditId: string | null;
 };
 
+type AuditOutcome = {
+  status: "completed" | "failed";
+  outcome: "audited" | "no_live_site" | "crawl_failed";
+  errorReason: string | null;
+};
+
 export class ShopAuditPersistError extends Error {
   constructor(message: string) {
     super(message);
@@ -99,14 +105,23 @@ export async function runShopAudit(deps: RunShopAuditDeps): Promise<RunShopAudit
   // Crawl the live site (capped + cost-aware). Any crawl failure ⇒ greenfield.
   const provider = deps.crawlProvider ?? selectCrawlProvider();
   let pages: Awaited<ReturnType<SiteCrawlProvider["crawl"]>> = [];
+  let auditOutcome: AuditOutcome = brief.domain
+    ? { status: "completed", outcome: "audited", errorReason: null }
+    : { status: "completed", outcome: "no_live_site", errorReason: null };
   if (brief.domain) {
     try {
       pages = await provider.crawl(brief.domain);
     } catch (err) {
+      const reason = err instanceof Error ? err.message : "unknown crawl error";
       console.error(
         "[seo-audit] crawl failed, degrading to greenfield:",
-        err instanceof Error ? err.message : err,
+        reason,
       );
+      auditOutcome = {
+        status: "failed",
+        outcome: "crawl_failed",
+        errorReason: reason.slice(0, 240),
+      };
       pages = [];
     }
   }
@@ -126,6 +141,9 @@ export async function runShopAudit(deps: RunShopAuditDeps): Promise<RunShopAudit
         grade: report.grade,
         summary: report.summary,
         report,
+        audit_status: auditOutcome.status,
+        audit_outcome: auditOutcome.outcome,
+        error_reason: auditOutcome.errorReason,
         created_by: deps.userId ?? null,
         generated_at: now,
       })
