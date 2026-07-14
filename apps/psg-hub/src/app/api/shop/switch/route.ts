@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   const response = NextResponse.json({ shop_id: shopId });
   response.cookies.set(ACTIVE_SHOP_COOKIE, shopId, {
     httpOnly: true,
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
   });

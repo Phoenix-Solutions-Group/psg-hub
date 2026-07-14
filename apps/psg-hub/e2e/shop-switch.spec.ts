@@ -11,7 +11,7 @@ test("switching shops rescopes the customer surface (07-03 flow)", async ({
   await page.goto("/dashboard/settings");
 
   // Default active shop = the owned shop A.
-  await expect(page.getByRole("main").getByText(MULTI.shopA)).toBeVisible();
+  await expect(page.getByLabel("Shop name")).toHaveValue(MULTI.shopA);
 
   // The sidebar switcher lists both memberships.
   const switcher = page
@@ -26,8 +26,7 @@ test("switching shops rescopes the customer surface (07-03 flow)", async ({
   // Switch to shop B -> POST /api/shop/switch -> router.refresh -> rescope.
   await switcher.selectOption({ label: MULTI.shopB });
 
-  await expect(page.getByRole("main").getByText(MULTI.shopB)).toBeVisible();
-  await expect(page.getByRole("main").getByText(MULTI.shopA)).toHaveCount(0);
+  await expect(page.getByLabel("Shop name")).toHaveValue(MULTI.shopB);
 
   await checkA11y(page, "switch-after");
   await shoot(page, "switch-after");
