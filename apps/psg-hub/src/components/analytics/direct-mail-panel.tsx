@@ -22,7 +22,8 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
             Direct mail
           </h2>
           <p className="text-sm text-muted-foreground">
-            Letters PSG mailed for {scopeLabel}, plus results when enough history is available.
+            Letters PSG mailed for {scopeLabel}, plus marketing reach signals when enough
+            history is available.
           </p>
         </div>
         <p className="text-sm text-muted-foreground">{formatLastUpdated(metrics)}</p>
@@ -35,7 +36,7 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
-              Direct-mail activity and historical results will appear here after PSG imports
+              Direct-mail activity and customer reach will appear here after PSG imports
               send history for this shop.
             </p>
           </CardContent>
@@ -84,25 +85,25 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
               detail="Counts households, not individual people"
             />
             <KpiCard
-              label="Responses and outcomes"
+              label="Customer response signals"
               value={
                 hasResults
                   ? formatNumber(metrics.results.responsesOrOutcomes)
-                  : "Not available yet"
+                  : "Building history"
               }
-              detail={metrics.results.message ?? "From mined historical mail results"}
+              detail={metrics.results.message ?? "Repeat visits, referrals, and survey replies"}
             />
             <KpiCard
-              label="Outcome rate"
+              label="Response signal rate"
               value={
                 metrics.results.responseRate === null
-                  ? "Not available yet"
+                  ? "Building history"
                   : formatPercent(metrics.results.responseRate)
               }
               detail={
                 metrics.results.bestPerformingPiece
-                  ? `Top performer: ${formatPieceLabel(metrics.results.bestPerformingPiece)}`
-                  : "Top performer appears after enough results"
+                  ? `Best-performing letter: ${formatPieceLabel(metrics.results.bestPerformingPiece)}`
+                  : "Best-performing letter appears after enough history"
               }
             />
             <KpiCard
@@ -119,12 +120,12 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Pieces by type</CardTitle>
+                <CardTitle>Letters by campaign type</CardTitle>
               </CardHeader>
               <CardContent>
                 {metrics.activity.piecesByType.length === 0 ? (
                   <p className="text-muted-foreground">
-                    Piece type details will appear after send history is imported.
+                    Campaign type details will appear after send history is imported.
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
@@ -136,7 +137,7 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
                             Mailed
                           </th>
                           <th className="py-2 text-right font-heading font-medium">
-                            Outcomes
+                            Response signals
                           </th>
                         </tr>
                       </thead>
@@ -166,7 +167,7 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
               <CardContent>
                 {metrics.activity.recentSendActivity.length === 0 ? (
                   <p className="text-muted-foreground">
-                    Recent send dates will appear after PSG imports mail activity.
+                    Recent mail dates will appear after PSG imports mail activity.
                   </p>
                 ) : (
                   <div className="space-y-3">

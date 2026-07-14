@@ -2,6 +2,21 @@ import { test, expect } from "@playwright/test";
 import { OWNER, MULTI, MEGA } from "./fixtures";
 import { checkA11y, shoot } from "./_helpers";
 
+function directMailSection(page: import("@playwright/test").Page) {
+  return page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Direct mail" }),
+  });
+}
+
+async function expectNoDirectMailPrivateFields(
+  section: ReturnType<typeof directMailSection>
+) {
+  await expect(section).not.toContainText(/e2e-recipient|e2e-household/i);
+  await expect(section).not.toContainText(
+    /\b(recipient hash|household key|street address|phone number|email address)\b/i
+  );
+}
+
 // 09-02: the analytics surface in a REAL browser. Recharts 3 emits no SVG
 // geometry in node SSR, so the "charts actually render" proof + the axe AA
 // scan can only happen here (research/recharts-integration.md).
@@ -28,6 +43,18 @@ test.describe("analytics — per-shop (OWNER)", () => {
     // KPI cards present.
     await expect(page.getByText("Organic traffic").first()).toBeVisible();
     await expect(page.getByText("Authority score")).toBeVisible();
+
+    const mail = directMailSection(page);
+    await expect(mail).toContainText("Letters mailed");
+    await expect(mail.getByText("3", { exact: true }).first()).toBeVisible();
+    await expect(mail).toContainText("Households reached");
+    await expect(mail.getByRole("paragraph").filter({ hasText: /^2$/ })).toBeVisible();
+    await expect(mail).toContainText("Customer response signals");
+    await expect(mail.getByText("9", { exact: true }).first()).toBeVisible();
+    await expect(mail).toContainText("Response signal rate");
+    await expect(mail).toContainText("30.0%");
+    await expect(mail).toContainText("Thank-you, warranty, and survey notice");
+    await expectNoDirectMailPrivateFields(mail);
 
     // REAL recharts render: SVG path geometry inside the chart region (the
     // node-SSR output is an empty wrapper — only a browser produces this).
@@ -76,6 +103,15 @@ test.describe("analytics — MSO aggregate (MULTI)", () => {
     // svg-only checks — this assertion is what makes "aggregate" true.
     await expect(page.getByText("982", { exact: true })).toBeVisible();
 
+    const mail = directMailSection(page);
+    await expect(mail).toContainText("Letters mailed");
+    await expect(mail.getByText("6", { exact: true }).first()).toBeVisible();
+    await expect(mail).toContainText("Customer response signals");
+    await expect(mail.getByText("14", { exact: true }).first()).toBeVisible();
+    await expect(mail).toContainText("20.0%");
+    await expect(mail).toContainText("your authorized shops");
+    await expectNoDirectMailPrivateFields(mail);
+
     // Charts render real SVG on the aggregate too.
     const chart = page.getByRole("img", {
       name: /Organic traffic over the last 30 days/,
@@ -114,6 +150,12 @@ test.describe("analytics — designed empty state (MEGA shops have no snapshots)
     // No chart shells and no KPI lies on a no-data shop (scoped to main —
     // the brand Logo outside it is also role=img).
     await expect(page.getByRole("main").getByRole("img")).toHaveCount(0);
+    const mail = directMailSection(page);
+    await expect(mail).toContainText("No direct-mail data imported yet");
+    await expect(mail).toContainText(
+      "Direct-mail activity and customer reach will appear here after PSG imports send history for this shop."
+    );
+    await expectNoDirectMailPrivateFields(mail);
 
     await checkA11y(page, "analytics-empty");
     await shoot(page, "analytics-empty");
