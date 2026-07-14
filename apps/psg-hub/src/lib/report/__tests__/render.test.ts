@@ -206,6 +206,16 @@ describe("renderReportHtml", () => {
           range: { from: "2026-05-01", to: "2026-05-31" },
           activity: {
             lettersMailed: 42,
+            lettersMailedMonthToDate: 42,
+            lettersMailedYearToDate: 42,
+            lettersMailedLifetime: 42,
+            estimatedReferralReach: {
+              monthToDate: 126,
+              yearToDate: 126,
+              lifetime: 126,
+              multiplier: 3,
+              label: "Estimated reach: letters mailed x 3 people told",
+            },
             householdsReached: 31,
             piecesByType: [
               {
@@ -235,6 +245,14 @@ describe("renderReportHtml", () => {
             },
             lastUpdatedAt: "2026-05-20T00:00:00Z",
             message: null,
+          },
+          postRepairSalesShare: {
+            status: "unavailable",
+            repairSalesCents: null,
+            overallShopSalesCents: null,
+            share: null,
+            message:
+              "Post-repair sales share is waiting on repair sales and package pricing.",
           },
           sources: {
             sendHistoryRows: 42,

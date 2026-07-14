@@ -44,14 +44,36 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
-              label="Letters mailed"
-              value={formatNumber(metrics.activity.lettersMailed)}
+              label="Letters mailed this month"
+              value={formatNumber(metrics.activity.lettersMailedMonthToDate)}
               detail={
                 metrics.activity.latestSentDate
                   ? `Latest send ${formatShortDate(metrics.activity.latestSentDate)}`
                   : "No send date available"
               }
             />
+            <KpiCard
+              label="Letters mailed this year"
+              value={formatNumber(metrics.activity.lettersMailedYearToDate)}
+              detail={`${formatNumber(
+                metrics.activity.estimatedReferralReach.yearToDate
+              )} estimated people reached`}
+            />
+            <KpiCard
+              label="Letters mailed lifetime"
+              value={formatNumber(metrics.activity.lettersMailedLifetime)}
+              detail={`${formatNumber(
+                metrics.activity.estimatedReferralReach.lifetime
+              )} estimated people reached`}
+            />
+            <KpiCard
+              label="Estimated referral reach"
+              value={formatNumber(metrics.activity.estimatedReferralReach.monthToDate)}
+              detail="Estimate: each mailed letter leads to 3 people hearing about it"
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
               label="Households reached"
               value={
@@ -82,6 +104,15 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
                   ? `Top performer: ${formatPieceLabel(metrics.results.bestPerformingPiece)}`
                   : "Top performer appears after enough results"
               }
+            />
+            <KpiCard
+              label="Post-repair sales share"
+              value={
+                metrics.postRepairSalesShare.share === null
+                  ? "Not available yet"
+                  : formatPercent(metrics.postRepairSalesShare.share)
+              }
+              detail={formatSalesShareDetail(metrics)}
             />
           </div>
 
@@ -205,4 +236,25 @@ export function formatPieceLabel(piece: DirectMailPieceSummary): string {
 
 export function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatSalesShareDetail(metrics: DirectMailMetrics): string {
+  if (metrics.postRepairSalesShare.status !== "ready") {
+    return metrics.postRepairSalesShare.message ?? "Waiting on sales inputs";
+  }
+
+  return `${formatCurrencyFromCents(
+    metrics.postRepairSalesShare.repairSalesCents
+  )} post-repair sales from ${formatCurrencyFromCents(
+    metrics.postRepairSalesShare.overallShopSalesCents
+  )} package sales`;
+}
+
+function formatCurrencyFromCents(value: number | null): string {
+  if (value === null) return "unknown";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value / 100);
 }

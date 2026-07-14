@@ -38,9 +38,19 @@ describe("summarizeDirectMailMetrics", () => {
         },
       ],
       priorRows: [],
+      today: "2026-07-14",
     });
 
     expect(out.activity.lettersMailed).toBe(4);
+    expect(out.activity.lettersMailedMonthToDate).toBe(4);
+    expect(out.activity.lettersMailedYearToDate).toBe(4);
+    expect(out.activity.lettersMailedLifetime).toBe(4);
+    expect(out.activity.estimatedReferralReach).toMatchObject({
+      monthToDate: 12,
+      yearToDate: 12,
+      lifetime: 12,
+      multiplier: 3,
+    });
     expect(out.activity.householdsReached).toBe(2);
     expect(out.activity.latestSentDate).toBe("2026-07-11");
     expect(out.activity.piecesByType[0]).toMatchObject({
@@ -54,6 +64,88 @@ describe("summarizeDirectMailMetrics", () => {
       sent: 1,
     });
     expect(out.privacy.rawRecipientFieldsIncluded).toBe(false);
+  });
+
+  it("keeps range activity separate from month, year, and lifetime letter counts", () => {
+    const out = summarizeDirectMailMetrics({
+      shopIds: ["shop_1"],
+      from: "2026-07-01",
+      to: "2026-07-14",
+      today: "2026-07-14",
+      sendHistoryRows: [
+        {
+          piece_code: "07",
+          piece_variant: null,
+          sent_date: "2025-12-31",
+          household_key: "old",
+        },
+        {
+          piece_code: "07",
+          piece_variant: null,
+          sent_date: "2026-01-02",
+          household_key: "ytd",
+        },
+        {
+          piece_code: "07",
+          piece_variant: null,
+          sent_date: "2026-07-10",
+          household_key: "mtd",
+        },
+      ],
+      priorRows: [],
+    });
+
+    expect(out.activity.lettersMailed).toBe(1);
+    expect(out.activity.lettersMailedMonthToDate).toBe(1);
+    expect(out.activity.lettersMailedYearToDate).toBe(2);
+    expect(out.activity.lettersMailedLifetime).toBe(3);
+    expect(out.activity.estimatedReferralReach.lifetime).toBe(9);
+  });
+
+  it("shows post-repair sales share only when both dollar sources are available", () => {
+    const ready = summarizeDirectMailMetrics({
+      shopIds: ["shop_1"],
+      from: "2026-06-14",
+      sendHistoryRows: [],
+      priorRows: [],
+      repairOrderAmountRows: [
+        { company_id: "company_1", repair_amount_cents: 120_000 },
+        { company_id: "company_1", repair_amount_cents: null },
+        { company_id: "company_1", repair_amount_cents: "not-a-number" },
+      ],
+      companyProgramAmountRows: [
+        { company_id: "company_1", unit_price_cents: 100_000, quantity: 2 },
+      ],
+    });
+
+    expect(ready.postRepairSalesShare).toMatchObject({
+      status: "ready",
+      repairSalesCents: 120_000,
+      overallShopSalesCents: 200_000,
+      share: 0.6,
+      message: null,
+    });
+
+    const missingDenominator = summarizeDirectMailMetrics({
+      shopIds: ["shop_1"],
+      from: "2026-06-14",
+      sendHistoryRows: [],
+      priorRows: [],
+      repairOrderAmountRows: [
+        { company_id: "company_1", repair_amount_cents: 120_000 },
+      ],
+      companyProgramAmountRows: [],
+    });
+
+    expect(missingDenominator.postRepairSalesShare).toMatchObject({
+      status: "unavailable",
+      repairSalesCents: 120_000,
+      overallShopSalesCents: null,
+      share: null,
+    });
+    expect(missingDenominator.postRepairSalesShare.message).toContain(
+      "package pricing"
+    );
   });
 
   it("keeps result metrics unavailable until shop-scoped mined outcomes exist", () => {
@@ -174,6 +266,28 @@ describe("summarizeDirectMailMetrics", () => {
           computed_at: "2026-07-10T00:00:00Z",
         },
       ],
+      repair_orders: [
+        {
+          company_id: "company_1",
+          repair_amount_cents: 120000,
+        },
+        {
+          company_id: "company_2",
+          repair_amount_cents: 999999,
+        },
+      ],
+      company_programs: [
+        {
+          company_id: "company_1",
+          quantity: 2,
+          unit_price_cents: 100000,
+        },
+        {
+          company_id: "company_2",
+          quantity: 1,
+          unit_price_cents: 999999,
+        },
+      ],
     });
 
     const out = await getDirectMailMetrics({
@@ -192,6 +306,15 @@ describe("summarizeDirectMailMetrics", () => {
       outcomes: 9,
     });
     expect(out.sources.resultRows).toBe(1);
+    expect(out.postRepairSalesShare).toMatchObject({
+      status: "ready",
+      repairSalesCents: 120000,
+      overallShopSalesCents: 200000,
+      share: 0.6,
+    });
+    expect(JSON.stringify(out)).not.toMatch(
+      /\b(recipient|address|phone|email|household_key)\b|household_a|household_b/i
+    );
   });
 });
 
@@ -213,6 +336,12 @@ function makeClient(fixtures: FixtureRows) {
           return builder;
         },
         lte() {
+          return builder;
+        },
+        not() {
+          return builder;
+        },
+        gt() {
           return builder;
         },
         order() {

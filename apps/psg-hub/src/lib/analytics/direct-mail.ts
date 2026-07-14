@@ -58,6 +58,17 @@ type ProductionRow = {
   company_id?: string | null;
 };
 
+type RepairOrderAmountRow = {
+  company_id?: string | null;
+  repair_amount_cents: number | string | null;
+};
+
+type CompanyProgramAmountRow = {
+  company_id?: string | null;
+  quantity: number | string | null;
+  unit_price_cents: number | string | null;
+};
+
 type SentEvent = {
   source: "history" | "production";
   pieceCode: string;
@@ -108,8 +119,28 @@ export type DirectMailResults = {
   message: string | null;
 };
 
+export type DirectMailReachEstimate = {
+  monthToDate: number;
+  yearToDate: number;
+  lifetime: number;
+  multiplier: 3;
+  label: string;
+};
+
+export type DirectMailPostRepairSalesShare = {
+  status: "ready" | "unavailable";
+  repairSalesCents: number | null;
+  overallShopSalesCents: number | null;
+  share: number | null;
+  message: string | null;
+};
+
 export type DirectMailActivity = {
   lettersMailed: number;
+  lettersMailedMonthToDate: number;
+  lettersMailedYearToDate: number;
+  lettersMailedLifetime: number;
+  estimatedReferralReach: DirectMailReachEstimate;
   householdsReached: number | null;
   piecesByType: DirectMailPieceSummary[];
   recentSendActivity: DirectMailRecentActivity[];
@@ -125,6 +156,7 @@ export type DirectMailMetrics = {
   };
   activity: DirectMailActivity;
   results: DirectMailResults;
+  postRepairSalesShare: DirectMailPostRepairSalesShare;
   sources: {
     sendHistoryRows: number;
     productionRows: number;
@@ -148,6 +180,16 @@ export const EMPTY_DIRECT_MAIL_METRICS: DirectMailMetrics = {
   range: { from: "", to: null },
   activity: {
     lettersMailed: 0,
+    lettersMailedMonthToDate: 0,
+    lettersMailedYearToDate: 0,
+    lettersMailedLifetime: 0,
+    estimatedReferralReach: {
+      monthToDate: 0,
+      yearToDate: 0,
+      lifetime: 0,
+      multiplier: 3,
+      label: "Estimated reach: letters mailed x 3 people told",
+    },
     householdsReached: null,
     piecesByType: [],
     recentSendActivity: [],
@@ -161,6 +203,14 @@ export const EMPTY_DIRECT_MAIL_METRICS: DirectMailMetrics = {
     bestPerformingPiece: null,
     lastUpdatedAt: null,
     message: "Direct-mail results are not available yet.",
+  },
+  postRepairSalesShare: {
+    status: "unavailable",
+    repairSalesCents: null,
+    overallShopSalesCents: null,
+    share: null,
+    message:
+      "Post-repair sales share is waiting on repair sales and package pricing.",
   },
   sources: {
     sendHistoryRows: 0,
@@ -185,7 +235,10 @@ export function summarizeDirectMailMetrics({
   sendHistoryRows,
   productionRows = [],
   priorRows = [],
+  repairOrderAmountRows = [],
+  companyProgramAmountRows = [],
   legacyNameFallbackUsed = false,
+  today = new Date().toISOString().slice(0, 10),
 }: {
   shopIds?: string[];
   from: string;
@@ -193,7 +246,10 @@ export function summarizeDirectMailMetrics({
   sendHistoryRows: SendHistoryRow[];
   productionRows?: ProductionRow[];
   priorRows?: PriorRow[];
+  repairOrderAmountRows?: RepairOrderAmountRow[];
+  companyProgramAmountRows?: CompanyProgramAmountRow[];
   legacyNameFallbackUsed?: boolean;
+  today?: string;
 }): DirectMailMetrics {
   const sentEvents: SentEvent[] = [
     ...sendHistoryRows.flatMap((row): SentEvent[] => {
@@ -228,12 +284,13 @@ export function summarizeDirectMailMetrics({
       ];
     }),
   ];
+  const rangeEvents = sentEvents.filter((row) => isWithinRange(row.sentDate, from, to));
 
   const pieces = new Map<string, DirectMailPieceSummary>();
   const recentByDate = new Map<string, Map<string, DirectMailPieceSummary>>();
   const households = new Set<string>();
 
-  for (const row of sentEvents) {
+  for (const row of rangeEvents) {
     const key = pieceKey(row.pieceCode, row.variant);
     const current = pieces.get(key) ?? newPiece(row.pieceCode, row.variant);
     current.sent += 1;
@@ -273,12 +330,31 @@ export function summarizeDirectMailMetrics({
       : null;
   const bestPiece =
     resultStatus === "ready" ? pickBestOutcomePiece(priorPieces) : null;
+  const monthStart = today.slice(0, 7) + "-01";
+  const yearStart = today.slice(0, 4) + "-01-01";
+  const lettersMailedMonthToDate = countSentEvents(sentEvents, monthStart, today);
+  const lettersMailedYearToDate = countSentEvents(sentEvents, yearStart, today);
+  const lettersMailedLifetime = sentEvents.length;
+  const salesShare = summarizePostRepairSalesShare({
+    repairOrderAmountRows,
+    companyProgramAmountRows,
+  });
 
   const metrics: DirectMailMetrics = {
     shopIds: [...new Set(shopIds)],
     range: { from, to },
     activity: {
-      lettersMailed: sentEvents.length,
+      lettersMailed: rangeEvents.length,
+      lettersMailedMonthToDate,
+      lettersMailedYearToDate,
+      lettersMailedLifetime,
+      estimatedReferralReach: {
+        monthToDate: lettersMailedMonthToDate * 3,
+        yearToDate: lettersMailedYearToDate * 3,
+        lifetime: lettersMailedLifetime * 3,
+        multiplier: 3,
+        label: "Estimated reach: letters mailed x 3 people told",
+      },
       householdsReached: households.size > 0 ? households.size : null,
       piecesByType: [...pieces.values()].sort(bySentThenPiece),
       recentSendActivity: [...recentByDate.entries()]
@@ -300,6 +376,7 @@ export function summarizeDirectMailMetrics({
       lastUpdatedAt: resultStatus === "ready" ? latestPriorUpdate : null,
       message: resultMessage(resultStatus, totalPriorSent),
     },
+    postRepairSalesShare: salesShare,
     sources: {
       sendHistoryRows: sendHistoryRows.length,
       productionRows: productionRows.length,
@@ -307,8 +384,8 @@ export function summarizeDirectMailMetrics({
       legacyNameFallbackUsed,
     },
     privacy: { rawRecipientFieldsIncluded: false },
-    totalSent: sentEvents.length,
-    recentSent: sentEvents.length,
+    totalSent: rangeEvents.length,
+    recentSent: rangeEvents.length,
     latestSentDate,
     recentTopPiece: pickMostSent([...pieces.values()]),
     totalOutcomes: resultStatus === "ready" ? totalOutcomes : 0,
@@ -352,9 +429,13 @@ export async function getDirectMailMetrics({
   }
 
   const [sendHistoryRows, productionRows, priorRows] = await Promise.all([
-    getSendHistoryRows(db, { companyIds, shopNames: scopedNames, from, to }),
-    getProductionRows(db, { companyIds, from, to }),
+    getSendHistoryRows(db, { companyIds, shopNames: scopedNames, from: null, to }),
+    getProductionRows(db, { companyIds, from: null, to }),
     getPriorRows(db, { companyIds, shopNames: scopedNames }),
+  ]);
+  const [repairOrderAmountRows, companyProgramAmountRows] = await Promise.all([
+    getRepairOrderAmountRows(db, companyIds),
+    getCompanyProgramAmountRows(db, companyIds),
   ]);
 
   return summarizeDirectMailMetrics({
@@ -364,7 +445,10 @@ export async function getDirectMailMetrics({
     sendHistoryRows,
     productionRows,
     priorRows,
+    repairOrderAmountRows,
+    companyProgramAmountRows,
     legacyNameFallbackUsed: scopedNames.length > 0,
+    today: to ?? undefined,
   });
 }
 
@@ -391,7 +475,7 @@ async function getSendHistoryRows(
   }: {
     companyIds: string[];
     shopNames: string[];
-    from: string;
+    from: string | null;
     to: string | null;
   }
 ): Promise<SendHistoryRow[]> {
@@ -415,14 +499,14 @@ async function selectSendHistory(
   db: SupabaseClient,
   scopeColumn: "company_id" | "shop_name",
   scopeValues: string[],
-  from: string,
+  from: string | null,
   to: string | null
 ): Promise<SendHistoryRow[]> {
   let query = db
     .from("mail_send_history")
     .select("id,company_id,shop_name,piece_code,piece_variant,sent_date,household_key,updated_at")
-    .in(scopeColumn, scopeValues)
-    .gte("sent_date", from);
+    .in(scopeColumn, scopeValues);
+  if (from) query = query.gte("sent_date", from);
   if (to) query = query.lte("sent_date", to);
 
   const { data, error } = await query
@@ -440,7 +524,7 @@ async function getProductionRows(
     to,
   }: {
     companyIds: string[];
-    from: string;
+    from: string | null;
     to: string | null;
   }
 ): Promise<ProductionRow[]> {
@@ -449,8 +533,8 @@ async function getProductionRows(
     .from("production_documents")
     .select("id,company_id,piece_type,status,created_at,updated_at")
     .in("company_id", companyIds)
-    .in("status", [...SENT_PRODUCTION_STATUSES])
-    .gte("created_at", from);
+    .in("status", [...SENT_PRODUCTION_STATUSES]);
+  if (from) query = query.gte("created_at", from);
   if (to) query = query.lte("created_at", to);
 
   const { data, error } = await query
@@ -458,6 +542,38 @@ async function getProductionRows(
     .limit(10000);
   if (error) throw new Error(`getProductionRows failed: ${error.message}`);
   return (data ?? []) as ProductionRow[];
+}
+
+async function getRepairOrderAmountRows(
+  db: SupabaseClient,
+  companyIds: string[]
+): Promise<RepairOrderAmountRow[]> {
+  if (companyIds.length === 0) return [];
+  const { data, error } = await db
+    .from("repair_orders")
+    .select("company_id,repair_amount_cents")
+    .in("company_id", companyIds)
+    .not("repair_amount_cents", "is", null)
+    .limit(10000);
+
+  if (error) throw new Error(`getRepairOrderAmountRows failed: ${error.message}`);
+  return (data ?? []) as RepairOrderAmountRow[];
+}
+
+async function getCompanyProgramAmountRows(
+  db: SupabaseClient,
+  companyIds: string[]
+): Promise<CompanyProgramAmountRow[]> {
+  if (companyIds.length === 0) return [];
+  const { data, error } = await db
+    .from("company_programs")
+    .select("company_id,quantity,unit_price_cents")
+    .in("company_id", companyIds)
+    .gt("unit_price_cents", 0)
+    .limit(10000);
+
+  if (error) throw new Error(`getCompanyProgramAmountRows failed: ${error.message}`);
+  return (data ?? []) as CompanyProgramAmountRow[];
 }
 
 async function getPriorRows(
@@ -575,6 +691,51 @@ function resultMessage(status: DirectMailResultStatus, totalPriorSent: number): 
   return "Direct-mail results are waiting on shop-scoped mined send-history outcomes.";
 }
 
+function summarizePostRepairSalesShare({
+  repairOrderAmountRows,
+  companyProgramAmountRows,
+}: {
+  repairOrderAmountRows: RepairOrderAmountRow[];
+  companyProgramAmountRows: CompanyProgramAmountRow[];
+}): DirectMailPostRepairSalesShare {
+  const repairSalesCents = repairOrderAmountRows.reduce(
+    (sum, row) => sum + Math.max(0, toFiniteNumber(row.repair_amount_cents)),
+    0
+  );
+  const overallShopSalesCents = companyProgramAmountRows.reduce((sum, row) => {
+    const unitPrice = Math.max(0, toFiniteNumber(row.unit_price_cents));
+    const quantity = Math.max(0, toFiniteNumber(row.quantity));
+    return sum + unitPrice * quantity;
+  }, 0);
+
+  const hasRepairSales = repairOrderAmountRows.length > 0 && repairSalesCents > 0;
+  const hasOverallSales =
+    companyProgramAmountRows.length > 0 && overallShopSalesCents > 0;
+
+  if (!hasRepairSales || !hasOverallSales) {
+    return {
+      status: "unavailable",
+      repairSalesCents: hasRepairSales ? repairSalesCents : null,
+      overallShopSalesCents: hasOverallSales ? overallShopSalesCents : null,
+      share: null,
+      message:
+        !hasRepairSales && !hasOverallSales
+          ? "Post-repair sales share is waiting on repair sales and package pricing."
+          : !hasRepairSales
+            ? "Post-repair sales share is waiting on repair sales amounts."
+            : "Post-repair sales share is waiting on package pricing.",
+    };
+  }
+
+  return {
+    status: "ready",
+    repairSalesCents,
+    overallShopSalesCents,
+    share: repairSalesCents / overallShopSalesCents,
+    message: null,
+  };
+}
+
 function normalizePiece(value: string | null): string {
   return value?.trim() ?? "";
 }
@@ -597,6 +758,14 @@ function normalizeDate(value: string | null): string | null {
 function normalizeDateTime(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed || null;
+}
+
+function countSentEvents(events: SentEvent[], from: string, to: string | null): number {
+  return events.filter((row) => isWithinRange(row.sentDate, from, to)).length;
+}
+
+function isWithinRange(value: string, from: string, to: string | null): boolean {
+  return value >= from && (!to || value <= to);
 }
 
 function toFiniteNumber(value: number | string | null): number {
