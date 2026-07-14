@@ -18,7 +18,7 @@
 // match-coverage diagnostics.
 //
 //   npx tsx apps/psg-hub/scripts/mine-mail-priors.mts
-import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { importSendBatch } from "../src/lib/ops/mail/send-history-import";
@@ -41,7 +41,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../../.."); // psg-hub root
 const BATCH_DIR = path.join(REPO, "docs/psg/production-center/production-files-sample/2021-09-07");
 const EXPORT_DIR = path.join(REPO, "docs/psg/filemaker/exports");
+const FILEMAKER_EXPORT_DIR = path.join(REPO, "docs/Filemaker Exports");
 const SENT_DATE = "2021-09-07";
+const COMPUTED_AT = "2026-07-14";
 const WINDOW_DAYS = 180;
 
 const hashers: OutcomeHashers = {
@@ -90,6 +92,315 @@ function listExports(prefix: string): string[] {
   };
   walk(EXPORT_DIR);
   return out;
+}
+
+// ── FileMaker CSV path (PSG-273) ────────────────────────────────────────────
+//
+// Nick's 2020-2026 export bridge landed the production-sized inputs in
+// docs/Filemaker Exports/. Prefer those when present; keep the PSG-224 one-day
+// markdown path below as a fallback for historical reproduction.
+function parseCsv(content: string): Record<string, string>[] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < content.length; i++) {
+    const ch = content[i];
+    if (quoted) {
+      if (ch === '"' && content[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (ch === '"') {
+        quoted = false;
+      } else {
+        cell += ch;
+      }
+      continue;
+    }
+    if (ch === '"') quoted = true;
+    else if (ch === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (ch === "\n") {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else if (ch !== "\r") {
+      cell += ch;
+    }
+  }
+  row.push(cell);
+  if (row.length > 1 || row[0] !== "") rows.push(row);
+  if (rows.length === 0) return [];
+  const header = rows[0].map((h) => h.replace(/^\uFEFF/, "").trim());
+  return rows.slice(1).filter((r) => r.some((c) => c.trim() !== "")).map((r) => {
+    const out: Record<string, string> = {};
+    header.forEach((h, i) => (out[h] = r[i] ?? ""));
+    return out;
+  });
+}
+
+function parseDate(raw: string | null | undefined): string {
+  const s = (raw ?? "").trim();
+  if (s === "") return "";
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const mdy = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(s);
+  if (mdy) {
+    const y = Number(mdy[3].length === 2 ? `20${mdy[3]}` : mdy[3]);
+    return `${String(y).padStart(4, "0")}-${mdy[1].padStart(2, "0")}-${mdy[2].padStart(2, "0")}`;
+  }
+  return "";
+}
+
+function daysBetween(fromIso: string, toIso: string): number {
+  const from = Date.parse(`${fromIso}T00:00:00Z`);
+  const to = Date.parse(`${toIso}T00:00:00Z`);
+  if (Number.isNaN(from) || Number.isNaN(to)) return Number.NaN;
+  return Math.round((to - from) / 86_400_000);
+}
+
+function yes(raw: string | null | undefined): boolean {
+  return (raw ?? "").trim().toLowerCase() === "yes";
+}
+
+type CsvProfile = {
+  date: string;
+  payType: string;
+  region: string;
+  repeat: boolean;
+};
+
+type CsvOutcome = {
+  date: string;
+};
+
+function latestProfileBefore(profiles: CsvProfile[], sentDate: string): CsvProfile | null {
+  let best: CsvProfile | null = null;
+  for (const profile of profiles) {
+    if (profile.date <= sentDate) best = profile;
+    else if (!best) return profile;
+  }
+  return best;
+}
+
+function addSend(
+  sends: SendRecord[],
+  profilesBySerial: Map<string, CsvProfile[]>,
+  serial: string,
+  sentDate: string,
+  pieceCode: string
+) {
+  if (!serial || !sentDate) return;
+  const profile = latestProfileBefore(profilesBySerial.get(serial) ?? [], sentDate);
+  sends.push({
+    pieceCode,
+    sentDate,
+    roNumber: serial,
+    recipientHash: null,
+    householdKey: null,
+    payType: profile?.payType ?? null,
+    region: profile?.region ?? null,
+    repeatCustomer: profile?.repeat ?? null,
+  });
+}
+
+function addOutcome(outcomesBySerial: Map<string, CsvOutcome[]>, serial: string, outcomeDate: string) {
+  if (!serial || !outcomeDate) return;
+  const existing = outcomesBySerial.get(serial);
+  if (existing) existing.push({ date: outcomeDate });
+  else outcomesBySerial.set(serial, [{ date: outcomeDate }]);
+}
+
+function writeOutputs(
+  priors: ReturnType<typeof mineSendPriors>,
+  meta: {
+    sourceLabel: string;
+    methodRef: string;
+    computedAt: string;
+    coverageNote: string;
+  }
+) {
+  const md = renderPriorsSummary(priors, {
+    computedAt: meta.computedAt,
+    windowDays: WINDOW_DAYS,
+    sourceLabel: meta.sourceLabel,
+  });
+  writeFileSync(path.join(REPO, "docs/ops/mail/priors/priors.md"), md + meta.coverageNote);
+
+  const sql: string[] = [
+    "-- PSG-273 — mined mail_send_priors (W0 §5/AC3). GENERATED by",
+    "-- apps/psg-hub/scripts/mine-mail-priors.mts — do not hand-edit; regenerate.",
+    `-- Source: ${meta.sourceLabel}. Window: ${WINDOW_DAYS}d. Computed: ${meta.computedAt}.`,
+    "-- Idempotent: upsert on (segment_key, piece_code, ab_variant).",
+    "begin;",
+    "delete from public.mail_send_priors where method_ref in ('mine-mail-priors.mts@2021-09-07', 'mine-mail-priors.mts@filemaker-2020-2026');",
+  ];
+  const esc = (s: string) => s.replace(/'/g, "''");
+  for (const p of priors) {
+    sql.push(
+      `insert into public.mail_send_priors (segment_key, piece_code, trigger, ab_variant, n_sent, n_outcome, outcome_rate, method_ref, computed_at) values (` +
+        `'${esc(p.segmentKey)}', '${esc(p.pieceCode)}', '${esc(p.trigger)}', '${p.abVariant}', ${p.nSent}, ${p.nOutcome}, ${p.outcomeRate.toFixed(6)}, ` +
+        `'${meta.methodRef}', '${meta.computedAt}T00:00:00Z')` +
+        ` on conflict (segment_key, piece_code, ab_variant) do update set ` +
+        `n_sent = excluded.n_sent, n_outcome = excluded.n_outcome, outcome_rate = excluded.outcome_rate, ` +
+        `trigger = excluded.trigger, method_ref = excluded.method_ref, computed_at = excluded.computed_at;`
+    );
+  }
+  sql.push("commit;", "");
+  writeFileSync(path.join(REPO, "apps/psg-hub/supabase/seeds/mail_send_priors_w0.sql"), sql.join("\n"));
+}
+
+function runFileMakerCsvMiner(): void {
+  const lettersPath = path.join(FILEMAKER_EXPORT_DIR, "letters-printed.csv");
+  const repairPaths = [
+    path.join(FILEMAKER_EXPORT_DIR, "Repair Customer Export - 01-01-18...12-31-20.csv"),
+    path.join(FILEMAKER_EXPORT_DIR, "repair-customer_nick.csv"),
+  ];
+  const surveyPath = path.join(FILEMAKER_EXPORT_DIR, "Survey Export - 01-01-18...12-31-20.csv");
+
+  const profilesBySerial = new Map<string, CsvProfile[]>();
+  const outcomesBySerial = new Map<string, CsvOutcome[]>();
+  const seenRepairOutcomes = new Set<string>();
+  let repairRows = 0;
+  let surveyRows = 0;
+
+  for (const repairPath of repairPaths) {
+    if (!existsSync(repairPath)) continue;
+    for (const row of parseCsv(readFileSync(repairPath, "utf8"))) {
+      const serial = (row.RC_SerialNum ?? "").trim();
+      const outcomeDate = parseDate(row.RC_Date_Out || row.RC_CreationDate);
+      if (!serial || !outcomeDate) continue;
+      const key = `${serial}\0${outcomeDate}\0${row.RC_Shop ?? ""}`;
+      if (seenRepairOutcomes.has(key)) continue;
+      seenRepairOutcomes.add(key);
+      repairRows++;
+      const profile: CsvProfile = {
+        date: outcomeDate,
+        payType: normalizePayType(row.RC_PayType),
+        region: normalizeState(row.RC_Cust_State) ?? "unknown",
+        repeat: yes(row.RC_Repeat_Yes_No),
+      };
+      const profiles = profilesBySerial.get(serial);
+      if (profiles) profiles.push(profile);
+      else profilesBySerial.set(serial, [profile]);
+      addOutcome(outcomesBySerial, serial, outcomeDate);
+    }
+  }
+  for (const profiles of profilesBySerial.values()) {
+    profiles.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  if (existsSync(surveyPath)) {
+    for (const row of parseCsv(readFileSync(surveyPath, "utf8"))) {
+      const serial = (row.S_MatchField_Customer || row.S_RC_RONumber || "").trim();
+      const outcomeDate = parseDate(row.S_CreationDate || row.S_RC_Date_Out);
+      if (!serial || !outcomeDate) continue;
+      surveyRows++;
+      addOutcome(outcomesBySerial, serial, outcomeDate);
+    }
+  }
+
+  const sends: SendRecord[] = [];
+  for (const row of parseCsv(readFileSync(lettersPath, "utf8"))) {
+    const serial = (row.RC_SerialNum ?? "").trim();
+    if (!serial) continue;
+    const thankYou = parseDate(row.Letter_ThankYou_Printed);
+    const thankYouNs = parseDate(row.Letter_ThankYouNS_Printed);
+    const thankYouNw = parseDate(row.Letter_ThankYouNW_Printed);
+    const thankYouNsNw = parseDate(row.Letter_ThankYouNSNW_Printed);
+    const warranty = parseDate(row.Letter_Warranty_Printed);
+    const warrantyS = parseDate(row.Letter_WarrantyS_Printed);
+    const survey = parseDate(row.Letter_Survey_Printed);
+    let surveyConsumed = false;
+    let warrantyConsumed = false;
+
+    if (thankYou && warranty && survey && thankYou === warranty && warranty === survey) {
+      addSend(sends, profilesBySerial, serial, thankYou, "07");
+      surveyConsumed = true;
+      warrantyConsumed = true;
+    }
+    if (thankYouNs && warranty && thankYouNs === warranty && !warrantyConsumed) {
+      addSend(sends, profilesBySerial, serial, thankYouNs, "04");
+      warrantyConsumed = true;
+    }
+    if (warrantyS && survey && warrantyS === survey) {
+      addSend(sends, profilesBySerial, serial, warrantyS, "05");
+      addSend(sends, profilesBySerial, serial, survey, "01");
+      surveyConsumed = true;
+    }
+    addSend(sends, profilesBySerial, serial, thankYouNsNw, "06");
+    addSend(sends, profilesBySerial, serial, thankYouNw, "03");
+    if (warranty && !warrantyConsumed) addSend(sends, profilesBySerial, serial, warranty, "05");
+    if (survey && !surveyConsumed) addSend(sends, profilesBySerial, serial, survey, "01");
+
+    const singles: Array<[string, string]> = [
+      ["Letter_3Month_Printed", "10"],
+      ["Letter_Birthday_Printed", "11"],
+      ["Letter_Drivers_Printed", "12"],
+      ["Letter_6Month_Printed", "13"],
+      ["Letter_1Year_Printed", "14"],
+      ["Letter_18Month_Printed", "15"],
+      ["Letter_2Year_Printed", "16"],
+      ["Letter_ThankYou_progressive_Printed", "03"],
+      ["Letter_6Month_progressive_Printed", "13"],
+      ["Letter_1Year_progressive_Printed", "14"],
+      ["Letter_AgentAckn_Printed", "A"],
+    ];
+    for (const [column, pieceCode] of singles) {
+      addSend(sends, profilesBySerial, serial, parseDate(row[column]), pieceCode);
+    }
+  }
+
+  const outcomes: OutcomeRecord[] = [];
+  for (const [serial, rows] of outcomesBySerial) {
+    for (const outcome of rows) {
+      outcomes.push({
+        roNumber: serial,
+        outcomeDate: outcome.date,
+        repeat: false,
+        referral: false,
+        surveyReturned: true,
+        subsequentRo: true,
+      });
+    }
+  }
+
+  const priors = mineSendPriors(sends, outcomes, { windowDays: WINDOW_DAYS });
+  const totalOutcomes = priors.reduce((a, p) => a + p.nOutcome, 0);
+  const nonzeroCells = priors.filter((p) => p.nOutcome > 0).length;
+  const sourceLabel =
+    `FileMaker CSV exports (letters-printed.csv: ${sends.length} send events; ` +
+    `repair outcomes: ${repairRows}; survey outcomes: ${surveyRows})`;
+  const coverageNote = [
+    "",
+    "> **Coverage:** mined from Nick's 2020-2026 FileMaker letter-production export",
+    "> plus repair-customer and survey outcome exports. Rows are joined by the",
+    "> legacy customer serial carried in the exports; no raw customer names or",
+    "> addresses are written to the priors outputs.",
+    `> ${totalOutcomes} sends had a positive repair/survey outcome inside the`,
+    `> ${WINDOW_DAYS}-day window across ${nonzeroCells} non-zero cells.`,
+    "",
+  ].join("\n");
+
+  writeOutputs(priors, {
+    sourceLabel,
+    methodRef: "mine-mail-priors.mts@filemaker-2020-2026",
+    computedAt: COMPUTED_AT,
+    coverageNote,
+  });
+
+  console.log(
+    `CSV SEND: ${sends.length} send events / OUTCOME: ${outcomes.length} outcome rows / ` +
+      `PRIORS: ${priors.length} cells / ${totalOutcomes} positive outcomes / ${nonzeroCells} non-zero cells`
+  );
+  console.log("WROTE docs/ops/mail/priors/priors.md + apps/psg-hub/supabase/seeds/mail_send_priors_w0.sql");
+}
+
+if (existsSync(path.join(FILEMAKER_EXPORT_DIR, "letters-printed.csv"))) {
+  runFileMakerCsvMiner();
+  process.exit(0);
 }
 
 // ── 1. Send side: import the real batch ─────────────────────────────────────
