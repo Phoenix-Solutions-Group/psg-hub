@@ -36,6 +36,11 @@ Before asking Nick, QA, the board, or a customer to retest production behavior, 
 **[docs/runbooks/psg-hub-release-retest.md](docs/runbooks/psg-hub-release-retest.md)**. It defines
 the required commit, push, review, QA, production deployment, and post-deploy checks for PSG Hub.
 
+For alarms, monitors, coverage checks, and safety checks, closing evidence must also prove the
+behaviour exists on `origin/main` by content and prove the check can fail with a deliberately broken
+input. Full rule:
+**[docs/runbooks/alarm-safety-check-closing-standard.md](docs/runbooks/alarm-safety-check-closing-standard.md)**.
+
 ## Active development
 
 `apps/psg-hub/` is the unified PSG platform target — customer portal + internal ops backbone + agentic market intelligence. See `apps/psg-hub/.paul/` for current PAUL state and `projects/psg-hub/PLANNING.md` for the SEED ideation v7 (71 design decisions, 10 milestones).
