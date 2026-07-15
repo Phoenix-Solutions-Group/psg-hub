@@ -28,7 +28,7 @@ These are the only fields required when a deal in the PSG Sales pipeline is mark
 | 12540 | Payer model | Billing Model | Not applicable / single location; Parent-paid; Location-paid; Split billing |
 | 12541 | Consolidated invoicing need | Consolidated Invoicing Required | No; Yes; N/A |
 | 12545 | Legal customer name | Legal Customer Name | Short text |
-| 12567 | Billing contact | Billing Contact | Linked person |
+| 12576 | Billing contact name | Billing Contact Name | Short text |
 | 12543 | Billing email | Billing Email | Short text |
 | 12548 | One-time setup fees | One-Time Setup Fees | Money |
 | 12549 | Monthly recurring fees | Monthly Recurring Fees | Money |
@@ -81,6 +81,10 @@ PSG-1554 retired these duplicates with Pipedrive's field-delete endpoint. Pipedr
 | 12573 Delivery Template Selected | 12554 Delivery Template |
 | 12574 Invoiced Customer / Subscription Link | 12553 Invoiced Customer / Billing Link |
 | 12575 Delivery Project Link | 12560 Pipedrive Delivery Project Link |
+
+PSG-1583 follow-up: `Billing Contact` field 12567 is hidden from add/details forms with
+`add_visible_flag: false` and `details_visible_flag: false`. Do not put 12567 back
+into the Won gate; 12576 `Billing Contact Name` is the gated Finance field.
 
 ## Apply Path
 
