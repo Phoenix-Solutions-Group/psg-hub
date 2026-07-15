@@ -10,6 +10,7 @@ const provisionForDeal = vi.fn();
 const enrollNurturePath = vi.fn();
 const createServiceClient = vi.fn();
 const updateDeal = vi.fn();
+const fetchPersonContact = vi.fn();
 
 vi.mock("@/lib/pipedrive/projects", () => ({
   createProjectsClient: (...args: unknown[]) => createProjectsClient(...args),
@@ -73,7 +74,7 @@ beforeEach(() => {
   vi.stubEnv("PIPEDRIVE_COMPANY_DOMAIN", "psg");
 
   createProjectsClient.mockReturnValue({ projectsClient: true, updateDeal });
-  createPipedriveClient.mockReturnValue({ contactClient: true });
+  createPipedriveClient.mockReturnValue({ contactClient: true, fetchPersonContact });
   createServiceClient.mockReturnValue({ serviceClient: true });
   resolvePipedriveToken.mockReturnValue("token");
   isDealWonTransition.mockReturnValue(true);
@@ -81,6 +82,7 @@ beforeEach(() => {
   dealPipelineId.mockReturnValue(8);
   provisionForDeal.mockResolvedValue({ provisionedProjects: 1, reusedProjects: 0 });
   enrollNurturePath.mockResolvedValue({ path: "onboarding_retention" });
+  fetchPersonContact.mockResolvedValue({ firstName: "Pat", email: "pat@example.com", phone: null });
 });
 
 describe("Pipedrive won-deal webhook nurture gate", () => {
@@ -93,6 +95,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       provisionedProjects: 1,
       reusedProjects: 0,
       nurtureEnrollment: "enrolled",
+      contactValidation: "skipped",
       firstContactStamp: "skipped",
     });
     expect(provisionForDeal).toHaveBeenCalledWith(
@@ -120,7 +123,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
         pipedriveDealId: 42,
         pipedrivePersonId: 7,
         pipedriveOrgId: 9,
-        pipedriveClient: { contactClient: true },
+        pipedriveClient: expect.objectContaining({ contactClient: true }),
       })
     );
   });
@@ -157,6 +160,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
     expect(await res.json()).toEqual({
       ok: true,
       skipped: "not_won_transition",
+      contactValidation: "skipped",
       firstContactStamp: "stamped",
     });
     expect(updateDeal).toHaveBeenCalledWith(42, {
@@ -193,8 +197,86 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
     expect(await res.json()).toEqual({
       ok: true,
       skipped: "not_won_transition",
+      contactValidation: "skipped",
       firstContactStamp: "skipped",
     });
     expect(updateDeal).not.toHaveBeenCalled();
+  });
+
+  it("flags a PSG Sales New Lead deal when the linked contact has no phone or email", async () => {
+    isDealWonTransition.mockReturnValue(false);
+    fetchPersonContact.mockResolvedValue({ firstName: "Pat", email: null, phone: null });
+
+    const res = await POST(
+      new Request("https://hub.psgweb.me/api/webhooks/pipedrive", {
+        method: "POST",
+        headers: {
+          authorization: authHeader(),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          previous: null,
+          current: {
+            id: 42,
+            title: "Pat's Collision",
+            status: "open",
+            pipeline_id: 8,
+            stage_id: 56,
+            person_id: { value: 7, name: "Pat Owner" },
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      skipped: "not_won_transition",
+      contactValidation: "flagged_missing_contact",
+      firstContactStamp: "skipped",
+    });
+    expect(fetchPersonContact).toHaveBeenCalledWith(7);
+    expect(updateDeal).toHaveBeenCalledWith(42, {
+      title: "[NEEDS CONTACT] Pat's Collision",
+    });
+    expect(provisionForDeal).not.toHaveBeenCalled();
+  });
+
+  it("clears the New Lead contact flag after the linked contact gains phone or email", async () => {
+    isDealWonTransition.mockReturnValue(false);
+    fetchPersonContact.mockResolvedValue({ firstName: "Pat", email: null, phone: "(555) 010-9900" });
+
+    const res = await POST(
+      new Request("https://hub.psgweb.me/api/webhooks/pipedrive", {
+        method: "POST",
+        headers: {
+          authorization: authHeader(),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          previous: { stage_id: 56 },
+          current: {
+            id: 42,
+            title: "[NEEDS CONTACT] Pat's Collision",
+            status: "open",
+            pipeline_id: 8,
+            stage_id: 56,
+            person_id: { value: 7, name: "Pat Owner" },
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      skipped: "not_won_transition",
+      contactValidation: "valid_cleared_flag",
+      firstContactStamp: "skipped",
+    });
+    expect(fetchPersonContact).toHaveBeenCalledWith(7);
+    expect(updateDeal).toHaveBeenCalledWith(42, {
+      title: "Pat's Collision",
+    });
   });
 });

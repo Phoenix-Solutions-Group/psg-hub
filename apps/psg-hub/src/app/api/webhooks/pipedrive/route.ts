@@ -33,6 +33,8 @@ import { enrollNurturePath } from "@/lib/nurture/enrollment";
 // runtime=nodejs is REQUIRED for node:crypto timingSafeEqual.
 export const runtime = "nodejs";
 
+const CONTACT_NEEDED_PREFIX = "[NEEDS CONTACT] ";
+
 function basicAuthOk(request: Request): boolean {
   const user = process.env.PIPEDRIVE_WEBHOOK_USER;
   const pass = process.env.PIPEDRIVE_WEBHOOK_PASS;
@@ -86,6 +88,26 @@ function discoveryStageId(): number {
   return Number.isFinite(parsed) ? parsed : 57;
 }
 
+function newLeadStageId(): number {
+  const parsed = Number(process.env.PIPEDRIVE_NEW_LEAD_STAGE_ID ?? "56");
+  return Number.isFinite(parsed) ? parsed : 56;
+}
+
+function dealTitle(current: Record<string, unknown> | null | undefined): string | null {
+  const title = current?.title;
+  return typeof title === "string" && title.trim() !== "" ? title : null;
+}
+
+function needsContactTitle(title: string): string {
+  return title.startsWith(CONTACT_NEEDED_PREFIX) ? title : `${CONTACT_NEEDED_PREFIX}${title}`;
+}
+
+function clearNeedsContactTitle(title: string): string {
+  return title.startsWith(CONTACT_NEEDED_PREFIX)
+    ? title.slice(CONTACT_NEEDED_PREFIX.length)
+    : title;
+}
+
 /** Map the webhook's `current` deal object onto the WonDeal the builder needs. */
 function toWonDeal(current: Record<string, unknown>): WonDeal | null {
   const id = Number(current.id);
@@ -108,6 +130,55 @@ function toWonDeal(current: Record<string, unknown>): WonDeal | null {
     // Day 0 = won date; fall back to today (UTC) only if Pipedrive omits both stamps.
     wonDate: (wonTime ?? new Date().toISOString()).slice(0, 10),
   };
+}
+
+async function validateNewLeadContact(
+  current: Record<string, unknown> | null,
+  salesPipelineId: number | null,
+): Promise<"skipped" | "valid" | "valid_cleared_flag" | "flagged_missing_contact"> {
+  const dealId = Number(current?.id);
+  const title = dealTitle(current);
+  if (
+    !Number.isFinite(dealId) ||
+    current == null ||
+    stageId(current) !== newLeadStageId() ||
+    !isDealPipelineInScope(current, salesPipelineId) ||
+    !title
+  ) {
+    return "skipped";
+  }
+
+  const personId = relId(current.person_id);
+  let hasContactMethod = false;
+  if (personId != null) {
+    const contactClient = createPipedriveClient({
+      companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
+    });
+    const person = await contactClient.fetchPersonContact(personId);
+    hasContactMethod = Boolean(person?.email?.trim() || person?.phone?.trim());
+  }
+
+  const client = createProjectsClient({
+    companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
+  });
+  if (typeof client.updateDeal !== "function") {
+    throw new Error("Pipedrive deal update client is unavailable");
+  }
+
+  if (!hasContactMethod) {
+    const flaggedTitle = needsContactTitle(title);
+    if (flaggedTitle !== title) {
+      await client.updateDeal(dealId, { title: flaggedTitle });
+    }
+    return "flagged_missing_contact";
+  }
+
+  const clearedTitle = clearNeedsContactTitle(title);
+  if (clearedTitle !== title) {
+    await client.updateDeal(dealId, { title: clearedTitle });
+    return "valid_cleared_flag";
+  }
+  return "valid";
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -141,6 +212,28 @@ export async function POST(request: Request): Promise<NextResponse> {
   const firstContactKey = firstContactFieldKey();
   const currentStageId = stageId(current);
   const priorStageId = stageId(payload.previous ?? null);
+
+  let contactValidation:
+    | "skipped"
+    | "valid"
+    | "valid_cleared_flag"
+    | "flagged_missing_contact"
+    | "failed" = "skipped";
+  try {
+    contactValidation = await validateNewLeadContact(current, salesPipelineId);
+  } catch (validationErr) {
+    contactValidation = "failed";
+    console.error(
+      "[pipedrive-webhook] new lead contact validation failed for deal",
+      Number.isFinite(dealId) ? dealId : "unknown",
+      validationErr instanceof Error ? validationErr.message : "unknown",
+    );
+    return NextResponse.json(
+      { error: "contact_validation_failed", contactValidation },
+      { status: 502 },
+    );
+  }
+
   const shouldStampFirstContact =
     Number.isFinite(dealId) &&
     firstContactKey !== "" &&
@@ -177,6 +270,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({
       ok: true,
       skipped: "not_won_transition",
+      contactValidation,
       firstContactStamp,
     });
   }
@@ -189,13 +283,14 @@ export async function POST(request: Request): Promise<NextResponse> {
       ok: true,
       skipped: "out_of_scope_pipeline",
       pipelineId: dealPipelineId(payload.current ?? null),
+      contactValidation,
       firstContactStamp,
     });
   }
 
   const deal = payload.current ? toWonDeal(payload.current) : null;
   if (!deal) {
-    return NextResponse.json({ ok: true, skipped: "no_deal", firstContactStamp });
+    return NextResponse.json({ ok: true, skipped: "no_deal", contactValidation, firstContactStamp });
   }
 
   try {
@@ -245,7 +340,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         nurtureErr instanceof Error ? nurtureErr.message : "unknown",
       );
     }
-    return NextResponse.json({ ok: true, ...summary, nurtureEnrollment, firstContactStamp });
+    return NextResponse.json({ ok: true, ...summary, nurtureEnrollment, contactValidation, firstContactStamp });
   } catch (err) {
     // Never log the error's cause verbatim (Pipedrive URLs carry the token); the
     // client already strips URLs from its messages, but be defensive here too.

@@ -116,7 +116,6 @@ describe("pipedrive-field-cleanup plan", () => {
     );
     expect(plan.unresolved).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ label: "Contact phone-or-email" }),
         expect.objectContaining({ label: "Lost Reason required-on-lost" }),
         expect.objectContaining({ label: "Custom Lost Reason" }),
         expect.objectContaining({ label: "qbo_item_id" }),
@@ -127,6 +126,10 @@ describe("pipedrive-field-cleanup plan", () => {
       expect.arrayContaining([
         expect.objectContaining({
           label: "First Contact Date auto-stamp",
+          status: "handled outside this script",
+        }),
+        expect.objectContaining({
+          label: "Contact phone-or-email",
           status: "handled outside this script",
         }),
       ]),
@@ -142,6 +145,7 @@ describe("pipedrive-field-cleanup plan", () => {
     expect(plan.unresolved).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: "First Contact Date auto-stamp" }),
+        expect.objectContaining({ label: "Contact phone-or-email" }),
       ]),
     );
   });

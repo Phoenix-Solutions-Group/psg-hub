@@ -337,7 +337,7 @@ const LIVE_APPLY_SCOPE = {
     {
       label: "Contact phone-or-email",
       reason:
-        "Pipedrive's deal-field required_fields API cannot express 'the linked contact must have either phone or email'. Enforce this through a reviewed Pipedrive automation, validation workflow, or follow-up API check before live rollout.",
+        "Pipedrive's deal-field required_fields API cannot express 'the linked contact must have either phone or email'. The Pipedrive webhook enforces the linked-person check for PSG Sales New Lead deals and visibly flags invalid leads with a [NEEDS CONTACT] title prefix.",
     },
     {
       label: "First Contact Date auto-stamp",
@@ -463,12 +463,21 @@ function createDealFieldOperation(spec) {
   };
 }
 
+/**
+ * @param {{
+ *   dealFields: any[];
+ *   organizationFields: any[];
+ *   productFields: any[];
+ *   activeStageIds?: Set<number> | null;
+ *   activePipelineIds?: Set<number> | null;
+ * }} args
+ */
 export function buildCleanupPlan({
   dealFields,
   organizationFields,
   productFields,
-  activeStageIds,
-  activePipelineIds,
+  activeStageIds = null,
+  activePipelineIds = null,
 }) {
   const operations = [];
   const unresolved = [];
@@ -479,6 +488,12 @@ export function buildCleanupPlan({
       status: "handled outside this script",
       reason:
         "The Pipedrive webhook stamps this field once when a PSG Sales deal first reaches Discovery and the field is still blank.",
+    },
+    {
+      label: "Contact phone-or-email",
+      status: "handled outside this script",
+      reason:
+        "The Pipedrive webhook reads the linked person on PSG Sales New Lead deals; if that person has neither phone nor email, it flags the deal title with [NEEDS CONTACT] until a contact method is added.",
     },
   ];
 
@@ -579,11 +594,6 @@ export function buildCleanupPlan({
     });
   }
 
-  unresolved.push({
-    label: "Contact phone-or-email",
-    reason:
-      "not applied by this script; Pipedrive deal-field rules cannot require either phone or email on the linked contact through the field admin API",
-  });
   unresolved.push({
     label: "qbo_item_id",
     reason: "kept by design; CFO John still needs the source QuickBooks item-link file before we can populate blanks",
@@ -757,7 +767,7 @@ async function main() {
   if (apply) {
     for (const op of applyable) await api.applyOperation(op);
     console.log(
-      `Applied ${applyable.length} operations. Website dedupe and contact phone-or-email validation were intentionally left for reviewed follow-up work.`,
+      `Applied ${applyable.length} operations. Website dedupe was intentionally left for a reviewed follow-up; contact phone-or-email validation is handled by the Pipedrive webhook.`,
     );
   }
 }
