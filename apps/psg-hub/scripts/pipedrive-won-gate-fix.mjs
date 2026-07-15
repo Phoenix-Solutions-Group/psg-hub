@@ -55,9 +55,10 @@ export const RETIRED_FIELD_IDS = [
 
 export const DELIVERY_TEMPLATE_FIELD_ID = 12554;
 export const DELIVERY_TEMPLATE_OPTIONS = [
-  "Standard Onboarding (fallback)",
-  "Web - New Website Build",
-  "Custom - approved",
+  "New-client onboarding",
+  "New Website Build",
+  "Custom Delivery Project",
+  "Needs Production decision",
 ];
 
 function resolveToken(env = process.env) {

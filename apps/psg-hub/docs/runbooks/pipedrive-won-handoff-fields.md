@@ -34,7 +34,7 @@ These are the only fields required when a deal in the PSG Sales pipeline is mark
 | 12549 | Monthly recurring fees | Monthly Recurring Fees | Money |
 | 12551 | First invoice date | First Invoice Date | Date |
 | 12572 | Payment terms | Payment Terms (deal) | Due on Receipt; NET 7; NET 14; NET 15 (standard); NET 30; Payment Plan - see Special Terms |
-| 12554 | Delivery template selected | Delivery Template | Standard Onboarding (fallback); Web - New Website Build; Custom - approved |
+| 12554 | Delivery template selected | Delivery Template | New-client onboarding; New Website Build; Custom Delivery Project; Needs Production decision |
 | 12555 | Needed, received, and missing access | Missing Access List | Long text |
 | 12556 | Required client assets | Asset Request List | Long text |
 

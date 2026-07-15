@@ -99,19 +99,19 @@ describe("pipedrive-won-gate-fix plan", () => {
     Object.assign(template!, {
       field_type: "enum",
       options: [
-        { id: 1, label: "New-client onboarding" },
-        { id: 2, label: "New Website Build" },
-        { id: 3, label: "Custom Delivery Project" },
-        { id: 4, label: "Needs Production decision" },
+        { id: 1, label: "Standard Onboarding (fallback)" },
+        { id: 2, label: "Web - New Website Build" },
+        { id: 3, label: "Custom - approved" },
       ],
     });
 
     const plan = buildPlan({ fieldsV1, fieldsV2, openDeals: [] });
 
     expect(DELIVERY_TEMPLATE_OPTIONS).toEqual([
-      "Standard Onboarding (fallback)",
-      "Web - New Website Build",
-      "Custom - approved",
+      "New-client onboarding",
+      "New Website Build",
+      "Custom Delivery Project",
+      "Needs Production decision",
     ]);
     expect(plan.actions).toEqual(
       expect.arrayContaining([
@@ -120,12 +120,12 @@ describe("pipedrive-won-gate-fix plan", () => {
           id: DELIVERY_TEMPLATE_FIELD_ID,
           desiredOptions: DELIVERY_TEMPLATE_OPTIONS,
           rename: [
-            { id: 1, label: "Standard Onboarding (fallback)" },
-            { id: 2, label: "Web - New Website Build" },
-            { id: 3, label: "Custom - approved" },
+            { id: 1, label: "New-client onboarding" },
+            { id: 2, label: "New Website Build" },
+            { id: 3, label: "Custom Delivery Project" },
           ],
-          remove: [{ id: 4 }],
-          add: [],
+          remove: [],
+          add: [{ label: "Needs Production decision" }],
         }),
       ]),
     );
