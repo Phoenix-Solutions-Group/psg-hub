@@ -89,11 +89,11 @@ describe("pipedrive-won-gate-fix plan", () => {
 
     const plan = buildPlan({ fieldsV1, fieldsV2, openDeals: [] });
 
-    expect(plan.actions.filter((action) => action.type === "clearOptionalRequired")).toHaveLength(5);
+    expect(plan.actions.filter((action) => action.type === "clearOptionalRequired")).toHaveLength(3);
     expect(plan.actions.filter((action) => action.type === "clearGate2ApiRequired")).toHaveLength(5);
   });
 
-  it("keeps Rev 3 Delivery Template options on the canonical field", () => {
+  it("normalizes Delivery Template options on the kept field", () => {
     const { fieldsV1, fieldsV2 } = baseFields();
     const template = fieldsV1.find((f) => f.id === DELIVERY_TEMPLATE_FIELD_ID);
     Object.assign(template!, {
@@ -109,17 +109,31 @@ describe("pipedrive-won-gate-fix plan", () => {
     const plan = buildPlan({ fieldsV1, fieldsV2, openDeals: [] });
 
     expect(DELIVERY_TEMPLATE_OPTIONS).toEqual([
-      "New-client onboarding",
-      "New Website Build",
-      "Custom Delivery Project",
-      "Needs Production decision",
+      "Standard Onboarding (fallback)",
+      "Web - New Website Build",
+      "Custom - approved",
     ]);
-    expect(plan.actions.some((action) => action.type === "syncDeliveryTemplateOptions")).toBe(false);
+    expect(plan.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "syncDeliveryTemplateOptions",
+          id: DELIVERY_TEMPLATE_FIELD_ID,
+          desiredOptions: DELIVERY_TEMPLATE_OPTIONS,
+          rename: [
+            { id: 1, label: "Standard Onboarding (fallback)" },
+            { id: 2, label: "Web - New Website Build" },
+            { id: 3, label: "Custom - approved" },
+          ],
+          remove: [{ id: 4 }],
+          add: [],
+        }),
+      ]),
+    );
   });
 
-  it("refuses apply when deals contain values in fields planned for retirement", () => {
+  it("refuses apply when open deals contain target-field values", () => {
     const { fieldsV1, fieldsV2 } = baseFields();
-    const firstField = fieldsV1.find((f) => f.id === RETIRED_FIELD_IDS[0])!;
+    const firstField = fieldsV1.find((f) => f.id === GATE_1_REQUIRED_FIELD_IDS[0])!;
     const plan = buildPlan({
       fieldsV1,
       fieldsV2,
@@ -127,9 +141,9 @@ describe("pipedrive-won-gate-fix plan", () => {
     });
 
     expect(plan.errors).toEqual([
-      "Deals have nonblank values in fields planned for retirement; refusing to apply without data migration (1 value(s))",
+      "Open deals have nonblank values in target fields; refusing to apply without data migration (1 value(s))",
     ]);
-    expect(plan.verification.dealNonBlankRetiredValues).toEqual([
+    expect(plan.verification.openDealNonBlankTargetValues).toEqual([
       { dealId: 99, fieldCode: firstField.key },
     ]);
   });

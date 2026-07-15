@@ -259,12 +259,6 @@ export function buildPlan({ fieldsV1, fieldsV2, openDeals }) {
       }
     }
   }
-  if (nonBlankRetiredDealValues.length > 0) {
-    errors.push(
-      `Deals have nonblank values in fields planned for retirement; refusing to apply without data migration (${nonBlankRetiredDealValues.length} value(s))`,
-    );
-  }
-
   const targetKeys = new Set(
     [...GATE_1_REQUIRED_FIELD_IDS, ...OPTIONAL_FIELD_IDS, ...GATE_2_FIELD_IDS, HANDOFF_COMPLETE_FIELD_ID, ...RETIRED_FIELD_IDS]
       .map((id) => byId.get(id)?.key)
@@ -278,6 +272,11 @@ export function buildPlan({ fieldsV1, fieldsV2, openDeals }) {
         nonBlankTargetDealValues.push({ dealId: deal.id, fieldCode: key });
       }
     }
+  }
+  if (nonBlankTargetDealValues.length > 0) {
+    errors.push(
+      `Open deals have nonblank values in target fields; refusing to apply without data migration (${nonBlankTargetDealValues.length} value(s))`,
+    );
   }
 
   const verification = {
@@ -298,8 +297,8 @@ export function buildPlan({ fieldsV1, fieldsV2, openDeals }) {
       const field = byId.get(id);
       return fieldSummary(field, getV2(field));
     }),
-    dealNonBlankRetiredValues: nonBlankRetiredDealValues,
-    dealNonBlankTargetValues: nonBlankTargetDealValues,
+    openDealNonBlankRetiredValues: nonBlankRetiredDealValues,
+    openDealNonBlankTargetValues: nonBlankTargetDealValues,
   };
 
   return { actions, errors, verification };
@@ -447,7 +446,7 @@ async function main() {
   }
 
   const result = {
-    issue: "PSG-1558",
+    issue: "PSG-1554",
     mode: apply ? "apply" : "dry-run",
     generatedAt: new Date().toISOString(),
     sourceEndpoints: [
@@ -480,7 +479,7 @@ async function main() {
     verification: plan.verification,
   };
 
-  const outDir = new URL("../../../artifacts/PSG-1558/", import.meta.url);
+  const outDir = new URL("../../../artifacts/PSG-1554/", import.meta.url);
   await mkdir(outDir, { recursive: true });
   const name = apply ? "pipedrive_won_gate_fix_apply_summary.json" : "pipedrive_won_gate_fix_dry-run_summary.json";
   await writeFile(new URL(name, outDir), `${JSON.stringify(result, null, 2)}\n`);

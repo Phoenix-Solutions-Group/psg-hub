@@ -1,0 +1,544 @@
+{
+  "issue": "PSG-1554",
+  "mode": "dry-run",
+  "generatedAt": "2026-07-15T18:35:02.684Z",
+  "sourceEndpoints": [
+    "GET /api/v1/dealFields",
+    "GET /api/v2/dealFields?include_fields=ui_visibility,required_fields",
+    "GET /api/v1/deals?status=all_not_deleted"
+  ],
+  "counts": {
+    "plannedActions": 0,
+    "appliedActions": 0,
+    "gate1RequiredFields": 14,
+    "optionalFields": 3,
+    "gate2Fields": 5,
+    "retiredFields": 11,
+    "dealsChecked": 418
+  },
+  "decisions": {
+    "gate1": "The 14 approved fields are required when a PSG Sales pipeline deal is marked won: statuses {\"8\":[\"won\"]}.",
+    "gate2": "Pipedrive required_fields does not expose an API field-to-field rule for 'before Handoff Complete'. Delivery-pipeline stage 63 rules are cleared; PSG Hub's Pipedrive Projects client blocks Handoff Complete=Yes when fields 17-21 are blank.",
+    "d7": "The API accepted and re-read required_fields through v2 dealFields. If the browser does not block an incomplete Won move, the Pipedrive plan lacks Required Fields and Nick must handle the plan/operator decision.",
+    "apiBypass": "Pipedrive required fields apply to web UI interactions. PSG API scripts can bypass them; treat this as a known limit until a separate code guard validates won-deal patches before writing status=won."
+  },
+  "applied": [],
+  "remainingActions": [],
+  "errors": [],
+  "verification": {
+    "gate1": [
+      {
+        "id": 12533,
+        "key": "55ea89f59464ce238ee7093bdf7282f7951c7129",
+        "name": "Signed Contract / Approval Link",
+        "type": "varchar",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12534,
+        "key": "b7ed5ca4718ba9dc4c3a324f223de3f2a00de9be",
+        "name": "Contract Start Date",
+        "type": "date",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12540,
+        "key": "7a84a5c9286927e0b644d781e30c3c1b834bbdb1",
+        "name": "Billing Model",
+        "type": "enum",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": [
+          "Not applicable / single location",
+          "Parent-paid",
+          "Location-paid",
+          "Split billing"
+        ]
+      },
+      {
+        "id": 12541,
+        "key": "f2bd200170a14cb937a5ce178fffec84e9a7c3c3",
+        "name": "Consolidated Invoicing Required",
+        "type": "enum",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": [
+          "No",
+          "Yes",
+          "N/A"
+        ]
+      },
+      {
+        "id": 12545,
+        "key": "eaecf6080f4dc77a8533315844a8cc8663312aa2",
+        "name": "Legal Customer Name",
+        "type": "varchar",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12567,
+        "key": "3191064d5c1d6d9d298b2e4c721a90f39c79d13d",
+        "name": "Billing Contact",
+        "type": "people",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12543,
+        "key": "c0a76c955f288460d1d472141df2574ac24a1d8d",
+        "name": "Billing Email",
+        "type": "varchar",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12548,
+        "key": "4047a088118caa2c0b353c000d33c5ac35ea2ed9",
+        "name": "One-Time Setup Fees",
+        "type": "monetary",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12549,
+        "key": "1f19ed0b91dda56a12be3655eaf09934982c4c63",
+        "name": "Monthly Recurring Fees",
+        "type": "monetary",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12551,
+        "key": "26112fa2328ef92aea1d87efa0af18e231841d8e",
+        "name": "First Invoice Date",
+        "type": "date",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12572,
+        "key": "5461d82fd372f1e65195ac3689e3ac9bfdb7e1e9",
+        "name": "Payment Terms (deal)",
+        "type": "enum",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": [
+          "Due on Receipt",
+          "NET 7",
+          "NET 14",
+          "NET 15 (standard)",
+          "NET 30",
+          "Payment Plan - see Special Terms"
+        ]
+      },
+      {
+        "id": 12554,
+        "key": "3025cb67fb88b6b548483e1a108f6d5b6b2ea362",
+        "name": "Delivery Template",
+        "type": "enum",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": [
+          "Standard Onboarding (fallback)",
+          "Web - New Website Build",
+          "Custom - approved"
+        ]
+      },
+      {
+        "id": 12555,
+        "key": "c5d5cd6efedd935b7320d5206cfeade7cad4bb56",
+        "name": "Missing Access List",
+        "type": "text",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12556,
+        "key": "4edecfde7682e1565c0450fc087953a1c457c12f",
+        "name": "Asset Request List",
+        "type": "text",
+        "active": true,
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      }
+    ],
+    "optional": [
+      {
+        "id": 12536,
+        "key": "522066896c73798672e5e793c21bdc8db7dfaefa",
+        "name": "Custom Promises / Exclusions / Deadlines",
+        "type": "text",
+        "active": true,
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12570,
+        "key": "aa4ad66da6438d6edd780c1bae181cc838584934",
+        "name": "Discount Type",
+        "type": "enum",
+        "active": true,
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        },
+        "options": [
+          "None",
+          "Fixed $ per month",
+          "Percent %"
+        ]
+      },
+      {
+        "id": 12571,
+        "key": "29604503dbef6d24e364de8096f5110eae141ee1",
+        "name": "Discount Value",
+        "type": "double",
+        "active": true,
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        },
+        "options": []
+      }
+    ],
+    "gate2": [
+      {
+        "id": 12553,
+        "key": "d57284f9b050ca6d04f28839c37dfbc8692af8c8",
+        "name": "Invoiced Customer / Billing Link",
+        "type": "varchar",
+        "active": true,
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12557,
+        "key": "9b9c783c486151d6104bb43d46d5a763ea884f84",
+        "name": "Google Shared Drive Folder Link",
+        "type": "varchar",
+        "active": true,
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {
+            "8": []
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12558,
+        "key": "c374bff86c62d7ba8fea3f6cabc5121e95512650",
+        "name": "Delivery Owner",
+        "type": "user",
+        "active": true,
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {
+            "8": []
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12559,
+        "key": "9f312c264009b69579476488aa887586b31aa7a5",
+        "name": "Backup Delivery Owner",
+        "type": "user",
+        "active": true,
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {
+            "8": []
+          }
+        },
+        "options": []
+      },
+      {
+        "id": 12560,
+        "key": "796476eed295a5907ed2a7082cc40ef63f8a88db",
+        "name": "Pipedrive Delivery Project Link",
+        "type": "varchar",
+        "active": true,
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {
+            "8": [
+              "won"
+            ]
+          }
+        },
+        "options": []
+      }
+    ],
+    "handoffComplete": {
+      "id": 12563,
+      "key": "f26e25bf03fc81f71332ee4673f776ded3b5ba27",
+      "name": "Handoff Complete",
+      "type": "enum",
+      "active": true,
+      "required_fields": {
+        "enabled": false,
+        "stage_ids": [],
+        "statuses": {
+          "8": [
+            "won"
+          ]
+        }
+      },
+      "options": [
+        "No",
+        "Yes",
+        "Exception approved"
+      ]
+    },
+    "retired": [
+      {
+        "id": null,
+        "key": null,
+        "name": null,
+        "type": null,
+        "active": false,
+        "required_fields": null,
+        "options": []
+      },
+      {
+        "id": null,
+        "key": null,
+        "name": null,
+        "type": null,
+        "active": false,
+        "required_fields": null,
+        "options": []
+      },
+      {
+        "id": null,
+        "key": null,
+        "name": null,
+        "type": null,
+        "active": false,
+        "required_fields": null,
+        "options": []
+      },
+      {
+        "id": null,
+        "key": null,
+        "name": null,
+        "type": null,
+        "active": false,
+        "required_fields": null,
+        "options": []
+      },
+      {
+        "id": null,
+        "key": null,
+        "name": null,
+        "type": null,
+        "active": false,
+        "required_fields": null,
+        "options": []
+      },
+      {
+        "id": null,
+        "key": null,
+        "name": null,
+        "type": null,
+        "active": false,
+        "required_fields": null,
+        "options": []
+      },
+      {
+        "id": null,
+        "key": null,
+        "name": null,
+        "type": null,
+        "active": false,
+        "required_fields": null,
+        "options": []
+      },
+      {
+        "id": null,
+        "key": null,
+        "name": null,
+        "type": null,
+        "active": false,
+        "required_fields": null,
+        "options": []
+      },
+      {
+        "id": null,
+        "key": null,
+        "name": null,
+        "type": null,
+        "active": false,
+        "required_fields": null,
+        "options": []
+      },
+      {
+        "id": null,
+        "key": null,
+        "name": null,
+        "type": null,
+        "active": false,
+        "required_fields": null,
+        "options": []
+      },
+      {
+        "id": null,
+        "key": null,
+        "name": null,
+        "type": null,
+        "active": false,
+        "required_fields": null,
+        "options": []
+      }
+    ],
+    "openDealNonBlankRetiredValues": [],
+    "openDealNonBlankTargetValues": []
+  }
+}
