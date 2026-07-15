@@ -85,20 +85,6 @@ describe("pipedrive-field-cleanup plan", () => {
         }),
         expect.objectContaining({
           type: "updateDealFieldRequired",
-          label: "Lost Reason",
-          fieldCode: "lost_reason",
-          body: expect.objectContaining({
-            required_fields: expect.objectContaining({
-              statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["lost"] },
-            }),
-          }),
-        }),
-        expect.objectContaining({
-          type: "deleteDealField",
-          fieldCode: "custom_lost_reason",
-        }),
-        expect.objectContaining({
-          type: "updateDealFieldRequired",
           label: "Signed Contract / Approval Link",
           fieldCode: "signed_contract_link",
           body: expect.objectContaining({
@@ -131,6 +117,8 @@ describe("pipedrive-field-cleanup plan", () => {
     expect(plan.unresolved).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: "Contact phone-or-email" }),
+        expect.objectContaining({ label: "Lost Reason required-on-lost" }),
+        expect.objectContaining({ label: "Custom Lost Reason" }),
         expect.objectContaining({ label: "qbo_item_id" }),
         expect.objectContaining({ label: "Legacy warranty/letter/header organization fields" }),
       ]),
@@ -146,6 +134,7 @@ describe("pipedrive-field-cleanup plan", () => {
     expect(plan.liveApplyScope.excluded).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: "Organization Website dedupe" }),
+        expect.objectContaining({ label: "Lost Reason consolidation" }),
         expect.objectContaining({ label: "Contact phone-or-email" }),
         expect.objectContaining({ label: "First Contact Date auto-stamp" }),
       ]),
@@ -300,7 +289,50 @@ describe("pipedrive-field-cleanup plan", () => {
     });
   });
 
-  it("does not schedule the built-in lost reason field for deletion when live metadata looks custom", () => {
+  it("filters stale Pipedrive stage and pipeline ids before applying required-field updates", () => {
+    const plan = buildCleanupPlan({
+      activeStageIds: new Set([PSG_SALES_STAGE_IDS.newLead]),
+      activePipelineIds: new Set([PSG_SALES_PIPELINE_ID]),
+      dealFields: [
+        custom("Lead Source (Channel)", "lead_source_channel", {
+          required_fields: {
+            enabled: true,
+            stage_ids: [999],
+            statuses: { "1": ["won", "lost"] },
+          },
+        }),
+        system("Organization", "org_id"),
+        system("Contact person", "person_id"),
+        custom("First Contact Date", "first_contact_date"),
+        custom("Service Line", "service_line"),
+        system("Value", "value"),
+        system("Expected Close Date", "expected_close_date"),
+        custom("Revenue Type", "revenue_type"),
+        custom("Proposal Link", "proposal_link"),
+        system("Lost reason", "lost_reason"),
+      ],
+      organizationFields: [],
+      productFields: [],
+    });
+
+    const leadSourceOp = plan.operations.find(
+      (op) =>
+        op.type === "updateDealFieldRequired" &&
+        "fieldCode" in op &&
+        op.fieldCode === "lead_source_channel",
+    );
+
+    expect(leadSourceOp).toMatchObject({
+      body: {
+        required_fields: {
+          stage_ids: [PSG_SALES_STAGE_IDS.newLead],
+          statuses: {},
+        },
+      },
+    });
+  });
+
+  it("keeps lost reason consolidation unresolved when live metadata looks custom", () => {
     const plan = buildCleanupPlan({
       dealFields: [
         custom("Lead Source (Channel)", "lead_source_channel"),
@@ -318,21 +350,17 @@ describe("pipedrive-field-cleanup plan", () => {
       productFields: [],
     });
 
-    expect(plan.operations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: "updateDealFieldRequired",
-          label: "Lost Reason",
-          fieldCode: "lost_reason",
-        }),
-      ]),
-    );
     expect(plan.operations).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: "deleteDealField",
           fieldCode: "lost_reason",
         }),
+      ]),
+    );
+    expect(plan.unresolved).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Lost Reason required-on-lost" }),
       ]),
     );
   });

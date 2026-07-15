@@ -321,10 +321,14 @@ const LIVE_APPLY_SCOPE = {
   included: [
     "Required deal-field rules for PSG Sales pipeline 8",
     "Won-stage handoff fields and required-on-Won rules",
-    "Custom Lost Reason field removal after built-in Lost Reason is required",
     "Dead product field removals for Income Account, Expense Account, and Supplier",
   ],
   excluded: [
+    {
+      label: "Lost Reason consolidation",
+      reason:
+        "Pipedrive's field API rejects required_fields updates on the built-in lost_reason field. Keep the custom duplicate until the built-in Lost Reason is confirmed required through Pipedrive UI or a supported vendor endpoint.",
+    },
     {
       label: "Organization Website dedupe",
       reason:
@@ -392,12 +396,21 @@ function isBuiltIn(field) {
   return field?.is_custom_flag === false || field?.edit_flag === false || field?.field_type === "system";
 }
 
-function mergeRequiredFields(existing, additions) {
+function mergeRequiredFields(existing, additions, opts = {}) {
   const current = existing && typeof existing === "object" ? existing : {};
   const stageIds = new Set(Array.isArray(current.stage_ids) ? current.stage_ids.map(Number) : []);
+  if (opts.activeStageIds) {
+    for (const id of [...stageIds]) {
+      if (!opts.activeStageIds.has(id)) stageIds.delete(id);
+    }
+  }
   for (const id of additions.stageIds ?? []) stageIds.add(Number(id));
 
-  const statuses = { ...(current.statuses ?? {}) };
+  const statuses = {};
+  for (const [pipelineId, values] of Object.entries(current.statuses ?? {})) {
+    if (opts.activePipelineIds && !opts.activePipelineIds.has(Number(pipelineId))) continue;
+    statuses[pipelineId] = Array.isArray(values) ? [...values] : [];
+  }
   for (const [pipelineId, values] of Object.entries(additions.statuses ?? {})) {
     const merged = new Set(Array.isArray(statuses[pipelineId]) ? statuses[pipelineId] : []);
     for (const value of values) merged.add(value);
@@ -411,7 +424,7 @@ function mergeRequiredFields(existing, additions) {
   };
 }
 
-function requiredFieldOperation(field, label, additions) {
+function requiredFieldOperation(field, label, additions, opts = {}) {
   const code = fieldCode(field);
   if (code == null) {
     return { type: "unresolved", label, reason: "matched field has no API field code" };
@@ -422,7 +435,7 @@ function requiredFieldOperation(field, label, additions) {
     fieldCode: String(code),
     fieldName: fieldName(field),
     body: {
-      required_fields: mergeRequiredFields(field.required_fields, additions),
+      required_fields: mergeRequiredFields(field.required_fields, additions, opts),
       show_in_pipelines: { show_in_all: false, pipeline_ids: [PSG_SALES_PIPELINE_ID] },
     },
   };
@@ -450,9 +463,16 @@ function createDealFieldOperation(spec) {
   };
 }
 
-export function buildCleanupPlan({ dealFields, organizationFields, productFields }) {
+export function buildCleanupPlan({
+  dealFields,
+  organizationFields,
+  productFields,
+  activeStageIds,
+  activePipelineIds,
+}) {
   const operations = [];
   const unresolved = [];
+  const requiredFieldOpts = { activeStageIds, activePipelineIds };
   const notices = [
     {
       label: "First Contact Date auto-stamp",
@@ -471,7 +491,9 @@ export function buildCleanupPlan({ dealFields, organizationFields, productFields
       });
       continue;
     }
-    operations.push(requiredFieldOperation(field, spec.labels[0], { stageIds: spec.stageIds }));
+    operations.push(
+      requiredFieldOperation(field, spec.labels[0], { stageIds: spec.stageIds }, requiredFieldOpts),
+    );
   }
 
   for (const spec of WON_HANDOFF_DEAL_FIELDS) {
@@ -483,7 +505,7 @@ export function buildCleanupPlan({ dealFields, organizationFields, productFields
     operations.push(
       requiredFieldOperation(field, spec.create.field_name, {
         statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
-      }),
+      }, requiredFieldOpts),
     );
   }
 
@@ -493,11 +515,11 @@ export function buildCleanupPlan({ dealFields, organizationFields, productFields
     (f) => !isDeleted(f) && (cleanLabel(f.key) === "lost reason" || cleanLabel(f.key) === "lost reason" || isBuiltIn(f)),
   ) ?? findField(dealFields, ["lost_reason"], (f) => !isDeleted(f));
   if (builtInLostReason) {
-    operations.push(
-      requiredFieldOperation(builtInLostReason, "Lost Reason", {
-        statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["lost"] },
-      }),
-    );
+    unresolved.push({
+      label: "Lost Reason required-on-lost",
+      reason:
+        "Pipedrive rejects required_fields updates on the built-in lost_reason field through the field API; configure or confirm this in Pipedrive UI before archiving the custom duplicate",
+    });
   } else {
     unresolved.push({
       label: "Lost Reason",
@@ -511,11 +533,10 @@ export function buildCleanupPlan({ dealFields, organizationFields, productFields
     (f) => !isDeleted(f) && !isBuiltIn(f) && !sameField(f, builtInLostReason),
   );
   if (customLostReason) {
-    operations.push({
-      type: "deleteDealField",
+    unresolved.push({
       label: "Custom Lost Reason",
-      fieldCode: String(fieldCode(customLostReason)),
-      fieldName: fieldName(customLostReason),
+      reason:
+        "kept until the built-in Lost Reason field is confirmed required on Lost; then this duplicate can be archived safely",
     });
   }
 
@@ -632,6 +653,20 @@ class PipedriveAdminApi {
     throw new Error(`Pipedrive ${resource} pagination exceeded 100 pages`);
   }
 
+  async listResource(resource) {
+    const out = [];
+    let cursor = null;
+    for (let page = 0; page < 100; page += 1) {
+      const params = new URLSearchParams({ limit: "500" });
+      if (cursor) params.set("cursor", cursor);
+      const json = await this.request("GET", "v2", `/${resource}?${params.toString()}`);
+      out.push(...(Array.isArray(json.data) ? json.data : []));
+      cursor = json.additional_data?.next_cursor ?? null;
+      if (!cursor) return out;
+    }
+    throw new Error(`Pipedrive ${resource} pagination exceeded 100 pages`);
+  }
+
   async applyOperation(op) {
     if (op.type === "updateDealFieldRequired") {
       await this.request("PATCH", "v2", `/dealFields/${encodeURIComponent(op.fieldCode)}`, op.body);
@@ -666,12 +701,32 @@ async function main() {
   }
 
   const api = new PipedriveAdminApi({ token, base: baseUrl() });
-  const [dealFields, organizationFields, productFields] = await Promise.all([
+  const [dealFields, organizationFields, productFields, stages, pipelines] = await Promise.all([
     api.listFields("dealFields"),
     api.listFields("organizationFields"),
     api.listFields("productFields"),
+    api.listResource("stages"),
+    api.listResource("pipelines"),
   ]);
-  const plan = buildCleanupPlan({ dealFields, organizationFields, productFields });
+  const activeStageIds = new Set(
+    stages
+      .filter((stage) => stage.active_flag !== false && stage.is_deleted !== true)
+      .map((stage) => Number(stage.id))
+      .filter(Number.isFinite),
+  );
+  const activePipelineIds = new Set(
+    pipelines
+      .filter((pipeline) => pipeline.active_flag !== false && pipeline.is_deleted !== true)
+      .map((pipeline) => Number(pipeline.id))
+      .filter(Number.isFinite),
+  );
+  const plan = buildCleanupPlan({
+    dealFields,
+    organizationFields,
+    productFields,
+    activeStageIds,
+    activePipelineIds,
+  });
   const applyable = applyableOperations(plan.operations);
 
   const result = {
