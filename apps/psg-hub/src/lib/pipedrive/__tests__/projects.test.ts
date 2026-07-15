@@ -457,6 +457,83 @@ describe("createProjectsClient — PSG-642 thin v2-Tasks adapter (updateTask + a
     });
   });
 
+  it("rejects Handoff Complete=Yes when a required handoff field is blank", async () => {
+    const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        method: String(init?.method ?? "GET"),
+        body: init?.body,
+      });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: {
+            id: 42,
+            "12553": "https://billing.example/customer/42",
+            "12557": "",
+            "12558": 101,
+            "12559": 102,
+            "12560": "https://psg.pipedrive.com/project/900",
+          },
+        }),
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    await expect(
+      client(fetchImpl).updateDeal!(42, {
+        handoff_complete: "Yes",
+      }),
+    ).rejects.toThrow(
+      "Cannot mark Handoff Complete as Yes until these fields are filled: Google Shared Drive Folder Link.",
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.method).toBe("GET");
+    expect(new URL(calls[0]!.url).pathname).toBe("/api/v1/deals/42");
+  });
+
+  it("allows Handoff Complete=Yes when all required handoff fields are present", async () => {
+    const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        method: String(init?.method ?? "GET"),
+        body: init?.body,
+      });
+      const method = String(init?.method ?? "GET");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: method === "GET" ? { id: 42 } : { id: 42 },
+        }),
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    const res = await client(fetchImpl).updateDeal!(42, {
+      handoff_complete: "Yes",
+      "12553": "https://billing.example/customer/42",
+      "12557": "https://drive.google.com/drive/folders/abc",
+      "12558": 101,
+      "12559": 102,
+      "12560": "https://psg.pipedrive.com/project/900",
+    });
+
+    expect(res.id).toBe(42);
+    expect(calls.map((call) => call.method)).toEqual(["GET", "PUT"]);
+    expect(JSON.parse(String(calls[1]?.body))).toEqual({
+      handoff_complete: "Yes",
+      "12553": "https://billing.example/customer/42",
+      "12557": "https://drive.google.com/drive/folders/abc",
+      "12558": 101,
+      "12559": 102,
+      "12560": "https://psg.pipedrive.com/project/900",
+    });
+  });
+
   it("updateTask surfaces a secret-free error on non-2xx (path + status only)", async () => {
     const fetchImpl = (async () =>
       ({ ok: false, status: 400, json: async () => ({}) }) as Response) as unknown as typeof fetch;

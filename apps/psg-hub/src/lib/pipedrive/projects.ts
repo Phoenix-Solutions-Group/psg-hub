@@ -187,6 +187,118 @@ export interface AttachProjectFileInput {
 /** Patch fields on an existing Pipedrive deal. Custom-field keys are allowed. */
 export type UpdateDealInput = Record<string, string | number | boolean | null>;
 
+export const HANDOFF_COMPLETE_FIELD_KEY_ENV = "PIPEDRIVE_HANDOFF_COMPLETE_FIELD_KEY";
+
+export const HANDOFF_COMPLETE_REQUIRED_FIELDS = [
+  {
+    label: "Invoiced Customer / Billing Link",
+    fieldId: "12553",
+    env: "PIPEDRIVE_INVOICED_CUSTOMER_BILLING_LINK_FIELD_KEY",
+  },
+  {
+    label: "Google Shared Drive Folder Link",
+    fieldId: "12557",
+    env: "PIPEDRIVE_GOOGLE_SHARED_DRIVE_FOLDER_LINK_FIELD_KEY",
+  },
+  {
+    label: "Delivery Owner",
+    fieldId: "12558",
+    env: "PIPEDRIVE_DELIVERY_OWNER_FIELD_KEY",
+  },
+  {
+    label: "Backup Delivery Owner",
+    fieldId: "12559",
+    env: "PIPEDRIVE_BACKUP_DELIVERY_OWNER_FIELD_KEY",
+  },
+  {
+    label: "Pipedrive Delivery Project Link",
+    fieldId: "12560",
+    env: "PIPEDRIVE_DELIVERY_PROJECT_LINK_FIELD_KEY",
+  },
+] as const;
+
+function envValue(envName: string): string | null {
+  const raw = process.env[envName];
+  return typeof raw === "string" && raw.trim() !== "" ? raw.trim() : null;
+}
+
+function handoffCompleteFieldKeys(): string[] {
+  return [
+    envValue(HANDOFF_COMPLETE_FIELD_KEY_ENV),
+    "handoff_complete",
+    "Handoff Complete",
+  ].filter((v): v is string => Boolean(v));
+}
+
+function handoffCompleteYesValues(): string[] {
+  const configured = (process.env.PIPEDRIVE_HANDOFF_COMPLETE_YES_VALUES ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  return [...configured, "yes", "Yes", "true", "1"];
+}
+
+function requiredHandoffFieldKey(
+  field: (typeof HANDOFF_COMPLETE_REQUIRED_FIELDS)[number],
+): string {
+  return envValue(field.env) ?? field.fieldId;
+}
+
+function isBlankPipedriveValue(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0 || value.every(isBlankPipedriveValue);
+  if (typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).every(isBlankPipedriveValue);
+  }
+  return false;
+}
+
+function isHandoffCompleteYes(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return handoffCompleteYesValues().includes(String(value));
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    return handoffCompleteYesValues().some(
+      (allowed) => allowed.toLocaleLowerCase() === normalized.toLocaleLowerCase(),
+    );
+  }
+  if (value && typeof value === "object") {
+    const candidate =
+      (value as Record<string, unknown>).label ??
+      (value as Record<string, unknown>).name ??
+      (value as Record<string, unknown>).value;
+    return isHandoffCompleteYes(candidate);
+  }
+  return false;
+}
+
+export function validateHandoffCompleteDealPatch(
+  patch: UpdateDealInput,
+  currentDeal: Record<string, unknown> = {},
+): void {
+  if (!patchSetsHandoffCompleteYes(patch)) return;
+
+  const mergedDeal = { ...currentDeal, ...patch };
+  const missing = HANDOFF_COMPLETE_REQUIRED_FIELDS.filter((field) => {
+    const key = requiredHandoffFieldKey(field);
+    return isBlankPipedriveValue(mergedDeal[key]);
+  }).map((field) => field.label);
+
+  if (missing.length > 0) {
+    throw new PipedriveProjectsError(
+      `Cannot mark Handoff Complete as Yes until these fields are filled: ${missing.join(", ")}.`,
+      400,
+    );
+  }
+}
+
+export function patchSetsHandoffCompleteYes(patch: UpdateDealInput): boolean {
+  return Object.entries(patch).some(([key, value]) =>
+    handoffCompleteFieldKeys().includes(key) && isHandoffCompleteYes(value),
+  );
+}
+
 /**
  * PSG-668 — one line item on a won deal, as needed by the template selector. The SKU is
  * how a deal is mapped to a net-new one-time template (e.g. Website Design & Build →
@@ -460,6 +572,14 @@ export function createProjectsClient(
     async updateDeal(dealId, patch) {
       // v1 `PUT /deals/{id}` is the stable deal-update endpoint already used by our
       // Pipedrive smoke path. Patch carries only the changed custom field.
+      if (patchSetsHandoffCompleteYes(patch)) {
+        const currentDeal = await call<Record<string, unknown>>(
+          "GET",
+          "v1",
+          `deals/${dealId}`,
+        );
+        validateHandoffCompleteDealPatch(patch, currentDeal ?? {});
+      }
       const deal = await call<{ id: number }>("PUT", "v1", `deals/${dealId}`, {}, patch);
       return { id: Number(deal.id) };
     },
