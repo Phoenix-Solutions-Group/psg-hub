@@ -1,0 +1,2 @@
+category,pipedrive_org_id,pipedrive_org_name,blank_field_to_fill,proposed_value,source_table,source_id,source_field,confidence_tier,match_strategy,reason,candidate_count,source_name,source_exact_name_match
+safe_fill,1213,Latuff Brothers Auto Body,website,http://www.latuffbrothers.com/,body_shops,ChIJQVoedIAq9ocR_HtPIeVDv5I,website,safe,exact_phone,exact_phone; same 10-digit phone; same ZIP 55104; same normalized name,1,Latuff Brothers Auto Body,yes
