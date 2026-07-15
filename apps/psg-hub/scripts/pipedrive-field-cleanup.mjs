@@ -39,6 +39,280 @@ const REQUIRED_DEAL_FIELDS = [
   { labels: ["Proposal Link"], stageIds: [PSG_SALES_STAGE_IDS.proposalSent] },
 ];
 
+export const WON_HANDOFF_DEAL_FIELDS = [
+  {
+    labels: ["Signed Contract / Approval Link", "Signed Contract Link", "PandaDoc Link"],
+    create: {
+      field_name: "Signed Contract / Approval Link",
+      field_type: "varchar",
+      description: "PSG-1337: signed agreement, PandaDoc completion, or written approval link required before Won handoff.",
+    },
+  },
+  {
+    labels: ["Contract Start Date"],
+    create: {
+      field_name: "Contract Start Date",
+      field_type: "date",
+      description: "PSG-1337: signed contract or service start date.",
+    },
+  },
+  {
+    labels: ["Expected Delivery Start Date", "Delivery Start Date"],
+    create: {
+      field_name: "Expected Delivery Start Date",
+      field_type: "date",
+      description: "PSG-1337: expected date Production can begin delivery.",
+    },
+  },
+  {
+    labels: ["Custom Promises / Exclusions / Deadlines", "Custom Promises", "Scope Notes"],
+    create: {
+      field_name: "Custom Promises / Exclusions / Deadlines",
+      field_type: "text",
+      description: "PSG-1337: plain-language notes for promises, exclusions, custom scope, or special deadlines.",
+    },
+  },
+  {
+    labels: ["Sold Products / SKU Notes", "Product SKU", "Product Code"],
+    create: {
+      field_name: "Sold Products / SKU Notes",
+      field_type: "text",
+      description: "PSG-1337: product/service line items, SKU or product code when available, quantity, tier, and frequency notes.",
+    },
+  },
+  {
+    labels: ["MSO Parent Company", "Parent Company Name"],
+    create: {
+      field_name: "MSO Parent Company",
+      field_type: "varchar",
+      description: "PSG-1337: parent company name when the customer is a multi-shop operator.",
+    },
+  },
+  {
+    labels: ["Client Location List", "Location List"],
+    create: {
+      field_name: "Client Location List",
+      field_type: "text",
+      description: "PSG-1337: shop/location names and location-specific notes for this sale.",
+    },
+  },
+  {
+    labels: ["Billing Model", "Payer Model"],
+    create: {
+      field_name: "Billing Model",
+      field_type: "enum",
+      options: [
+        { label: "Not applicable / single location" },
+        { label: "Parent-paid" },
+        { label: "Location-paid" },
+        { label: "Split billing" },
+      ],
+      description: "PSG-1337: how Finance should bill a multi-shop operator or single-location customer.",
+    },
+  },
+  {
+    labels: ["Consolidated Invoicing Required"],
+    create: {
+      field_name: "Consolidated Invoicing Required",
+      field_type: "enum",
+      options: [{ label: "No" }, { label: "Yes" }, { label: "Not applicable" }],
+      description: "PSG-1337: whether Finance must use parent/sub-customer consolidated invoicing.",
+    },
+  },
+  {
+    labels: ["Billing Contact Name"],
+    create: {
+      field_name: "Billing Contact Name",
+      field_type: "varchar",
+      description: "PSG-1337: billing contact name copied into Invoiced during setup.",
+    },
+  },
+  {
+    labels: ["Billing Email"],
+    create: {
+      field_name: "Billing Email",
+      field_type: "varchar",
+      description: "PSG-1337: billing email copied into Invoiced during setup.",
+    },
+  },
+  {
+    labels: ["Billing Address"],
+    create: {
+      field_name: "Billing Address",
+      field_type: "address",
+      description: "PSG-1337: billing mailing address copied into Invoiced during setup.",
+    },
+  },
+  {
+    labels: ["Legal Customer Name"],
+    create: {
+      field_name: "Legal Customer Name",
+      field_type: "varchar",
+      description: "PSG-1337: legal customer name if different from the shop or organization name.",
+    },
+  },
+  {
+    labels: ["Purchase Order Requirement"],
+    create: {
+      field_name: "Purchase Order Requirement",
+      field_type: "text",
+      description: "PSG-1337: purchase-order requirement, PO number, or no-PO note.",
+    },
+  },
+  {
+    labels: ["Tax Exempt Status"],
+    create: {
+      field_name: "Tax Exempt Status",
+      field_type: "enum",
+      options: [{ label: "No" }, { label: "Yes" }, { label: "Unknown / needs Finance" }],
+      description: "PSG-1337: tax-exempt status for Finance before invoicing.",
+    },
+  },
+  {
+    labels: ["One-Time Setup Fees"],
+    create: {
+      field_name: "One-Time Setup Fees",
+      field_type: "monetary",
+      description: "PSG-1337: one-time setup fees from the signed agreement.",
+    },
+  },
+  {
+    labels: ["Monthly Recurring Fees"],
+    create: {
+      field_name: "Monthly Recurring Fees",
+      field_type: "monetary",
+      description: "PSG-1337: recurring monthly fees from the signed agreement.",
+    },
+  },
+  {
+    labels: ["Discounts / Credits"],
+    create: {
+      field_name: "Discounts / Credits",
+      field_type: "text",
+      description: "PSG-1337: discounts, credits, waived fees, and expiration dates.",
+    },
+  },
+  {
+    labels: ["First Invoice Date"],
+    create: {
+      field_name: "First Invoice Date",
+      field_type: "date",
+      description: "PSG-1337: first invoice date Finance should use.",
+    },
+  },
+  {
+    labels: ["Payment Terms"],
+    create: {
+      field_name: "Payment Terms",
+      field_type: "enum",
+      options: [
+        { label: "Due on receipt" },
+        { label: "Net 15" },
+        { label: "Net 30" },
+        { label: "Custom - see notes" },
+      ],
+      description: "PSG-1337: invoice timing, due date, and payment terms.",
+    },
+  },
+  {
+    labels: ["Invoiced Customer / Billing Link", "Invoiced Customer Link", "Invoiced Link"],
+    create: {
+      field_name: "Invoiced Customer / Billing Link",
+      field_type: "varchar",
+      description: "PSG-1337: Invoiced customer, invoice, subscription, or consolidated invoice setup link.",
+    },
+  },
+  {
+    labels: ["Delivery Template", "Delivery Template Selected"],
+    create: {
+      field_name: "Delivery Template",
+      field_type: "enum",
+      options: [
+        { label: "New-client onboarding" },
+        { label: "New Website Build" },
+        { label: "Custom Delivery Project" },
+        { label: "Needs Production decision" },
+      ],
+      description: "PSG-1337: delivery template selected from sold product/SKU or approved manually.",
+    },
+  },
+  {
+    labels: ["Missing Access List", "Access Needs"],
+    create: {
+      field_name: "Missing Access List",
+      field_type: "text",
+      description: "PSG-1337: needed access, received access, missing access, owner, and due date.",
+    },
+  },
+  {
+    labels: ["Asset Request List", "Required Assets"],
+    create: {
+      field_name: "Asset Request List",
+      field_type: "text",
+      description: "PSG-1337: product-specific asset checklist and known files already available.",
+    },
+  },
+  {
+    labels: ["Google Shared Drive Folder Link", "Google Drive Folder Link", "Client Folder Link"],
+    create: {
+      field_name: "Google Shared Drive Folder Link",
+      field_type: "varchar",
+      description: "PSG-1337: client shared-drive folder with the standard handoff folder structure.",
+    },
+  },
+  {
+    labels: ["Delivery Owner"],
+    create: {
+      field_name: "Delivery Owner",
+      field_type: "user",
+      description: "PSG-1337: accountable delivery owner for kickoff and client communication.",
+    },
+  },
+  {
+    labels: ["Backup Delivery Owner"],
+    create: {
+      field_name: "Backup Delivery Owner",
+      field_type: "user",
+      description: "PSG-1337: backup delivery owner if the main delivery owner is unavailable.",
+    },
+  },
+  {
+    labels: ["Pipedrive Delivery Project Link", "Delivery Project Link"],
+    create: {
+      field_name: "Pipedrive Delivery Project Link",
+      field_type: "varchar",
+      description: "PSG-1337: created delivery project or projects linked back to the won deal.",
+    },
+  },
+  {
+    labels: ["Finance Handoff Sign-Off"],
+    create: {
+      field_name: "Finance Handoff Sign-Off",
+      field_type: "enum",
+      options: [{ label: "Not ready" }, { label: "Ready" }, { label: "Blocked - see notes" }],
+      description: "PSG-1337: Finance confirms billing can be created accurately before delivery starts.",
+    },
+  },
+  {
+    labels: ["Production Handoff Sign-Off"],
+    create: {
+      field_name: "Production Handoff Sign-Off",
+      field_type: "enum",
+      options: [{ label: "Not ready" }, { label: "Ready" }, { label: "Blocked - see notes" }],
+      description: "PSG-1337: Production confirms scope, template, owner, access, assets, and folder are ready.",
+    },
+  },
+  {
+    labels: ["Handoff Complete"],
+    create: {
+      field_name: "Handoff Complete",
+      field_type: "enum",
+      options: [{ label: "No" }, { label: "Yes" }, { label: "Exception approved" }],
+      description: "PSG-1337: marked only after Sales, Finance, and Production confirm readiness.",
+    },
+  },
+];
+
 const PRODUCT_FIELDS_TO_ARCHIVE = ["Income Account", "Expense Account", "Supplier"];
 const CUSTOM_LOST_REASON_LABELS = ["Lost Reason (custom enum)", "Lost Reason"];
 
@@ -117,6 +391,28 @@ function requiredFieldOperation(field, label, additions) {
   };
 }
 
+function createDealFieldOperation(spec) {
+  return {
+    type: "createDealField",
+    label: spec.create.field_name,
+    fieldName: spec.create.field_name,
+    body: {
+      ...spec.create,
+      ui_visibility: {
+        add_visible_flag: true,
+        details_visible_flag: true,
+        projects_detail_visible_flag: true,
+      },
+      show_in_pipelines: { show_in_all: false, pipeline_ids: [PSG_SALES_PIPELINE_ID] },
+      required_fields: {
+        enabled: true,
+        stage_ids: [],
+        statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
+      },
+    },
+  };
+}
+
 export function buildCleanupPlan({ dealFields, organizationFields, productFields }) {
   const operations = [];
   const unresolved = [];
@@ -131,6 +427,19 @@ export function buildCleanupPlan({ dealFields, organizationFields, productFields
       continue;
     }
     operations.push(requiredFieldOperation(field, spec.labels[0], { stageIds: spec.stageIds }));
+  }
+
+  for (const spec of WON_HANDOFF_DEAL_FIELDS) {
+    const field = findField(dealFields, spec.labels, (f) => !isDeleted(f));
+    if (!field) {
+      operations.push(createDealFieldOperation(spec));
+      continue;
+    }
+    operations.push(
+      requiredFieldOperation(field, spec.create.field_name, {
+        statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
+      }),
+    );
   }
 
   const builtInLostReason = findField(
@@ -212,11 +521,6 @@ export function buildCleanupPlan({ dealFields, organizationFields, productFields
     label: "Legacy warranty/letter/header organization fields",
     reason: "not archived by this script; each field must be confirmed as orphaned from warranty-letter and portal generation first",
   });
-  unresolved.push({
-    label: "First Contact Date auto-stamp",
-    reason: "requires Pipedrive webhook/automation registration after the field key is confirmed; this script makes the field required at Discovery only",
-  });
-
   return { operations, unresolved };
 }
 
@@ -277,6 +581,10 @@ class PipedriveAdminApi {
   async applyOperation(op) {
     if (op.type === "updateDealFieldRequired") {
       await this.request("PATCH", "v2", `/dealFields/${encodeURIComponent(op.fieldCode)}`, op.body);
+      return;
+    }
+    if (op.type === "createDealField") {
+      await this.request("POST", "v2", "/dealFields", op.body);
       return;
     }
     if (op.type === "deleteDealField") {

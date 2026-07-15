@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   PSG_SALES_PIPELINE_ID,
   PSG_SALES_STAGE_IDS,
+  WON_HANDOFF_DEAL_FIELDS,
   buildCleanupPlan,
 } from "../../../../../scripts/pipedrive-field-cleanup.mjs";
 
@@ -38,6 +39,10 @@ describe("pipedrive-field-cleanup plan", () => {
       system("Expected Close Date", "expected_close_date"),
       custom("Revenue Type", "revenue_type"),
       custom("Proposal Link", "proposal_link"),
+      custom("Signed Contract / Approval Link", "signed_contract_link"),
+      custom("Billing Model", "billing_model"),
+      custom("Google Shared Drive Folder Link", "google_drive_folder_link"),
+      custom("Delivery Owner", "delivery_owner"),
       system("Lost reason", "lost_reason"),
       custom("Lost Reason", "custom_lost_reason"),
     ];
@@ -93,6 +98,21 @@ describe("pipedrive-field-cleanup plan", () => {
           fieldCode: "custom_lost_reason",
         }),
         expect.objectContaining({
+          type: "updateDealFieldRequired",
+          label: "Signed Contract / Approval Link",
+          fieldCode: "signed_contract_link",
+          body: expect.objectContaining({
+            required_fields: expect.objectContaining({
+              statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          type: "updateDealFieldRequired",
+          label: "Google Shared Drive Folder Link",
+          fieldCode: "google_drive_folder_link",
+        }),
+        expect.objectContaining({
           type: "dedupeOrganizationWebsite",
           customFieldCode: "custom_website",
         }),
@@ -112,9 +132,116 @@ describe("pipedrive-field-cleanup plan", () => {
       expect.arrayContaining([
         expect.objectContaining({ label: "qbo_item_id" }),
         expect.objectContaining({ label: "Legacy warranty/letter/header organization fields" }),
+      ]),
+    );
+    expect(plan.unresolved).not.toEqual(
+      expect.arrayContaining([
         expect.objectContaining({ label: "First Contact Date auto-stamp" }),
       ]),
     );
+  });
+
+  it("plans PSG-1337 Won-stage custom fields with exact types and options when they are missing", () => {
+    const plan = buildCleanupPlan({
+      dealFields: [
+        custom("Lead Source (Channel)", "lead_source_channel"),
+        system("Organization", "org_id"),
+        system("Contact person", "person_id"),
+        custom("First Contact Date", "first_contact_date"),
+        custom("Service Line", "service_line"),
+        system("Value", "value"),
+        system("Expected Close Date", "expected_close_date"),
+        custom("Revenue Type", "revenue_type"),
+        custom("Proposal Link", "proposal_link"),
+        system("Lost reason", "lost_reason"),
+      ],
+      organizationFields: [],
+      productFields: [],
+    });
+
+    const createOps = plan.operations.filter((op) => op.type === "createDealField");
+
+    expect(createOps).toHaveLength(WON_HANDOFF_DEAL_FIELDS.length);
+    expect(createOps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Billing Model",
+          body: expect.objectContaining({
+            field_name: "Billing Model",
+            field_type: "enum",
+            options: [
+              { label: "Not applicable / single location" },
+              { label: "Parent-paid" },
+              { label: "Location-paid" },
+              { label: "Split billing" },
+            ],
+            required_fields: {
+              enabled: true,
+              stage_ids: [],
+              statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
+            },
+          }),
+        }),
+        expect.objectContaining({
+          label: "Signed Contract / Approval Link",
+          body: expect.objectContaining({
+            field_type: "varchar",
+            show_in_pipelines: { show_in_all: false, pipeline_ids: [PSG_SALES_PIPELINE_ID] },
+          }),
+        }),
+        expect.objectContaining({
+          label: "Delivery Owner",
+          body: expect.objectContaining({ field_type: "user" }),
+        }),
+        expect.objectContaining({
+          label: "Google Shared Drive Folder Link",
+          body: expect.objectContaining({ field_type: "varchar" }),
+        }),
+      ]),
+    );
+  });
+
+  it("requires existing PSG-1337 Won-stage fields without creating duplicates", () => {
+    const wonFields = WON_HANDOFF_DEAL_FIELDS.map((spec, index) =>
+      custom(spec.create.field_name, `won_field_${index}`),
+    );
+    const plan = buildCleanupPlan({
+      dealFields: [
+        custom("Lead Source (Channel)", "lead_source_channel"),
+        system("Organization", "org_id"),
+        system("Contact person", "person_id"),
+        custom("First Contact Date", "first_contact_date"),
+        custom("Service Line", "service_line"),
+        system("Value", "value"),
+        system("Expected Close Date", "expected_close_date"),
+        custom("Revenue Type", "revenue_type"),
+        custom("Proposal Link", "proposal_link"),
+        system("Lost reason", "lost_reason"),
+        ...wonFields,
+      ],
+      organizationFields: [],
+      productFields: [],
+    });
+
+    expect(plan.operations).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "createDealField" })]),
+    );
+    for (const [index, spec] of WON_HANDOFF_DEAL_FIELDS.entries()) {
+      expect(plan.operations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "updateDealFieldRequired",
+            label: spec.create.field_name,
+            fieldCode: `won_field_${index}`,
+            body: expect.objectContaining({
+              required_fields: expect.objectContaining({
+                statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
+              }),
+            }),
+          }),
+        ]),
+      );
+    }
   });
 
   it("preserves existing required stages while adding Reese's stage gate", () => {
@@ -144,6 +271,7 @@ describe("pipedrive-field-cleanup plan", () => {
     const leadSourceOp = plan.operations.find(
       (op) =>
         op.type === "updateDealFieldRequired" &&
+        "fieldCode" in op &&
         op.fieldCode === "lead_source_channel",
     );
 
