@@ -39,6 +39,13 @@ export function normalizeWebsite(value) {
     .replace(/\/+$/, "");
 }
 
+export function isCopyableWebsiteValue(value) {
+  const text = clean(value);
+  if (!text) return false;
+  if (/[,;\s]/.test(text)) return false;
+  return normalizeWebsite(text).includes(".");
+}
+
 export function classifyOrganizationWebsite(row, fields = {}) {
   const keptKey = fields.keptKey ?? BUILT_IN_WEBSITE_CODE;
   const duplicateKey = fields.duplicateKey ?? CUSTOM_WEBSITE_CODE;
@@ -47,7 +54,9 @@ export function classifyOrganizationWebsite(row, fields = {}) {
   const keptNormalized = normalizeWebsite(keptValue);
   const duplicateNormalized = normalizeWebsite(duplicateValue);
 
-  if (!keptValue && duplicateValue) return "copy";
+  if (!keptValue && duplicateValue) {
+    return isCopyableWebsiteValue(duplicateValue) ? "copy" : "needs_review";
+  }
   if (keptValue && duplicateValue && keptNormalized !== duplicateNormalized) return "conflict";
   if (keptValue && duplicateValue) return "same";
   if (keptValue && !duplicateValue) return "keeper_only";
@@ -63,6 +72,7 @@ export function buildWebsiteDedupeReport({
     totalOrganizations: organizations.length,
     copy: 0,
     conflict: 0,
+    needsReview: 0,
     same: 0,
     keeperOnly: 0,
     blank: 0,
@@ -76,11 +86,12 @@ export function buildWebsiteDedupeReport({
     });
     if (status === "copy") counts.copy += 1;
     else if (status === "conflict") counts.conflict += 1;
+    else if (status === "needs_review") counts.needsReview += 1;
     else if (status === "same") counts.same += 1;
     else if (status === "keeper_only") counts.keeperOnly += 1;
     else counts.blank += 1;
 
-    if (status === "copy" || status === "conflict") {
+    if (status === "copy" || status === "conflict" || status === "needs_review") {
       rows.push({
         id: org.id,
         name: org.name,
@@ -122,6 +133,7 @@ export function buildMarkdownReport(report) {
     `- Organizations checked: ${report.counts.totalOrganizations}`,
     `- Would copy from duplicate into keeper: ${report.counts.copy}`,
     `- Conflicts needing review: ${report.counts.conflict}`,
+    `- Custom-only values needing manual review: ${report.counts.needsReview}`,
     `- Already matching in both fields: ${report.counts.same}`,
     `- Keeper already populated and duplicate blank: ${report.counts.keeperOnly}`,
     `- Both fields blank: ${report.counts.blank}`,
@@ -288,6 +300,7 @@ async function main() {
   console.log(`Organizations checked: ${report.counts.totalOrganizations}`);
   console.log(`Would copy: ${report.counts.copy}`);
   console.log(`Conflicts: ${report.counts.conflict}`);
+  console.log(`Needs manual review: ${report.counts.needsReview}`);
   console.log(`Already matching: ${report.counts.same}`);
   console.log(`Keeper-only: ${report.counts.keeperOnly}`);
   console.log(`Both blank: ${report.counts.blank}`);
