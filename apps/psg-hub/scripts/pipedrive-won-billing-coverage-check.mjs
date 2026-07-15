@@ -65,7 +65,11 @@ function fieldName(field) {
 
 function hasWonStageRequirement(field, wonStageId = WON_STAGE_ID) {
   const stageIds = field?.required_fields?.stage_ids;
-  return Array.isArray(stageIds) && stageIds.map(Number).includes(Number(wonStageId));
+  const wonStatuses = field?.required_fields?.statuses?.[String(PSG_SALES_PIPELINE_ID)];
+  const requiresWonStage = Array.isArray(stageIds) && stageIds.map(Number).includes(Number(wonStageId));
+  const requiresWonButton =
+    Array.isArray(wonStatuses) && wonStatuses.length === 1 && String(wonStatuses[0]) === "won";
+  return requiresWonStage && requiresWonButton;
 }
 
 function compareValues(actualValues, expectedValues) {
