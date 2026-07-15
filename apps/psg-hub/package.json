@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "audit:pipedrive-won-billing": "node scripts/pipedrive-won-billing-audit.mjs",
     "seed:bsm-demo": "node scripts/seed-bsm-governance-demo.mjs",
     "seed:superadmin-qa": "node scripts/seed-superadmin-qa-env.mjs",
     "test": "vitest run",
