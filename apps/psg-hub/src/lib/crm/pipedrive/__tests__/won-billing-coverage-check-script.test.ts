@@ -50,6 +50,43 @@ describe("pipedrive-won-billing-coverage-check", () => {
     expect(check.alertText).toContain("Finance may be unable to invoice new sales");
   });
 
+  it("flags an expected field when it keeps the Won stage rule but loses the Won button rule", () => {
+    const check = buildWonBillingCoverageCheck({
+      dealFields: EXPECTED_WON_BILLING_REQUIRED_FIELDS.map((field) =>
+        requiredField(
+          field.id,
+          field.name,
+          field.id === 12543
+            ? { required_fields: { enabled: true, stage_ids: [WON_STAGE_ID] } }
+            : {},
+        ),
+      ),
+    });
+
+    expect(check.ok).toBe(false);
+    expect(check.missingIds).toEqual([12543]);
+    expect(check.missingNames).toEqual(["Billing Email"]);
+    expect(check.alertText).toContain("Billing Email no longer required");
+  });
+
+  it("does not count a field that has only the Won button rule without the Won stage rule", () => {
+    const check = buildWonBillingCoverageCheck({
+      dealFields: EXPECTED_WON_BILLING_REQUIRED_FIELDS.map((field) =>
+        requiredField(
+          field.id,
+          field.name,
+          field.id === 12549
+            ? { required_fields: { enabled: true, statuses: { "8": ["won"] } } }
+            : {},
+        ),
+      ),
+    });
+
+    expect(check.ok).toBe(false);
+    expect(check.missingIds).toEqual([12549]);
+    expect(check.missingNames).toEqual(["Monthly Recurring Fees"]);
+  });
+
   it("flags unexpected additions even when the count is still 19", () => {
     const swappedFields = EXPECTED_WON_BILLING_REQUIRED_FIELDS
       .filter((field) => field.id !== 12549)
