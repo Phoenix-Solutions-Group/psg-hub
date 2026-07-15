@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildWonBillingAudit } from "../../../../../scripts/pipedrive-won-billing-audit.mjs";
+import {
+  buildWonBillingAudit,
+  WON_GATE_COMPLETED_AT,
+} from "../../../../../scripts/pipedrive-won-billing-audit.mjs";
 import {
   GATE_1_REQUIRED_FIELD_IDS,
   PSG_SALES_PIPELINE_ID,
@@ -17,6 +20,7 @@ const completeDeal = (extra: Record<string, unknown> = {}) => ({
   id: 101,
   title: "Complete won deal",
   pipeline_id: PSG_SALES_PIPELINE_ID,
+  won_time: WON_GATE_COMPLETED_AT,
   ...Object.fromEntries(GATE_1_REQUIRED_FIELD_IDS.map((id) => [`field_${id}`, "filled"])),
   ...extra,
 });
@@ -41,6 +45,7 @@ describe("pipedrive-won-billing-audit", () => {
         completeDeal({
           id: 3935,
           title: "API bypass proof",
+          won_time: "2026-07-15 21:16:00",
           [`field_${blankId}`]: " ",
         }),
       ],
@@ -73,5 +78,26 @@ describe("pipedrive-won-billing-audit", () => {
 
     expect(audit.ok).toBe(true);
     expect(audit.dealsChecked).toBe(0);
+  });
+
+  it("ignores legacy PSG Sales won deals from before the complete gate existed", () => {
+    const blankId = GATE_1_REQUIRED_FIELD_IDS[0];
+    const audit = buildWonBillingAudit({
+      dealFields: GATE_1_REQUIRED_FIELD_IDS.map((id) => field(id, `Gate field ${id}`)),
+      wonDeals: [
+        completeDeal({
+          id: 3001,
+          title: "Legacy won deal",
+          won_time: "2026-07-13 18:00:00",
+          [`field_${blankId}`]: "",
+        }),
+      ],
+    });
+
+    expect(audit.ok).toBe(true);
+    expect(audit.pipelineWonDealsSeen).toBe(1);
+    expect(audit.dealsChecked).toBe(0);
+    expect(audit.legacyDealsSkipped).toBe(1);
+    expect(audit.violations).toEqual([]);
   });
 });

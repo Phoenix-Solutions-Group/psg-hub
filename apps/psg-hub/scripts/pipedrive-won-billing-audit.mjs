@@ -20,6 +20,8 @@ const TOKEN_ENV_CANDIDATES = [
   "PIPEDRIVE_API_KEY",
 ];
 
+export const WON_GATE_COMPLETED_AT = "2026-07-15T21:16:00Z";
+
 function resolveToken(env = process.env) {
   for (const name of TOKEN_ENV_CANDIDATES) {
     const value = env[name];
@@ -54,11 +56,28 @@ function fieldKey(field) {
   return field?.key ?? field?.field_code ?? null;
 }
 
+function parsePipedriveTimestamp(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const trimmed = value.trim();
+  const normalized = /(?:Z|[+-]\d\d:?\d\d)$/.test(trimmed)
+    ? trimmed
+    : `${trimmed.replace(" ", "T")}Z`;
+  const timestamp = Date.parse(normalized);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function dealWonAtOrAfter(deal, watermark) {
+  const wonAt = parsePipedriveTimestamp(deal?.won_time ?? deal?.wonTime);
+  const threshold = parsePipedriveTimestamp(watermark);
+  return wonAt != null && threshold != null && wonAt >= threshold;
+}
+
 export function buildWonBillingAudit({
   dealFields,
   wonDeals,
   pipelineId = PSG_SALES_PIPELINE_ID,
   requiredFieldIds = GATE_1_REQUIRED_FIELD_IDS,
+  wonGateCompletedAt = WON_GATE_COMPLETED_AT,
 }) {
   const activeFieldsById = new Map(
     dealFields
@@ -80,7 +99,8 @@ export function buildWonBillingAudit({
     };
   });
   const missingFieldDefinitions = requiredFields.filter((field) => !field.found || !field.key);
-  const targetDeals = wonDeals.filter((deal) => Number(deal.pipeline_id) === Number(pipelineId));
+  const pipelineWonDeals = wonDeals.filter((deal) => Number(deal.pipeline_id) === Number(pipelineId));
+  const targetDeals = pipelineWonDeals.filter((deal) => dealWonAtOrAfter(deal, wonGateCompletedAt));
   const violations = [];
 
   for (const deal of targetDeals) {
@@ -99,8 +119,11 @@ export function buildWonBillingAudit({
   return {
     ok: violations.length === 0 && missingFieldDefinitions.length === 0,
     pipelineId,
+    wonGateCompletedAt,
     requiredFieldCount: requiredFields.length,
+    pipelineWonDealsSeen: pipelineWonDeals.length,
     dealsChecked: targetDeals.length,
+    legacyDealsSkipped: pipelineWonDeals.length - targetDeals.length,
     violationCount: violations.length,
     missingFieldDefinitions,
     violations,
