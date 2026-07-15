@@ -58,6 +58,13 @@ export function fieldCode(field) {
   return field?.field_code ?? field?.key ?? field?.id ?? null;
 }
 
+function sameField(a, b) {
+  if (!a || !b) return false;
+  const aCodes = [a?.field_code, a?.key, a?.id].filter((value) => value != null).map(String);
+  const bCodes = new Set([b?.field_code, b?.key, b?.id].filter((value) => value != null).map(String));
+  return aCodes.some((value) => bCodes.has(value));
+}
+
 export function findField(fields, labels, predicate = () => true) {
   const wanted = new Set(labels.map(cleanLabel));
   return fields.find((field) => {
@@ -147,7 +154,7 @@ export function buildCleanupPlan({ dealFields, organizationFields, productFields
   const customLostReason = findField(
     dealFields,
     CUSTOM_LOST_REASON_LABELS,
-    (f) => !isDeleted(f) && !isBuiltIn(f),
+    (f) => !isDeleted(f) && !isBuiltIn(f) && !sameField(f, builtInLostReason),
   );
   if (customLostReason) {
     operations.push({
@@ -334,4 +341,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   });
 }
-

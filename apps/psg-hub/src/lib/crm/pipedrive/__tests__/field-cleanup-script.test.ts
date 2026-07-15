@@ -155,4 +155,41 @@ describe("pipedrive-field-cleanup plan", () => {
       },
     });
   });
+
+  it("does not schedule the built-in lost reason field for deletion when live metadata looks custom", () => {
+    const plan = buildCleanupPlan({
+      dealFields: [
+        custom("Lead Source (Channel)", "lead_source_channel"),
+        system("Organization", "org_id"),
+        system("Contact person", "person_id"),
+        custom("First Contact Date", "first_contact_date"),
+        custom("Service Line", "service_line"),
+        system("Value", "value"),
+        system("Expected Close Date", "expected_close_date"),
+        custom("Revenue Type", "revenue_type"),
+        custom("Proposal Link", "proposal_link"),
+        custom("Lost reason", "lost_reason", { field_code: "lost_reason" }),
+      ],
+      organizationFields: [],
+      productFields: [],
+    });
+
+    expect(plan.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "updateDealFieldRequired",
+          label: "Lost Reason",
+          fieldCode: "lost_reason",
+        }),
+      ]),
+    );
+    expect(plan.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "deleteDealField",
+          fieldCode: "lost_reason",
+        }),
+      ]),
+    );
+  });
 });
