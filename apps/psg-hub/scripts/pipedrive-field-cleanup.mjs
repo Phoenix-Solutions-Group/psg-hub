@@ -315,6 +315,43 @@ export const WON_HANDOFF_DEAL_FIELDS = [
 
 const PRODUCT_FIELDS_TO_ARCHIVE = ["Income Account", "Expense Account", "Supplier"];
 const CUSTOM_LOST_REASON_LABELS = ["Lost Reason (custom enum)", "Lost Reason"];
+const APPLY_EXCLUDED_OPERATION_TYPES = new Set(["dedupeOrganizationWebsite"]);
+
+const LIVE_APPLY_SCOPE = {
+  included: [
+    "Required deal-field rules for PSG Sales pipeline 8",
+    "Won-stage handoff fields and required-on-Won rules",
+    "Custom Lost Reason field removal after built-in Lost Reason is required",
+    "Dead product field removals for Income Account, Expense Account, and Supplier",
+  ],
+  excluded: [
+    {
+      label: "Organization Website dedupe",
+      reason:
+        "Dry-run detects the duplicate fields, but live --apply does not delete the custom Website field until a reviewed data migration copies any custom values into the kept Website field.",
+    },
+    {
+      label: "Contact phone-or-email",
+      reason:
+        "Pipedrive's deal-field required_fields API cannot express 'the linked contact must have either phone or email'. Enforce this through a reviewed Pipedrive automation, validation workflow, or follow-up API check before live rollout.",
+    },
+    {
+      label: "First Contact Date auto-stamp",
+      reason:
+        "Handled by the Pipedrive webhook in apps/psg-hub/src/app/api/webhooks/pipedrive/route.ts when a sales deal first reaches Discovery; this script only makes the field required at Discovery.",
+    },
+    {
+      label: "qbo_item_id backfill",
+      reason:
+        "Protected from deletion; Finance still needs to supply the source QuickBooks item-link file before blanks can be populated.",
+    },
+    {
+      label: "Legacy warranty/letter/header organization fields",
+      reason:
+        "Protected from bulk archive until each field is confirmed as unused by warranty-letter and customer-portal generation.",
+    },
+  ],
+};
 
 function cleanLabel(value) {
   return String(value ?? "")
@@ -416,6 +453,14 @@ function createDealFieldOperation(spec) {
 export function buildCleanupPlan({ dealFields, organizationFields, productFields }) {
   const operations = [];
   const unresolved = [];
+  const notices = [
+    {
+      label: "First Contact Date auto-stamp",
+      status: "handled outside this script",
+      reason:
+        "The Pipedrive webhook stamps this field once when a PSG Sales deal first reaches Discovery and the field is still blank.",
+    },
+  ];
 
   for (const spec of REQUIRED_DEAL_FIELDS) {
     const field = findField(dealFields, spec.labels, (f) => !isDeleted(f));
@@ -514,6 +559,11 @@ export function buildCleanupPlan({ dealFields, organizationFields, productFields
   }
 
   unresolved.push({
+    label: "Contact phone-or-email",
+    reason:
+      "not applied by this script; Pipedrive deal-field rules cannot require either phone or email on the linked contact through the field admin API",
+  });
+  unresolved.push({
     label: "qbo_item_id",
     reason: "kept by design; CFO John still needs the source QuickBooks item-link file before we can populate blanks",
   });
@@ -521,7 +571,11 @@ export function buildCleanupPlan({ dealFields, organizationFields, productFields
     label: "Legacy warranty/letter/header organization fields",
     reason: "not archived by this script; each field must be confirmed as orphaned from warranty-letter and portal generation first",
   });
-  return { operations, unresolved };
+  return { operations, unresolved, notices, liveApplyScope: LIVE_APPLY_SCOPE };
+}
+
+function applyableOperations(operations) {
+  return operations.filter((op) => !APPLY_EXCLUDED_OPERATION_TYPES.has(op.type));
 }
 
 function resolveToken(env = process.env) {
@@ -618,12 +672,16 @@ async function main() {
     api.listFields("productFields"),
   ]);
   const plan = buildCleanupPlan({ dealFields, organizationFields, productFields });
+  const applyable = applyableOperations(plan.operations);
 
   const result = {
     mode: apply ? "apply" : "dry-run",
     plannedOperationCount: plan.operations.length,
+    applyableOperationCount: applyable.length,
     operations: plan.operations,
     unresolved: plan.unresolved,
+    notices: plan.notices,
+    liveApplyScope: plan.liveApplyScope,
   };
   if (json) {
     console.log(JSON.stringify(result, null, 2));
@@ -632,14 +690,20 @@ async function main() {
     for (const op of plan.operations) {
       console.log(`- ${op.type}: ${op.label} (${op.fieldName ?? op.fieldCode})`);
     }
+    console.log(`Apply scope: ${applyable.length} of ${plan.operations.length} operations run with --apply.`);
+    console.log("Excluded from live --apply:");
+    for (const item of LIVE_APPLY_SCOPE.excluded) console.log(`- ${item.label}: ${item.reason}`);
+    console.log("Handled by other guardrails:");
+    for (const item of plan.notices) console.log(`- ${item.label}: ${item.reason}`);
     console.log("Unresolved / needs human confirmation:");
     for (const item of plan.unresolved) console.log(`- ${item.label}: ${item.reason}`);
   }
 
   if (apply) {
-    const applyable = plan.operations.filter((op) => op.type !== "dedupeOrganizationWebsite");
     for (const op of applyable) await api.applyOperation(op);
-    console.log(`Applied ${applyable.length} operations. Website dedupe was intentionally left for reviewed migration.`);
+    console.log(
+      `Applied ${applyable.length} operations. Website dedupe and contact phone-or-email validation were intentionally left for reviewed follow-up work.`,
+    );
   }
 }
 

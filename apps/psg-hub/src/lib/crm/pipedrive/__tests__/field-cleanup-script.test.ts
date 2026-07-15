@@ -130,8 +130,24 @@ describe("pipedrive-field-cleanup plan", () => {
     );
     expect(plan.unresolved).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({ label: "Contact phone-or-email" }),
         expect.objectContaining({ label: "qbo_item_id" }),
         expect.objectContaining({ label: "Legacy warranty/letter/header organization fields" }),
+      ]),
+    );
+    expect(plan.notices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "First Contact Date auto-stamp",
+          status: "handled outside this script",
+        }),
+      ]),
+    );
+    expect(plan.liveApplyScope.excluded).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Organization Website dedupe" }),
+        expect.objectContaining({ label: "Contact phone-or-email" }),
+        expect.objectContaining({ label: "First Contact Date auto-stamp" }),
       ]),
     );
     expect(plan.unresolved).not.toEqual(
