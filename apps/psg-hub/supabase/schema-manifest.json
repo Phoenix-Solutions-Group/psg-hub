@@ -11,7 +11,7 @@
     "accidents_2024", "accidents_2025", "accidents_2026", "accidents_2027", "accidents_default", "activity_log",
     "ad_copy_events", "ads_api_call_log", "ads_audit_logs", "ai_prompt_templates", "analytics_snapshots",
     "analytics_sync_runs", "api_cache", "app_user_roles", "approval_queue", "billing_memory_decisions",
-    "billing_run_history", "board_briefing_outbox", "body_shops", "bsm_campaigns", "campaign_budget_snapshots", "campaign_sends",
+    "billing_run_history", "board_briefing_outbox", "body_shops", "bsm_campaigns", "bsm_pilot_events", "campaign_budget_snapshots", "campaign_sends",
     "campaigns", "ccc_accounts", "ccc_api_call_log", "clients", "companies", "company_programs",
     "competitor_monitor_runs", "competitor_scores", "competitors", "configs", "consolidators", "content_items",
     "county_references", "county_vehicle_registrations", "crash_event_sources", "crash_events", "crash_zip_annual",

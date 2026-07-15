@@ -1,18 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { trackBsmPilotEvent } from "@/lib/bsm/pilot-events-client";
 
 export function OnboardingWizard() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  // PSG-767 — after the shop is created we kick off the free SEO audit so a real
-  // "first win" result is waiting on the dashboard; this flags that phase for copy.
-  const [auditing, setAuditing] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [discoveryNote, setDiscoveryNote] = useState<string | null>(null);
   const [pendingFields, setPendingFields] = useState<string[]>([]);
@@ -25,6 +23,13 @@ export function OnboardingWizard() {
   const [state, setState] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [phone, setPhone] = useState("");
+  const trackedOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (trackedOpenRef.current) return;
+    trackedOpenRef.current = true;
+    void trackBsmPilotEvent("setup_started");
+  }, []);
 
   // PSG-144 smart auto-discovery: name + address -> suggested profile fields.
   // Suggestions are pre-filled but always editable; the user confirms before the
@@ -92,20 +97,7 @@ export function OnboardingWizard() {
       return;
     }
 
-    // PSG-767 first-win: completing onboarding automatically starts the free SEO
-    // audit — no separate action — so a real result is persisted before the owner
-    // reaches the dashboard. Best-effort: a slow or failed audit must never block
-    // the owner from their dashboard (which degrades to a "check is running" state).
-    setAuditing(true);
-    try {
-      await fetch("/api/onboarding/audit", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-      });
-    } catch {
-      // Swallow — the dashboard shows the pending first-win card if this didn't land.
-    }
-
+    await fetch("/api/onboarding/audit", { method: "POST" }).catch(() => null);
     router.push("/dashboard");
     router.refresh();
   }
@@ -239,11 +231,7 @@ export function OnboardingWizard() {
                 onClick={handleSubmit}
                 disabled={loading}
               >
-                {auditing
-                  ? "Running your free website check…"
-                  : loading
-                    ? "Setting up..."
-                    : "Complete setup"}
+                {loading ? "Setting up..." : "Complete setup"}
               </Button>
             </div>
           </div>

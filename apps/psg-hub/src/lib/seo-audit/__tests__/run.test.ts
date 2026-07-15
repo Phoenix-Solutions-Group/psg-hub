@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { runShopAudit, getLatestShopAudit, shopRowToBrief } from "../run";
+import {
+  runShopAudit,
+  getLatestShopAudit,
+  shopRowToBrief,
+  ShopAuditPersistError,
+} from "../run";
 import type { CrawledPage, SiteCrawlProvider } from "../index";
 
 const T = "2026-06-23T12:00:00.000Z";
@@ -113,12 +118,20 @@ describe("runShopAudit", () => {
     expect(auditId).toBe("audit-9");
     expect(html).toContain("Tracy");
     // persisted row carries the denormalized columns
-    expect(inserted.value).toMatchObject({ shop_id: "s1", mode: "audited", created_by: "u1", generated_at: T });
+    expect(inserted.value).toMatchObject({
+      shop_id: "s1",
+      mode: "audited",
+      audit_status: "completed",
+      audit_outcome: "audited",
+      error_reason: null,
+      created_by: "u1",
+      generated_at: T,
+    });
   });
 
-  it("greenfield run: no domain ⇒ greenfield report, no crawl call", async () => {
+  it("greenfield run: no domain ⇒ queryable no-live-site outcome, no crawl call", async () => {
     const crawl = vi.fn(async () => []);
-    const { service } = mockService({
+    const { service, inserted } = mockService({
       shopRow: { id: "s1", name: "New Shop", url: null, address_locality: "Omaha", address_region: "NE" },
     });
     const { report } = await runShopAudit({
@@ -129,10 +142,15 @@ describe("runShopAudit", () => {
     });
     expect(report.mode).toBe("greenfield");
     expect(crawl).not.toHaveBeenCalled();
+    expect(inserted.value).toMatchObject({
+      audit_status: "completed",
+      audit_outcome: "no_live_site",
+      error_reason: null,
+    });
   });
 
-  it("crawl failure degrades to greenfield, does not throw", async () => {
-    const { service } = mockService({
+  it("crawl failure degrades to greenfield and stores a failed outcome", async () => {
+    const { service, inserted } = mockService({
       shopRow: { id: "s1", name: "Tracy's", url: "tracys.com", address_locality: "Lincoln", address_region: "NE" },
     });
     const provider: SiteCrawlProvider = {
@@ -144,6 +162,11 @@ describe("runShopAudit", () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { report } = await runShopAudit({ service, shopId: "s1", crawlProvider: provider, now: T });
     expect(report.mode).toBe("greenfield");
+    expect(inserted.value).toMatchObject({
+      audit_status: "failed",
+      audit_outcome: "crawl_failed",
+      error_reason: "network down",
+    });
     errSpy.mockRestore();
   });
 
@@ -167,15 +190,15 @@ describe("runShopAudit", () => {
     expect(inserted.value).toBeNull();
   });
 
-  it("insert failure surfaces (auditId null) but still returns the report", async () => {
+  it("insert failure fails closed so callers cannot imply the audit was saved", async () => {
     const { service } = mockService({
       shopRow: { id: "s1", name: "Tracy's", url: "tracys.com", address_locality: "Lincoln", address_region: "NE" },
       insertError: true,
     });
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { auditId, report } = await runShopAudit({ service, shopId: "s1", crawlProvider: fakeCrawl([]), now: T });
-    expect(auditId).toBeNull();
-    expect(report).toBeTruthy();
+    await expect(
+      runShopAudit({ service, shopId: "s1", crawlProvider: fakeCrawl([]), now: T }),
+    ).rejects.toBeInstanceOf(ShopAuditPersistError);
     errSpy.mockRestore();
   });
 });
