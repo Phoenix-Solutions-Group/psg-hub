@@ -24,7 +24,7 @@ export const GATE_1_REQUIRED_FIELD_IDS = [
   12540,
   12541,
   12545,
-  12567,
+  12576,
   12543,
   12548,
   12549,
