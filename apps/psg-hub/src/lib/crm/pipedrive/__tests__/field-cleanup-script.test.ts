@@ -27,6 +27,9 @@ const system = (name: string, key: string, extra: Record<string, unknown> = {}) 
   ...extra,
 });
 
+const wonRequiredSpecs = () =>
+  WON_HANDOFF_DEAL_FIELDS.filter((spec) => spec.required_on_won !== false);
+
 describe("pipedrive-field-cleanup plan", () => {
   it("builds stage-required field updates, dedupe cleanup, and protected follow-ups", () => {
     const dealFields = [
@@ -206,11 +209,41 @@ describe("pipedrive-field-cleanup plan", () => {
           label: "Google Shared Drive Folder Link",
           body: expect.objectContaining({ field_type: "varchar" }),
         }),
+        expect.objectContaining({
+          label: "MSO Parent Company",
+          body: expect.objectContaining({
+            required_fields: {
+              enabled: false,
+              stage_ids: [],
+              statuses: {},
+            },
+          }),
+        }),
+        expect.objectContaining({
+          label: "Finance Handoff Sign-Off",
+          body: expect.objectContaining({
+            required_fields: {
+              enabled: false,
+              stage_ids: [],
+              statuses: {},
+            },
+          }),
+        }),
+        expect.objectContaining({
+          label: "Production Handoff Sign-Off",
+          body: expect.objectContaining({
+            required_fields: {
+              enabled: false,
+              stage_ids: [],
+              statuses: {},
+            },
+          }),
+        }),
       ]),
     );
   });
 
-  it("requires existing PSG-1337 Won-stage fields without creating duplicates", () => {
+  it("requires existing PSG-1337 Won-stage required fields without creating duplicates", () => {
     const wonFields = WON_HANDOFF_DEAL_FIELDS.map((spec, index) =>
       custom(spec.create.field_name, `won_field_${index}`),
     );
@@ -235,7 +268,8 @@ describe("pipedrive-field-cleanup plan", () => {
     expect(plan.operations).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ type: "createDealField" })]),
     );
-    for (const [index, spec] of WON_HANDOFF_DEAL_FIELDS.entries()) {
+    for (const spec of wonRequiredSpecs()) {
+      const index = WON_HANDOFF_DEAL_FIELDS.indexOf(spec);
       expect(plan.operations).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -246,6 +280,105 @@ describe("pipedrive-field-cleanup plan", () => {
               required_fields: expect.objectContaining({
                 statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
               }),
+            }),
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("does not re-gate the three PSG-1595 fields that were removed from the Won blocker", () => {
+    const wonFields = WON_HANDOFF_DEAL_FIELDS.map((spec, index) =>
+      custom(spec.create.field_name, `won_field_${index}`, {
+        required_fields: {
+          enabled: false,
+          stage_ids: [],
+          statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
+        },
+      }),
+    );
+    const plan = buildCleanupPlan({
+      dealFields: [
+        custom("Lead Source (Channel)", "lead_source_channel"),
+        system("Organization", "org_id"),
+        system("Contact person", "person_id"),
+        custom("First Contact Date", "first_contact_date"),
+        custom("Service Line", "service_line"),
+        system("Value", "value"),
+        system("Expected Close Date", "expected_close_date"),
+        custom("Revenue Type", "revenue_type"),
+        custom("Proposal Link", "proposal_link"),
+        system("Lost reason", "lost_reason"),
+        ...wonFields,
+      ],
+      organizationFields: [],
+      productFields: [],
+    });
+
+    for (const label of [
+      "MSO Parent Company",
+      "Finance Handoff Sign-Off",
+      "Production Handoff Sign-Off",
+    ]) {
+      expect(plan.operations).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "updateDealFieldRequired",
+            label,
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("clears accidental required rules from the three PSG-1595 non-Won fields", () => {
+    const wonFields = WON_HANDOFF_DEAL_FIELDS.map((spec, index) =>
+      custom(spec.create.field_name, `won_field_${index}`, {
+        required_fields: {
+          enabled: [
+            "MSO Parent Company",
+            "Finance Handoff Sign-Off",
+            "Production Handoff Sign-Off",
+          ].includes(spec.create.field_name),
+          stage_ids: [],
+          statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
+        },
+      }),
+    );
+    const plan = buildCleanupPlan({
+      dealFields: [
+        custom("Lead Source (Channel)", "lead_source_channel"),
+        system("Organization", "org_id"),
+        system("Contact person", "person_id"),
+        custom("First Contact Date", "first_contact_date"),
+        custom("Service Line", "service_line"),
+        system("Value", "value"),
+        system("Expected Close Date", "expected_close_date"),
+        custom("Revenue Type", "revenue_type"),
+        custom("Proposal Link", "proposal_link"),
+        system("Lost reason", "lost_reason"),
+        ...wonFields,
+      ],
+      organizationFields: [],
+      productFields: [],
+    });
+
+    for (const label of [
+      "MSO Parent Company",
+      "Finance Handoff Sign-Off",
+      "Production Handoff Sign-Off",
+    ]) {
+      expect(plan.operations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "updateDealFieldRequired",
+            label,
+            body: expect.objectContaining({
+              required_fields: {
+                enabled: false,
+                stage_ids: [],
+                statuses: {},
+              },
             }),
           }),
         ]),

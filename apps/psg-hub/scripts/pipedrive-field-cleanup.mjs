@@ -84,6 +84,7 @@ export const WON_HANDOFF_DEAL_FIELDS = [
   },
   {
     labels: ["MSO Parent Company", "Parent Company Name"],
+    required_on_won: false,
     create: {
       field_name: "MSO Parent Company",
       field_type: "varchar",
@@ -288,6 +289,7 @@ export const WON_HANDOFF_DEAL_FIELDS = [
   },
   {
     labels: ["Finance Handoff Sign-Off"],
+    required_on_won: false,
     create: {
       field_name: "Finance Handoff Sign-Off",
       field_type: "enum",
@@ -297,6 +299,7 @@ export const WON_HANDOFF_DEAL_FIELDS = [
   },
   {
     labels: ["Production Handoff Sign-Off"],
+    required_on_won: false,
     create: {
       field_name: "Production Handoff Sign-Off",
       field_type: "enum",
@@ -443,7 +446,29 @@ function requiredFieldOperation(field, label, additions, opts = {}) {
   };
 }
 
+function wonRequiredClearedOperation(field, label) {
+  const code = fieldCode(field);
+  if (code == null) {
+    return { type: "unresolved", label, reason: "matched field has no API field code" };
+  }
+  return {
+    type: "updateDealFieldRequired",
+    label,
+    fieldCode: String(code),
+    fieldName: fieldName(field),
+    body: {
+      required_fields: {
+        enabled: false,
+        stage_ids: [],
+        statuses: {},
+      },
+      show_in_pipelines: { show_in_all: false, pipeline_ids: [PSG_SALES_PIPELINE_ID] },
+    },
+  };
+}
+
 function createDealFieldOperation(spec) {
+  const requiredOnWon = spec.required_on_won !== false;
   return {
     type: "createDealField",
     label: spec.create.field_name,
@@ -457,9 +482,9 @@ function createDealFieldOperation(spec) {
       },
       show_in_pipelines: { show_in_all: false, pipeline_ids: [PSG_SALES_PIPELINE_ID] },
       required_fields: {
-        enabled: true,
+        enabled: requiredOnWon,
         stage_ids: [],
-        statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
+        statuses: requiredOnWon ? { [String(PSG_SALES_PIPELINE_ID)]: ["won"] } : {},
       },
     },
   };
@@ -519,6 +544,12 @@ export function buildCleanupPlan({
     const field = findField(dealFields, spec.labels, (f) => !isDeleted(f));
     if (!field) {
       operations.push(createDealFieldOperation(spec));
+      continue;
+    }
+    if (spec.required_on_won === false) {
+      if (field.required_fields?.enabled) {
+        operations.push(wonRequiredClearedOperation(field, spec.create.field_name));
+      }
       continue;
     }
     operations.push(
