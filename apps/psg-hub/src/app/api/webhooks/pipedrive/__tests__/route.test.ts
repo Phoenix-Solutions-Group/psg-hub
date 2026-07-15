@@ -9,6 +9,7 @@ const dealPipelineId = vi.fn();
 const provisionForDeal = vi.fn();
 const enrollNurturePath = vi.fn();
 const createServiceClient = vi.fn();
+const updateDeal = vi.fn();
 
 vi.mock("@/lib/pipedrive/projects", () => ({
   createProjectsClient: (...args: unknown[]) => createProjectsClient(...args),
@@ -71,7 +72,7 @@ beforeEach(() => {
   vi.stubEnv("PIPEDRIVE_SALES_PIPELINE_ID", "8");
   vi.stubEnv("PIPEDRIVE_COMPANY_DOMAIN", "psg");
 
-  createProjectsClient.mockReturnValue({ projectsClient: true });
+  createProjectsClient.mockReturnValue({ projectsClient: true, updateDeal });
   createPipedriveClient.mockReturnValue({ contactClient: true });
   createServiceClient.mockReturnValue({ serviceClient: true });
   resolvePipedriveToken.mockReturnValue("token");
@@ -92,10 +93,11 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       provisionedProjects: 1,
       reusedProjects: 0,
       nurtureEnrollment: "enrolled",
+      firstContactStamp: "skipped",
     });
     expect(provisionForDeal).toHaveBeenCalledWith(
       expect.objectContaining({
-        client: { projectsClient: true },
+        client: expect.objectContaining({ projectsClient: true }),
         defaultBoardId: 123,
         defaultPhaseId: 456,
         roleUserMap: { strategist: 101 },
@@ -121,5 +123,78 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
         pipedriveClient: { contactClient: true },
       })
     );
+  });
+
+  it("stamps First Contact Date when a sales deal first reaches Discovery", async () => {
+    vi.stubEnv("PIPEDRIVE_ONBOARDING_BOARD_ID", "");
+    vi.stubEnv("PIPEDRIVE_ONBOARDING_PHASE_ID", "");
+    isDealWonTransition.mockReturnValue(false);
+    updateDeal.mockResolvedValue({ id: 42 });
+
+    const res = await POST(
+      new Request("https://hub.psgweb.me/api/webhooks/pipedrive", {
+        method: "POST",
+        headers: {
+          authorization: authHeader(),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          previous: { status: "open", stage_id: 56 },
+          current: {
+            id: 42,
+            title: "Wallace discovery",
+            status: "open",
+            pipeline_id: 8,
+            stage_id: 57,
+            update_time: "2026-07-15 14:22:00",
+            first_contact_date: "",
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      skipped: "not_won_transition",
+      firstContactStamp: "stamped",
+    });
+    expect(updateDeal).toHaveBeenCalledWith(42, {
+      first_contact_date: "2026-07-15",
+    });
+    expect(provisionForDeal).not.toHaveBeenCalled();
+  });
+
+  it("does not overwrite an existing First Contact Date", async () => {
+    isDealWonTransition.mockReturnValue(false);
+
+    const res = await POST(
+      new Request("https://hub.psgweb.me/api/webhooks/pipedrive", {
+        method: "POST",
+        headers: {
+          authorization: authHeader(),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          previous: { status: "open", stage_id: 56 },
+          current: {
+            id: 42,
+            status: "open",
+            pipeline_id: 8,
+            stage_id: 57,
+            update_time: "2026-07-15 14:22:00",
+            first_contact_date: "2026-07-14",
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      skipped: "not_won_transition",
+      firstContactStamp: "skipped",
+    });
+    expect(updateDeal).not.toHaveBeenCalled();
   });
 });

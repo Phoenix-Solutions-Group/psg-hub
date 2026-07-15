@@ -441,6 +441,22 @@ describe("createProjectsClient — PSG-642 thin v2-Tasks adapter (updateTask + a
     expect(form.get("file")).toBeInstanceOf(Blob);
   });
 
+  it("updateDeal PUTs /api/v1/deals/{id} with only the changed fields, token in query", async () => {
+    const { fetchImpl, calls } = recordingFetch({ id: 42 });
+    const res = await client(fetchImpl).updateDeal!(42, {
+      first_contact_date: "2026-07-15",
+    });
+    expect(res.id).toBe(42);
+
+    const u = new URL(calls[0].url);
+    expect(calls[0].method).toBe("PUT");
+    expect(`${u.origin}${u.pathname}`).toBe("https://psg.pipedrive.com/api/v1/deals/42");
+    expect(u.searchParams.get("api_token")).toBe(TOKEN);
+    expect(JSON.parse(String(calls[0].body))).toEqual({
+      first_contact_date: "2026-07-15",
+    });
+  });
+
   it("updateTask surfaces a secret-free error on non-2xx (path + status only)", async () => {
     const fetchImpl = (async () =>
       ({ ok: false, status: 400, json: async () => ({}) }) as Response) as unknown as typeof fetch;

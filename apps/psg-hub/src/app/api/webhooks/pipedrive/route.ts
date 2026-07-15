@@ -62,6 +62,30 @@ function relName(v: unknown): string | null {
   return null;
 }
 
+function stageId(current: Record<string, unknown> | null | undefined): number | null {
+  if (!current) return null;
+  return relId(current.stage_id);
+}
+
+function dateFromDealTimestamp(current: Record<string, unknown>): string {
+  const stamp =
+    typeof current.update_time === "string" && current.update_time.trim() !== ""
+      ? current.update_time
+      : typeof current.add_time === "string" && current.add_time.trim() !== ""
+        ? current.add_time
+        : new Date().toISOString();
+  return stamp.slice(0, 10);
+}
+
+function firstContactFieldKey(): string {
+  return (process.env.PIPEDRIVE_FIRST_CONTACT_DATE_FIELD_KEY ?? "first_contact_date").trim();
+}
+
+function discoveryStageId(): number {
+  const parsed = Number(process.env.PIPEDRIVE_DISCOVERY_STAGE_ID ?? "57");
+  return Number.isFinite(parsed) ? parsed : 57;
+}
+
 /** Map the webhook's `current` deal object onto the WonDeal the builder needs. */
 function toWonDeal(current: Record<string, unknown>): WonDeal | null {
   const id = Number(current.id);
@@ -93,17 +117,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!resolvePipedriveToken()) {
     return NextResponse.json({ error: "pipedrive_not_configured" }, { status: 503 });
   }
-  const boardId = Number(process.env.PIPEDRIVE_ONBOARDING_BOARD_ID);
-  const phaseId = Number(process.env.PIPEDRIVE_ONBOARDING_PHASE_ID);
-  if (!Number.isFinite(boardId) || !Number.isFinite(phaseId)) {
-    // Board/phase must be discovered once (listBoards/listPhases) and set in env.
-    console.error("[pipedrive-webhook] onboarding board/phase env not set");
-    return NextResponse.json({ error: "board_not_configured" }, { status: 503 });
-  }
 
   let payload: {
     current?: Record<string, unknown> | null;
-    previous?: { status?: string } | null;
+    previous?: { status?: string; stage_id?: unknown } | null;
     event?: string;
     meta?: Record<string, unknown>;
   };
@@ -113,31 +130,82 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "bad_json" }, { status: 400 });
   }
 
+  // PSG-1472 — stamp First Contact Date the first time a sales deal reaches Discovery.
+  // Idempotent: only writes when the configured field is blank in the webhook payload,
+  // and a replay writes the same date value.
+  const salesPipelineId = process.env.PIPEDRIVE_SALES_PIPELINE_ID
+    ? Number(process.env.PIPEDRIVE_SALES_PIPELINE_ID)
+    : null;
+  const current = payload.current ?? null;
+  const dealId = Number(current?.id);
+  const firstContactKey = firstContactFieldKey();
+  const currentStageId = stageId(current);
+  const priorStageId = stageId(payload.previous ?? null);
+  const shouldStampFirstContact =
+    Number.isFinite(dealId) &&
+    firstContactKey !== "" &&
+    currentStageId === discoveryStageId() &&
+    priorStageId !== currentStageId &&
+    isDealPipelineInScope(current, salesPipelineId) &&
+    (current?.[firstContactKey] == null || String(current[firstContactKey]).trim() === "");
+
+  let firstContactStamp: "stamped" | "skipped" | "failed" = "skipped";
+  if (shouldStampFirstContact) {
+    try {
+      const client = createProjectsClient({
+        companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
+      });
+      if (typeof client.updateDeal !== "function") {
+        throw new Error("Pipedrive deal update client is unavailable");
+      }
+      await client.updateDeal(dealId, {
+        [firstContactKey]: dateFromDealTimestamp(current!),
+      });
+      firstContactStamp = "stamped";
+    } catch (stampErr) {
+      firstContactStamp = "failed";
+      console.error(
+        "[pipedrive-webhook] first contact date stamp failed for deal",
+        dealId,
+        stampErr instanceof Error ? stampErr.message : "unknown",
+      );
+    }
+  }
+
   if (!isDealWonTransition(payload)) {
     // Not a won transition — ack so Pipedrive does not retry.
-    return NextResponse.json({ ok: true, skipped: "not_won_transition" });
+    return NextResponse.json({
+      ok: true,
+      skipped: "not_won_transition",
+      firstContactStamp,
+    });
   }
 
   // Scope to the sales pipeline (pipeline 8, per Nick's PSG-584 pointer). PSG runs
   // multiple pipelines; only won deals in the sales pipeline should build a delivery
   // board. Env unset ⇒ scoping OFF (every won deal passes) — a safe default.
-  const salesPipelineId = process.env.PIPEDRIVE_SALES_PIPELINE_ID
-    ? Number(process.env.PIPEDRIVE_SALES_PIPELINE_ID)
-    : null;
   if (!isDealPipelineInScope(payload.current ?? null, salesPipelineId)) {
     return NextResponse.json({
       ok: true,
       skipped: "out_of_scope_pipeline",
       pipelineId: dealPipelineId(payload.current ?? null),
+      firstContactStamp,
     });
   }
 
   const deal = payload.current ? toWonDeal(payload.current) : null;
   if (!deal) {
-    return NextResponse.json({ ok: true, skipped: "no_deal" });
+    return NextResponse.json({ ok: true, skipped: "no_deal", firstContactStamp });
   }
 
   try {
+    const boardId = Number(process.env.PIPEDRIVE_ONBOARDING_BOARD_ID);
+    const phaseId = Number(process.env.PIPEDRIVE_ONBOARDING_PHASE_ID);
+    if (!Number.isFinite(boardId) || !Number.isFinite(phaseId)) {
+      // Board/phase must be discovered once (listBoards/listPhases) and set in env.
+      console.error("[pipedrive-webhook] onboarding board/phase env not set");
+      return NextResponse.json({ error: "board_not_configured" }, { status: 503 });
+    }
     const client = createProjectsClient({
       companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
     });
@@ -177,7 +245,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         nurtureErr instanceof Error ? nurtureErr.message : "unknown",
       );
     }
-    return NextResponse.json({ ok: true, ...summary, nurtureEnrollment });
+    return NextResponse.json({ ok: true, ...summary, nurtureEnrollment, firstContactStamp });
   } catch (err) {
     // Never log the error's cause verbatim (Pipedrive URLs carry the token); the
     // client already strips URLs from its messages, but be defensive here too.

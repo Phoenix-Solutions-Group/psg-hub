@@ -184,6 +184,9 @@ export interface AttachProjectFileInput {
   contentType?: string;
 }
 
+/** Patch fields on an existing Pipedrive deal. Custom-field keys are allowed. */
+export type UpdateDealInput = Record<string, string | number | boolean | null>;
+
 /**
  * PSG-668 — one line item on a won deal, as needed by the template selector. The SKU is
  * how a deal is mapped to a net-new one-time template (e.g. Website Design & Build →
@@ -220,6 +223,11 @@ export interface PipedriveProjectsClient {
   updateTask?(taskId: number, patch: UpdateTaskInput): Promise<{ id: number }>;
   /** Attach a file at PROJECT level (v1 `POST /files`) for the rare true-file case. */
   attachProjectFile?(input: AttachProjectFileInput): Promise<{ id: number }>;
+  /**
+   * PSG-1472 — patch a deal-level field, primarily the First Contact Date custom field.
+   * Optional so older test fakes stay valid; the concrete client always implements it.
+   */
+  updateDeal?(dealId: number, patch: UpdateDealInput): Promise<{ id: number }>;
   /**
    * PSG-644 — list a project's tasks (v2 `GET /tasks?project_id`). Optional so existing
    * test fakes stay valid. Backs the Asana-import marker-guard: a re-run reads the tasks
@@ -448,6 +456,12 @@ export function createProjectsClient(
         );
       }
       return { id: Number(payload.data?.id) };
+    },
+    async updateDeal(dealId, patch) {
+      // v1 `PUT /deals/{id}` is the stable deal-update endpoint already used by our
+      // Pipedrive smoke path. Patch carries only the changed custom field.
+      const deal = await call<{ id: number }>("PUT", "v1", `deals/${dealId}`, {}, patch);
+      return { id: Number(deal.id) };
     },
     async createPhase(boardId, name, orderNr) {
       // v2 `POST /phases` (PSG-722). Board phases double as the project-card kanban columns
