@@ -47,6 +47,29 @@ export async function POST(request: Request) {
   const service = createServiceClient();
   const websiteUrl = body.websiteUrl?.trim() || null;
 
+  const { data: existingMembership, error: existingMembershipErr } = await service
+    .from("shop_users")
+    .select("shop_id")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingMembershipErr) {
+    console.error(
+      "[onboarding] existing membership check failed:",
+      existingMembershipErr.message
+    );
+    return NextResponse.json({ error: "Onboarding status check failed" }, { status: 500 });
+  }
+
+  if (existingMembership?.shop_id) {
+    return NextResponse.json({
+      shop_id: existingMembership.shop_id,
+      already_setup: true,
+      message: "Shop already set up",
+    });
+  }
+
   // 1. Create the owning client (shops.client_id is NOT NULL, FK -> clients).
   const { data: client, error: clientErr } = await service
     .from("clients")
