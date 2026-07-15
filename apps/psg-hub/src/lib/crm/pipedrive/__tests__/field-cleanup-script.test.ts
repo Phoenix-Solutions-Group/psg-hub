@@ -368,4 +368,49 @@ describe("pipedrive-field-cleanup plan", () => {
       ]),
     );
   });
+
+  it("archives custom Lost Reason only after built-in Lost Reason is confirmed required", () => {
+    const plan = buildCleanupPlan({
+      builtInLostReasonRequiredConfirmed: true,
+      dealFields: [
+        custom("Lead Source (Channel)", "lead_source_channel"),
+        system("Organization", "org_id"),
+        system("Contact person", "person_id"),
+        custom("First Contact Date", "first_contact_date"),
+        custom("Service Line", "service_line"),
+        system("Value", "value"),
+        system("Expected Close Date", "expected_close_date"),
+        custom("Revenue Type", "revenue_type"),
+        custom("Proposal Link", "proposal_link"),
+        system("Lost reason", "lost_reason"),
+        custom("Lost Reason", "custom_lost_reason"),
+      ],
+      organizationFields: [],
+      productFields: [],
+    });
+
+    expect(plan.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "deleteDealField",
+          label: "Custom Lost Reason",
+          fieldCode: "custom_lost_reason",
+        }),
+      ]),
+    );
+    expect(plan.unresolved).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Custom Lost Reason" }),
+        expect.objectContaining({ label: "Lost Reason required-on-lost" }),
+      ]),
+    );
+    expect(plan.notices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Lost Reason required-on-lost",
+          status: "confirmed outside this script",
+        }),
+      ]),
+    );
+  });
 });

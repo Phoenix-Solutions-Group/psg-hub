@@ -5,6 +5,8 @@
 //   node --env-file=.env.local scripts/pipedrive-field-cleanup.mjs
 // Apply live changes:
 //   node --env-file=.env.local scripts/pipedrive-field-cleanup.mjs --apply
+// Archive the duplicate custom Lost Reason after built-in Lost Reason is confirmed required:
+//   node --env-file=.env.local scripts/pipedrive-field-cleanup.mjs --apply --archive-custom-lost-reason
 //
 // The script never prints the API token. It only changes Pipedrive when --apply is
 // supplied; otherwise it reports the planned mutations and unresolved manual checks.
@@ -315,7 +317,7 @@ export const WON_HANDOFF_DEAL_FIELDS = [
 
 const PRODUCT_FIELDS_TO_ARCHIVE = ["Income Account", "Expense Account", "Supplier"];
 const CUSTOM_LOST_REASON_LABELS = ["Lost Reason (custom enum)", "Lost Reason"];
-const APPLY_EXCLUDED_OPERATION_TYPES = new Set(["dedupeOrganizationWebsite"]);
+const APPLY_EXCLUDED_OPERATION_TYPES = new Set(["dedupeOrganizationWebsite", "deleteDealField"]);
 
 const LIVE_APPLY_SCOPE = {
   included: [
@@ -470,6 +472,7 @@ function createDealFieldOperation(spec) {
  *   productFields: any[];
  *   activeStageIds?: Set<number> | null;
  *   activePipelineIds?: Set<number> | null;
+ *   builtInLostReasonRequiredConfirmed?: boolean;
  * }} args
  */
 export function buildCleanupPlan({
@@ -478,6 +481,7 @@ export function buildCleanupPlan({
   productFields,
   activeStageIds = null,
   activePipelineIds = null,
+  builtInLostReasonRequiredConfirmed = false,
 }) {
   const operations = [];
   const unresolved = [];
@@ -530,11 +534,20 @@ export function buildCleanupPlan({
     (f) => !isDeleted(f) && (cleanLabel(f.key) === "lost reason" || cleanLabel(f.key) === "lost reason" || isBuiltIn(f)),
   ) ?? findField(dealFields, ["lost_reason"], (f) => !isDeleted(f));
   if (builtInLostReason) {
-    unresolved.push({
-      label: "Lost Reason required-on-lost",
-      reason:
-        "Pipedrive rejects required_fields updates on the built-in lost_reason field through the field API; configure or confirm this in Pipedrive UI before archiving the custom duplicate",
-    });
+    if (builtInLostReasonRequiredConfirmed) {
+      notices.push({
+        label: "Lost Reason required-on-lost",
+        status: "confirmed outside this script",
+        reason:
+          "Pipedrive rejects required_fields updates on the built-in lost_reason field through the field API; Nick confirmed the built-in Lost Reason prompt is required before custom duplicate archive.",
+      });
+    } else {
+      unresolved.push({
+        label: "Lost Reason required-on-lost",
+        reason:
+          "Pipedrive rejects required_fields updates on the built-in lost_reason field through the field API; configure or confirm this in Pipedrive UI before archiving the custom duplicate",
+      });
+    }
   } else {
     unresolved.push({
       label: "Lost Reason",
@@ -548,11 +561,20 @@ export function buildCleanupPlan({
     (f) => !isDeleted(f) && !isBuiltIn(f) && !sameField(f, builtInLostReason),
   );
   if (customLostReason) {
-    unresolved.push({
-      label: "Custom Lost Reason",
-      reason:
-        "kept until the built-in Lost Reason field is confirmed required on Lost; then this duplicate can be archived safely",
-    });
+    if (builtInLostReasonRequiredConfirmed) {
+      operations.push({
+        type: "deleteDealField",
+        label: "Custom Lost Reason",
+        fieldCode: String(fieldCode(customLostReason)),
+        fieldName: fieldName(customLostReason),
+      });
+    } else {
+      unresolved.push({
+        label: "Custom Lost Reason",
+        reason:
+          "kept until the built-in Lost Reason field is confirmed required on Lost; then this duplicate can be archived safely",
+      });
+    }
   }
 
   const builtInWebsite = findField(
@@ -605,8 +627,15 @@ export function buildCleanupPlan({
   return { operations, unresolved, notices, liveApplyScope: LIVE_APPLY_SCOPE };
 }
 
-function applyableOperations(operations) {
-  return operations.filter((op) => !APPLY_EXCLUDED_OPERATION_TYPES.has(op.type));
+function applyableOperations(operations, opts = {}) {
+  if (opts.archiveCustomLostReason === true) {
+    return operations.filter(
+      (op) => op.type === "deleteDealField" && op.label === "Custom Lost Reason",
+    );
+  }
+  return operations.filter((op) => {
+    return !APPLY_EXCLUDED_OPERATION_TYPES.has(op.type);
+  });
 }
 
 function resolveToken(env = process.env) {
@@ -705,6 +734,7 @@ class PipedriveAdminApi {
 async function main() {
   const apply = process.argv.includes("--apply");
   const json = process.argv.includes("--json");
+  const archiveCustomLostReason = process.argv.includes("--archive-custom-lost-reason");
   const token = resolveToken();
   if (!token) {
     throw new Error(`Missing Pipedrive token. Set one of: ${TOKEN_ENV_CANDIDATES.join(", ")}`);
@@ -736,8 +766,9 @@ async function main() {
     productFields,
     activeStageIds,
     activePipelineIds,
+    builtInLostReasonRequiredConfirmed: archiveCustomLostReason,
   });
-  const applyable = applyableOperations(plan.operations);
+  const applyable = applyableOperations(plan.operations, { archiveCustomLostReason });
 
   const result = {
     mode: apply ? "apply" : "dry-run",
@@ -756,6 +787,9 @@ async function main() {
       console.log(`- ${op.type}: ${op.label} (${op.fieldName ?? op.fieldCode})`);
     }
     console.log(`Apply scope: ${applyable.length} of ${plan.operations.length} operations run with --apply.`);
+    if (archiveCustomLostReason) {
+      console.log("Custom Lost Reason archive is enabled because --archive-custom-lost-reason was supplied.");
+    }
     console.log("Excluded from live --apply:");
     for (const item of LIVE_APPLY_SCOPE.excluded) console.log(`- ${item.label}: ${item.reason}`);
     console.log("Handled by other guardrails:");
@@ -765,6 +799,14 @@ async function main() {
   }
 
   if (apply) {
+    const lostReasonArchiveOps = applyable.filter(
+      (op) => op.type === "deleteDealField" && op.label === "Custom Lost Reason",
+    );
+    if (archiveCustomLostReason && lostReasonArchiveOps.length !== 1) {
+      throw new Error(
+        `Expected exactly one Custom Lost Reason archive operation, found ${lostReasonArchiveOps.length}. Refusing live apply.`,
+      );
+    }
     for (const op of applyable) await api.applyOperation(op);
     console.log(
       `Applied ${applyable.length} operations. Website dedupe was intentionally left for a reviewed follow-up; contact phone-or-email validation is handled by the Pipedrive webhook.`,
