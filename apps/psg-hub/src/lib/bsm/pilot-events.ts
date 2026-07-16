@@ -36,6 +36,22 @@ export function sanitizeBsmPilotEventProperties(
   ) as BsmPilotEventProperties;
 }
 
+function isLocalSupabaseStack(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(url);
+}
+
+function isMissingPilotEventsTableError(error: { code?: string; message?: string }): boolean {
+  const message = error.message ?? "";
+  return (
+    message.includes("bsm_pilot_events") &&
+    (error.code === "42P01" ||
+      error.code === "PGRST205" ||
+      /relation .* does not exist/i.test(message) ||
+      /could not find .*bsm_pilot_events/i.test(message))
+  );
+}
+
 export async function recordBsmPilotEvent(
   service: SupabaseClient,
   input: {
@@ -53,6 +69,10 @@ export async function recordBsmPilotEvent(
   });
 
   if (error) {
+    if (isLocalSupabaseStack() && isMissingPilotEventsTableError(error)) {
+      return;
+    }
+
     console.error("[bsm-pilot-events] insert failed:", error.message);
   }
 }

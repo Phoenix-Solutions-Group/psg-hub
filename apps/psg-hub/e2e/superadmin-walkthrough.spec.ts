@@ -1,8 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { DEMO_SESSIONS } from "./demo-fixtures";
+import { OPS_STAFF } from "./fixtures";
+
+const operatorStatePath =
+  process.env.DEMO_CAPTURE === "1"
+    ? DEMO_SESSIONS.operator.statePath
+    : OPS_STAFF.statePath;
 
 test.describe("superadmin walkthrough QA environment", () => {
-  test.use({ storageState: DEMO_SESSIONS.operator.statePath });
+  test.use({ storageState: operatorStatePath });
 
   test("operator can reach user access, module access, and audit pages", async ({ page }) => {
     await page.goto("/ops/admin/users", { waitUntil: "domcontentloaded" });
