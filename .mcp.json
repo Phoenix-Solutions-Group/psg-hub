@@ -7,7 +7,7 @@
     },
     "supabase": {
       "type": "http",
-      "url": "https://mcp.supabase.com/mcp?project_ref=gylkkzmcmbdftxieyabw&read_only=true&features=database,docs",
+      "url": "https://mcp.supabase.com/mcp?project_ref=gjapvrkakfrrpwxmksre&read_only=true&features=database,docs",
       "headers": {
         "Authorization": "Bearer ${SUPABASE_MCP_ACCESS_TOKEN}"
       }
