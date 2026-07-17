@@ -5,6 +5,78 @@
 -- manage_bsm_content_approvals gate. Customer reads/writes are shop-scoped and
 -- reviewer-aware so one shop can never see another shop's approval content.
 
+alter table if exists public.bsm_content_review_items
+  add column if not exists account_id uuid,
+  add column if not exists source_content_item_id uuid references public.content_items (id) on delete set null,
+  add column if not exists customer_profile_id uuid references public.profiles (id) on delete set null,
+  add column if not exists source_kind text,
+  add column if not exists title text,
+  add column if not exists content_type text,
+  add column if not exists status text not null default 'draft',
+  add column if not exists admin_context_note text,
+  add column if not exists current_version_id uuid,
+  add column if not exists due_at timestamptz,
+  add column if not exists sent_at timestamptz,
+  add column if not exists approved_at timestamptz,
+  add column if not exists archived_at timestamptz,
+  add column if not exists created_by_profile_id uuid references public.profiles (id) on delete set null,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now(),
+  add column if not exists metadata_jsonb jsonb not null default '{}'::jsonb;
+
+alter table if exists public.bsm_content_review_versions
+  add column if not exists review_item_id uuid references public.bsm_content_review_items (id) on delete cascade,
+  add column if not exists shop_id uuid references public.shops (id) on delete cascade,
+  add column if not exists version_number integer,
+  add column if not exists status text not null default 'current',
+  add column if not exists storage_bucket text,
+  add column if not exists storage_path text,
+  add column if not exists storage_object_path text,
+  add column if not exists original_filename text,
+  add column if not exists version_label text,
+  add column if not exists content_type text,
+  add column if not exists byte_size integer,
+  add column if not exists checksum_sha256 text,
+  add column if not exists checksum text,
+  add column if not exists preview_type text not null default 'file',
+  add column if not exists generated_page_path text,
+  add column if not exists source_content_item_id uuid references public.content_items (id) on delete set null,
+  add column if not exists preview_url text,
+  add column if not exists source_metadata_jsonb jsonb not null default '{}'::jsonb,
+  add column if not exists snapshot_jsonb jsonb not null default '{}'::jsonb,
+  add column if not exists created_by_profile_id uuid references public.profiles (id) on delete set null,
+  add column if not exists created_at timestamptz not null default now();
+
+do $$
+begin
+  if to_regclass('public.bsm_content_review_versions') is not null then
+    execute $sql$
+      update public.bsm_content_review_versions
+      set
+        storage_path = coalesce(storage_path, storage_object_path),
+        original_filename = coalesce(original_filename, version_label),
+        source_metadata_jsonb = case
+          when source_metadata_jsonb <> '{}'::jsonb then source_metadata_jsonb
+          else jsonb_strip_nulls(
+            jsonb_build_object(
+              'generatedPagePath', generated_page_path,
+              'previewUrl', preview_url,
+              'sourceContentItemId', source_content_item_id
+            ) || snapshot_jsonb
+          )
+        end,
+        preview_type = case
+          when preview_type is not null then preview_type
+          when generated_page_path is not null or preview_url is not null then 'generated_page'
+          else 'file'
+        end,
+        content_type = coalesce(content_type, 'application/octet-stream'),
+        byte_size = coalesce(byte_size, 1)
+      where true
+    $sql$;
+  end if;
+end$$;
+
 create table if not exists public.bsm_content_review_items (
   id uuid primary key default gen_random_uuid(),
   shop_id uuid not null references public.shops (id) on delete cascade,

@@ -201,7 +201,7 @@ create policy content_approval_archives_psg_write on public.content_approval_arc
 drop trigger if exists set_updated_at_content_approval_comments on public.content_approval_comments;
 create trigger set_updated_at_content_approval_comments
   before update on public.content_approval_comments
-  for each row execute function public.update_updated_at();
+  for each row execute function public.set_updated_at();
 
 grant select on public.content_approval_files to authenticated;
 grant select on public.content_approval_comments to authenticated;
