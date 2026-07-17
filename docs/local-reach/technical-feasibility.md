@@ -75,6 +75,8 @@ Operating rules:
 
 Manual publishing is the MVP path because it keeps customer websites safe while Local Reach proves its recommendation quality.
 
+Operator checklist: `docs/local-reach/manual-wordpress-elementor-publishing-checklist.md`.
+
 1. Local Reach creates a recommendation and draft content in BSM.
 2. The draft passes the existing BSM claim-integrity gate before it can become a review item.
 3. PSG creates a BSM content approval item with:
