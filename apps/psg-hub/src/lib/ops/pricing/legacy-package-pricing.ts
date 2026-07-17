@@ -79,6 +79,29 @@ export type LegacyPackageProgramUpsert = {
   customizations_jsonb: LegacyPackageMapping["companyProgram"]["customizations_jsonb"];
 };
 
+export type LegacyProductMapping = {
+  legacyRecordId: string | null;
+  name: string;
+  legacyCode: string | null;
+  family: string | null;
+  currency: string | null;
+  active: boolean | null;
+  product: {
+    name: string;
+    description: string | null;
+    selling_price_cents: number;
+    total_cost_cents: 0;
+    items_jsonb: {
+      source: "legacy_product_catalog";
+      legacyRecordId: string | null;
+      legacyCode: string | null;
+      family: string | null;
+      currency: string | null;
+      active: boolean | null;
+    };
+  };
+};
+
 export function mapLegacyPackagePricingRow(
   row: LegacyPackageExportRow
 ): LegacyPackageMapping | null {
@@ -152,8 +175,67 @@ export function buildLegacyPackageProgramUpsert({
   };
 }
 
+export function mapLegacyProductPricingRow(
+  row: LegacyPackageExportRow
+): LegacyProductMapping | null {
+  const name = firstText(row, ["Product Name", "Name"]);
+  const price = moneyToCents(firstValue(row, ["Standard Price", "Price (USD)", "Price"]));
+  if (!name || price === null) return null;
+
+  const legacyRecordId = firstText(row, ["Record ID", "\ufeffRecord ID", "\ufeffID", "ID"]) || null;
+  const legacyCode = firstText(row, ["Product Code", "Product code"]) || null;
+  const family = firstText(row, ["Product Family", "Category"]) || null;
+  const currency = firstText(row, ["Currency"]) || null;
+  const description = firstText(row, ["Description", "Product Description"]) || null;
+  const active = boolish(firstValue(row, ["Active"]));
+
+  return {
+    legacyRecordId,
+    name,
+    legacyCode,
+    family,
+    currency,
+    active,
+    product: {
+      name,
+      description,
+      selling_price_cents: price,
+      total_cost_cents: 0,
+      items_jsonb: {
+        source: "legacy_product_catalog",
+        legacyRecordId,
+        legacyCode,
+        family,
+        currency,
+        active,
+      },
+    },
+  };
+}
+
+export function mapLegacyProductPricingRows(
+  rows: readonly LegacyPackageExportRow[]
+): LegacyProductMapping[] {
+  return rows.flatMap((row) => {
+    const mapped = mapLegacyProductPricingRow(row);
+    return mapped ? [mapped] : [];
+  });
+}
+
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function firstValue(row: LegacyPackageExportRow, keys: readonly string[]): unknown {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && row[key] !== "") return row[key];
+  }
+  return null;
+}
+
+function firstText(row: LegacyPackageExportRow, keys: readonly string[]): string {
+  const value = firstValue(row, keys);
+  return text(value);
 }
 
 function isSelected(value: unknown): boolean {
@@ -186,4 +268,17 @@ function percent(value: unknown): number | null {
       ? value
       : Number(String(value).replace(/[%\s]/g, ""));
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+function boolish(value: unknown): boolean | null {
+  if (value === true || value === false) return value;
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "yes" || normalized === "y" || normalized === "1") {
+    return true;
+  }
+  if (normalized === "false" || normalized === "no" || normalized === "n" || normalized === "0") {
+    return false;
+  }
+  return null;
 }
