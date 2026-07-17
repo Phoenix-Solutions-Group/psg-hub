@@ -11,6 +11,11 @@ const enrollNurturePath = vi.fn();
 const createServiceClient = vi.fn();
 const updateDeal = vi.fn();
 const listDealProducts = vi.fn();
+const listUserConnections = vi.fn();
+const listMailboxThreads = vi.fn();
+const listDealActivities = vi.fn();
+const createActivity = vi.fn();
+const deleteActivity = vi.fn();
 const fetchPersonContact = vi.fn();
 const fetchOrganizationBillingDetails = vi.fn();
 
@@ -66,7 +71,8 @@ function wonDealRequest(): Request {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.unstubAllEnvs();
+  vi.resetAllMocks();
   vi.stubEnv("PIPEDRIVE_WEBHOOK_USER", "webhook-user");
   vi.stubEnv("PIPEDRIVE_WEBHOOK_PASS", "webhook-pass");
   vi.stubEnv("PIPEDRIVE_API_TOKEN", "token");
@@ -75,8 +81,18 @@ beforeEach(() => {
   vi.stubEnv("PIPEDRIVE_SALES_PIPELINE_ID", "8");
   vi.stubEnv("PIPEDRIVE_COMPANY_DOMAIN", "psg");
   vi.stubEnv("PIPEDRIVE_PANDADOC_SIGNED_URL_FIELD_KEY", "");
+  vi.stubEnv("PIPEDRIVE_PROPOSAL_PREP_BUSINESS_DAY_OFFSET", "1");
 
-  createProjectsClient.mockReturnValue({ projectsClient: true, updateDeal, listDealProducts });
+  createProjectsClient.mockReturnValue({
+    projectsClient: true,
+    updateDeal,
+    listDealProducts,
+    listUserConnections,
+    listMailboxThreads,
+    listDealActivities,
+    createActivity,
+    deleteActivity,
+  });
   createPipedriveClient.mockReturnValue({
     contactClient: true,
     fetchPersonContact,
@@ -89,6 +105,11 @@ beforeEach(() => {
   dealPipelineId.mockReturnValue(8);
   provisionForDeal.mockResolvedValue({ provisionedProjects: 1, reusedProjects: 0 });
   enrollNurturePath.mockResolvedValue({ path: "onboarding_retention" });
+  listUserConnections.mockResolvedValue({ google: "nick@phoenixsolutionsgroup.net" });
+  listMailboxThreads.mockResolvedValue([{ id: 1 }]);
+  listDealActivities.mockResolvedValue([]);
+  createActivity.mockResolvedValue({ id: 9001 });
+  deleteActivity.mockResolvedValue(undefined);
   fetchPersonContact.mockResolvedValue({ firstName: "Pat", email: "pat@example.com", phone: null });
   fetchOrganizationBillingDetails.mockResolvedValue({
     id: 9,
@@ -249,6 +270,8 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
   });
 
   it("flags a PSG Sales New Lead deal when the linked contact has no phone or email", async () => {
+    vi.stubEnv("PIPEDRIVE_NEW_LEAD_STAGE_ID", "56");
+    vi.stubEnv("PIPEDRIVE_QUALIFIED_STAGE_ID", "58");
     isDealWonTransition.mockReturnValue(false);
     fetchPersonContact.mockResolvedValue({ firstName: "Pat", email: null, phone: null });
 
@@ -327,5 +350,204 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
     expect(updateDeal).toHaveBeenCalledWith(42, {
       title: "Pat's Collision",
     });
+  });
+
+  it("creates one busy 45-minute proposal prep block when a sales deal reaches Qualified", async () => {
+    vi.stubEnv("PIPEDRIVE_NEW_LEAD_STAGE_ID", "55");
+    vi.stubEnv("PIPEDRIVE_QUALIFIED_STAGE_ID", "56");
+    isDealWonTransition.mockReturnValue(false);
+    createActivity.mockResolvedValueOnce({ id: 901 });
+
+    const res = await POST(
+      new Request("https://hub.psgweb.me/api/webhooks/pipedrive", {
+        method: "POST",
+        headers: {
+          authorization: authHeader(),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          previous: { stage_id: 57 },
+          current: {
+            id: 42,
+            title: "Wallace website proposal",
+            status: "open",
+            pipeline_id: 8,
+            stage_id: 56,
+            org_id: { value: 9, name: "Wallace Collision" },
+            person_id: { value: 7, name: "Pat Owner" },
+            value: 6500,
+            currency: "USD",
+            update_time: "2026-07-17 14:22:00",
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(
+      expect.objectContaining({
+        ok: true,
+        skipped: "not_won_transition",
+        proposalPrepBlock: { status: "created", activityIds: [901] },
+      }),
+    );
+    expect(listUserConnections).toHaveBeenCalled();
+    expect(listMailboxThreads).toHaveBeenCalledWith("drafts", 1);
+    expect(createActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: "Proposal prep: Wallace website proposal",
+        type: "meeting",
+        deal_id: 42,
+        person_id: 7,
+        org_id: 9,
+        due_date: "2026-07-20",
+        due_time: "09:00",
+        duration: "00:45",
+        busy: true,
+        done: false,
+      }),
+    );
+  });
+
+  it("reuses an existing proposal prep block on webhook replay", async () => {
+    vi.stubEnv("PIPEDRIVE_NEW_LEAD_STAGE_ID", "55");
+    vi.stubEnv("PIPEDRIVE_QUALIFIED_STAGE_ID", "56");
+    isDealWonTransition.mockReturnValue(false);
+    listDealActivities.mockResolvedValueOnce([
+      {
+        id: 777,
+        subject: "Proposal prep: Wallace website proposal",
+        type: "meeting",
+        dueDate: "2026-07-20",
+        done: false,
+      },
+    ]);
+
+    const res = await POST(
+      new Request("https://hub.psgweb.me/api/webhooks/pipedrive", {
+        method: "POST",
+        headers: {
+          authorization: authHeader(),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          previous: { stage_id: 57 },
+          current: {
+            id: 42,
+            title: "Wallace website proposal",
+            status: "open",
+            pipeline_id: 8,
+            stage_id: 56,
+            update_time: "2026-07-17 14:22:00",
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(
+      expect.objectContaining({
+        proposalPrepBlock: { status: "reused", activityIds: [777] },
+      }),
+    );
+    expect(createActivity).not.toHaveBeenCalled();
+  });
+
+  it("creates five non-sending follow-up draft tasks when a sales deal reaches Proposal Sent", async () => {
+    isDealWonTransition.mockReturnValue(false);
+    createActivity.mockImplementation(async () => ({ id: 9000 + createActivity.mock.calls.length }));
+
+    const res = await POST(
+      new Request("https://hub.psgweb.me/api/webhooks/pipedrive", {
+        method: "POST",
+        headers: {
+          authorization: authHeader(),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          previous: { stage_id: 56 },
+          current: {
+            id: 42,
+            title: "Wallace website proposal",
+            status: "open",
+            pipeline_id: 8,
+            stage_id: 59,
+            org_id: { value: 9, name: "Wallace Collision" },
+            person_id: { value: 7, name: "Pat Owner" },
+            update_time: "2026-07-17 14:22:00",
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(
+      expect.objectContaining({
+        proposalDraftSeries: {
+          status: "created",
+          activityIds: [9001, 9002, 9003, 9004, 9005],
+        },
+      }),
+    );
+    expect(createActivity).toHaveBeenCalledTimes(5);
+    expect(createActivity).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        subject: "Proposal follow-up draft Touch 1: Wallace website proposal",
+        type: "email",
+        due_date: "2026-07-21",
+        done: false,
+        note: expect.stringContaining("Draft only. Do not auto-send."),
+      }),
+    );
+  });
+
+  it("deletes open proposal follow-up draft tasks when the deal is lost", async () => {
+    isDealWonTransition.mockReturnValue(false);
+    listDealActivities.mockResolvedValueOnce([
+      {
+        id: 801,
+        subject: "Proposal follow-up draft Touch 1: Wallace website proposal",
+        type: "email",
+        dueDate: "2026-07-21",
+        done: false,
+      },
+      {
+        id: 802,
+        subject: "Proposal follow-up draft Touch 2: Wallace website proposal",
+        type: "email",
+        dueDate: "2026-07-24",
+        done: false,
+      },
+    ]);
+
+    const res = await POST(
+      new Request("https://hub.psgweb.me/api/webhooks/pipedrive", {
+        method: "POST",
+        headers: {
+          authorization: authHeader(),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          previous: { status: "open", stage_id: 59 },
+          current: {
+            id: 42,
+            title: "Wallace website proposal",
+            status: "lost",
+            pipeline_id: 8,
+            stage_id: 59,
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(
+      expect.objectContaining({
+        proposalDraftSeries: { status: "stopped", stoppedActivityIds: [801, 802] },
+      }),
+    );
+    expect(deleteActivity).toHaveBeenCalledWith(801);
+    expect(deleteActivity).toHaveBeenCalledWith(802);
   });
 });

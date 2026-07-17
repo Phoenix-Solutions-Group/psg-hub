@@ -17,6 +17,7 @@ import {
   buildDealBillingAutofillPatch,
   buildDealWonGateAutofillPatch,
 } from "@/lib/pipedrive/deal-billing-autofill";
+import { runProposalAutomations } from "@/lib/pipedrive/proposal-automations";
 
 // PSG-584 / PSG-576 Move 1 — Pipedrive deal-won webhook → auto-create delivery board.
 //
@@ -347,7 +348,24 @@ export async function POST(request: Request): Promise<NextResponse> {
   const wonGateAutofill = isWonTransition
     ? await autofillDealWonGateFields(current)
     : "skipped";
-
+  let proposalAutomations = {};
+  try {
+    const client = createProjectsClient({
+      companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
+    });
+    proposalAutomations = await runProposalAutomations(
+      client,
+      current,
+      payload.previous ?? null,
+    );
+  } catch (automationErr) {
+    console.error(
+      "[pipedrive-webhook] proposal automation failed for deal",
+      Number.isFinite(dealId) ? dealId : "unknown",
+      automationErr instanceof Error ? automationErr.message : "unknown",
+    );
+    return NextResponse.json({ error: "proposal_automation_failed" }, { status: 502 });
+  }
   const shouldStampFirstContact =
     Number.isFinite(dealId) &&
     firstContactKey !== "" &&
@@ -388,6 +406,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       firstContactStamp,
       billingAutofill,
       wonGateAutofill,
+      ...proposalAutomations,
     });
   }
 
@@ -403,6 +422,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       firstContactStamp,
       billingAutofill,
       wonGateAutofill,
+      ...proposalAutomations,
     });
   }
 
@@ -415,6 +435,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       firstContactStamp,
       billingAutofill,
       wonGateAutofill,
+      ...proposalAutomations,
     });
   }
 
@@ -473,6 +494,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       firstContactStamp,
       billingAutofill,
       wonGateAutofill,
+      ...proposalAutomations,
     });
   } catch (err) {
     // Never log the error's cause verbatim (Pipedrive URLs carry the token); the

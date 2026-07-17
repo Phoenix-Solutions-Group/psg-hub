@@ -319,6 +319,35 @@ export interface DealProduct {
   billingFrequency?: string | null;
 }
 
+export interface PipedriveUserConnections {
+  /** Pipedrive currently returns `{ google: "email@domain" }` for Nick's connected Google account. */
+  google?: unknown;
+  [key: string]: unknown;
+}
+
+export interface DealActivitySummary {
+  id: number;
+  subject: string;
+  type: string | null;
+  dueDate: string | null;
+  done: boolean;
+}
+
+export interface CreateActivityInput extends Record<string, unknown> {
+  subject: string;
+  type: string;
+  owner_id?: number;
+  deal_id?: number;
+  person_id?: number;
+  org_id?: number;
+  due_date?: string;
+  due_time?: string;
+  duration?: string;
+  busy?: boolean;
+  done?: boolean;
+  note?: string;
+}
+
 export interface PipedriveProjectsClient {
   listBoards(): Promise<ProjectBoard[]>;
   listPhases(boardId: number): Promise<ProjectPhase[]>;
@@ -330,6 +359,16 @@ export interface PipedriveProjectsClient {
    * interface so existing test fakes stay valid; the concrete client always implements it.
    */
   listDealProducts?(dealId: number): Promise<DealProduct[]>;
+  /** Read connected account state before calendar/mail automations write anything. */
+  listUserConnections?(): Promise<PipedriveUserConnections>;
+  /** Lightweight mailbox probe, used to confirm Nick's Pipedrive mailbox drafts folder is reachable. */
+  listMailboxThreads?(folder: "drafts", limit?: number): Promise<Array<{ id: number }>>;
+  /** Deal-linked open activities, used as the replay/idempotency guard for webhook-created work. */
+  listDealActivities?(dealId: number): Promise<DealActivitySummary[]>;
+  /** Create a deal-linked activity. Activities sync to calendar when the user has calendar sync enabled. */
+  createActivity?(input: CreateActivityInput): Promise<{ id: number }>;
+  /** Delete an activity when a proposal follow-up sequence should stop. */
+  deleteActivity?(activityId: number): Promise<void>;
   createProject(input: CreateProjectInput): Promise<{ id: number }>;
   createTask(input: CreateTaskInput): Promise<{ id: number }>;
   /** Find an existing project whose title matches (idempotency guard). */
@@ -431,7 +470,7 @@ export function createProjectsClient(
   }
 
   async function call<T>(
-    method: "GET" | "POST" | "PATCH" | "PUT",
+    method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
     version: ApiVersion,
     path: string,
     params: Record<string, string> = {},
@@ -525,6 +564,44 @@ export function createProjectsClient(
               : null,
         };
       });
+    },
+    async listUserConnections() {
+      const data = await call<PipedriveUserConnections>("GET", "v1", "userConnections");
+      return data ?? {};
+    },
+    async listMailboxThreads(folder, limit = 1) {
+      const data = await call<Array<{ id?: number }>>(
+        "GET",
+        "v1",
+        "mailbox/mailThreads",
+        { folder, start: "0", limit: String(limit) },
+      );
+      return (data ?? []).map((thread) => ({ id: Number(thread.id) }));
+    },
+    async listDealActivities(dealId) {
+      const data = await call<
+        Array<{
+          id?: number;
+          subject?: string | null;
+          type?: string | null;
+          due_date?: string | null;
+          done?: boolean | number | null;
+        }>
+      >("GET", "v2", "activities", { deal_id: String(dealId), limit: "100" });
+      return (data ?? []).map((activity) => ({
+        id: Number(activity.id),
+        subject: String(activity.subject ?? ""),
+        type: typeof activity.type === "string" ? activity.type : null,
+        dueDate: typeof activity.due_date === "string" ? activity.due_date : null,
+        done: activity.done === true || activity.done === 1,
+      }));
+    },
+    async createActivity(input) {
+      const activity = await call<{ id: number }>("POST", "v2", "activities", {}, input);
+      return { id: Number(activity.id) };
+    },
+    async deleteActivity(activityId) {
+      await call<unknown>("DELETE", "v2", `activities/${activityId}`);
     },
     async createProject(input) {
       const proj = await call<{ id: number }>("POST", "v2", "projects", {}, {
