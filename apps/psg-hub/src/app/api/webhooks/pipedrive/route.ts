@@ -18,6 +18,10 @@ import {
   buildDealWonGateAutofillPatch,
 } from "@/lib/pipedrive/deal-billing-autofill";
 import { runProposalAutomations } from "@/lib/pipedrive/proposal-automations";
+import {
+  buildOrganizationBodyShopPatch,
+  findBodyShopForOrganization,
+} from "@/lib/pipedrive/organization-enrichment";
 
 // PSG-584 / PSG-576 Move 1 — Pipedrive deal-won webhook → auto-create delivery board.
 //
@@ -105,6 +109,90 @@ function newLeadStageId(): number {
 function dealTitle(current: Record<string, unknown> | null | undefined): string | null {
   const title = current?.title;
   return typeof title === "string" && title.trim() !== "" ? title : null;
+}
+
+function payloadText(value: unknown): string {
+  return typeof value === "string" ? value.toLocaleLowerCase() : "";
+}
+
+function isOrganizationCreateWebhook(payload: {
+  current?: Record<string, unknown> | null;
+  previous?: Record<string, unknown> | null;
+  event?: string;
+  meta?: Record<string, unknown>;
+}): boolean {
+  const current = payload.current ?? null;
+  if (!current) return false;
+  const event = payloadText(payload.event);
+  const metaObject = payloadText(payload.meta?.object ?? payload.meta?.entity);
+  const isOrganization =
+    event.includes("organization") ||
+    metaObject === "organization" ||
+    ("name" in current && !("title" in current) && !("stage_id" in current));
+  if (!isOrganization) return false;
+
+  const isCreate =
+    event.includes("add") ||
+    event.includes("create") ||
+    payloadText(payload.meta?.action).includes("add") ||
+    payloadText(payload.meta?.action).includes("create") ||
+    payload.previous == null;
+  return isCreate;
+}
+
+async function enrichNewOrganizationFromDirectory(
+  current: Record<string, unknown> | null,
+): Promise<
+  | { status: "skipped"; reason: "not_organization_create" | "missing_organization" }
+  | { status: "no_match"; organizationId: number; organizationName: string | null }
+  | { status: "no_changes"; organizationId: number; matchedShopId: string }
+  | {
+      status: "updated";
+      organizationId: number;
+      matchedShopId: string;
+      filledFields: string[];
+    }
+> {
+  const organizationId = Number(current?.id);
+  if (!current || !Number.isFinite(organizationId)) {
+    return { status: "skipped", reason: "missing_organization" };
+  }
+
+  const organizationName =
+    typeof current.name === "string" && current.name.trim() !== ""
+      ? current.name.trim()
+      : null;
+  const match = await findBodyShopForOrganization(createServiceClient(), organizationName);
+  if (!match) {
+    return { status: "no_match", organizationId, organizationName };
+  }
+
+  const patch = buildOrganizationBodyShopPatch({ organization: current, match });
+  if (Object.keys(patch.patch).length === 0) {
+    return { status: "no_changes", organizationId, matchedShopId: match.shop_id };
+  }
+
+  const client = createProjectsClient({
+    companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
+  });
+  if (typeof client.updateOrganization !== "function") {
+    throw new Error("Pipedrive organization update client is unavailable");
+  }
+  await client.updateOrganization(organizationId, patch.patch);
+  console.info(
+    "[pipedrive-webhook] enriched organization from body_shops",
+    JSON.stringify({
+      organizationId,
+      matchedShopId: match.shop_id,
+      filledFields: patch.filled.map((field) => field.fieldKey),
+    }),
+  );
+  return {
+    status: "updated",
+    organizationId,
+    matchedShopId: match.shop_id,
+    filledFields: patch.filled.map((field) => field.fieldKey),
+  };
 }
 
 function needsContactTitle(title: string): string {
@@ -317,6 +405,19 @@ export async function POST(request: Request): Promise<NextResponse> {
     ? Number(process.env.PIPEDRIVE_SALES_PIPELINE_ID)
     : null;
   const current = payload.current ?? null;
+  if (isOrganizationCreateWebhook(payload)) {
+    try {
+      const organizationEnrichment = await enrichNewOrganizationFromDirectory(current);
+      return NextResponse.json({ ok: true, organizationEnrichment });
+    } catch (err) {
+      console.error(
+        "[pipedrive-webhook] organization enrichment failed",
+        err instanceof Error ? err.message : "unknown",
+      );
+      return NextResponse.json({ error: "organization_enrichment_failed" }, { status: 502 });
+    }
+  }
+
   const dealId = Number(current?.id);
   const firstContactKey = firstContactFieldKey();
   const currentStageId = stageId(current);

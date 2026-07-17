@@ -187,6 +187,9 @@ export interface AttachProjectFileInput {
 /** Patch fields on an existing Pipedrive deal. Custom-field keys are allowed. */
 export type UpdateDealInput = Record<string, string | number | boolean | null>;
 
+/** Patch fields on an existing Pipedrive organization. Custom-field keys are allowed. */
+export type UpdateOrganizationInput = Record<string, string | number | boolean | null>;
+
 export const HANDOFF_COMPLETE_FIELD_KEY_ENV = "PIPEDRIVE_HANDOFF_COMPLETE_FIELD_KEY";
 
 export const HANDOFF_COMPLETE_REQUIRED_FIELDS = [
@@ -385,6 +388,14 @@ export interface PipedriveProjectsClient {
    * Optional so older test fakes stay valid; the concrete client always implements it.
    */
   updateDeal?(dealId: number, patch: UpdateDealInput): Promise<{ id: number }>;
+  /**
+   * Patch organization fields when an external source has better contact data.
+   * Optional so older test fakes stay valid; the concrete client always implements it.
+   */
+  updateOrganization?(
+    organizationId: number,
+    patch: UpdateOrganizationInput,
+  ): Promise<{ id: number }>;
   /**
    * PSG-644 — list a project's tasks (v2 `GET /tasks?project_id`). Optional so existing
    * test fakes stay valid. Backs the Asana-import marker-guard: a re-run reads the tasks
@@ -677,6 +688,17 @@ export function createProjectsClient(
       }
       const deal = await call<{ id: number }>("PUT", "v1", `deals/${dealId}`, {}, patch);
       return { id: Number(deal.id) };
+    },
+    async updateOrganization(organizationId, patch) {
+      // v1 `PUT /organizations/{id}` is the stable organization-update endpoint.
+      const organization = await call<{ id: number }>(
+        "PUT",
+        "v1",
+        `organizations/${organizationId}`,
+        {},
+        patch,
+      );
+      return { id: Number(organization.id) };
     },
     async createPhase(boardId, name, orderNr) {
       // v2 `POST /phases` (PSG-722). Board phases double as the project-card kanban columns

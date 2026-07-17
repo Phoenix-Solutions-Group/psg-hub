@@ -18,6 +18,7 @@ const createActivity = vi.fn();
 const deleteActivity = vi.fn();
 const fetchPersonContact = vi.fn();
 const fetchOrganizationBillingDetails = vi.fn();
+const updateOrganization = vi.fn();
 
 vi.mock("@/lib/pipedrive/projects", () => ({
   createProjectsClient: (...args: unknown[]) => createProjectsClient(...args),
@@ -92,6 +93,7 @@ beforeEach(() => {
     listDealActivities,
     createActivity,
     deleteActivity,
+    updateOrganization,
   });
   createPipedriveClient.mockReturnValue({
     contactClient: true,
@@ -119,6 +121,7 @@ beforeEach(() => {
     generalEmail: "billing@wallace.example",
     paymentTerms: "Net 15",
   });
+  updateOrganization.mockResolvedValue({ id: 9 });
   listDealProducts.mockResolvedValue([
     {
       name: "Website Design & Build",
@@ -131,7 +134,136 @@ beforeEach(() => {
   ]);
 });
 
+function supabaseWithBodyShopRows(rows: Array<Record<string, unknown>>) {
+  const query = {
+    eq: vi.fn(() => query),
+    ilike: vi.fn(() => query),
+    order: vi.fn(() => query),
+    limit: vi.fn(() => query),
+    then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
+      Promise.resolve({ data: rows, error: null }).then(resolve, reject),
+  };
+  const select = vi.fn(() => query);
+  const from = vi.fn(() => ({ select }));
+  return { client: { from }, query, select, from };
+}
+
 describe("Pipedrive won-deal webhook nurture gate", () => {
+  it("enriches a newly-created organization from the body shop directory", async () => {
+    vi.stubEnv("PIPEDRIVE_ORG_PHONE_FIELD_KEY", "org_phone_key");
+    vi.stubEnv("PIPEDRIVE_ORG_WEBSITE_FIELD_KEY", "org_website_key");
+    vi.stubEnv("PIPEDRIVE_ORG_BODY_SHOP_ID_FIELD_KEY", "org_body_shop_id_key");
+    const supabase = supabaseWithBodyShopRows([
+      {
+        shop_id: "bs_123",
+        shop_name: "Wallace Collision",
+        place_id: "place_123",
+        address: "123 Main St, Phoenix, AZ 85001",
+        phone: "(602) 555-0100",
+        website: "https://wallace.example",
+        rating: 4.8,
+        normalized_name: "wallacecollision",
+      },
+    ]);
+    createServiceClient.mockReturnValueOnce(supabase.client);
+
+    const res = await POST(
+      new Request("https://hub.psgweb.me/api/webhooks/pipedrive", {
+        method: "POST",
+        headers: {
+          authorization: authHeader(),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          event: "added.organization",
+          previous: null,
+          current: {
+            id: 9,
+            name: "Wallace Collision",
+            address: "",
+            org_phone_key: "",
+            org_website_key: "",
+            org_body_shop_id_key: "",
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      organizationEnrichment: {
+        status: "updated",
+        organizationId: 9,
+        matchedShopId: "bs_123",
+        filledFields: ["address", "org_phone_key", "org_website_key", "org_body_shop_id_key"],
+      },
+    });
+    expect(supabase.from).toHaveBeenCalledWith("body_shops");
+    expect(supabase.query.eq).toHaveBeenCalledWith("normalized_name", "wallacecollision");
+    expect(updateOrganization).toHaveBeenCalledWith(9, {
+      address: "123 Main St, Phoenix, AZ 85001",
+      org_phone_key: "(602) 555-0100",
+      org_website_key: "https://wallace.example",
+      org_body_shop_id_key: "bs_123",
+    });
+    expect(updateDeal).not.toHaveBeenCalled();
+    expect(provisionForDeal).not.toHaveBeenCalled();
+  });
+
+  it("does not overwrite organization fields that are already populated", async () => {
+    vi.stubEnv("PIPEDRIVE_ORG_PHONE_FIELD_KEY", "org_phone_key");
+    vi.stubEnv("PIPEDRIVE_ORG_WEBSITE_FIELD_KEY", "org_website_key");
+    const supabase = supabaseWithBodyShopRows([
+      {
+        shop_id: "bs_123",
+        shop_name: "Wallace Collision",
+        place_id: null,
+        address: "123 Main St, Phoenix, AZ 85001",
+        phone: "(602) 555-0100",
+        website: "https://wallace.example",
+        rating: 4.8,
+        normalized_name: "wallacecollision",
+      },
+    ]);
+    createServiceClient.mockReturnValueOnce(supabase.client);
+
+    const res = await POST(
+      new Request("https://hub.psgweb.me/api/webhooks/pipedrive", {
+        method: "POST",
+        headers: {
+          authorization: authHeader(),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          event: "added.organization",
+          previous: null,
+          current: {
+            id: 9,
+            name: "Wallace Collision",
+            address: "999 Existing St",
+            org_phone_key: "(602) 555-9999",
+            org_website_key: "",
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      organizationEnrichment: {
+        status: "updated",
+        organizationId: 9,
+        matchedShopId: "bs_123",
+        filledFields: ["org_website_key"],
+      },
+    });
+    expect(updateOrganization).toHaveBeenCalledWith(9, {
+      org_website_key: "https://wallace.example",
+    });
+  });
+
   it("keeps the onboarding board flow and enrolls won deals into Path E", async () => {
     const res = await POST(wonDealRequest());
 

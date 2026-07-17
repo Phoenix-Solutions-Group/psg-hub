@@ -485,6 +485,24 @@ describe("createProjectsClient — PSG-642 thin v2-Tasks adapter (updateTask + a
     });
   });
 
+  it("updateOrganization PUTs /api/v1/organizations/{id} with only the changed fields", async () => {
+    const { fetchImpl, calls } = recordingFetch({ id: 9 });
+    const res = await client(fetchImpl).updateOrganization!(9, {
+      address: "123 Main St, Phoenix, AZ 85001",
+      org_phone_key: "(602) 555-0100",
+    });
+    expect(res.id).toBe(9);
+
+    const u = new URL(calls[0].url);
+    expect(calls[0].method).toBe("PUT");
+    expect(`${u.origin}${u.pathname}`).toBe("https://psg.pipedrive.com/api/v1/organizations/9");
+    expect(u.searchParams.get("api_token")).toBe(TOKEN);
+    expect(JSON.parse(String(calls[0].body))).toEqual({
+      address: "123 Main St, Phoenix, AZ 85001",
+      org_phone_key: "(602) 555-0100",
+    });
+  });
+
   it("rejects Handoff Complete=Yes when a required handoff field is blank", async () => {
     const calls: Array<{ url: string; method: string; body?: unknown }> = [];
     const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
