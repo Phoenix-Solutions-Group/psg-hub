@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { getActiveShopContext } from "@/lib/shop/context";
 import {
   getSnapshots,
@@ -24,6 +25,10 @@ import {
   trailingWindow,
   type DatedMetrics,
 } from "@/lib/analytics/aggregate";
+import {
+  buildGoogleAdsDashboard,
+  getRecentGoogleAdsChanges,
+} from "@/lib/analytics/google-ads-dashboard";
 import { readAnalyticsSection } from "@/lib/analytics/safe-read";
 import {
   LineChartCard,
@@ -32,6 +37,7 @@ import {
 } from "@/components/analytics/charts";
 import { DirectMailPanel } from "@/components/analytics/direct-mail-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { LinkGoogleButton } from "./link-google-button";
 import { LinkGbpButton } from "./link-gbp-button";
 
@@ -59,24 +65,6 @@ const AGGREGATE_KPIS = [
   { key: "organic_keywords", label: "Keywords ranked" },
   { key: "organic_traffic_cost", label: "Traffic value (USD)" },
   { key: "backlinks", label: "Backlinks" },
-] as const;
-
-/** Paid (Google Ads) KPIs — Phase 10 / 10-02. */
-const PAID_KPIS = [
-  { key: "spend", label: "Spend (USD)" },
-  { key: "clicks", label: "Clicks" },
-  { key: "conversions", label: "Conversions" },
-  { key: "cpl", label: "Cost per lead (USD)" },
-] as const;
-/**
- * Aggregate paid view DROPS cpl — a summed ratio lies (same reason the organic
- * aggregate drops authority_score). Spend/clicks/conversions sum honestly; CPL
- * is per-shop only.
- */
-const PAID_AGGREGATE_KPIS = [
-  { key: "spend", label: "Spend (USD)" },
-  { key: "clicks", label: "Clicks" },
-  { key: "conversions", label: "Conversions" },
 ] as const;
 
 /** GA4 website-traffic KPIs — Phase 11 / 11-02. */
@@ -143,8 +131,20 @@ type Props = {
   searchParams: Promise<{ scope?: string }>;
 };
 
+function priorWindow(from: string, days: number): { from: string; to: string } {
+  const priorTo = new Date(`${from}T00:00:00Z`);
+  priorTo.setUTCDate(priorTo.getUTCDate() - 1);
+  const priorFrom = new Date(priorTo);
+  priorFrom.setUTCDate(priorFrom.getUTCDate() - days);
+  return {
+    from: priorFrom.toISOString().slice(0, 10),
+    to: priorTo.toISOString().slice(0, 10),
+  };
+}
+
 export default async function AnalyticsPage({ searchParams }: Props) {
   const supabase = await createClient();
+  const service = createServiceClient();
   const params = await searchParams;
 
   const {
@@ -173,6 +173,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   // Date window: trailing 30 days. Clock read lives in trailingWindow (server
   // helper) — client islands receive plain props so hydration stays deterministic.
   const { from, to } = trailingWindow(WINDOW_DAYS);
+  const priorPaidWindow = priorWindow(from, WINDOW_DAYS);
   const readWarnings: { section: string; message: string }[] = [];
 
   const snapshots = await readAnalyticsSection(
@@ -237,16 +238,45 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const paidRows: DatedMetrics[] = scopeAll
     ? aggregateByDate(paidSnapshots)
     : paidSnapshots;
-  const paidLatest = latestSnapshot(paidRows);
-  const paidKpis = scopeAll ? PAID_AGGREGATE_KPIS : PAID_KPIS;
-  const spendSeries = toSeries(paidRows, "spend").map((p) => ({
-    date: formatShortDate(p.date),
-    value: p.value,
-  }));
-  const conversionsSeries = toSeries(paidRows, "conversions").map((p) => ({
-    date: formatShortDate(p.date),
-    value: p.value,
-  }));
+
+  const priorPaidSnapshots = await readAnalyticsSection(
+    "Google Ads prior period",
+    () =>
+      scopeAll
+        ? getSnapshotsForShops(supabase, {
+            shopIds: shops.map((s) => s.id),
+            source: PAID_SOURCE,
+            period: PERIOD,
+            from: priorPaidWindow.from,
+            to: priorPaidWindow.to,
+          })
+        : getSnapshots(supabase, {
+            shopId: activeShopId,
+            source: PAID_SOURCE,
+            period: PERIOD,
+            from: priorPaidWindow.from,
+            to: priorPaidWindow.to,
+          }),
+    [],
+    readWarnings
+  );
+  const priorPaidRows: DatedMetrics[] = scopeAll
+    ? aggregateByDate(priorPaidSnapshots)
+    : priorPaidSnapshots;
+  const recentGoogleAdsChanges = await readAnalyticsSection(
+    "recent Google Ads changes",
+    () =>
+      getRecentGoogleAdsChanges(service, {
+        authorizedShopIds: scopeAll ? shops.map((s) => s.id) : [activeShopId],
+      }),
+    [],
+    readWarnings
+  );
+  const googleAdsDashboard = buildGoogleAdsDashboard({
+    currentRows: paidRows,
+    priorRows: priorPaidRows,
+    recentChanges: recentGoogleAdsChanges,
+  });
 
   // GA4 website traffic (11-02) — same source-agnostic snapshot read, source='ga4'.
   // Own unlinked state below; the organic + paid blocks above are untouched.
@@ -580,7 +610,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           Paid advertising
         </h2>
 
-        {paidRows.length === 0 ? (
+        {googleAdsDashboard.status === "empty" ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Ads account linked</CardTitle>
@@ -600,54 +630,91 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </Card>
         ) : (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {paidKpis.map((kpi) => {
-                const raw = paidLatest?.metrics[kpi.key];
-                const value =
-                  typeof raw === "number" && Number.isFinite(raw) ? raw : null;
-                return (
-                  <Card key={kpi.key}>
-                    <CardHeader className="pb-2">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              {googleAdsDashboard.tiles.map((tile) => (
+                <Card key={tile.key}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-2">
                       <CardTitle className="text-sm font-medium text-muted-foreground">
-                        {kpi.label}
+                        {tile.label}
                       </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-2xl font-bold tracking-tight">
-                        {value === null ? "—" : formatNumber(value)}
-                      </p>
-                      <div className="mt-2">
-                        <Sparkline
-                          data={toSeries(paidRows, kpi.key)}
-                          dataKey="value"
-                          ariaLabel={`${kpi.label}, last ${WINDOW_DAYS} days`}
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      {tile.unconfirmed ? (
+                        <Badge variant="warning">Unconfirmed</Badge>
+                      ) : null}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold tracking-tight">
+                      {tile.display}
+                    </p>
+                    <p className="mt-1 min-h-5 text-xs text-muted-foreground">
+                      {tile.note ?? tile.trendLabel}
+                    </p>
+                    <div className="mt-2">
+                      <Sparkline
+                        data={tile.series}
+                        dataKey="value"
+                        ariaLabel={`${tile.label}, last ${WINDOW_DAYS} days`}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
               <LineChartCard
                 title="Ad spend"
-                caption={`Daily Google Ads spend (USD), trailing ${WINDOW_DAYS} days.`}
-                data={spendSeries}
+                caption={`Daily Google Ads spend from synced account snapshots, trailing ${WINDOW_DAYS} days.`}
+                data={googleAdsDashboard.spendSeries}
                 dataKey="value"
                 xKey="date"
                 ariaLabel={`Google Ads spend over the last ${WINDOW_DAYS} days`}
               />
               <BarChartCard
-                title="Conversions"
-                caption="Tracked conversions from paid clicks."
-                data={conversionsSeries}
+                title="Leads"
+                caption={
+                  googleAdsDashboard.conversionTrackingConfirmed
+                    ? "Tracked leads from paid clicks."
+                    : "Lead totals stay unconfirmed until conversion tracking is verified."
+                }
+                data={googleAdsDashboard.leadsSeries}
                 dataKey="value"
                 xKey="date"
-                ariaLabel={`Google Ads conversions over the last ${WINDOW_DAYS} days`}
+                ariaLabel={`Google Ads leads over the last ${WINDOW_DAYS} days`}
                 color="var(--chart-2)"
               />
             </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent PSG changes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {googleAdsDashboard.recentChanges.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Recent Google Ads changes will appear here after PSG records
+                    completed campaign updates.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {googleAdsDashboard.recentChanges.map((change) => (
+                      <li
+                        key={change.id}
+                        className="flex flex-wrap items-center justify-between gap-2 py-3"
+                      >
+                        <span className="font-heading text-sm font-medium">
+                          {change.title}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {formatSyncedAt(change.occurredAt)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
           </>
         )}
       </section>
