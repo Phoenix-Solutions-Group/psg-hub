@@ -351,8 +351,6 @@ async function seedDirectMailMetrics(
 
   const { error: pErr } = await admin.from("mail_send_priors").upsert(
     {
-      company_id: company.id,
-      shop_name: shopName,
       segment_key: `e2e-${opts.segment}`,
       piece_code: "07",
       trigger: "survey_followup_warranty",
