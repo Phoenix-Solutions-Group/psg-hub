@@ -7,6 +7,8 @@
 //   node --env-file=.env.local apps/psg-hub/scripts/pipedrive-branding-tier-basis.mjs --apply
 // Also require fields at PSG Sales / Proposal Sent (broad gate, affects all PSG Sales quotes):
 //   node --env-file=.env.local apps/psg-hub/scripts/pipedrive-branding-tier-basis.mjs --apply --require-proposal-sent
+// Export the first closed branding jobs with estimated-vs-actual hours:
+//   node --env-file=.env.local apps/psg-hub/scripts/pipedrive-branding-tier-basis.mjs --actual-hours-report
 
 import { mkdir, writeFile } from "node:fs/promises";
 import process from "node:process";
@@ -16,6 +18,13 @@ const TOKEN_ENV_CANDIDATES = ["PIPEDRIVE_API_TOKEN", "PIPEDRIVE_TOKEN", "PIPEDRI
 export const PSG_SALES_PIPELINE_ID = 8;
 export const PROPOSAL_SENT_STAGE_ID = 59;
 export const AUDIT_FILTER_NAME = "Branding audit - Proposal Sent missing Tier Basis";
+export const ACTUAL_HOURS_REPORT_LIMIT = 3;
+
+export const BRANDING_TIER_ESTIMATES = {
+  "T1 Brand Mark": { designHours: 27 },
+  "T2 Brand Identity System": { designHours: 50 },
+  "T3 Identity + Rollout": { designHours: 70 },
+};
 
 export const TIER_BASIS_FIELDS = [
   {
@@ -60,6 +69,21 @@ export const TIER_BASIS_FIELDS = [
   {
     name: "Tier Basis - Answered by",
     type: "varchar",
+  },
+];
+
+export const ACTUAL_HOURS_FIELDS = [
+  {
+    name: "Branding Actual - Design Hours",
+    type: "double",
+    description:
+      "PSG-1779: actual design hours spent on this branding engagement. Used to verify fixed-price branding tiers after the first three jobs.",
+  },
+  {
+    name: "Branding Actual - PM Hours",
+    type: "double",
+    description:
+      "PSG-1779: actual project-management hours spent on this branding engagement. Captured separately so overhead does not hide inside design hours.",
   },
 ];
 
@@ -130,6 +154,22 @@ function fieldByName(fields, name) {
   return fields.find((field) => clean(field.name ?? field.field_name) === clean(name)) ?? null;
 }
 
+function fieldKeyByName(fields, name) {
+  const field = fieldByName(fields, name);
+  return field?.key ?? field?.field_code ?? null;
+}
+
+function readNumber(value) {
+  if (value == null || value === "") return null;
+  const parsed = Number(String(value).replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readDate(value) {
+  const timestamp = Date.parse(String(value ?? ""));
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
 function filterConditions(fieldIds) {
   return {
     glue: "and",
@@ -175,8 +215,12 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
   const existingV2ByCode = new Map(fieldsV2.map((field) => [String(field.field_code), field]));
   const existingFilter = filters.find((filter) => clean(filter.name) === clean(AUDIT_FILTER_NAME)) ?? null;
 
-  for (const spec of TIER_BASIS_FIELDS) {
+  for (const spec of [
+    ...TIER_BASIS_FIELDS.map((field) => ({ ...field, category: "tierBasis" })),
+    ...ACTUAL_HOURS_FIELDS.map((field) => ({ ...field, category: "actualHours" })),
+  ]) {
     const existing = fieldByName(fieldsV1, spec.name);
+    const fieldRequiredState = spec.category === "tierBasis" ? requiredFields(requireProposalSent) : requiredFields(false);
     if (!existing) {
       actions.push({
         type: "createDealField",
@@ -184,16 +228,18 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
         body: {
           field_name: spec.name,
           field_type: spec.type,
-          description: `PSG-1757: Branding quote Tier Basis field. Required before quote only after the enforcement gate is approved.`,
+          description:
+            spec.description ??
+            `PSG-1757: Branding quote Tier Basis field. Required before quote only after the enforcement gate is approved.`,
           ...(spec.options ? { options: spec.options.map((label) => ({ label })) } : {}),
           ...visibleInSales(),
-          required_fields: requiredFields(requireProposalSent),
+          required_fields: fieldRequiredState,
         },
       });
       continue;
     }
 
-    createdOrExisting.push(existing);
+    if (spec.category === "tierBasis") createdOrExisting.push(existing);
     if (existing.field_type !== spec.type) {
       unresolved.push({
         label: spec.name,
@@ -207,8 +253,10 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
     if (!visibilityMatches(existingV2?.ui_visibility)) {
       Object.assign(updateBody, visibleInSales());
     }
-    if (requireProposalSent && !requiredMatches(existingV2?.required_fields, requiredFields(true))) {
-      updateBody.required_fields = requiredFields(true);
+    if (!requiredMatches(existingV2?.required_fields, fieldRequiredState)) {
+      if (spec.category === "tierBasis" ? requireProposalSent : Boolean(existingV2?.required_fields?.enabled)) {
+        updateBody.required_fields = fieldRequiredState;
+      }
     }
     if (Object.keys(updateBody).length > 0) {
       actions.push({
@@ -273,11 +321,113 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
           required_fields: fieldV2?.required_fields ?? null,
         };
       }),
+      actualHoursFields: ACTUAL_HOURS_FIELDS.map((spec) => {
+        const field = fieldByName(fieldsV1, spec.name);
+        const fieldV2 = field ? existingV2ByCode.get(String(field.key)) : null;
+        return {
+          id: field?.id ?? null,
+          key: field?.key ?? null,
+          name: spec.name,
+          type: field?.field_type ?? null,
+          required_fields: fieldV2?.required_fields ?? null,
+        };
+      }),
       filter: existingFilter ? { id: existingFilter.id, name: existingFilter.name } : null,
       enforcement: requireProposalSent
         ? "Configured as required at PSG Sales / Proposal Sent. This is broader than branding-only because Pipedrive has no Branding pipeline in this account."
         : "Not enabled by this run. Native Pipedrive required fields can target stages/statuses, but this account has no Branding pipeline to target without affecting all PSG Sales proposal moves.",
     },
+  };
+}
+
+export function buildActualHoursReport({ fieldsV1, deals, generatedAt = new Date().toISOString() }) {
+  const tierKey = fieldKeyByName(fieldsV1, "Tier Basis - Tier selected");
+  const designHoursKey = fieldKeyByName(fieldsV1, "Branding Actual - Design Hours");
+  const pmHoursKey = fieldKeyByName(fieldsV1, "Branding Actual - PM Hours");
+  const missingFields = [
+    ["Tier Basis - Tier selected", tierKey],
+    ["Branding Actual - Design Hours", designHoursKey],
+    ["Branding Actual - PM Hours", pmHoursKey],
+  ]
+    .filter(([, key]) => !key)
+    .map(([name]) => name);
+
+  if (missingFields.length > 0) {
+    return {
+      issue: "PSG-1779",
+      generatedAt,
+      ready: false,
+      missingFields,
+      firstClosedBrandingJobs: [],
+      byTier: [],
+    };
+  }
+
+  const firstClosedBrandingJobs = deals
+    .filter((deal) => clean(deal.status) === "won")
+    .map((deal) => {
+      const tier = String(deal[tierKey] ?? "").trim();
+      const estimate = BRANDING_TIER_ESTIMATES[tier] ?? null;
+      const actualDesignHours = readNumber(deal[designHoursKey]);
+      const actualPmHours = readNumber(deal[pmHoursKey]);
+      const designVariancePct =
+        estimate?.designHours && actualDesignHours != null
+          ? Number((((actualDesignHours - estimate.designHours) / estimate.designHours) * 100).toFixed(1))
+          : null;
+      return {
+        dealId: deal.id ?? null,
+        title: deal.title ?? null,
+        tier: tier || null,
+        wonAt: deal.won_time ?? deal.close_time ?? null,
+        estimatedDesignHours: estimate?.designHours ?? null,
+        actualDesignHours,
+        actualPmHours,
+        designVariancePct,
+        repricingTrigger: designVariancePct == null ? "missing actuals" : Math.abs(designVariancePct) > 15,
+      };
+    })
+    .filter((deal) => deal.tier && deal.estimatedDesignHours != null)
+    .sort((a, b) => readDate(a.wonAt) - readDate(b.wonAt))
+    .slice(0, ACTUAL_HOURS_REPORT_LIMIT);
+
+  const byTier = Object.entries(
+    firstClosedBrandingJobs.reduce((acc, deal) => {
+      const bucket = acc[deal.tier] ?? {
+        tier: deal.tier,
+        closedJobs: 0,
+        estimatedDesignHours: 0,
+        actualDesignHours: 0,
+        actualPmHours: 0,
+        missingActualJobs: 0,
+      };
+      bucket.closedJobs += 1;
+      bucket.estimatedDesignHours += deal.estimatedDesignHours ?? 0;
+      if (deal.actualDesignHours == null) bucket.missingActualJobs += 1;
+      else bucket.actualDesignHours += deal.actualDesignHours;
+      if (deal.actualPmHours != null) bucket.actualPmHours += deal.actualPmHours;
+      acc[deal.tier] = bucket;
+      return acc;
+    }, {}),
+  ).map(([, bucket]) => ({
+    ...bucket,
+    designVariancePct:
+      bucket.estimatedDesignHours > 0 && bucket.missingActualJobs === 0
+        ? Number((((bucket.actualDesignHours - bucket.estimatedDesignHours) / bucket.estimatedDesignHours) * 100).toFixed(1))
+        : null,
+    repricingTrigger:
+      bucket.missingActualJobs > 0
+        ? "missing actuals"
+        : Math.abs((bucket.actualDesignHours - bucket.estimatedDesignHours) / bucket.estimatedDesignHours) > 0.15,
+  }));
+
+  return {
+    issue: "PSG-1779",
+    generatedAt,
+    ready: firstClosedBrandingJobs.length >= ACTUAL_HOURS_REPORT_LIMIT,
+    missingFields: [],
+    firstClosedBrandingJobs,
+    byTier,
+    threshold: "Rebuild the tier scope if actual design hours are more than 15% above or below the estimate.",
   };
 }
 
@@ -328,6 +478,20 @@ class PipedriveApi {
     return Array.isArray(json.data) ? json.data : [];
   }
 
+  async listWonDeals() {
+    const deals = [];
+    let start = 0;
+    for (let page = 0; page < 100; page += 1) {
+      const json = await this.request("GET", "v1", `deals?status=won&start=${start}&limit=500`, null);
+      if (Array.isArray(json.data)) deals.push(...json.data);
+      const pagination = json?.additional_data?.pagination ?? {};
+      if (!pagination.more_items_in_collection) return deals;
+      start = Number(pagination.next_start);
+      if (!Number.isFinite(start)) throw new Error("Pipedrive won-deal pagination did not return next_start");
+    }
+    throw new Error("Pipedrive won-deal pagination exceeded 100 pages");
+  }
+
   async applyAction(action) {
     if (action.type === "createDealField") {
       return this.request("POST", "v2", "dealFields", action.body);
@@ -359,11 +523,22 @@ async function snapshot(api, requireProposalSent) {
 
 async function main() {
   const apply = process.argv.includes("--apply");
+  const actualHoursReport = process.argv.includes("--actual-hours-report");
   const requireProposalSent = process.argv.includes("--require-proposal-sent");
   const token = resolveToken();
   if (!token) throw new Error(`Missing Pipedrive token. Set one of: ${TOKEN_ENV_CANDIDATES.join(", ")}`);
 
   const api = new PipedriveApi({ token, base: baseUrl() });
+  if (actualHoursReport) {
+    const [fieldsV1, deals] = await Promise.all([api.listDealFieldsV1(), api.listWonDeals()]);
+    const result = buildActualHoursReport({ fieldsV1, deals });
+    const outDir = new URL("../../../artifacts/PSG-1779/", import.meta.url);
+    await mkdir(outDir, { recursive: true });
+    await writeFile(new URL("branding_actual_hours_report.json", outDir), `${JSON.stringify(result, null, 2)}\n`);
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
   let plan = await snapshot(api, requireProposalSent);
   if (plan.unresolved.length > 0) {
     console.log(JSON.stringify({ mode: apply ? "apply" : "dry-run", ...plan }, null, 2));
@@ -397,6 +572,7 @@ async function main() {
   const sampleDeals = apply && auditFilter?.id ? await api.listDealsByFilter(auditFilter.id) : [];
   const result = {
     issue: "PSG-1757",
+    includes: ["PSG-1779 actual-hours capture fields"],
     mode: apply ? "apply" : "dry-run",
     generatedAt: new Date().toISOString(),
     sourceEndpoints: [
@@ -411,7 +587,7 @@ async function main() {
     counts: {
       plannedActions: plan.actions.length,
       appliedActions: applied.length,
-      fieldsExpected: TIER_BASIS_FIELDS.length,
+      fieldsExpected: TIER_BASIS_FIELDS.length + ACTUAL_HOURS_FIELDS.length,
       auditFilterSampleDealCount: sampleDeals.length,
     },
     decisions: {
@@ -421,6 +597,8 @@ async function main() {
         "Pipedrive deal-field required_fields supports stage-based web UI enforcement. It cannot target only branding quotes here without a real Branding pipeline or another approved pipeline/stage split.",
       auditFilter:
         "The saved filter lists PSG Sales deals in Proposal Sent where any Tier Basis field is empty.",
+      actualHours:
+        "Two numeric deal fields capture actual design and project-management hours per branding engagement. Run this script with --actual-hours-report after branding job #3 closes to compare actual design hours with the 27/50/70 hour tier estimates.",
     },
     applied,
     remainingActions: plan.actions,
@@ -432,9 +610,9 @@ async function main() {
     },
   };
 
-  const outDir = new URL("../../../artifacts/PSG-1757/", import.meta.url);
+  const outDir = new URL("../../../artifacts/PSG-1779/", import.meta.url);
   await mkdir(outDir, { recursive: true });
-  const filename = apply ? "pipedrive_branding_tier_basis_apply_summary.json" : "pipedrive_branding_tier_basis_dry-run_summary.json";
+  const filename = apply ? "pipedrive_branding_hours_apply_summary.json" : "pipedrive_branding_hours_dry-run_summary.json";
   await writeFile(new URL(filename, outDir), `${JSON.stringify(result, null, 2)}\n`);
   console.log(JSON.stringify(result, null, 2));
 }

@@ -1,0 +1,133 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  ACTUAL_HOURS_FIELDS,
+  ACTUAL_HOURS_REPORT_LIMIT,
+  BRANDING_TIER_ESTIMATES,
+  TIER_BASIS_FIELDS,
+  buildActualHoursReport,
+  buildPlan,
+} from "../../../../../scripts/pipedrive-branding-tier-basis.mjs";
+
+const field = (id: number, name: string, type = "varchar") => ({
+  id,
+  key: `field_${id}`,
+  name,
+  field_type: type,
+  active_flag: true,
+});
+
+const fieldV2 = (id: number, name: string, type = "varchar") => ({
+  field_code: `field_${id}`,
+  field_name: name,
+  field_type: type,
+  required_fields: { enabled: false, stage_ids: [], statuses: {} },
+  ui_visibility: {
+    add_visible_flag: true,
+    details_visible_flag: true,
+    projects_detail_visible_flag: true,
+    show_in_pipelines: { show_in_all: false, pipeline_ids: [8] },
+  },
+});
+
+function configuredFields() {
+  const fieldsV1 = [
+    ...TIER_BASIS_FIELDS.map((spec, index) => field(1000 + index, spec.name, spec.type)),
+    ...ACTUAL_HOURS_FIELDS.map((spec, index) => field(2000 + index, spec.name, spec.type)),
+  ];
+  const fieldsV2 = fieldsV1.map((item) => fieldV2(Number(item.id), String(item.name), String(item.field_type)));
+  return { fieldsV1, fieldsV2 };
+}
+
+describe("pipedrive-branding-tier-basis plan", () => {
+  it("creates the two actual-hours fields with the Tier Basis setup", () => {
+    const plan = buildPlan({ fieldsV1: [], fieldsV2: [], filters: [] });
+
+    expect(plan.actions.filter((action) => action.type === "createDealField")).toHaveLength(
+      TIER_BASIS_FIELDS.length + ACTUAL_HOURS_FIELDS.length,
+    );
+    for (const spec of ACTUAL_HOURS_FIELDS) {
+      expect(plan.actions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            fieldName: spec.name,
+            body: expect.objectContaining({
+              field_type: "double",
+              required_fields: { enabled: false, stage_ids: [], statuses: {} },
+            }),
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("reports the first three won branding jobs against the 27/50/70 design-hour estimates", () => {
+    const { fieldsV1 } = configuredFields();
+    const report = buildActualHoursReport({
+      fieldsV1,
+      generatedAt: "2026-07-17T00:00:00.000Z",
+      deals: [
+        {
+          id: 3,
+          title: "Third",
+          status: "won",
+          won_time: "2026-07-13T00:00:00Z",
+          field_1005: "T3 Identity + Rollout",
+          field_2000: 82,
+          field_2001: 10,
+        },
+        {
+          id: 1,
+          title: "First",
+          status: "won",
+          won_time: "2026-07-11T00:00:00Z",
+          field_1005: "T1 Brand Mark",
+          field_2000: 27,
+          field_2001: 4,
+        },
+        {
+          id: 2,
+          title: "Second",
+          status: "won",
+          won_time: "2026-07-12T00:00:00Z",
+          field_1005: "T2 Brand Identity System",
+          field_2000: 60,
+          field_2001: 7,
+        },
+        {
+          id: 4,
+          title: "Fourth is outside the trigger window",
+          status: "won",
+          won_time: "2026-07-14T00:00:00Z",
+          field_1005: "T1 Brand Mark",
+          field_2000: 30,
+          field_2001: 2,
+        },
+      ],
+    });
+
+    expect(ACTUAL_HOURS_REPORT_LIMIT).toBe(3);
+    expect(BRANDING_TIER_ESTIMATES["T1 Brand Mark"].designHours).toBe(27);
+    expect(report.ready).toBe(true);
+    expect(report.firstClosedBrandingJobs.map((deal) => deal.dealId)).toEqual([1, 2, 3]);
+    expect(report.firstClosedBrandingJobs[1]).toEqual(
+      expect.objectContaining({
+        estimatedDesignHours: 50,
+        actualDesignHours: 60,
+        designVariancePct: 20,
+        repricingTrigger: true,
+      }),
+    );
+  });
+
+  it("does not mark the report ready until the Pipedrive fields exist", () => {
+    const report = buildActualHoursReport({
+      fieldsV1: [field(1005, "Tier Basis - Tier selected", "enum")],
+      deals: [],
+      generatedAt: "2026-07-17T00:00:00.000Z",
+    });
+
+    expect(report.ready).toBe(false);
+    expect(report.missingFields).toEqual(["Branding Actual - Design Hours", "Branding Actual - PM Hours"]);
+  });
+});
