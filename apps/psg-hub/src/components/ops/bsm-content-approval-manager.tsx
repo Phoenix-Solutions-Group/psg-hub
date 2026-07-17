@@ -30,13 +30,23 @@ type Phase =
   | { kind: "success"; message: string }
   | { kind: "error"; message: string };
 
+export type BsmContentApprovalShopOption = { id: string; name: string };
+
 export function BsmContentApprovalManager({
   initialApprovals,
+  shops,
+  activeShopId,
 }: {
   initialApprovals: BsmContentApprovalListItem[];
+  shops?: BsmContentApprovalShopOption[];
+  activeShopId?: string | null;
 }) {
   const [approvals, setApprovals] = useState(initialApprovals);
-  const [shopId, setShopId] = useState("");
+  const orderedShops = shops ?? [];
+  const initialShopId = orderedShops.some((shop) => shop.id === activeShopId)
+    ? activeShopId ?? ""
+    : orderedShops[0]?.id ?? "";
+  const [shopId, setShopId] = useState(initialShopId);
   const [customerProfileId, setCustomerProfileId] = useState("");
   const [title, setTitle] = useState("");
   const [contextNote, setContextNote] = useState("");
@@ -164,14 +174,30 @@ export function BsmContentApprovalManager({
       <section className="space-y-4 border-b border-border pb-8">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="bsm-approval-shop">Shop ID</Label>
-            <Input
-              id="bsm-approval-shop"
-              value={shopId}
-              onChange={(event) => setShopId(event.target.value)}
-              disabled={uploading}
-              placeholder="00000000-0000-0000-0000-000000000000"
-            />
+            <Label htmlFor="bsm-approval-shop">Shop</Label>
+            {orderedShops.length > 0 ? (
+              <select
+                id="bsm-approval-shop"
+                value={shopId}
+                onChange={(event) => setShopId(event.target.value)}
+                disabled={uploading}
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {orderedShops.map((shop) => (
+                  <option key={shop.id} value={shop.id}>
+                    {shop.name || shop.id}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <Input
+                id="bsm-approval-shop"
+                value={shopId}
+                onChange={(event) => setShopId(event.target.value)}
+                disabled={uploading}
+                placeholder="No shops available"
+              />
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="bsm-approval-profile">Customer profile ID</Label>
