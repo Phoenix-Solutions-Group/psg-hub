@@ -50,8 +50,18 @@ describe("WHM onboarding template", () => {
   });
 
   it("counts all tasks (excludes phase parents)", () => {
-    // 7 + 6 + 3 + 5 + 4 = 25 leaf tasks.
-    expect(templateTaskCount()).toBe(25);
+    // 9 + 6 + 3 + 5 + 4 = 27 leaf tasks.
+    expect(templateTaskCount()).toBe(27);
+  });
+
+  it("keeps the former Won-gate access and asset lists as Day-1 onboarding work", () => {
+    const d1Titles = WHM_ONBOARDING_TEMPLATE[0]!.tasks.map((task) => task.title);
+    expect(d1Titles).toEqual(
+      expect.arrayContaining([
+        "Review Missing Access List with Delivery and assign follow-ups",
+        "Review Asset Request List with Delivery and assign follow-ups",
+      ]),
+    );
   });
 });
 
