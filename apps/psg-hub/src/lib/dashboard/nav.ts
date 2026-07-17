@@ -7,6 +7,7 @@ const BASE_DASHBOARD_NAV: DashboardNavItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/dashboard/analytics", label: "Analytics" },
   { href: "/dashboard/audit", label: "SEO Audit" },
+  { href: "/dashboard/local-reach", label: "Local Reach" },
   { href: "/dashboard/content", label: "Content" },
   { href: "/dashboard/approvals", label: "Approvals" },
   { href: "/dashboard/reviews", label: "Reviews" },
