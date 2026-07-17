@@ -22,6 +22,7 @@ export type LocalReachEvidence = {
 
 export type LocalReachRecommendation = {
   id: string;
+  createdAt: string;
   title: string;
   type: string;
   status: LocalReachStatus;
@@ -147,7 +148,12 @@ export function buildLocalReachStats(recommendations: LocalReachRecommendation[]
       return now - new Date(item.publishedAt).getTime() <= thirtyDaysMs;
     }).length,
     needsClarification: recommendations.filter((item) => item.status === "changes_requested").length,
-    createdLast30Days: recommendations.length,
+    createdLast30Days: recommendations.filter((item) => {
+      const createdAt = new Date(item.createdAt).getTime();
+      if (Number.isNaN(createdAt)) return false;
+      const ageMs = now - createdAt;
+      return ageMs >= 0 && ageMs <= thirtyDaysMs;
+    }).length,
   };
 }
 
@@ -231,6 +237,7 @@ export async function getLocalReachWorkspace(
     const id = String(row.id);
     return {
       id,
+      createdAt: String(row.created_at ?? ""),
       title: String(row.title ?? "Untitled recommendation"),
       type: String(row.recommendation_type ?? "Content update"),
       status: asStatus(row.status),
