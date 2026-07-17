@@ -13,6 +13,7 @@
  */
 export const AUDIT_ACTIONS = [
   // users / roles / shops
+  "user.invite",
   "role.grant",
   "role.revoke",
   "shop.assign",
@@ -80,12 +81,31 @@ export const AUDIT_ACTIONS = [
   // is audited so a credential teardown is attributable to an actor + shop.
   // (Connect runs through the OAuth consent flow, recorded by the linked-account row.)
   "gbp.disconnect",
+  // Google Ads optimization audit reports — PSG staff publish a PDF/report into
+  // the customer-facing Google Ads review surface. The report is uploaded and
+  // attributed to the acting profile; no ad mutation is executed by this action.
+  "google_ads.audit_report.publish",
+  // Google Ads customer request workflow (PSG-1707) — customers submit
+  // non-executing ads-change requests, and PSG staff move them through
+  // human-reviewed statuses. Every create/update is audited so request handling
+  // is attributable without executing any Google Ads mutation.
+  "google_ads_request.create",
+  "google_ads_request.update",
+  // Review response restore workflow (PSG-1719) — customers can request an
+  // older response version, but PSG staff must approve or reject the restore
+  // before a previous version becomes active again.
+  "review_response_restore.approve",
+  "review_response_restore.reject",
   // Pilot-intake signed-upload mint (PSG-394 / Track A) — a superadmin mints a
   // time-limited signed-upload URL for a caller-named object in the private
   // "pilot-intake" bucket so Nick can drop the real RO/Estimate export for the
   // PSG-387 E2E. No file contents pass through the audit row — only the target
   // object path — so the mint is attributable to an actor + shop without leaking PII.
   "intake.signed_upload.mint",
+  // BSM content approvals (PSG-1715) — PSG staff create a shop-scoped customer
+  // review item, add the context note, mint a private upload path, and create
+  // the initial immutable version.
+  "bsm_content_approval.create",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

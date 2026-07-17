@@ -22,6 +22,7 @@ const OPS_NAV: { href: string; label: string; superadminOnly?: boolean }[] = [
   { href: "/ops/production/templates", label: "Mail Templates" },
   { href: "/ops/production/artwork", label: "Mail Artwork" },
   { href: "/ops/ads-mutations", label: "Ads Mutations" },
+  { href: "/ops/bsm-content-approvals", label: "Content Approvals" },
   { href: "/ops/sitemap", label: "Sitemap", superadminOnly: true },
   { href: "/ops/bsm-progress", label: "BSM Progress", superadminOnly: true },
   { href: "/ops/sales-pipeline", label: "Sales Pipeline", superadminOnly: true },
@@ -32,6 +33,10 @@ const OPS_NAV: { href: string; label: string; superadminOnly?: boolean }[] = [
 
 const canSeeArtwork = (item: { href: string }, access: OpsAccess) =>
   item.href !== "/ops/production/artwork" || hasOpsFn(access, "design_mail_artwork");
+
+const canSeeContentApprovals = (item: { href: string }, access: OpsAccess) =>
+  item.href !== "/ops/bsm-content-approvals" ||
+  hasOpsFn(access, "manage_bsm_content_approvals");
 
 export default async function OpsLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -63,7 +68,9 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
         <nav className="flex-1 space-y-1 p-3">
           {OPS_NAV.filter(
             (item) =>
-              (!item.superadminOnly || access.role === "psg_superadmin") && canSeeArtwork(item, access),
+              (!item.superadminOnly || access.role === "psg_superadmin") &&
+              canSeeArtwork(item, access) &&
+              canSeeContentApprovals(item, access),
           ).map((item) => (
             <a
               key={item.href}

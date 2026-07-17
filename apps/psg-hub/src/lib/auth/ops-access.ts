@@ -37,6 +37,9 @@ export const OPS_FUNCTIONS = [
   // (private.current_user_has_fn('view_sales_pipeline'), PSG-434 migration).
   // psg_superadmin passes implicitly; a psg_internal user needs this flag granted.
   "view_sales_pipeline",
+  // BSM content approvals (PSG-1715). Gates the PSG-side upload/library/context
+  // note surface and its service-role mutation route.
+  "manage_bsm_content_approvals",
   // PSG-870 — Mail-artwork freeform editor (Phase 2). Gates the PSG-only
   // production-editor surface under /ops/production/artwork.
   "design_mail_artwork",
