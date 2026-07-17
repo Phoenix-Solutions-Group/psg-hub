@@ -80,7 +80,7 @@ function configuredFields() {
 }
 
 describe("pipedrive-branding-tier-basis plan", () => {
-  it("creates the engagement-level actual-hours fields with the Tier Basis setup", () => {
+  it("creates the phase-level actual-hours fields with the Tier Basis setup", () => {
     const plan = buildPlan({ fieldsV1: [], fieldsV2: [], filters: [] });
 
     expect(plan.actions.filter((action) => action.type === "createDealField")).toHaveLength(
@@ -109,8 +109,16 @@ describe("pipedrive-branding-tier-basis plan", () => {
       ]),
     );
     expect(ACTUAL_HOURS_FIELDS.map((spec) => spec.name)).toEqual([
-      "Branding Actual - Design Hours",
-      "Branding Actual - PM Hours",
+      "phase1_design_hours_actual",
+      "phase1_pm_hours_actual",
+      "phase2_design_hours_actual",
+      "phase2_pm_hours_actual",
+      "phase3_design_hours_actual",
+      "phase3_pm_hours_actual",
+      "phase4_design_hours_actual",
+      "phase4_pm_hours_actual",
+      "change_order_design_hours",
+      "change_order_pm_hours",
     ]);
     for (const spec of ACTUAL_HOURS_FIELDS) {
       expect(plan.actions).toEqual(
@@ -128,16 +136,22 @@ describe("pipedrive-branding-tier-basis plan", () => {
     expect(plan.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          fieldName: "Branding Actual - Design Hours",
+          fieldName: "phase3_design_hours_actual",
           body: expect.objectContaining({
-            description: expect.stringContaining("total actual design hours"),
+            description: expect.stringContaining("role assigned in the PSG-658 task graph"),
+          }),
+        }),
+        expect.objectContaining({
+          fieldName: "change_order_design_hours",
+          body: expect.objectContaining({
+            description: expect.stringContaining("Keep these hours out of Phase 1-4 fixed-scope totals"),
           }),
         }),
       ]),
     );
   });
 
-  it("reports the first three won branding jobs against the engagement-level baseline", () => {
+  it("reports the first three won branding jobs against phase totals and excludes change orders", () => {
     const { fieldsV1 } = configuredFields();
     const report = buildActualHoursReport({
       fieldsV1,
@@ -149,8 +163,16 @@ describe("pipedrive-branding-tier-basis plan", () => {
           status: "won",
           won_time: "2026-07-13T00:00:00Z",
           field_1005: "T3 Identity + Rollout",
-          field_2000: 82,
-          field_2001: 14,
+          field_2000: 12,
+          field_2001: 3,
+          field_2002: 23,
+          field_2003: 3,
+          field_2004: 21,
+          field_2005: 3,
+          field_2006: 14,
+          field_2007: 5,
+          field_2008: 12,
+          field_2009: 2,
         },
         {
           id: 1,
@@ -158,8 +180,16 @@ describe("pipedrive-branding-tier-basis plan", () => {
           status: "won",
           won_time: "2026-07-11T00:00:00Z",
           field_1005: "T1 Brand Mark",
-          field_2000: 27,
-          field_2001: 5,
+          field_2000: 3,
+          field_2001: 1.5,
+          field_2002: 11,
+          field_2003: 1,
+          field_2004: 9,
+          field_2005: 1.5,
+          field_2006: 4,
+          field_2007: 1,
+          field_2008: 20,
+          field_2009: 4,
         },
         {
           id: 2,
@@ -167,8 +197,16 @@ describe("pipedrive-branding-tier-basis plan", () => {
           status: "won",
           won_time: "2026-07-12T00:00:00Z",
           field_1005: "T2 Brand Identity System",
-          field_2000: 60,
-          field_2001: 8,
+          field_2000: 8,
+          field_2001: 2.5,
+          field_2002: 14,
+          field_2003: 1.5,
+          field_2004: 25,
+          field_2005: 2,
+          field_2006: 13,
+          field_2007: 2,
+          field_2008: 8,
+          field_2009: 1,
         },
         {
           id: 4,
@@ -176,7 +214,7 @@ describe("pipedrive-branding-tier-basis plan", () => {
           status: "won",
           won_time: "2026-07-14T00:00:00Z",
           field_1005: "T1 Brand Mark",
-          field_2000: 30,
+          field_2000: 3,
         },
       ],
     });
@@ -190,7 +228,23 @@ describe("pipedrive-branding-tier-basis plan", () => {
         estimatedDesignHours: 50,
         actualDesignHours: 60,
         designVariancePct: 20,
+        changeOrderDesignHours: 8,
         repricingTrigger: true,
+      }),
+    );
+    expect(report.firstClosedBrandingJobs[0]).toEqual(
+      expect.objectContaining({
+        actualDesignHours: 27,
+        changeOrderDesignHours: 20,
+        repricingTrigger: false,
+      }),
+    );
+    expect(report.firstClosedBrandingJobs[1].phases[2]).toEqual(
+      expect.objectContaining({
+        name: "Review & Refinement",
+        estimatedDesignHours: 15,
+        actualDesignHours: 25,
+        designVariancePct: 66.7,
       }),
     );
     expect(report.byTier.find((bucket) => bucket.tier === "T2 Brand Identity System")).toEqual(
@@ -198,6 +252,10 @@ describe("pipedrive-branding-tier-basis plan", () => {
         estimatedDesignHours: 50,
         actualDesignHours: 60,
         designVariancePct: 20,
+        estimatedPmHours: 8,
+        actualPmHours: 8,
+        pmVariancePct: 0,
+        changeOrderDesignHours: 8,
       }),
     );
   });
