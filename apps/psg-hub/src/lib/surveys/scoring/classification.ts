@@ -7,6 +7,7 @@
  */
 
 export type SurveyAlertClass =
+  | "duplicate"
   | "perfect"
   | "misfire"
   | "hotspot"
@@ -15,6 +16,8 @@ export type SurveyAlertClass =
   | "none";
 
 export interface SurveyAlertClassificationInput {
+  /** This survey alert was already raised/imported and should not post again. */
+  duplicate?: boolean | null;
   /** FileMaker `csi_resolve`: 1 means perfect; values below 1 are non-perfect. */
   csiResolve?: number | string | null;
   /** Customer would recommend/refer the shop. */
@@ -39,14 +42,17 @@ function finiteNumber(value: number | string | null | undefined): number | null 
  * Classify one survey into exactly one FileMaker alert class.
  *
  * Gate order is load-bearing:
- * 1. happy referral with referral tracking on and no credit hold -> referral
- * 2. happy perfect score -> perfect
- * 3. happy non-perfect score -> misfire
- * 4. unresolved shop issue -> unresolved
- * 5. negative/non-perfect score -> hotspot
- * 6. otherwise -> none
+ * 1. duplicate alert already handled -> duplicate
+ * 2. happy referral with referral tracking on and no credit hold -> referral
+ * 3. happy perfect score -> perfect
+ * 4. happy non-perfect score -> misfire
+ * 5. unresolved shop issue -> unresolved
+ * 6. negative/non-perfect score -> hotspot
+ * 7. otherwise -> none
  */
 export function classifySurveyAlert(input: SurveyAlertClassificationInput): SurveyAlertClass {
+  if (input.duplicate === true) return "duplicate";
+
   const csiResolve = finiteNumber(input.csiResolve);
   const unresolvedShop = input.unresolvedShop === true;
   const happy = input.wouldRecommend === true && !unresolvedShop;

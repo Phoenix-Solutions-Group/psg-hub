@@ -13,6 +13,19 @@ describe("classifySurveyAlert", () => {
     expected: SurveyAlertClass;
   }> = [
     {
+      id: "UT-CLS-0 duplicate",
+      input: {
+        duplicate: true,
+        wouldRecommend: true,
+        unresolvedShop: false,
+        csiResolve: 1,
+        referralConsumer: true,
+        referralTrackingEnabled: true,
+        creditHold: false,
+      },
+      expected: "duplicate",
+    },
+    {
       id: "UT-CLS-1 perfect",
       input: {
         wouldRecommend: true,
@@ -133,6 +146,17 @@ describe("classifySurveyAlert", () => {
         csiResolve: 1,
       }),
     ).toBe("perfect");
+  });
+
+  it("labels duplicates before posting any FileMaker alert class again", () => {
+    expect(
+      classifySurveyAlert({
+        duplicate: true,
+        wouldRecommend: false,
+        unresolvedShop: true,
+        csiResolve: 0.1,
+      }),
+    ).toBe("duplicate");
   });
 
   it("coerces numeric strings from imports and fails closed on missing scores", () => {
