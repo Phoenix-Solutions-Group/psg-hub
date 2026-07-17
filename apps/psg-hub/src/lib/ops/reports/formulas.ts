@@ -25,7 +25,7 @@ export type ReportFormulaMapping = {
 export const FORMULA_TOLERANCES = {
   count: { type: "number", tolerance: 0, display: "exact whole count" },
   money: { type: "currency", tolerance: 0.01, display: "within one cent" },
-  percent: { type: "percent", tolerance: 0.1, display: "within 0.1 percentage point" },
+  percent: { type: "percent", tolerance: 0.01, display: "within 0.01 percentage point" },
   score: { type: "number", tolerance: 0.1, display: "within 0.1 score point" },
   date: { type: "date", tolerance: 0, display: "same calendar date" },
   text: { type: "string", tolerance: 0, display: "exact text label" },

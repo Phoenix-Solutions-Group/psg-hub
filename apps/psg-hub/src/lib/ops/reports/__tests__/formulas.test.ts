@@ -46,7 +46,7 @@ describe("report formula mappings", () => {
     expect(FORMULA_TOLERANCES.money).toMatchObject({ type: "currency", tolerance: 0.01 });
     expect(FORMULA_TOLERANCES.date).toMatchObject({ type: "date", tolerance: 0 });
     expect(FORMULA_TOLERANCES.count).toMatchObject({ type: "number", tolerance: 0 });
-    expect(FORMULA_TOLERANCES.percent).toMatchObject({ type: "percent", tolerance: 0.1 });
+    expect(FORMULA_TOLERANCES.percent).toMatchObject({ type: "percent", tolerance: 0.01 });
     expect(FORMULA_TOLERANCES.score).toMatchObject({ type: "number", tolerance: 0.1 });
   });
 });
