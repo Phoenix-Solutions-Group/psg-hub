@@ -34,9 +34,13 @@ export async function POST(request: Request) {
   }
 
   const response = NextResponse.json({ shop_id: shopId });
+  const requestUrl = new URL(request.url);
   response.cookies.set(ACTIVE_SHOP_COOKIE, shopId, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure:
+      process.env.NODE_ENV === "production" &&
+      requestUrl.hostname !== "localhost" &&
+      requestUrl.hostname !== "127.0.0.1",
     sameSite: "lax",
     path: "/",
   });
