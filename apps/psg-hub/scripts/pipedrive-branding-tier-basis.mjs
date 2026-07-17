@@ -20,10 +20,44 @@ export const PROPOSAL_SENT_STAGE_ID = 59;
 export const AUDIT_FILTER_NAME = "Branding audit - Proposal Sent missing Tier Basis";
 export const ACTUAL_HOURS_REPORT_LIMIT = 3;
 
+export const BRANDING_PHASES = [
+  { id: 1, name: "Discovery & Brand Audit", gate: "A-GATE" },
+  { id: 2, name: "Concept Development", gate: "D-GATE" },
+  { id: 3, name: "Review & Refinement", gate: "R-GATE" },
+  { id: 4, name: "Delivery & Rollout Handoff", gate: "F-GATE" },
+];
+
 export const BRANDING_TIER_ESTIMATES = {
-  "T1 Brand Mark": { designHours: 27 },
-  "T2 Brand Identity System": { designHours: 50 },
-  "T3 Identity + Rollout": { designHours: 70 },
+  "T1 Brand Mark": {
+    designHours: 27,
+    pmHours: 5,
+    phases: {
+      1: { designHours: 3, pmHours: 1.5 },
+      2: { designHours: 11, pmHours: 1 },
+      3: { designHours: 9, pmHours: 1.5 },
+      4: { designHours: 4, pmHours: 1 },
+    },
+  },
+  "T2 Brand Identity System": {
+    designHours: 50,
+    pmHours: 8,
+    phases: {
+      1: { designHours: 8, pmHours: 2.5 },
+      2: { designHours: 14, pmHours: 1.5 },
+      3: { designHours: 15, pmHours: 2 },
+      4: { designHours: 13, pmHours: 2 },
+    },
+  },
+  "T3 Identity + Rollout": {
+    designHours: 70,
+    pmHours: 14,
+    phases: {
+      1: { designHours: 12, pmHours: 3 },
+      2: { designHours: 23, pmHours: 3 },
+      3: { designHours: 21, pmHours: 3 },
+      4: { designHours: 14, pmHours: 5 },
+    },
+  },
 };
 
 export const TIER_BASIS_FIELDS = [
@@ -73,17 +107,31 @@ export const TIER_BASIS_FIELDS = [
 ];
 
 export const ACTUAL_HOURS_FIELDS = [
+  ...BRANDING_PHASES.flatMap((phase) => [
+    {
+      name: `phase${phase.id}_design_hours_actual`,
+      type: "double",
+      description:
+        `PSG-1779: actual design hours for Branding phase ${phase.id} (${phase.name}), recorded before ${phase.gate} closes. Round to the nearest 0.5 hour. Attribute hours by the ROLE the PSG-658 graph assigns to the task, never by who did the work.`,
+    },
+    {
+      name: `phase${phase.id}_pm_hours_actual`,
+      type: "double",
+      description:
+        `PSG-1779: actual project-management hours for Branding phase ${phase.id} (${phase.name}), recorded before ${phase.gate} closes. Round to the nearest 0.5 hour. Attribute hours by the ROLE the PSG-658 graph assigns to the task, never by who did the work.`,
+    },
+  ]),
   {
-    name: "Branding Actual - Design Hours",
+    name: "change_order_design_hours",
     type: "double",
     description:
-      "PSG-1779: actual design hours spent on this branding engagement. Used to verify fixed-price branding tiers after the first three jobs.",
+      "PSG-1779: design hours sold on a D5 change order. Keep these out of phase totals so out-of-scope paid work does not make fixed-scope delivery look over budget. Round to the nearest 0.5 hour.",
   },
   {
-    name: "Branding Actual - PM Hours",
+    name: "change_order_pm_hours",
     type: "double",
     description:
-      "PSG-1779: actual project-management hours spent on this branding engagement. Captured separately so overhead does not hide inside design hours.",
+      "PSG-1779: project-management hours sold on a D5 change order. Keep these out of phase totals so out-of-scope paid work does not make fixed-scope delivery look over budget. Round to the nearest 0.5 hour.",
   },
 ];
 
@@ -168,6 +216,19 @@ function readNumber(value) {
 function readDate(value) {
   const timestamp = Date.parse(String(value ?? ""));
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function variancePct(actual, expected) {
+  return expected && actual != null ? Number((((actual - expected) / expected) * 100).toFixed(1)) : null;
+}
+
+function sumNumbers(values) {
+  let total = 0;
+  for (const value of values) {
+    if (value == null) return null;
+    total += value;
+  }
+  return total;
 }
 
 function filterConditions(fieldIds) {
@@ -342,12 +403,12 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
 
 export function buildActualHoursReport({ fieldsV1, deals, generatedAt = new Date().toISOString() }) {
   const tierKey = fieldKeyByName(fieldsV1, "Tier Basis - Tier selected");
-  const designHoursKey = fieldKeyByName(fieldsV1, "Branding Actual - Design Hours");
-  const pmHoursKey = fieldKeyByName(fieldsV1, "Branding Actual - PM Hours");
+  const actualHourFieldKeys = Object.fromEntries(
+    ACTUAL_HOURS_FIELDS.map((spec) => [spec.name, fieldKeyByName(fieldsV1, spec.name)]),
+  );
   const missingFields = [
     ["Tier Basis - Tier selected", tierKey],
-    ["Branding Actual - Design Hours", designHoursKey],
-    ["Branding Actual - PM Hours", pmHoursKey],
+    ...ACTUAL_HOURS_FIELDS.map((spec) => [spec.name, actualHourFieldKeys[spec.name]]),
   ]
     .filter(([, key]) => !key)
     .map(([name]) => name);
@@ -368,12 +429,26 @@ export function buildActualHoursReport({ fieldsV1, deals, generatedAt = new Date
     .map((deal) => {
       const tier = String(deal[tierKey] ?? "").trim();
       const estimate = BRANDING_TIER_ESTIMATES[tier] ?? null;
-      const actualDesignHours = readNumber(deal[designHoursKey]);
-      const actualPmHours = readNumber(deal[pmHoursKey]);
-      const designVariancePct =
-        estimate?.designHours && actualDesignHours != null
-          ? Number((((actualDesignHours - estimate.designHours) / estimate.designHours) * 100).toFixed(1))
-          : null;
+      const phases = BRANDING_PHASES.map((phase) => {
+        const phaseEstimate = estimate?.phases?.[phase.id] ?? null;
+        const actualDesignHours = readNumber(deal[actualHourFieldKeys[`phase${phase.id}_design_hours_actual`]]);
+        const actualPmHours = readNumber(deal[actualHourFieldKeys[`phase${phase.id}_pm_hours_actual`]]);
+        return {
+          phase: phase.id,
+          name: phase.name,
+          gate: phase.gate,
+          estimatedDesignHours: phaseEstimate?.designHours ?? null,
+          actualDesignHours,
+          designVariancePct: variancePct(actualDesignHours, phaseEstimate?.designHours),
+          estimatedPmHours: phaseEstimate?.pmHours ?? null,
+          actualPmHours,
+          pmVariancePct: variancePct(actualPmHours, phaseEstimate?.pmHours),
+        };
+      });
+      const actualDesignHours = sumNumbers(phases.map((phase) => phase.actualDesignHours));
+      const actualPmHours = sumNumbers(phases.map((phase) => phase.actualPmHours));
+      const designVariancePct = variancePct(actualDesignHours, estimate?.designHours);
+      const pmVariancePct = variancePct(actualPmHours, estimate?.pmHours);
       return {
         dealId: deal.id ?? null,
         title: deal.title ?? null,
@@ -381,8 +456,13 @@ export function buildActualHoursReport({ fieldsV1, deals, generatedAt = new Date
         wonAt: deal.won_time ?? deal.close_time ?? null,
         estimatedDesignHours: estimate?.designHours ?? null,
         actualDesignHours,
-        actualPmHours,
         designVariancePct,
+        estimatedPmHours: estimate?.pmHours ?? null,
+        actualPmHours,
+        pmVariancePct,
+        phases,
+        changeOrderDesignHours: readNumber(deal[actualHourFieldKeys.change_order_design_hours]),
+        changeOrderPmHours: readNumber(deal[actualHourFieldKeys.change_order_pm_hours]),
         repricingTrigger: designVariancePct == null ? "missing actuals" : Math.abs(designVariancePct) > 15,
       };
     })
@@ -397,14 +477,43 @@ export function buildActualHoursReport({ fieldsV1, deals, generatedAt = new Date
         closedJobs: 0,
         estimatedDesignHours: 0,
         actualDesignHours: 0,
+        estimatedPmHours: 0,
         actualPmHours: 0,
         missingActualJobs: 0,
+        phases: Object.fromEntries(
+          BRANDING_PHASES.map((phase) => [
+            phase.id,
+            {
+              phase: phase.id,
+              name: phase.name,
+              estimatedDesignHours: 0,
+              actualDesignHours: 0,
+              estimatedPmHours: 0,
+              actualPmHours: 0,
+              missingActualJobs: 0,
+            },
+          ]),
+        ),
       };
       bucket.closedJobs += 1;
       bucket.estimatedDesignHours += deal.estimatedDesignHours ?? 0;
-      if (deal.actualDesignHours == null) bucket.missingActualJobs += 1;
-      else bucket.actualDesignHours += deal.actualDesignHours;
-      if (deal.actualPmHours != null) bucket.actualPmHours += deal.actualPmHours;
+      bucket.estimatedPmHours += deal.estimatedPmHours ?? 0;
+      if (deal.actualDesignHours == null || deal.actualPmHours == null) bucket.missingActualJobs += 1;
+      else {
+        bucket.actualDesignHours += deal.actualDesignHours;
+        bucket.actualPmHours += deal.actualPmHours;
+      }
+      for (const phase of deal.phases) {
+        const phaseBucket = bucket.phases[phase.phase];
+        phaseBucket.estimatedDesignHours += phase.estimatedDesignHours ?? 0;
+        phaseBucket.estimatedPmHours += phase.estimatedPmHours ?? 0;
+        if (phase.actualDesignHours == null || phase.actualPmHours == null) {
+          phaseBucket.missingActualJobs += 1;
+        } else {
+          phaseBucket.actualDesignHours += phase.actualDesignHours;
+          phaseBucket.actualPmHours += phase.actualPmHours;
+        }
+      }
       acc[deal.tier] = bucket;
       return acc;
     }, {}),
@@ -418,16 +527,30 @@ export function buildActualHoursReport({ fieldsV1, deals, generatedAt = new Date
       bucket.missingActualJobs > 0
         ? "missing actuals"
         : Math.abs((bucket.actualDesignHours - bucket.estimatedDesignHours) / bucket.estimatedDesignHours) > 0.15,
+    phases: Object.values(bucket.phases).map((phase) => ({
+      ...phase,
+      designVariancePct:
+        phase.estimatedDesignHours > 0 && phase.missingActualJobs === 0
+          ? Number((((phase.actualDesignHours - phase.estimatedDesignHours) / phase.estimatedDesignHours) * 100).toFixed(1))
+          : null,
+      pmVariancePct:
+        phase.estimatedPmHours > 0 && phase.missingActualJobs === 0
+          ? Number((((phase.actualPmHours - phase.estimatedPmHours) / phase.estimatedPmHours) * 100).toFixed(1))
+          : null,
+    })),
   }));
 
   return {
     issue: "PSG-1779",
     generatedAt,
-    ready: firstClosedBrandingJobs.length >= ACTUAL_HOURS_REPORT_LIMIT,
+    ready:
+      firstClosedBrandingJobs.length >= ACTUAL_HOURS_REPORT_LIMIT &&
+      firstClosedBrandingJobs.every((deal) => deal.repricingTrigger !== "missing actuals"),
     missingFields: [],
     firstClosedBrandingJobs,
     byTier,
-    threshold: "Rebuild the tier scope if actual design hours are more than 15% above or below the estimate.",
+    threshold:
+      "Rebuild the tier scope if total actual design hours are more than 15% above or below the estimate. Use phase splits to tell pricing defects from Phase 3 change-order enforcement defects.",
   };
 }
 
@@ -598,7 +721,7 @@ async function main() {
       auditFilter:
         "The saved filter lists PSG Sales deals in Proposal Sent where any Tier Basis field is empty.",
       actualHours:
-        "Two numeric deal fields capture actual design and project-management hours per branding engagement. Run this script with --actual-hours-report after branding job #3 closes to compare actual design hours with the 27/50/70 hour tier estimates.",
+        "Ten numeric deal fields capture actual design and project-management hours per branding phase, plus separate change-order design/PM hours that stay out of phase totals. Run this script with --actual-hours-report after branding job #3 closes to compare actuals with the approved per-phase tier baseline.",
     },
     applied,
     remainingActions: plan.actions,
