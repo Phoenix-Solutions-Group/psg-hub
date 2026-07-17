@@ -1,6 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { ApprovalCard, type ApprovalCardRow } from "@/components/dashboard/approval-card";
+import {
+  ApprovedContentArchiveTable,
+  type ApprovedContentArchiveRow,
+} from "@/components/dashboard/approved-content-archive-table";
+import { listApprovedContentArchiveRows } from "@/lib/bsm/approved-content-archive";
 
 // PSG-245 / Wave 2 (G-d) — per-shop approval queue. Lists the active shop's
 // pending agent-proposed actions for an owner/manager to preview, confirm, then
@@ -17,6 +22,7 @@ export default async function ApprovalsPage() {
 
   let pending: ApprovalCardRow[] = [];
   let recentCount = 0;
+  let approvedArchive: ApprovedContentArchiveRow[] = [];
 
   if (user) {
     const { activeShopId } = await getActiveShopContext(user.id);
@@ -48,6 +54,8 @@ export default async function ApprovalsPage() {
         .eq("shop_id", activeShopId)
         .in("status", ["approved", "rejected", "published"]);
       recentCount = count ?? 0;
+
+      approvedArchive = await listApprovedContentArchiveRows(supabase, activeShopId);
     }
   }
 
@@ -79,6 +87,16 @@ export default async function ApprovalsPage() {
           ))}
         </div>
       )}
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Approved Content Archive</h2>
+          <p className="text-sm text-muted-foreground">
+            Approved files and generated pages are kept here for reference and audit.
+          </p>
+        </div>
+        <ApprovedContentArchiveTable rows={approvedArchive} />
+      </section>
     </div>
   );
 }
