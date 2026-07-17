@@ -6,23 +6,23 @@ type ArchiveItemRecord = {
   id: string;
   title: string;
   content_type: string;
-  source_kind: string;
 };
 
 type ArchiveVersionRecord = {
   id: string;
   version_number: number;
-  version_label: string | null;
-  preview_url: string | null;
-  generated_page_path: string | null;
+  original_filename: string | null;
+  storage_path: string | null;
+  preview_type: string | null;
   source_content_item_id: string | null;
+  source_metadata_jsonb: Record<string, unknown> | null;
 };
 
 type ArchiveDecisionRecord = {
   id: string;
   decision: string;
-  actor_display_name: string | null;
-  decided_at: string;
+  actor_profile_id: string | null;
+  created_at: string;
   item: ArchiveItemRecord | ArchiveItemRecord[] | null;
   version: ArchiveVersionRecord | ArchiveVersionRecord[] | null;
 };
@@ -33,12 +33,23 @@ function one<T>(value: T | T[] | null): T | null {
 }
 
 function previewHref(version: ArchiveVersionRecord): string | null {
-  if (version.preview_url) return version.preview_url;
-  if (version.generated_page_path) return version.generated_page_path;
+  const metadata = version.source_metadata_jsonb ?? {};
+  const previewUrl = typeof metadata.previewUrl === "string" ? metadata.previewUrl : null;
+  const generatedPagePath = typeof metadata.generatedPagePath === "string" ? metadata.generatedPagePath : null;
+  if (previewUrl) return previewUrl;
+  if (generatedPagePath) return generatedPagePath;
   if (version.source_content_item_id) {
     return `/dashboard/content/${encodeURIComponent(version.source_content_item_id)}`;
   }
+  if (version.storage_path) return null;
   return null;
+}
+
+function sourceKind(item: ArchiveItemRecord, version: ArchiveVersionRecord): string {
+  if (item.content_type === "generated_page" || version.preview_type === "generated_page") {
+    return "generated_page";
+  }
+  return "uploaded_file";
 }
 
 export function mapApprovedContentArchiveRows(
@@ -54,12 +65,12 @@ export function mapApprovedContentArchiveRows(
         id: record.id,
         title: item.title,
         contentType: item.content_type,
-        sourceKind: item.source_kind,
+        sourceKind: sourceKind(item, version),
         versionNumber: version.version_number,
-        versionLabel: version.version_label,
+        versionLabel: version.original_filename,
         decision: record.decision,
-        approver: record.actor_display_name,
-        approvedAt: record.decided_at,
+        approver: record.actor_profile_id,
+        approvedAt: record.created_at,
         previewHref: previewHref(version),
       },
     ];
@@ -77,27 +88,27 @@ export async function listApprovedContentArchiveRows(
       `
         id,
         decision,
-        actor_display_name,
-        decided_at,
+        actor_profile_id,
+        created_at,
         item:bsm_content_review_items!inner (
           id,
           title,
-          content_type,
-          source_kind
+          content_type
         ),
         version:bsm_content_review_versions!inner (
           id,
           version_number,
-          version_label,
-          preview_url,
-          generated_page_path,
-          source_content_item_id
+          original_filename,
+          storage_path,
+          preview_type,
+          source_content_item_id,
+          source_metadata_jsonb
         )
       `
     )
     .eq("shop_id", shopId)
-    .eq("decision", "approved")
-    .order("decided_at", { ascending: false })
+    .eq("decision", "approve")
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) {
