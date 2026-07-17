@@ -5,7 +5,7 @@
 //   node --env-file=.env.local apps/psg-hub/scripts/pipedrive-won-billing-coverage-check.mjs
 //
 // The script is read-only and never prints the API token. It exits with code 1
-// when the Won gate requires anything other than the exact 19 billing fields.
+// when the Won gate requires anything other than the exact billing fields.
 
 import process from "node:process";
 
@@ -35,8 +35,6 @@ export const EXPECTED_WON_BILLING_REQUIRED_FIELDS = [
   { id: 12549, code: "1f19ed0b91dda56a12be3655eaf09934982c4c63", name: "Monthly Recurring Fees" },
   { id: 12551, code: "26112fa2328ef92aea1d87efa0af18e231841d8e", name: "First Invoice Date" },
   { id: 12554, code: "3025cb67fb88b6b548483e1a108f6d5b6b2ea362", name: "Delivery Template" },
-  { id: 12555, code: "c5d5cd6efedd935b7320d5206cfeade7cad4bb56", name: "Missing Access List" },
-  { id: 12556, code: "4edecfde7682e1565c0450fc087953a1c457c12f", name: "Asset Request List" },
   { id: 12572, code: "5461d82fd372f1e65195ac3689e3ac9bfdb7e1e9", name: "Payment Terms (deal)" },
   { id: 12576, code: "d318a4cf86fc9a9fae395cd7a4e8785862ded54c", name: "Billing Contact Name" },
 ];

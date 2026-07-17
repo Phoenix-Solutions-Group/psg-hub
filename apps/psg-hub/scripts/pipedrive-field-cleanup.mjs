@@ -241,6 +241,7 @@ export const WON_HANDOFF_DEAL_FIELDS = [
   },
   {
     labels: ["Missing Access List", "Access Needs"],
+    required_on_won: false,
     create: {
       field_name: "Missing Access List",
       field_type: "text",
@@ -249,6 +250,7 @@ export const WON_HANDOFF_DEAL_FIELDS = [
   },
   {
     labels: ["Asset Request List", "Required Assets"],
+    required_on_won: false,
     create: {
       field_name: "Asset Request List",
       field_type: "text",

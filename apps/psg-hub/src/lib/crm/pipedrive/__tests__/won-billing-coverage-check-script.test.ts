@@ -19,7 +19,7 @@ const requiredField = (id: number, name: string, extra: Record<string, unknown> 
 });
 
 describe("pipedrive-won-billing-coverage-check", () => {
-  it("passes only when the Won gate covers the exact 19 billing fields", () => {
+  it("passes only when the Won gate covers the exact 17 billing fields", () => {
     const check = buildWonBillingCoverageCheck({
       dealFields: EXPECTED_WON_BILLING_REQUIRED_FIELDS.map((field) =>
         requiredField(field.id, field.name),
@@ -27,8 +27,8 @@ describe("pipedrive-won-billing-coverage-check", () => {
     });
 
     expect(check.ok).toBe(true);
-    expect(check.expectedFieldCount).toBe(19);
-    expect(check.actualFieldCount).toBe(19);
+    expect(check.expectedFieldCount).toBe(17);
+    expect(check.actualFieldCount).toBe(17);
     expect(check.missingNames).toEqual([]);
     expect(check.unexpectedNames).toEqual([]);
     expect(check.alertText).toBe("");
@@ -87,7 +87,7 @@ describe("pipedrive-won-billing-coverage-check", () => {
     expect(check.missingNames).toEqual(["Monthly Recurring Fees"]);
   });
 
-  it("flags unexpected additions even when the count is still 19", () => {
+  it("flags unexpected additions even when the count is still 17", () => {
     const swappedFields = EXPECTED_WON_BILLING_REQUIRED_FIELDS
       .filter((field) => field.id !== 12549)
       .map((field) => requiredField(field.id, field.name));
@@ -96,7 +96,7 @@ describe("pipedrive-won-billing-coverage-check", () => {
     const check = buildWonBillingCoverageCheck({ dealFields: swappedFields });
 
     expect(check.ok).toBe(false);
-    expect(check.actualFieldCount).toBe(19);
+    expect(check.actualFieldCount).toBe(17);
     expect(check.missingNames).toEqual(["Monthly Recurring Fees"]);
     expect(check.unexpectedNames).toEqual(["Unexpected Billing Field"]);
     expect(check.alertText).toContain("lost coverage: Monthly Recurring Fees no longer required");
@@ -114,7 +114,7 @@ describe("pipedrive-won-billing-coverage-check", () => {
     });
 
     expect(check.ok).toBe(true);
-    expect(check.actualFieldCount).toBe(19);
+    expect(check.actualFieldCount).toBe(17);
     expect(check.unexpectedNames).toEqual([]);
   });
 });

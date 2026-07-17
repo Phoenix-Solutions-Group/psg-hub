@@ -287,7 +287,7 @@ describe("pipedrive-field-cleanup plan", () => {
     }
   });
 
-  it("does not re-gate the three PSG-1595 fields that were removed from the Won blocker", () => {
+  it("does not re-gate the non-billing fields that were removed from the Won blocker", () => {
     const wonFields = WON_HANDOFF_DEAL_FIELDS.map((spec, index) =>
       custom(spec.create.field_name, `won_field_${index}`, {
         required_fields: {
@@ -317,6 +317,8 @@ describe("pipedrive-field-cleanup plan", () => {
 
     for (const label of [
       "MSO Parent Company",
+      "Missing Access List",
+      "Asset Request List",
       "Finance Handoff Sign-Off",
       "Production Handoff Sign-Off",
     ]) {
@@ -331,12 +333,14 @@ describe("pipedrive-field-cleanup plan", () => {
     }
   });
 
-  it("clears accidental required rules from the three PSG-1595 non-Won fields", () => {
+  it("clears accidental required rules from non-billing Won fields", () => {
     const wonFields = WON_HANDOFF_DEAL_FIELDS.map((spec, index) =>
       custom(spec.create.field_name, `won_field_${index}`, {
         required_fields: {
           enabled: [
             "MSO Parent Company",
+            "Missing Access List",
+            "Asset Request List",
             "Finance Handoff Sign-Off",
             "Production Handoff Sign-Off",
           ].includes(spec.create.field_name),
@@ -365,6 +369,8 @@ describe("pipedrive-field-cleanup plan", () => {
 
     for (const label of [
       "MSO Parent Company",
+      "Missing Access List",
+      "Asset Request List",
       "Finance Handoff Sign-Off",
       "Production Handoff Sign-Off",
     ]) {

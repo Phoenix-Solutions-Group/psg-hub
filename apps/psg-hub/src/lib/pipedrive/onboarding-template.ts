@@ -85,6 +85,8 @@ export const WHM_ONBOARDING_TEMPLATE: readonly OnboardingPhase[] = [
       { title: "Send welcome email + schedule kickoff call", owner: "AS", dayOffset: 1 },
       { title: "Send client intake questionnaire (structured intake form)", owner: "AS", dayOffset: 1 },
       { title: "Confirm billing, budget & contract terms logged in CRM", owner: "AS", dayOffset: 2 },
+      { title: "Review Missing Access List with Delivery and assign follow-ups", owner: "AS", dayOffset: 2 },
+      { title: "Review Asset Request List with Delivery and assign follow-ups", owner: "AS", dayOffset: 2 },
       { title: "Set up client folder/workspace + shared calendar", owner: "AS", dayOffset: 2 },
       { title: "Internal kickoff: assign core pod (AS + Analytics + Ads)", owner: "AS", dayOffset: 2 },
       {
