@@ -367,10 +367,15 @@ export async function runProposalAutomations(
     summary.proposalDraftSeries = await createProposalDraftSeries(client, current, env);
   }
   const status = typeof current.status === "string" ? current.status.toLowerCase() : "";
+  const currentStageId = stageId(current);
+  const previousStageId = stageId(previous);
+  const movedOutOfProposalSent =
+    previousStageId === proposalSentStageId && currentStageId !== proposalSentStageId;
   if (
     status === "won" ||
     status === "lost" ||
-    (stageId(current) != null && stopStageIds.includes(stageId(current)!))
+    movedOutOfProposalSent ||
+    (currentStageId != null && stopStageIds.includes(currentStageId))
   ) {
     const stopped = await stopProposalDraftSeries(client, current);
     if (stopped.status === "stopped") summary.proposalDraftSeries = stopped;

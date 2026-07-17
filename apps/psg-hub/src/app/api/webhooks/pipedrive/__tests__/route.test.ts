@@ -550,4 +550,45 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
     expect(deleteActivity).toHaveBeenCalledWith(801);
     expect(deleteActivity).toHaveBeenCalledWith(802);
   });
+
+  it("deletes open proposal follow-up draft tasks when the deal leaves Proposal Sent", async () => {
+    isDealWonTransition.mockReturnValue(false);
+    listDealActivities.mockResolvedValueOnce([
+      {
+        id: 803,
+        subject: "Proposal follow-up draft Touch 3: Wallace website proposal",
+        type: "email",
+        dueDate: "2026-07-30",
+        done: false,
+      },
+    ]);
+
+    const res = await POST(
+      new Request("https://hub.psgweb.me/api/webhooks/pipedrive", {
+        method: "POST",
+        headers: {
+          authorization: authHeader(),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          previous: { status: "open", stage_id: 59 },
+          current: {
+            id: 42,
+            title: "Wallace website proposal",
+            status: "open",
+            pipeline_id: 8,
+            stage_id: 58,
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(
+      expect.objectContaining({
+        proposalDraftSeries: { status: "stopped", stoppedActivityIds: [803] },
+      }),
+    );
+    expect(deleteActivity).toHaveBeenCalledWith(803);
+  });
 });
