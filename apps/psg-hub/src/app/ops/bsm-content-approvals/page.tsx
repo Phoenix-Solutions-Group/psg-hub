@@ -3,6 +3,7 @@ import { BsmContentApprovalManager } from "@/components/ops/bsm-content-approval
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
 import { listBsmContentApprovals } from "@/lib/bsm/content-approvals";
 import type { BsmContentApprovalListItem } from "@/lib/bsm/content-approvals-shared";
+import { getActiveShopContext } from "@/lib/shop/context";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -29,9 +30,22 @@ export default async function BsmContentApprovalsPage() {
   }
 
   let approvals: BsmContentApprovalListItem[] = [];
+  let shops: Array<{ id: string; name: string }> = [];
+  let activeShopId: string | null = null;
   let loadError = false;
+  const service = createServiceClient();
   try {
-    approvals = await listBsmContentApprovals(createServiceClient());
+    const [approvalRows, shopContext, shopRows] = await Promise.all([
+      listBsmContentApprovals(service),
+      getActiveShopContext(user.id),
+      service.from("shops").select("id, name").order("name", { ascending: true }).limit(500),
+    ]);
+    approvals = approvalRows;
+    activeShopId = shopContext.activeShopId;
+    shops = (shopRows.data ?? []).map((row) => ({
+      id: row.id as string,
+      name: (row.name as string | null) || (row.id as string),
+    }));
   } catch {
     loadError = true;
   }
@@ -55,7 +69,11 @@ export default async function BsmContentApprovalsPage() {
         </div>
       ) : null}
 
-      <BsmContentApprovalManager initialApprovals={approvals} />
+      <BsmContentApprovalManager
+        initialApprovals={approvals}
+        shops={shops}
+        activeShopId={activeShopId}
+      />
     </div>
   );
 }

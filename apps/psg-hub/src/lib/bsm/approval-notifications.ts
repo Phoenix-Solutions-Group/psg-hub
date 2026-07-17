@@ -89,7 +89,7 @@ export function normalizeBsmApprovalAdminEmails(value: string | undefined): stri
 
 export function bsmApprovalReviewUrl(appBaseUrl: string, reviewItemId: string): string {
   const base = appBaseUrl.replace(/\/+$/, "");
-  return `${base}/ops/bsm/content-approvals/${encodeURIComponent(reviewItemId)}`;
+  return `${base}/ops/bsm-content-approvals?reviewItemId=${encodeURIComponent(reviewItemId)}`;
 }
 
 export function buildBsmApprovalNotificationCopy(input: BsmApprovalNotificationInput): {

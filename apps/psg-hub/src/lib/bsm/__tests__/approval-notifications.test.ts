@@ -101,7 +101,7 @@ describe("BSM approval notification copy", () => {
     expect(copy.body).toContain("Tracy's Collision");
     expect(copy.body).toContain("Can we make the offer clearer?");
     expect(copy.actionUrl).toBe(
-      "https://hub.psg.test/ops/bsm/content-approvals/00000000-0000-0000-0000-0000000000aa",
+      "https://hub.psg.test/ops/bsm-content-approvals?reviewItemId=00000000-0000-0000-0000-0000000000aa",
     );
   });
 
@@ -114,7 +114,7 @@ describe("BSM approval notification copy", () => {
 
   it("creates stable review URLs without double slashes", () => {
     expect(bsmApprovalReviewUrl("https://hub.psg.test///", "review 1")).toBe(
-      "https://hub.psg.test/ops/bsm/content-approvals/review%201",
+      "https://hub.psg.test/ops/bsm-content-approvals?reviewItemId=review%201",
     );
   });
 });
