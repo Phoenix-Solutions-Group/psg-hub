@@ -52,6 +52,38 @@ Freshness procedure before each Local Reach release or monthly pilot batch:
 4. If a skill has no version or the version is unchanged but the file content changed, treat it as changed and re-run the sample regression.
 5. Do not use optional creative/media skills in production content unless the approval record names the generated asset and the customer approves it.
 
+### Local Reach Writer Freshness Receipt
+
+Issue: PSG-2125  
+Checked: 2026-07-17  
+Checked by: Ada  
+
+Real Supreme Collision customer drafting may start only when the draft run uses the writer recorded in this receipt. If another writer runtime, skill path, version, or file hash is used, drafting is not approved until this receipt is refreshed.
+
+Approved writer for the first Local Reach customer draft:
+
+- Skill name: `collision-repair-content-system`
+- Skill path: `/paperclip/instances/default/companies/a38dde7c-f8ee-4901-804d-bf1d6887dbf0/codex-home/skills/content-generator/SKILL.md`
+- Skill version: `0.4.0`
+- Skill repository commit: `91a8443025798daf1108d4823da3f7f28eb0ebc0`
+- Skill repository commit date: 2026-06-24
+- `SKILL.md` SHA-256: `7f77cea186fffc4e57569bcf9b98106380c61c6f7289d52c4436f39a56d7e5cf`
+- BSM repo commit checked: `6193f1c532c1efef764393b877d120adc59a1f94`
+
+Latest-approved-version finding:
+
+- `SKILL.md` frontmatter reports version `0.4.0`.
+- `CHANGELOG.md` lists `0.4.0` as the current released entry and says it added the PSG content guardrails, existing-content optimizer, schema validation updates, 2026 GEO doctrine, and phase command files.
+- The local skill git repository is clean on `main...origin/main` at commit `91a8443025798daf1108d4823da3f7f28eb0ebc0`.
+- A remote tag comparison was attempted with `git ls-remote --tags origin`, but GitHub requested credentials in this runtime. No newer approved local skill version was found.
+
+Pre-use rule:
+
+- For the first Supreme Collision pilot draft, invoke `collision-repair-content-system` version `0.4.0` from the path above.
+- Record this receipt id, the skill version, the skill commit, and the `SKILL.md` hash in the draft run log.
+- Run the normal BSM claim-integrity check before the draft can be saved for review.
+- If the writer runtime cannot prove it used this exact skill receipt, do not create a real customer draft.
+
 ## Source Options Ranked
 
 | Rank | Source path | Legality / policy risk | Reliability | Cost | Usefulness | MVP decision |
