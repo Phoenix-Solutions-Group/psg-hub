@@ -58,6 +58,9 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "ccc.connection.decline": "Declined CCC connection",
   "ccc.connection.revoke": "Revoked CCC connection",
   "gbp.disconnect": "Disconnected Google Business Profile",
+  "google_ads.audit_report.publish": "Published Google Ads audit report",
+  "google_ads_request.create": "Submitted Google Ads request",
+  "google_ads_request.update": "Updated Google Ads request",
   "intake.signed_upload.mint": "Minted pilot-intake upload link",
 };
 
@@ -84,7 +87,7 @@ export function auditCategory(action: string): AuditCategory {
   if (action.startsWith("approval")) return "approvals";
   if (action.startsWith("sitemap")) return "sitemap";
   if (action.startsWith("ccc.")) return "ccc";
-  if (action.startsWith("gbp")) return "integrations";
+  if (action.startsWith("gbp") || action.startsWith("google_ads")) return "integrations";
   if (action.startsWith("intake")) return "intake";
   return "other";
 }

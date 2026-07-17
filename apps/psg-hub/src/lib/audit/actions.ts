@@ -81,6 +81,16 @@ export const AUDIT_ACTIONS = [
   // is audited so a credential teardown is attributable to an actor + shop.
   // (Connect runs through the OAuth consent flow, recorded by the linked-account row.)
   "gbp.disconnect",
+  // Google Ads optimization audit reports — PSG staff publish a PDF/report into
+  // the customer-facing Google Ads review surface. The report is uploaded and
+  // attributed to the acting profile; no ad mutation is executed by this action.
+  "google_ads.audit_report.publish",
+  // Google Ads customer request workflow (PSG-1707) — customers submit
+  // non-executing ads-change requests, and PSG staff move them through
+  // human-reviewed statuses. Every create/update is audited so request handling
+  // is attributable without executing any Google Ads mutation.
+  "google_ads_request.create",
+  "google_ads_request.update",
   // Pilot-intake signed-upload mint (PSG-394 / Track A) — a superadmin mints a
   // time-limited signed-upload URL for a caller-named object in the private
   // "pilot-intake" bucket so Nick can drop the real RO/Estimate export for the
