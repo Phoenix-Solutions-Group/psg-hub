@@ -101,6 +101,7 @@ describe("BSM content approval upload helpers", () => {
     expect(item.shop_id).toBe(SHOP_ID);
     expect(item.customer_profile_id).toBe(PROFILE_ID);
     expect(item.content_type).toBe("pdf");
+    expect(item.source_kind).toBe("uploaded_file");
     expect(version.storage_path).toBe(
       approvalStoragePath({
         shopId: SHOP_ID,
@@ -148,6 +149,7 @@ describe("BSM content approval upload helpers", () => {
     const item = inserts[0].payload;
     const version = inserts[1].payload;
     expect(item.content_type).toBe("generated_page");
+    expect(item.source_kind).toBe("generated_page");
     expect(item.source_content_item_id).toBe("44444444-4444-4444-8444-444444444444");
     expect(version.storage_path).toBeNull();
     expect(version.source_metadata_jsonb).toMatchObject({

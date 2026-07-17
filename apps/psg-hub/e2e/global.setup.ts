@@ -381,6 +381,7 @@ async function seedBsmContentApprovalReview(
     customer_profile_id: ownerId,
     title: opts.title,
     content_type: "generated_page",
+    source_kind: "generated_page",
     status: "in_review",
     admin_context_note: "Please review this BSM page before PSG uses it.",
     current_version_id: null,
