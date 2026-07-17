@@ -528,4 +528,48 @@ describe("createPipedriveClient — org names", () => {
     expect(deals).toHaveLength(1);
     expect(deals[0]!.orgName).toBeNull();
   });
+
+  it("reads one organization's billing defaults without logging the token", async () => {
+    const fetchImpl = vi.fn(async (_url: string) =>
+      jsonResponse({
+        success: true,
+        data: {
+          id: 9,
+          name: "Wallace Collision",
+          d6dfb1cfee548ef9e680962ddcbce413a3fda68d: "Wallace Collision LLC",
+          address_formatted_address: "123 Main St, Phoenix, AZ 85001",
+          ab9a437a33140874fae9a97439852840975327ed: "billing@wallace.example",
+          bd65fffd521173fe8a752bf3bac64476f4626415: "Net 15",
+        },
+      }),
+    );
+    const client = createPipedriveClient({
+      apiToken: "tok_secret",
+      companyDomain: "acme",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await expect(client.fetchOrganizationBillingDetails!(9)).resolves.toEqual({
+      id: 9,
+      name: "Wallace Collision",
+      displayName: "Wallace Collision LLC",
+      address: "123 Main St, Phoenix, AZ 85001",
+      generalEmail: "billing@wallace.example",
+      paymentTerms: "Net 15",
+    });
+    const url = String(fetchImpl.mock.calls[0][0]);
+    expect(url).toContain("https://acme.pipedrive.com/api/v1/organizations/9");
+    expect(url).toContain("api_token=tok_secret");
+
+    const failingFetch = vi.fn().mockResolvedValue(jsonResponse({}, false, 403));
+    const failingClient = createPipedriveClient({
+      apiToken: "tok_secret",
+      fetchImpl: failingFetch as unknown as typeof fetch,
+    });
+    await expect(failingClient.fetchOrganizationBillingDetails!(9)).rejects.toMatchObject({
+      name: "PipedriveError",
+      status: 403,
+    });
+    await expect(failingClient.fetchOrganizationBillingDetails!(9)).rejects.not.toThrow(/tok_secret/);
+  });
 });

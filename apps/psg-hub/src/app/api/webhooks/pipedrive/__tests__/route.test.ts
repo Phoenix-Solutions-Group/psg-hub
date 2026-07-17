@@ -11,6 +11,7 @@ const enrollNurturePath = vi.fn();
 const createServiceClient = vi.fn();
 const updateDeal = vi.fn();
 const fetchPersonContact = vi.fn();
+const fetchOrganizationBillingDetails = vi.fn();
 
 vi.mock("@/lib/pipedrive/projects", () => ({
   createProjectsClient: (...args: unknown[]) => createProjectsClient(...args),
@@ -74,7 +75,11 @@ beforeEach(() => {
   vi.stubEnv("PIPEDRIVE_COMPANY_DOMAIN", "psg");
 
   createProjectsClient.mockReturnValue({ projectsClient: true, updateDeal });
-  createPipedriveClient.mockReturnValue({ contactClient: true, fetchPersonContact });
+  createPipedriveClient.mockReturnValue({
+    contactClient: true,
+    fetchPersonContact,
+    fetchOrganizationBillingDetails,
+  });
   createServiceClient.mockReturnValue({ serviceClient: true });
   resolvePipedriveToken.mockReturnValue("token");
   isDealWonTransition.mockReturnValue(true);
@@ -83,6 +88,14 @@ beforeEach(() => {
   provisionForDeal.mockResolvedValue({ provisionedProjects: 1, reusedProjects: 0 });
   enrollNurturePath.mockResolvedValue({ path: "onboarding_retention" });
   fetchPersonContact.mockResolvedValue({ firstName: "Pat", email: "pat@example.com", phone: null });
+  fetchOrganizationBillingDetails.mockResolvedValue({
+    id: 9,
+    name: "Wallace Collision",
+    displayName: "Wallace Collision LLC",
+    address: "123 Main St, Phoenix, AZ 85001",
+    generalEmail: "billing@wallace.example",
+    paymentTerms: "Net 15",
+  });
 });
 
 describe("Pipedrive won-deal webhook nurture gate", () => {
@@ -97,6 +110,15 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       nurtureEnrollment: "enrolled",
       contactValidation: "skipped",
       firstContactStamp: "skipped",
+      billingAutofill: "filled",
+    });
+    expect(fetchOrganizationBillingDetails).toHaveBeenCalledWith(9);
+    expect(updateDeal).toHaveBeenCalledWith(42, {
+      eaecf6080f4dc77a8533315844a8cc8663312aa2: "Wallace Collision LLC",
+      "5d5c27acc52d0ed92af361bc4dc0a87801477f4b": "123 Main St, Phoenix, AZ 85001",
+      c0a76c955f288460d1d472141df2574ac24a1d8d: "billing@wallace.example",
+      "5461d82fd372f1e65195ac3689e3ac9bfdb7e1e9": "NET 15 (standard)",
+      d318a4cf86fc9a9fae395cd7a4e8785862ded54c: "Pat Owner",
     });
     expect(provisionForDeal).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -162,6 +184,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       skipped: "not_won_transition",
       contactValidation: "skipped",
       firstContactStamp: "stamped",
+      billingAutofill: "skipped",
     });
     expect(updateDeal).toHaveBeenCalledWith(42, {
       first_contact_date: "2026-07-15",
@@ -199,6 +222,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       skipped: "not_won_transition",
       contactValidation: "skipped",
       firstContactStamp: "skipped",
+      billingAutofill: "skipped",
     });
     expect(updateDeal).not.toHaveBeenCalled();
   });
@@ -234,6 +258,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       skipped: "not_won_transition",
       contactValidation: "flagged_missing_contact",
       firstContactStamp: "skipped",
+      billingAutofill: "skipped",
     });
     expect(fetchPersonContact).toHaveBeenCalledWith(7);
     expect(updateDeal).toHaveBeenCalledWith(42, {
@@ -273,6 +298,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       skipped: "not_won_transition",
       contactValidation: "valid_cleared_flag",
       firstContactStamp: "skipped",
+      billingAutofill: "skipped",
     });
     expect(fetchPersonContact).toHaveBeenCalledWith(7);
     expect(updateDeal).toHaveBeenCalledWith(42, {

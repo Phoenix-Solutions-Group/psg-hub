@@ -13,6 +13,7 @@ import { provisionForDeal } from "@/lib/pipedrive/template-registry";
 import { loadRoleUserMap } from "@/lib/pipedrive/role-user-map";
 import { createServiceClient } from "@/lib/supabase/service";
 import { enrollNurturePath } from "@/lib/nurture/enrollment";
+import { buildDealBillingAutofillPatch } from "@/lib/pipedrive/deal-billing-autofill";
 
 // PSG-584 / PSG-576 Move 1 — Pipedrive deal-won webhook → auto-create delivery board.
 //
@@ -181,6 +182,56 @@ async function validateNewLeadContact(
   return "valid";
 }
 
+async function autofillDealBillingFields(
+  current: Record<string, unknown> | null,
+): Promise<"skipped" | "filled" | "no_changes" | "failed"> {
+  const dealId = Number(current?.id);
+  const orgId = relId(current?.org_id);
+  if (!current || !Number.isFinite(dealId) || orgId == null) return "skipped";
+
+  try {
+    const readClient = createPipedriveClient({
+      companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
+    });
+    if (typeof readClient.fetchOrganizationBillingDetails !== "function") {
+      throw new Error("Pipedrive organization billing client is unavailable");
+    }
+    const organization = await readClient.fetchOrganizationBillingDetails(orgId);
+    if (!organization) return "no_changes";
+
+    const autofill = buildDealBillingAutofillPatch({
+      deal: current,
+      organization,
+      billingContactName: relName(current.person_id),
+    });
+    if (Object.keys(autofill.patch).length === 0) return "no_changes";
+
+    const writeClient = createProjectsClient({
+      companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
+    });
+    if (typeof writeClient.updateDeal !== "function") {
+      throw new Error("Pipedrive deal update client is unavailable");
+    }
+    await writeClient.updateDeal(dealId, autofill.patch);
+    console.info(
+      "[pipedrive-webhook] auto-filled deal billing fields",
+      JSON.stringify({
+        dealId,
+        orgId,
+        filledFields: autofill.filled.map((field) => field.dealFieldName),
+      }),
+    );
+    return "filled";
+  } catch (err) {
+    console.error(
+      "[pipedrive-webhook] deal billing auto-fill failed for deal",
+      Number.isFinite(dealId) ? dealId : "unknown",
+      err instanceof Error ? err.message : "unknown",
+    );
+    return "failed";
+  }
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   if (!basicAuthOk(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -234,6 +285,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  const billingAutofill = await autofillDealBillingFields(current);
+
   const shouldStampFirstContact =
     Number.isFinite(dealId) &&
     firstContactKey !== "" &&
@@ -272,6 +325,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       skipped: "not_won_transition",
       contactValidation,
       firstContactStamp,
+      billingAutofill,
     });
   }
 
@@ -285,12 +339,19 @@ export async function POST(request: Request): Promise<NextResponse> {
       pipelineId: dealPipelineId(payload.current ?? null),
       contactValidation,
       firstContactStamp,
+      billingAutofill,
     });
   }
 
   const deal = payload.current ? toWonDeal(payload.current) : null;
   if (!deal) {
-    return NextResponse.json({ ok: true, skipped: "no_deal", contactValidation, firstContactStamp });
+    return NextResponse.json({
+      ok: true,
+      skipped: "no_deal",
+      contactValidation,
+      firstContactStamp,
+      billingAutofill,
+    });
   }
 
   try {
@@ -340,7 +401,14 @@ export async function POST(request: Request): Promise<NextResponse> {
         nurtureErr instanceof Error ? nurtureErr.message : "unknown",
       );
     }
-    return NextResponse.json({ ok: true, ...summary, nurtureEnrollment, contactValidation, firstContactStamp });
+    return NextResponse.json({
+      ok: true,
+      ...summary,
+      nurtureEnrollment,
+      contactValidation,
+      firstContactStamp,
+      billingAutofill,
+    });
   } catch (err) {
     // Never log the error's cause verbatim (Pipedrive URLs carry the token); the
     // client already strips URLs from its messages, but be defensive here too.
