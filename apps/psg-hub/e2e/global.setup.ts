@@ -31,6 +31,19 @@ const admin = createClient(url, serviceKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+async function assertBsmContentApprovalArchiveSchema(): Promise<void> {
+  const { error } = await admin
+    .from("bsm_content_review_versions")
+    .select("source_content_item_id,source_metadata_jsonb,original_filename,storage_path,preview_type")
+    .limit(1);
+  if (error) {
+    throw new Error(
+      `[e2e] BSM content approvals schema is missing approved-content archive columns: ${error.message}. ` +
+        "Reset/apply the local Supabase migrations before rerunning the focused BSM walkthrough."
+    );
+  }
+}
+
 function slugify(name: string): string {
   return name
     .toLowerCase()
@@ -49,12 +62,25 @@ async function seedProfile(userId: string, displayName: string): Promise<void> {
     .from("profiles")
     // profiles.role CHECK = admin|reviewer|viewer (legacy column, NOT the RBAC
     // gate which reads app_user_roles). Least-privilege 'viewer' — no staff bypass.
-    .insert({ id: userId, display_name: displayName, role: "viewer" });
+    .upsert({ id: userId, display_name: displayName, role: "viewer" }, { onConflict: "id" });
   if (error) throw new Error(`[e2e] profile insert failed: ${error.message}`);
 }
 
 /** Mirror of /api/onboarding: client -> shop -> shop_users(role). */
 async function seedShop(ownerId: string, name: string, role: string): Promise<string> {
+  const slug = slugify(name);
+  const { data: existing } = await admin
+    .from("shops")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (existing) {
+    await admin
+      .from("shop_users")
+      .upsert({ user_id: ownerId, shop_id: existing.id, role }, { onConflict: "user_id,shop_id" });
+    return existing.id as string;
+  }
+
   const { data: client, error: cErr } = await admin
     .from("clients")
     .insert({ name, website_url: null, created_by: ownerId })
@@ -64,7 +90,7 @@ async function seedShop(ownerId: string, name: string, role: string): Promise<st
 
   const { data: shop, error: sErr } = await admin
     .from("shops")
-    .insert({ client_id: client.id, name, slug: slugify(name) })
+    .insert({ client_id: client.id, name, slug })
     .select("id")
     .single();
   if (sErr || !shop) throw new Error(`[e2e] shop insert failed: ${sErr?.message}`);
@@ -301,6 +327,140 @@ async function seedGbpPresence(
     throw new Error(`[e2e] gbp_presence seed failed: ${error.message}`);
 }
 
+function dayOffset(daysAgo: number): string {
+  const t = new Date(`${SNAPSHOT_END_DATE}T00:00:00Z`).getTime();
+  return new Date(t - daysAgo * 86_400_000).toISOString().slice(0, 10);
+}
+
+async function seedDirectMailMetrics(
+  shopId: string,
+  shopName: string,
+  opts: { sends: number; priorSent: number; priorOutcomes: number; segment: string }
+): Promise<void> {
+  const { data: company, error: cErr } = await admin
+    .from("companies")
+    .insert({ name: shopName, shop_id: shopId, status: "active" })
+    .select("id")
+    .single();
+  if (cErr || !company) {
+    throw new Error(`[e2e] direct-mail company seed failed: ${cErr?.message}`);
+  }
+
+  const rows = Array.from({ length: opts.sends }, (_, i) => ({
+    company_id: company.id,
+    shop_name: shopName,
+    piece_code: i % 2 === 0 ? "07" : "10",
+    piece_variant: "letter",
+    sent_date: dayOffset(i),
+    recipient_hash: `e2e-recipient-${opts.segment}-${i}`,
+    household_key: `e2e-household-${opts.segment}-${i % Math.max(1, opts.sends - 1)}`,
+    send_ref: `e2e:${opts.segment}:${i}`,
+    source: "e2e",
+  }));
+  const { error: hErr } = await admin
+    .from("mail_send_history")
+    .upsert(rows, { onConflict: "send_ref" });
+  if (hErr) throw new Error(`[e2e] direct-mail history seed failed: ${hErr.message}`);
+
+  const { error: pErr } = await admin.from("mail_send_priors").upsert(
+    {
+      segment_key: `e2e-${opts.segment}`,
+      piece_code: "07",
+      trigger: "survey_followup_warranty",
+      ab_variant: "A",
+      n_sent: opts.priorSent,
+      n_outcome: opts.priorOutcomes,
+      outcome_rate: opts.priorSent > 0 ? opts.priorOutcomes / opts.priorSent : 0,
+      method_ref: "e2e-direct-mail-dashboard",
+    },
+    { onConflict: "segment_key,piece_code,ab_variant" }
+  );
+  if (pErr) throw new Error(`[e2e] direct-mail priors seed failed: ${pErr.message}`);
+}
+
+async function seedBsmContentApprovalReview(
+  shopId: string,
+  ownerId: string,
+  opts: { itemId: string; title: string }
+): Promise<void> {
+  const oldVersionId = opts.itemId.replace(/1111$|2222$/, "0001");
+  const currentVersionId = opts.itemId.replace(/1111$|2222$/, "0002");
+
+  const { error: itemErr } = await admin.from("bsm_content_review_items").insert({
+    id: opts.itemId,
+    shop_id: shopId,
+    customer_profile_id: ownerId,
+    title: opts.title,
+    content_type: "generated_page",
+    source_kind: "generated_page",
+    status: "in_review",
+    admin_context_note: "Please review this BSM page before PSG uses it.",
+    current_version_id: null,
+    created_by_profile_id: ownerId,
+    metadata_jsonb: { sourceKind: "generated_page", fixture: true },
+  });
+  if (itemErr) throw new Error(`[e2e] BSM content review item seed failed: ${itemErr.message}`);
+
+  const versions = [
+    {
+      id: oldVersionId,
+      review_item_id: opts.itemId,
+      shop_id: shopId,
+      version_number: 1,
+      status: "superseded",
+      storage_bucket: null,
+      storage_path: null,
+      original_filename: "Homepage proof v1",
+      content_type: "text/html",
+      byte_size: 1,
+      preview_type: "generated_page",
+      source_metadata_jsonb: {
+        sourceKind: "generated_page",
+        generatedPagePath: "/dashboard",
+        previewUrl: "/dashboard",
+      },
+      created_by_profile_id: ownerId,
+    },
+    {
+      id: currentVersionId,
+      review_item_id: opts.itemId,
+      shop_id: shopId,
+      version_number: 2,
+      status: "current",
+      storage_bucket: null,
+      storage_path: null,
+      original_filename: "Homepage proof v2",
+      content_type: "text/html",
+      byte_size: 1,
+      preview_type: "generated_page",
+      source_metadata_jsonb: {
+        sourceKind: "generated_page",
+        generatedPagePath: "/dashboard",
+        previewUrl: "/dashboard",
+      },
+      created_by_profile_id: ownerId,
+    },
+  ];
+
+  const { error: versionsErr } = await admin.from("bsm_content_review_versions").insert(versions);
+  if (versionsErr) throw new Error(`[e2e] BSM content review versions seed failed: ${versionsErr.message}`);
+
+  const { error: updateErr } = await admin
+    .from("bsm_content_review_items")
+    .update({ current_version_id: currentVersionId })
+    .eq("id", opts.itemId);
+  if (updateErr) throw new Error(`[e2e] BSM content current version seed failed: ${updateErr.message}`);
+
+  const { error: reviewerErr } = await admin.from("bsm_content_review_reviewers").insert({
+    review_item_id: opts.itemId,
+    shop_id: shopId,
+    profile_id: ownerId,
+    reviewer_role: "reviewer",
+    notification_preference: "email",
+  });
+  if (reviewerErr) throw new Error(`[e2e] BSM content reviewer seed failed: ${reviewerErr.message}`);
+}
+
 async function ensureCustomerRole(userId: string): Promise<void> {
   const { data: existing } = await admin
     .from("app_user_roles")
@@ -326,6 +486,10 @@ async function setSuperadminRole(userId: string): Promise<void> {
 
 /** Idempotent: remove any prior fixture data so re-runs (without db reset) are clean. */
 async function cleanup(): Promise<void> {
+  await admin.from("mail_send_priors").delete().like("segment_key", "e2e-%");
+  await admin.from("mail_send_history").delete().eq("source", "e2e");
+  await admin.from("companies").delete().in("name", FIXTURE_SHOP_NAMES);
+
   // PSG-40: drop the ops happy-path company. employees / repair_customers /
   // repair_orders all FK -> companies(id) ON DELETE CASCADE, so this one delete
   // removes the whole RO ladder the spec creates.
@@ -378,6 +542,11 @@ async function createUser(email: string): Promise<string> {
     password: PASSWORD,
     email_confirm: true,
   });
+  if (error?.message?.includes("already been registered")) {
+    const { data: users } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    const existing = users.users.find((user) => user.email === email);
+    if (existing) return existing.id;
+  }
   if (error || !data.user) throw new Error(`[e2e] createUser ${email} failed: ${error?.message}`);
   return data.user.id;
 }
@@ -387,6 +556,7 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
 
   // 1. Programmatic seed (service-role ladder, dynamic UUIDs).
+  await assertBsmContentApprovalArchiveSchema();
   await cleanup();
 
   const ownerId = await createUser(OWNER.email);
@@ -460,6 +630,34 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
     averageRating: 4.6,
     totalReviewCount: 87,
     openStatus: "OPEN",
+  });
+
+  await seedBsmContentApprovalReview(ownerShopId, ownerId, {
+    itemId: OWNER.bsmReviewItemId,
+    title: "E2E BSM homepage approval",
+  });
+  await seedBsmContentApprovalReview(shopAId, multiId, {
+    itemId: MULTI.bsmReviewItemId,
+    title: "E2E separate shop approval",
+  });
+
+  await seedDirectMailMetrics(ownerShopId, OWNER.shopName, {
+    sends: 3,
+    priorSent: 30,
+    priorOutcomes: 9,
+    segment: "owner",
+  });
+  await seedDirectMailMetrics(shopAId, MULTI.shopA, {
+    sends: 2,
+    priorSent: 30,
+    priorOutcomes: 6,
+    segment: "multi-a",
+  });
+  await seedDirectMailMetrics(shopBId, MULTI.shopB, {
+    sends: 4,
+    priorSent: 40,
+    priorOutcomes: 8,
+    segment: "multi-b",
   });
 
   // 2. Real UI login per role -> persist @supabase/ssr cookies as storageState.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +40,13 @@ export function SettingsForm({ initial, email, canEdit }: Props) {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setValues(initial);
+    setFieldErrors({});
+    setFormError(null);
+    setSaved(false);
+  }, [initial]);
 
   function set<K extends keyof SettingsFormValues>(
     key: K,

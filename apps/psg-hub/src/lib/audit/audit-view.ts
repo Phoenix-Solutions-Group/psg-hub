@@ -27,6 +27,7 @@ export type AuditCategory =
   | "other";
 
 const ACTION_LABELS: Record<AuditAction, string> = {
+  "user.invite": "Invited user",
   "role.grant": "Granted role",
   "role.revoke": "Revoked role",
   "shop.assign": "Assigned to shop",
@@ -57,6 +58,12 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "ccc.connection.decline": "Declined CCC connection",
   "ccc.connection.revoke": "Revoked CCC connection",
   "gbp.disconnect": "Disconnected Google Business Profile",
+  "google_ads.audit_report.publish": "Published Google Ads audit report",
+  "google_ads_request.create": "Submitted Google Ads request",
+  "google_ads_request.update": "Updated Google Ads request",
+  "review_response_restore.approve": "Approved review response restore",
+  "review_response_restore.reject": "Rejected review response restore",
+  "bsm_content_approval.create": "Created BSM content approval",
   "intake.signed_upload.mint": "Minted pilot-intake upload link",
 };
 
@@ -67,7 +74,12 @@ export function auditActionLabel(action: string): string {
 
 /** Coarse category for an action, used by the viewer filter. */
 export function auditCategory(action: string): AuditCategory {
-  if (action.startsWith("role.") || action.startsWith("shop.") || action === "tier.change") {
+  if (
+    action.startsWith("user.") ||
+    action.startsWith("role.") ||
+    action.startsWith("shop.") ||
+    action === "tier.change"
+  ) {
     return "users";
   }
   if (action.startsWith("module")) return "modules";
@@ -75,10 +87,16 @@ export function auditCategory(action: string): AuditCategory {
   if (action.startsWith("superadmin")) return "superadmin";
   if (action.startsWith("intel")) return "intel";
   if (action.startsWith("production")) return "production";
-  if (action.startsWith("approval")) return "approvals";
+  if (
+    action.startsWith("approval") ||
+    action.startsWith("review_response_restore") ||
+    action.startsWith("bsm_content_approval")
+  ) {
+    return "approvals";
+  }
   if (action.startsWith("sitemap")) return "sitemap";
   if (action.startsWith("ccc.")) return "ccc";
-  if (action.startsWith("gbp")) return "integrations";
+  if (action.startsWith("gbp") || action.startsWith("google_ads")) return "integrations";
   if (action.startsWith("intake")) return "intake";
   return "other";
 }
@@ -119,6 +137,7 @@ export function summarizePayload(payload: unknown): string {
     parts.push(`${label ?? key}: ${String(v)}`);
   };
   pick("name");
+  pick("email");
   pick("slug");
   pick("role");
   pick("effect");
@@ -133,6 +152,7 @@ export function summarizePayload(payload: unknown): string {
 /** Keys that `summarizePayload` surfaces in the one-line summary. */
 const SUMMARIZED_KEYS = new Set([
   "name",
+  "email",
   "slug",
   "role",
   "effect",

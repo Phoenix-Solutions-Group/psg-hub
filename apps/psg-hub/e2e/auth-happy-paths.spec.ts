@@ -58,12 +58,17 @@ test.beforeAll(async () => {
  * Tries the Mailpit API first (current Supabase local), then the legacy Inbucket
  * API, so this works regardless of which mailer the CLI bundles.
  */
-async function latestEmailLink(address: string): Promise<string> {
+async function latestEmailLink(
+  address: string,
+  acceptLink: (url: string) => boolean = () => true
+): Promise<string> {
   const deadline = Date.now() + 25_000;
   let lastErr = "no messages";
   while (Date.now() < deadline) {
     try {
-      const link = (await mailpitLink(address)) ?? (await inbucketLink(address));
+      const link =
+        (await mailpitLink(address, acceptLink)) ??
+        (await inbucketLink(address, acceptLink));
       if (link) return link;
     } catch (e) {
       lastErr = String(e);
@@ -74,7 +79,10 @@ async function latestEmailLink(address: string): Promise<string> {
 }
 
 /** Mailpit: list messages, filter by recipient, newest first, extract the link. */
-async function mailpitLink(address: string): Promise<string | null> {
+async function mailpitLink(
+  address: string,
+  acceptLink: (url: string) => boolean
+): Promise<string | null> {
   const listRes = await fetch(`${MAILPIT}/api/v1/messages?limit=200`);
   if (!listRes.ok) return null; // not Mailpit (or no messages endpoint) — caller falls back
   const data = (await listRes.json()) as {
@@ -89,14 +97,19 @@ async function mailpitLink(address: string): Promise<string | null> {
     const mres = await fetch(`${MAILPIT}/api/v1/message/${m.ID}`);
     if (!mres.ok) continue;
     const msg = (await mres.json()) as { HTML?: string; Text?: string };
-    const link = extractActionLink(msg.HTML ?? "") ?? extractActionLink(msg.Text ?? "");
+    const link =
+      extractActionLink(msg.HTML ?? "", acceptLink) ??
+      extractActionLink(msg.Text ?? "", acceptLink);
     if (link) return link;
   }
   return null;
 }
 
 /** Legacy Inbucket fallback: mailbox = local part of the address. */
-async function inbucketLink(address: string): Promise<string | null> {
+async function inbucketLink(
+  address: string,
+  acceptLink: (url: string) => boolean
+): Promise<string | null> {
   const mailbox = address.split("@")[0];
   const listRes = await fetch(`${MAILPIT}/api/v1/mailbox/${encodeURIComponent(mailbox)}`);
   if (!listRes.ok) return null;
@@ -107,20 +120,25 @@ async function inbucketLink(address: string): Promise<string | null> {
     if (!mres.ok) continue;
     const msg = (await mres.json()) as { body?: { text?: string; html?: string } };
     const link =
-      extractActionLink(msg.body?.html ?? "") ?? extractActionLink(msg.body?.text ?? "");
+      extractActionLink(msg.body?.html ?? "", acceptLink) ??
+      extractActionLink(msg.body?.text ?? "", acceptLink);
     if (link) return link;
   }
   return null;
 }
 
-function extractActionLink(body: string): string | null {
+function extractActionLink(
+  body: string,
+  acceptLink: (url: string) => boolean = () => true
+): string | null {
   if (!body) return null;
   const decoded = body.replace(/&amp;/g, "&"); // keep query strings intact
   const urls = decoded.match(/https?:\/\/[^\s"'<>)]+/g) ?? [];
+  const accepted = urls.filter(acceptLink);
   return (
-    urls.find((u) => u.includes("/auth/v1/verify")) ??
-    urls.find((u) => u.includes("/auth/callback")) ??
-    urls.find((u) => u.includes("token")) ??
+    accepted.find((u) => u.includes("/auth/v1/verify")) ??
+    accepted.find((u) => u.includes("/auth/callback")) ??
+    accepted.find((u) => u.includes("token")) ??
     null
   );
 }
@@ -211,7 +229,10 @@ test("C: forgot password → reset link → set new password → signed in", asy
   await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
 
   // Recovery link → /auth/callback?next=/reset-password → set-new-password form.
-  const link = await latestEmailLink(email);
+  const link = await latestEmailLink(
+    email,
+    (url) => url.includes("type=recovery") || url.includes("reset-password")
+  );
   await page.goto(link);
   await page.waitForURL("**/reset-password");
   await page.getByLabel("New password", { exact: true }).fill(NEWPW);

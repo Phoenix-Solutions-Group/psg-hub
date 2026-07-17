@@ -16,6 +16,7 @@ export const OWNER = {
   email: "owner@e2e.test",
   statePath: path.join(AUTH_DIR, "owner.json"),
   shopName: "E2E Owner Auto Body",
+  bsmReviewItemId: "11111111-aaaa-4aaa-8aaa-111111111111",
 };
 
 // 2-shop user (owner of A, viewer of B) — drives shop-switch.spec.
@@ -24,6 +25,7 @@ export const MULTI = {
   statePath: path.join(AUTH_DIR, "multi.json"),
   shopA: "E2E Multi Shop A",
   shopB: "E2E Multi Shop B",
+  bsmReviewItemId: "22222222-bbbb-4bbb-8bbb-222222222222",
 };
 
 // 9-shop owner (big MSO) — drives the 09-02 switcher-typeahead branch (>=8).

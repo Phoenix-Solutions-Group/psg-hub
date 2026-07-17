@@ -1,6 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveShopContext } from "@/lib/shop/context";
+import Link from "next/link";
 import { ApprovalCard, type ApprovalCardRow } from "@/components/dashboard/approval-card";
+import {
+  ApprovedContentArchiveTable,
+  type ApprovedContentArchiveRow,
+} from "@/components/dashboard/approved-content-archive-table";
+import { listApprovedContentArchiveRows } from "@/lib/bsm/approved-content-archive";
 
 // PSG-245 / Wave 2 (G-d) — per-shop approval queue. Lists the active shop's
 // pending agent-proposed actions for an owner/manager to preview, confirm, then
@@ -16,7 +22,16 @@ export default async function ApprovalsPage() {
   } = await supabase.auth.getUser();
 
   let pending: ApprovalCardRow[] = [];
+  let bsmContentReviews: Array<{
+    id: string;
+    title: string;
+    status: string;
+    content_type: string;
+    admin_context_note: string | null;
+    updated_at: string;
+  }> = [];
   let recentCount = 0;
+  let approvedArchive: ApprovedContentArchiveRow[] = [];
 
   if (user) {
     const { activeShopId } = await getActiveShopContext(user.id);
@@ -48,6 +63,16 @@ export default async function ApprovalsPage() {
         .eq("shop_id", activeShopId)
         .in("status", ["approved", "rejected", "published"]);
       recentCount = count ?? 0;
+
+      const { data: reviewItems } = await supabase
+        .from("bsm_content_review_items")
+        .select("id, title, status, content_type, admin_context_note, updated_at")
+        .eq("shop_id", activeShopId)
+        .in("status", ["draft", "sent", "in_review", "updates_requested"])
+        .order("updated_at", { ascending: false });
+      bsmContentReviews = (reviewItems ?? []) as typeof bsmContentReviews;
+
+      approvedArchive = await listApprovedContentArchiveRows(supabase, activeShopId);
     }
   }
 
@@ -79,6 +104,62 @@ export default async function ApprovalsPage() {
           ))}
         </div>
       )}
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Content Review</h2>
+          <p className="text-sm text-muted-foreground">
+            Review BSM files and generated pages before PSG uses or publishes them.
+          </p>
+        </div>
+        {bsmContentReviews.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-8 text-center">
+            <p className="text-sm text-muted-foreground">No BSM content is waiting for review.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {bsmContentReviews.map((item) => (
+              <Link
+                key={item.id}
+                href={`/dashboard/approvals/content/${item.id}`}
+                className="block rounded-lg border border-border p-4 hover:border-ember"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-heading font-semibold">{item.title}</h3>
+                    {item.admin_context_note && (
+                      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                        {item.admin_context_note}
+                      </p>
+                    )}
+                  </div>
+                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                    {item.status.replace(/_/g, " ")}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {item.content_type.replace(/_/g, " ")} · updated{" "}
+                  {new Date(item.updated_at).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </p>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Approved Content Archive</h2>
+          <p className="text-sm text-muted-foreground">
+            Approved files and generated pages are kept here for reference and audit.
+          </p>
+        </div>
+        <ApprovedContentArchiveTable rows={approvedArchive} />
+      </section>
     </div>
   );
 }
