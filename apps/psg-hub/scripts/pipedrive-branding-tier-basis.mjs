@@ -251,6 +251,23 @@ function filterConditions(fieldIds) {
   };
 }
 
+function normalizeConditionTree(value) {
+  if (Array.isArray(value)) return value.map(normalizeConditionTree);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "json_value_flag")
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, child]) => [key, normalizeConditionTree(child)]),
+    );
+  }
+  return value;
+}
+
+function filterConditionsMatch(actual, expected) {
+  return JSON.stringify(normalizeConditionTree(actual)) === JSON.stringify(normalizeConditionTree(expected));
+}
+
 export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = false }) {
   const actions = [];
   const unresolved = [];
@@ -329,6 +346,7 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
 
   if (createdOrExisting.length === TIER_BASIS_FIELDS.length) {
     const fieldIds = createdOrExisting.map((field) => field.id);
+    const expectedFilterConditions = filterConditions(fieldIds);
     if (!existingFilter) {
       actions.push({
         type: "createFilter",
@@ -337,7 +355,18 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
         body: {
           name: AUDIT_FILTER_NAME,
           type: "deals",
-          conditions: filterConditions(fieldIds),
+          conditions: expectedFilterConditions,
+        },
+      });
+    } else if (!filterConditionsMatch(existingFilter.conditions, expectedFilterConditions)) {
+      actions.push({
+        type: "updateFilter",
+        filterId: existingFilter.id,
+        filterName: AUDIT_FILTER_NAME,
+        body: {
+          name: AUDIT_FILTER_NAME,
+          type: "deals",
+          conditions: expectedFilterConditions,
         },
       });
     }
@@ -522,7 +551,14 @@ class PipedriveApi {
 
   async listFilters() {
     const json = await this.request("GET", "v1", "filters?type=deals", null);
-    return Array.isArray(json.data) ? json.data : [];
+    const filters = Array.isArray(json.data) ? json.data : [];
+    return Promise.all(
+      filters.map(async (filter) => {
+        if (filter?.conditions) return filter;
+        const detail = await this.request("GET", "v1", `filters/${encodeURIComponent(filter.id)}`, null);
+        return detail.data ?? filter;
+      }),
+    );
   }
 
   async listDealsByFilter(filterId) {
