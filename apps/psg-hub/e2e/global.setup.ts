@@ -62,12 +62,25 @@ async function seedProfile(userId: string, displayName: string): Promise<void> {
     .from("profiles")
     // profiles.role CHECK = admin|reviewer|viewer (legacy column, NOT the RBAC
     // gate which reads app_user_roles). Least-privilege 'viewer' — no staff bypass.
-    .insert({ id: userId, display_name: displayName, role: "viewer" });
+    .upsert({ id: userId, display_name: displayName, role: "viewer" }, { onConflict: "id" });
   if (error) throw new Error(`[e2e] profile insert failed: ${error.message}`);
 }
 
 /** Mirror of /api/onboarding: client -> shop -> shop_users(role). */
 async function seedShop(ownerId: string, name: string, role: string): Promise<string> {
+  const slug = slugify(name);
+  const { data: existing } = await admin
+    .from("shops")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (existing) {
+    await admin
+      .from("shop_users")
+      .upsert({ user_id: ownerId, shop_id: existing.id, role }, { onConflict: "user_id,shop_id" });
+    return existing.id as string;
+  }
+
   const { data: client, error: cErr } = await admin
     .from("clients")
     .insert({ name, website_url: null, created_by: ownerId })
@@ -77,7 +90,7 @@ async function seedShop(ownerId: string, name: string, role: string): Promise<st
 
   const { data: shop, error: sErr } = await admin
     .from("shops")
-    .insert({ client_id: client.id, name, slug: slugify(name) })
+    .insert({ client_id: client.id, name, slug })
     .select("id")
     .single();
   if (sErr || !shop) throw new Error(`[e2e] shop insert failed: ${sErr?.message}`);
@@ -529,6 +542,11 @@ async function createUser(email: string): Promise<string> {
     password: PASSWORD,
     email_confirm: true,
   });
+  if (error?.message?.includes("already been registered")) {
+    const { data: users } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    const existing = users.users.find((user) => user.email === email);
+    if (existing) return existing.id;
+  }
   if (error || !data.user) throw new Error(`[e2e] createUser ${email} failed: ${error?.message}`);
   return data.user.id;
 }
