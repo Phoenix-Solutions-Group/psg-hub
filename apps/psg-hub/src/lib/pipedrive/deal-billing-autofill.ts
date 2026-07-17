@@ -6,6 +6,14 @@ export const DEAL_BILLING_FIELD_KEYS = {
   billingContactName: "d318a4cf86fc9a9fae395cd7a4e8785862ded54c",
 } as const;
 
+export const DEAL_WON_GATE_FIELD_KEYS = {
+  signedContractApprovalLink: "55ea89f59464ce238ee7093bdf7282f7951c7129",
+  expectedDeliveryStartDate: "4c4b2ff1ef59a56331fc2cdc3927e3b9c72c708a",
+  soldProductsSkuNotes: "c454180428b8e3ee69d817c44f825eacd489eeb3",
+  oneTimeSetupFees: "4047a088118caa2c0b353c000d33c5ac35ea2ed9",
+  monthlyRecurringFees: "1f19ed0b91dda56a12be3655eaf09934982c4c63",
+} as const;
+
 export const ORG_BILLING_FIELD_KEYS = {
   displayName: "d6dfb1cfee548ef9e680962ddcbce413a3fda68d",
   generalEmail: "ab9a437a33140874fae9a97439852840975327ed",
@@ -35,6 +43,35 @@ export interface DealBillingAutofillResult {
     reason: "deal_already_has_value" | "source_blank" | "unmapped_payment_terms";
     sourceField: string;
     sourceValue?: string | null;
+  }>;
+}
+
+export interface DealWonGateProduct {
+  name: string;
+  sku?: string | null;
+  quantity?: number | null;
+  sum?: number | null;
+  billingFrequency?: string | null;
+}
+
+export interface DealWonGateAutofillResult {
+  patch: Record<string, string | number>;
+  filled: Array<{
+    dealFieldKey: string;
+    dealFieldName: string;
+    sourceField: string;
+    value: string | number;
+  }>;
+  skipped: Array<{
+    dealFieldKey: string;
+    dealFieldName: string;
+    reason:
+      | "deal_already_has_value"
+      | "source_blank"
+      | "no_products"
+      | "no_recurring_products";
+    sourceField: string;
+    sourceValue?: string | number | null;
   }>;
 }
 
@@ -190,3 +227,140 @@ export function buildDealBillingAutofillPatch({
   return result;
 }
 
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function isRecurringFrequency(value: string | null | undefined): boolean {
+  const normalized = (value ?? "").trim().toLocaleLowerCase().replace(/[\s_-]+/g, " ");
+  return [
+    "monthly",
+    "month",
+    "recurring",
+    "subscription",
+    "quarterly",
+    "annual",
+    "annually",
+    "yearly",
+    "weekly",
+  ].includes(normalized);
+}
+
+function productLineLabel(product: DealWonGateProduct): string | null {
+  const name = clean(product.name);
+  if (!name) return null;
+  const sku = clean(product.sku);
+  const quantity =
+    typeof product.quantity === "number" && Number.isFinite(product.quantity)
+      ? product.quantity
+      : null;
+  const details = [
+    sku ? `SKU ${sku}` : null,
+    quantity != null && quantity !== 1 ? `qty ${quantity}` : null,
+  ].filter((part): part is string => part != null);
+  return details.length > 0 ? `${name} (${details.join(", ")})` : name;
+}
+
+function addWonGatePatchValue(
+  result: DealWonGateAutofillResult,
+  deal: Record<string, unknown>,
+  row: {
+    dealFieldKey: string;
+    dealFieldName: string;
+    sourceField: string;
+    sourceValue: string | number | null;
+    outputValue: string | number | null;
+    blankReason?: DealWonGateAutofillResult["skipped"][number]["reason"];
+  },
+): void {
+  if (!isBlankPipedriveValue(deal[row.dealFieldKey])) {
+    result.skipped.push({
+      dealFieldKey: row.dealFieldKey,
+      dealFieldName: row.dealFieldName,
+      sourceField: row.sourceField,
+      sourceValue: row.sourceValue,
+      reason: "deal_already_has_value",
+    });
+    return;
+  }
+  if (row.outputValue == null || row.outputValue === "") {
+    result.skipped.push({
+      dealFieldKey: row.dealFieldKey,
+      dealFieldName: row.dealFieldName,
+      sourceField: row.sourceField,
+      sourceValue: row.sourceValue,
+      reason: row.blankReason ?? "source_blank",
+    });
+    return;
+  }
+  result.patch[row.dealFieldKey] = row.outputValue;
+  result.filled.push({
+    dealFieldKey: row.dealFieldKey,
+    dealFieldName: row.dealFieldName,
+    sourceField: row.sourceField,
+    value: row.outputValue,
+  });
+}
+
+export function buildDealWonGateAutofillPatch({
+  deal,
+  products,
+  signedContractUrl,
+}: {
+  deal: Record<string, unknown>;
+  products: readonly DealWonGateProduct[];
+  signedContractUrl?: string | null;
+}): DealWonGateAutofillResult {
+  const result: DealWonGateAutofillResult = { patch: {}, filled: [], skipped: [] };
+  const productLabels = products
+    .map(productLineLabel)
+    .filter((label): label is string => label != null);
+  const oneTimeTotal = roundMoney(
+    products
+      .filter((product) => !isRecurringFrequency(product.billingFrequency))
+      .reduce((sum, product) => sum + (Number.isFinite(product.sum) ? Number(product.sum) : 0), 0),
+  );
+  const recurringProducts = products.filter((product) =>
+    isRecurringFrequency(product.billingFrequency),
+  );
+  const recurringTotal = roundMoney(
+    recurringProducts.reduce(
+      (sum, product) => sum + (Number.isFinite(product.sum) ? Number(product.sum) : 0),
+      0,
+    ),
+  );
+
+  addWonGatePatchValue(result, deal, {
+    dealFieldKey: DEAL_WON_GATE_FIELD_KEYS.soldProductsSkuNotes,
+    dealFieldName: "Sold Products / SKU Notes",
+    sourceField: "deal products",
+    sourceValue: productLabels.join("; ") || null,
+    outputValue: productLabels.join("; ") || null,
+    blankReason: products.length === 0 ? "no_products" : "source_blank",
+  });
+  addWonGatePatchValue(result, deal, {
+    dealFieldKey: DEAL_WON_GATE_FIELD_KEYS.oneTimeSetupFees,
+    dealFieldName: "One-Time Setup Fees",
+    sourceField: "deal products with one-time billing frequency",
+    sourceValue: oneTimeTotal,
+    outputValue: products.length > 0 ? oneTimeTotal : null,
+    blankReason: "no_products",
+  });
+  addWonGatePatchValue(result, deal, {
+    dealFieldKey: DEAL_WON_GATE_FIELD_KEYS.monthlyRecurringFees,
+    dealFieldName: "Monthly Recurring Fees",
+    sourceField: "deal products with recurring billing frequency",
+    sourceValue: recurringTotal,
+    outputValue: recurringProducts.length > 0 ? recurringTotal : null,
+    blankReason: recurringProducts.length === 0 ? "no_recurring_products" : "source_blank",
+  });
+  addWonGatePatchValue(result, deal, {
+    dealFieldKey: DEAL_WON_GATE_FIELD_KEYS.signedContractApprovalLink,
+    dealFieldName: "Signed Contract / Approval Link",
+    sourceField: "PandaDoc signed document URL",
+    sourceValue: clean(signedContractUrl),
+    outputValue: clean(signedContractUrl),
+  });
+
+  return result;
+}

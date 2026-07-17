@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEAL_BILLING_FIELD_KEYS,
+  DEAL_WON_GATE_FIELD_KEYS,
   buildDealBillingAutofillPatch,
+  buildDealWonGateAutofillPatch,
   type PipedriveOrganizationBillingDetails,
 } from "../deal-billing-autofill";
 
@@ -81,3 +83,93 @@ describe("deal billing auto-fill", () => {
   });
 });
 
+describe("deal Won-gate auto-fill", () => {
+  it("fills product notes and one-time fees from deal products when blank", () => {
+    const result = buildDealWonGateAutofillPatch({
+      deal: {},
+      products: [
+        {
+          name: "Website Design & Build",
+          sku: "PSG_P_026",
+          quantity: 1,
+          sum: 6500,
+          billingFrequency: "one-time",
+        },
+        {
+          name: "Landing Page Add-on",
+          sku: null,
+          quantity: 2,
+          sum: 750,
+          billingFrequency: "one-time",
+        },
+      ],
+      signedContractUrl: null,
+    });
+
+    expect(result.patch).toEqual({
+      [DEAL_WON_GATE_FIELD_KEYS.soldProductsSkuNotes]:
+        "Website Design & Build (SKU PSG_P_026); Landing Page Add-on (qty 2)",
+      [DEAL_WON_GATE_FIELD_KEYS.oneTimeSetupFees]: 7250,
+    });
+    expect(result.skipped).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dealFieldName: "Monthly Recurring Fees",
+          reason: "no_recurring_products",
+        }),
+        expect.objectContaining({
+          dealFieldName: "Signed Contract / Approval Link",
+          reason: "source_blank",
+        }),
+      ]),
+    );
+  });
+
+  it("fills monthly recurring fees only when at least one product is recurring", () => {
+    const result = buildDealWonGateAutofillPatch({
+      deal: {},
+      products: [
+        { name: "SEO Retainer", sku: "MRR_001", quantity: 1, sum: 1250, billingFrequency: "monthly" },
+        { name: "CRM Setup", sku: null, quantity: 1, sum: 500, billingFrequency: "one-time" },
+      ],
+      signedContractUrl: "https://app.pandadoc.com/a/#/document/abc",
+    });
+
+    expect(result.patch).toEqual({
+      [DEAL_WON_GATE_FIELD_KEYS.soldProductsSkuNotes]:
+        "SEO Retainer (SKU MRR_001); CRM Setup",
+      [DEAL_WON_GATE_FIELD_KEYS.oneTimeSetupFees]: 500,
+      [DEAL_WON_GATE_FIELD_KEYS.monthlyRecurringFees]: 1250,
+      [DEAL_WON_GATE_FIELD_KEYS.signedContractApprovalLink]:
+        "https://app.pandadoc.com/a/#/document/abc",
+    });
+  });
+
+  it("does not overwrite deal-side Won-gate values already typed by a rep", () => {
+    const result = buildDealWonGateAutofillPatch({
+      deal: {
+        [DEAL_WON_GATE_FIELD_KEYS.soldProductsSkuNotes]: "rep-entered product notes",
+        [DEAL_WON_GATE_FIELD_KEYS.monthlyRecurringFees]: 0,
+      },
+      products: [
+        { name: "SEO Retainer", sku: "MRR_001", quantity: 1, sum: 1250, billingFrequency: "monthly" },
+      ],
+      signedContractUrl: null,
+    });
+
+    expect(result.patch[DEAL_WON_GATE_FIELD_KEYS.soldProductsSkuNotes]).toBeUndefined();
+    expect(result.patch[DEAL_WON_GATE_FIELD_KEYS.monthlyRecurringFees]).toBeUndefined();
+    expect(result.skipped).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dealFieldName: "Sold Products / SKU Notes",
+          reason: "deal_already_has_value",
+        }),
+        expect.objectContaining({
+          dealFieldName: "Monthly Recurring Fees",
+          reason: "deal_already_has_value",
+        }),
+      ]),
+    );
+  });
+});

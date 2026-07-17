@@ -10,6 +10,7 @@ const provisionForDeal = vi.fn();
 const enrollNurturePath = vi.fn();
 const createServiceClient = vi.fn();
 const updateDeal = vi.fn();
+const listDealProducts = vi.fn();
 const fetchPersonContact = vi.fn();
 const fetchOrganizationBillingDetails = vi.fn();
 
@@ -73,8 +74,9 @@ beforeEach(() => {
   vi.stubEnv("PIPEDRIVE_ONBOARDING_PHASE_ID", "456");
   vi.stubEnv("PIPEDRIVE_SALES_PIPELINE_ID", "8");
   vi.stubEnv("PIPEDRIVE_COMPANY_DOMAIN", "psg");
+  vi.stubEnv("PIPEDRIVE_PANDADOC_SIGNED_URL_FIELD_KEY", "");
 
-  createProjectsClient.mockReturnValue({ projectsClient: true, updateDeal });
+  createProjectsClient.mockReturnValue({ projectsClient: true, updateDeal, listDealProducts });
   createPipedriveClient.mockReturnValue({
     contactClient: true,
     fetchPersonContact,
@@ -96,6 +98,16 @@ beforeEach(() => {
     generalEmail: "billing@wallace.example",
     paymentTerms: "Net 15",
   });
+  listDealProducts.mockResolvedValue([
+    {
+      name: "Website Design & Build",
+      sku: "PSG_P_026",
+      productId: 26,
+      quantity: 1,
+      sum: 6500,
+      billingFrequency: "one-time",
+    },
+  ]);
 });
 
 describe("Pipedrive won-deal webhook nurture gate", () => {
@@ -111,6 +123,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       contactValidation: "skipped",
       firstContactStamp: "skipped",
       billingAutofill: "filled",
+      wonGateAutofill: "filled",
     });
     expect(fetchOrganizationBillingDetails).toHaveBeenCalledWith(9);
     expect(updateDeal).toHaveBeenCalledWith(42, {
@@ -119,6 +132,12 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       c0a76c955f288460d1d472141df2574ac24a1d8d: "billing@wallace.example",
       "5461d82fd372f1e65195ac3689e3ac9bfdb7e1e9": "NET 15 (standard)",
       d318a4cf86fc9a9fae395cd7a4e8785862ded54c: "Pat Owner",
+    });
+    expect(listDealProducts).toHaveBeenCalledWith(42);
+    expect(updateDeal).toHaveBeenCalledWith(42, {
+      c454180428b8e3ee69d817c44f825eacd489eeb3:
+        "Website Design & Build (SKU PSG_P_026)",
+      "4047a088118caa2c0b353c000d33c5ac35ea2ed9": 6500,
     });
     expect(provisionForDeal).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -185,6 +204,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       contactValidation: "skipped",
       firstContactStamp: "stamped",
       billingAutofill: "skipped",
+      wonGateAutofill: "skipped",
     });
     expect(updateDeal).toHaveBeenCalledWith(42, {
       first_contact_date: "2026-07-15",
@@ -223,6 +243,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       contactValidation: "skipped",
       firstContactStamp: "skipped",
       billingAutofill: "skipped",
+      wonGateAutofill: "skipped",
     });
     expect(updateDeal).not.toHaveBeenCalled();
   });
@@ -259,6 +280,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       contactValidation: "flagged_missing_contact",
       firstContactStamp: "skipped",
       billingAutofill: "skipped",
+      wonGateAutofill: "skipped",
     });
     expect(fetchPersonContact).toHaveBeenCalledWith(7);
     expect(updateDeal).toHaveBeenCalledWith(42, {
@@ -299,6 +321,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       contactValidation: "valid_cleared_flag",
       firstContactStamp: "skipped",
       billingAutofill: "skipped",
+      wonGateAutofill: "skipped",
     });
     expect(fetchPersonContact).toHaveBeenCalledWith(7);
     expect(updateDeal).toHaveBeenCalledWith(42, {

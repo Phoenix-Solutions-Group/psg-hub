@@ -311,6 +311,12 @@ export interface DealProduct {
   sku: string | null;
   /** Pipedrive product id, when present (diagnostic only). */
   productId: number | null;
+  /** Quantity sold on this line item, when Pipedrive returns it. */
+  quantity?: number | null;
+  /** Line total from Pipedrive (`sum`), used for Won-gate fee autofill. */
+  sum?: number | null;
+  /** Pipedrive billing cadence for the line item (`one-time`, `monthly`, etc.). */
+  billingFrequency?: string | null;
 }
 
 export interface PipedriveProjectsClient {
@@ -491,6 +497,9 @@ export function createProjectsClient(
           name?: string | null;
           sku?: string | null;
           code?: string | null;
+          quantity?: number | string | null;
+          sum?: number | string | null;
+          billing_frequency?: string | null;
           product?: { code?: string | null; name?: string | null } | null;
         }>
       >("GET", "v1", `deals/${dealId}/products`);
@@ -505,6 +514,15 @@ export function createProjectsClient(
           name: String(p.name ?? p.product?.name ?? ""),
           sku,
           productId: p.product_id != null ? Number(p.product_id) : null,
+          quantity:
+            p.quantity != null && Number.isFinite(Number(p.quantity))
+              ? Number(p.quantity)
+              : null,
+          sum: p.sum != null && Number.isFinite(Number(p.sum)) ? Number(p.sum) : null,
+          billingFrequency:
+            typeof p.billing_frequency === "string" && p.billing_frequency.trim() !== ""
+              ? p.billing_frequency.trim()
+              : null,
         };
       });
     },

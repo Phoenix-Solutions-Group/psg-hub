@@ -13,7 +13,10 @@ import { provisionForDeal } from "@/lib/pipedrive/template-registry";
 import { loadRoleUserMap } from "@/lib/pipedrive/role-user-map";
 import { createServiceClient } from "@/lib/supabase/service";
 import { enrollNurturePath } from "@/lib/nurture/enrollment";
-import { buildDealBillingAutofillPatch } from "@/lib/pipedrive/deal-billing-autofill";
+import {
+  buildDealBillingAutofillPatch,
+  buildDealWonGateAutofillPatch,
+} from "@/lib/pipedrive/deal-billing-autofill";
 
 // PSG-584 / PSG-576 Move 1 — Pipedrive deal-won webhook → auto-create delivery board.
 //
@@ -82,6 +85,10 @@ function dateFromDealTimestamp(current: Record<string, unknown>): string {
 
 function firstContactFieldKey(): string {
   return (process.env.PIPEDRIVE_FIRST_CONTACT_DATE_FIELD_KEY ?? "first_contact_date").trim();
+}
+
+function pandaDocSignedUrlFieldKey(): string {
+  return (process.env.PIPEDRIVE_PANDADOC_SIGNED_URL_FIELD_KEY ?? "").trim();
 }
 
 function discoveryStageId(): number {
@@ -232,6 +239,56 @@ async function autofillDealBillingFields(
   }
 }
 
+async function autofillDealWonGateFields(
+  current: Record<string, unknown> | null,
+): Promise<"skipped" | "filled" | "no_changes" | "failed"> {
+  const dealId = Number(current?.id);
+  if (!current || !Number.isFinite(dealId)) return "skipped";
+
+  try {
+    const client = createProjectsClient({
+      companyDomain: process.env.PIPEDRIVE_COMPANY_DOMAIN ?? null,
+    });
+    if (typeof client.updateDeal !== "function" || typeof client.listDealProducts !== "function") {
+      throw new Error("Pipedrive deal product/update client is unavailable");
+    }
+
+    const products = await client.listDealProducts(dealId);
+    const signedUrlKey = pandaDocSignedUrlFieldKey();
+    const signedContractUrl =
+      signedUrlKey !== "" && typeof current[signedUrlKey] === "string"
+        ? String(current[signedUrlKey])
+        : null;
+    const autofill = buildDealWonGateAutofillPatch({
+      deal: current,
+      products,
+      signedContractUrl,
+    });
+    if (Object.keys(autofill.patch).length === 0) return "no_changes";
+
+    await client.updateDeal(dealId, autofill.patch);
+    console.info(
+      "[pipedrive-webhook] auto-filled deal won-gate fields",
+      JSON.stringify({
+        dealId,
+        filledFields: autofill.filled.map((field) => field.dealFieldName),
+        skippedReasons: autofill.skipped.map((field) => ({
+          field: field.dealFieldName,
+          reason: field.reason,
+        })),
+      }),
+    );
+    return "filled";
+  } catch (err) {
+    console.error(
+      "[pipedrive-webhook] deal won-gate auto-fill failed for deal",
+      Number.isFinite(dealId) ? dealId : "unknown",
+      err instanceof Error ? err.message : "unknown",
+    );
+    return "failed";
+  }
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   if (!basicAuthOk(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -286,6 +343,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const billingAutofill = await autofillDealBillingFields(current);
+  const isWonTransition = isDealWonTransition(payload);
+  const wonGateAutofill = isWonTransition
+    ? await autofillDealWonGateFields(current)
+    : "skipped";
 
   const shouldStampFirstContact =
     Number.isFinite(dealId) &&
@@ -318,7 +379,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
 
-  if (!isDealWonTransition(payload)) {
+  if (!isWonTransition) {
     // Not a won transition — ack so Pipedrive does not retry.
     return NextResponse.json({
       ok: true,
@@ -326,6 +387,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       contactValidation,
       firstContactStamp,
       billingAutofill,
+      wonGateAutofill,
     });
   }
 
@@ -340,6 +402,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       contactValidation,
       firstContactStamp,
       billingAutofill,
+      wonGateAutofill,
     });
   }
 
@@ -351,6 +414,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       contactValidation,
       firstContactStamp,
       billingAutofill,
+      wonGateAutofill,
     });
   }
 
@@ -408,6 +472,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       contactValidation,
       firstContactStamp,
       billingAutofill,
+      wonGateAutofill,
     });
   } catch (err) {
     // Never log the error's cause verbatim (Pipedrive URLs carry the token); the

@@ -326,8 +326,15 @@ describe("createProjectsClient — transport (PSG-588: /api/ base path + v1/v2 p
 
   it("listDealProducts reads /api/v1/deals/{id}/products and normalizes name + sku (PSG-668)", async () => {
     const { fetchImpl, calls } = recordingFetch([
-      { product_id: 26, name: "Website Design & Build", sku: "psg_p_026 " },
-      { product_id: 5, name: "Legacy line", product: { code: "OLD_CODE" } },
+      {
+        product_id: 26,
+        name: "Website Design & Build",
+        sku: "psg_p_026 ",
+        quantity: "1",
+        sum: "6500",
+        billing_frequency: "one-time",
+      },
+      { product_id: 5, name: "Legacy line", product: { code: "OLD_CODE" }, sum: 250 },
       { product_id: 9, name: "No sku item" },
     ]);
     const rows = await client(fetchImpl).listDealProducts!(3915);
@@ -336,9 +343,30 @@ describe("createProjectsClient — transport (PSG-588: /api/ base path + v1/v2 p
     expect(u.pathname).toBe("/api/v1/deals/3915/products");
     expect(u.searchParams.get("api_token")).toBe(TOKEN);
     expect(rows).toEqual([
-      { name: "Website Design & Build", sku: "psg_p_026", productId: 26 },
-      { name: "Legacy line", sku: "OLD_CODE", productId: 5 }, // falls back to product.code
-      { name: "No sku item", sku: null, productId: 9 },
+      {
+        name: "Website Design & Build",
+        sku: "psg_p_026",
+        productId: 26,
+        quantity: 1,
+        sum: 6500,
+        billingFrequency: "one-time",
+      },
+      {
+        name: "Legacy line",
+        sku: "OLD_CODE",
+        productId: 5,
+        quantity: null,
+        sum: 250,
+        billingFrequency: null,
+      }, // falls back to product.code
+      {
+        name: "No sku item",
+        sku: null,
+        productId: 9,
+        quantity: null,
+        sum: null,
+        billingFrequency: null,
+      },
     ]);
   });
 
