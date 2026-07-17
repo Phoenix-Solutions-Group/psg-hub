@@ -14,8 +14,11 @@ const listDealProducts = vi.fn();
 const listUserConnections = vi.fn();
 const listMailboxThreads = vi.fn();
 const listDealActivities = vi.fn();
+const listDealPersons = vi.fn();
+const listUsers = vi.fn();
 const createActivity = vi.fn();
 const deleteActivity = vi.fn();
+const ensureDraft = vi.fn();
 const fetchPersonContact = vi.fn();
 const fetchOrganizationBillingDetails = vi.fn();
 const updateOrganization = vi.fn();
@@ -41,6 +44,24 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 vi.mock("@/lib/nurture/enrollment", () => ({
   enrollNurturePath: (...args: unknown[]) => enrollNurturePath(...args),
+}));
+vi.mock("@/lib/gmail/drafts", () => ({
+  createGmailDraftAdapter: () => ({
+    ensureDraft: (...args: unknown[]) => ensureDraft(...args),
+  }),
+  loadGmailDraftConfig: () => ({ ok: true, refreshToken: "rt", clientId: "cid", clientSecret: "sec", userId: "me" }),
+}));
+vi.mock("@/lib/google-calendar/freebusy", () => ({
+  createGoogleCalendarAvailabilityAdapter: () => ({
+    listBusy: vi.fn(async () => []),
+  }),
+  loadGoogleCalendarConfig: () => ({
+    ok: true,
+    refreshToken: "calendar-rt",
+    clientId: "cid",
+    clientSecret: "sec",
+    calendarId: "primary",
+  }),
 }));
 
 import { POST } from "../route";
@@ -83,6 +104,7 @@ beforeEach(() => {
   vi.stubEnv("PIPEDRIVE_COMPANY_DOMAIN", "psg");
   vi.stubEnv("PIPEDRIVE_PANDADOC_SIGNED_URL_FIELD_KEY", "");
   vi.stubEnv("PIPEDRIVE_PROPOSAL_PREP_BUSINESS_DAY_OFFSET", "1");
+  vi.stubEnv("GMAIL_PROPOSAL_DRAFTS_FROM_EMAIL", "nick@psgweb.me");
 
   createProjectsClient.mockReturnValue({
     projectsClient: true,
@@ -91,6 +113,8 @@ beforeEach(() => {
     listUserConnections,
     listMailboxThreads,
     listDealActivities,
+    listDealPersons,
+    listUsers,
     createActivity,
     deleteActivity,
     updateOrganization,
@@ -110,8 +134,11 @@ beforeEach(() => {
   listUserConnections.mockResolvedValue({ google: "nick@phoenixsolutionsgroup.net" });
   listMailboxThreads.mockResolvedValue([{ id: 1 }]);
   listDealActivities.mockResolvedValue([]);
+  listDealPersons.mockResolvedValue([{ id: 7, name: "Pat Owner", email: "pat@example.com" }]);
+  listUsers.mockResolvedValue([{ id: 22, name: "Alex Seller", email: "alex@psgweb.me", active: true }]);
   createActivity.mockResolvedValue({ id: 9001 });
   deleteActivity.mockResolvedValue(undefined);
+  ensureDraft.mockImplementation(async () => ({ id: `gmail-${ensureDraft.mock.calls.length}`, messageId: "<m@psgweb.me>", reused: false }));
   fetchPersonContact.mockResolvedValue({ firstName: "Pat", email: "pat@example.com", phone: null });
   fetchOrganizationBillingDetails.mockResolvedValue({
     id: 9,
@@ -533,7 +560,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
         person_id: 7,
         org_id: 9,
         due_date: "2026-07-20",
-        due_time: "09:00",
+        due_time: "07:00",
         duration: "00:45",
         busy: true,
         done: false,
@@ -585,7 +612,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
     expect(createActivity).not.toHaveBeenCalled();
   });
 
-  it("creates five non-sending follow-up draft tasks when a sales deal reaches Proposal Sent", async () => {
+  it("creates Gmail drafts and five non-sending follow-up records when a sales deal reaches Proposal Sent", async () => {
     isDealWonTransition.mockReturnValue(false);
     createActivity.mockImplementation(async () => ({ id: 9000 + createActivity.mock.calls.length }));
 
@@ -606,6 +633,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
             stage_id: 59,
             org_id: { value: 9, name: "Wallace Collision" },
             person_id: { value: 7, name: "Pat Owner" },
+            user_id: { value: 22, name: "Alex Seller" },
             update_time: "2026-07-17 14:22:00",
           },
         }),
@@ -618,7 +646,18 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
         proposalDraftSeries: {
           status: "created",
           activityIds: [9001, 9002, 9003, 9004, 9005],
+          draftIds: ["gmail-1", "gmail-2", "gmail-3", "gmail-4", "gmail-5"],
         },
+      }),
+    );
+    expect(ensureDraft).toHaveBeenCalledTimes(5);
+    expect(ensureDraft).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        from: { email: "nick@psgweb.me", name: "Alex Seller" },
+        replyTo: { email: "alex@psgweb.me", name: "Alex Seller" },
+        to: [{ email: "pat@example.com", name: "Pat Owner" }],
+        subject: "Quick follow-up on the proposal",
       }),
     );
     expect(createActivity).toHaveBeenCalledTimes(5);
@@ -629,7 +668,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
         type: "email",
         due_date: "2026-07-21",
         done: false,
-        note: expect.stringContaining("Draft only. Do not auto-send."),
+        note: expect.stringContaining("Gmail draft ID: gmail-1"),
       }),
     );
   });
@@ -709,7 +748,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
             title: "Wallace website proposal",
             status: "open",
             pipeline_id: 8,
-            stage_id: 58,
+            stage_id: 60,
           },
         }),
       }),
