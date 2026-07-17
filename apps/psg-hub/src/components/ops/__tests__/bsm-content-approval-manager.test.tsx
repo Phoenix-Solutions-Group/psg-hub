@@ -21,4 +21,13 @@ describe("BsmContentApprovalManager", () => {
     expect(html).not.toContain(">shop-a</option>");
     expect(html).not.toContain(">shop-b</option>");
   });
+
+  it("does not prompt staff with an internal shop ID when shops are unavailable", () => {
+    const html = renderToStaticMarkup(
+      <BsmContentApprovalManager initialApprovals={[]} activeShopId={null} shops={[]} />,
+    );
+
+    expect(html).toContain('placeholder="No shops available"');
+    expect(html).not.toContain("00000000-0000-0000-0000-000000000000");
+  });
 });

@@ -195,7 +195,7 @@ export function BsmContentApprovalManager({
                 value={shopId}
                 onChange={(event) => setShopId(event.target.value)}
                 disabled={uploading}
-                placeholder="00000000-0000-0000-0000-000000000000"
+                placeholder="No shops available"
               />
             )}
           </div>
