@@ -40,23 +40,15 @@ function configuredFields() {
 }
 
 describe("pipedrive-branding-tier-basis plan", () => {
-  it("creates the phase-level actual-hours fields with the Tier Basis setup", () => {
+  it("creates the engagement-level actual-hours fields with the Tier Basis setup", () => {
     const plan = buildPlan({ fieldsV1: [], fieldsV2: [], filters: [] });
 
     expect(plan.actions.filter((action) => action.type === "createDealField")).toHaveLength(
       TIER_BASIS_FIELDS.length + ACTUAL_HOURS_FIELDS.length,
     );
     expect(ACTUAL_HOURS_FIELDS.map((spec) => spec.name)).toEqual([
-      "phase1_design_hours_actual",
-      "phase1_pm_hours_actual",
-      "phase2_design_hours_actual",
-      "phase2_pm_hours_actual",
-      "phase3_design_hours_actual",
-      "phase3_pm_hours_actual",
-      "phase4_design_hours_actual",
-      "phase4_pm_hours_actual",
-      "change_order_design_hours",
-      "change_order_pm_hours",
+      "Branding Actual - Design Hours",
+      "Branding Actual - PM Hours",
     ]);
     for (const spec of ACTUAL_HOURS_FIELDS) {
       expect(plan.actions).toEqual(
@@ -74,16 +66,16 @@ describe("pipedrive-branding-tier-basis plan", () => {
     expect(plan.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          fieldName: "phase1_design_hours_actual",
+          fieldName: "Branding Actual - Design Hours",
           body: expect.objectContaining({
-            description: expect.stringContaining("Attribute hours by the ROLE"),
+            description: expect.stringContaining("total actual design hours"),
           }),
         }),
       ]),
     );
   });
 
-  it("reports the first three won branding jobs against the per-phase baseline", () => {
+  it("reports the first three won branding jobs against the engagement-level baseline", () => {
     const { fieldsV1 } = configuredFields();
     const report = buildActualHoursReport({
       fieldsV1,
@@ -95,16 +87,8 @@ describe("pipedrive-branding-tier-basis plan", () => {
           status: "won",
           won_time: "2026-07-13T00:00:00Z",
           field_1005: "T3 Identity + Rollout",
-          field_2000: 12,
-          field_2001: 3,
-          field_2002: 23,
-          field_2003: 3,
-          field_2004: 30,
-          field_2005: 3,
-          field_2006: 17,
-          field_2007: 5,
-          field_2008: 99,
-          field_2009: 99,
+          field_2000: 82,
+          field_2001: 14,
         },
         {
           id: 1,
@@ -112,16 +96,8 @@ describe("pipedrive-branding-tier-basis plan", () => {
           status: "won",
           won_time: "2026-07-11T00:00:00Z",
           field_1005: "T1 Brand Mark",
-          field_2000: 3,
-          field_2001: 1.5,
-          field_2002: 11,
-          field_2003: 1,
-          field_2004: 9,
-          field_2005: 1.5,
-          field_2006: 4,
-          field_2007: 1,
-          field_2008: 6,
-          field_2009: 2,
+          field_2000: 27,
+          field_2001: 5,
         },
         {
           id: 2,
@@ -129,16 +105,8 @@ describe("pipedrive-branding-tier-basis plan", () => {
           status: "won",
           won_time: "2026-07-12T00:00:00Z",
           field_1005: "T2 Brand Identity System",
-          field_2000: 8,
-          field_2001: 2.5,
-          field_2002: 14,
-          field_2003: 1.5,
-          field_2004: 15,
-          field_2005: 2,
-          field_2006: 23,
-          field_2007: 2,
-          field_2008: 10,
-          field_2009: 3,
+          field_2000: 60,
+          field_2001: 8,
         },
         {
           id: 4,
@@ -160,15 +128,7 @@ describe("pipedrive-branding-tier-basis plan", () => {
         estimatedDesignHours: 50,
         actualDesignHours: 60,
         designVariancePct: 20,
-        changeOrderDesignHours: 10,
         repricingTrigger: true,
-      }),
-    );
-    expect(report.firstClosedBrandingJobs[1].phases[3]).toEqual(
-      expect.objectContaining({
-        phase: 4,
-        estimatedDesignHours: 13,
-        actualDesignHours: 23,
       }),
     );
     expect(report.byTier.find((bucket) => bucket.tier === "T2 Brand Identity System")).toEqual(
