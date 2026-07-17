@@ -27,27 +27,29 @@ export async function POST(
 
   const service = createServiceClient();
 
-  // The batch must be in a printable (non-terminal) state.
+  // Cancelled batches are not printable. Historical batches remain callable so a
+  // retry can return skipped counts without double-submitting vendor jobs.
   const { data: batch, error: batchError } = await service
     .from("production_batches")
-    .select("id, status")
+    .select("id, status, printed_at")
     .eq("id", id)
     .single();
   if (batchError || !batch) {
     return NextResponse.json({ error: "Batch not found" }, { status: 404 });
   }
-  if (nextBatchStatusOnPrint(batch.status as BatchStatus) === null) {
+  if (batch.status === "cancelled") {
     return NextResponse.json(
       { error: `Batch is ${batch.status} and cannot be printed` },
       { status: 409 }
     );
   }
+  if (batch.status !== "historical" && nextBatchStatusOnPrint(batch.status as BatchStatus) === null) {
+    return NextResponse.json({ error: `Batch is ${batch.status} and cannot be printed` }, { status: 409 });
+  }
 
-  // Submit only documents that have not already been handed to the vendor, so a
-  // re-run never double-mails a piece that already has an external_id.
   const { data: docs, error: docsError } = await service
     .from("production_documents")
-    .select("id, external_id")
+    .select("id")
     .eq("batch_id", id);
   if (docsError) {
     return NextResponse.json({ error: "Failed to load batch documents" }, { status: 500 });
@@ -55,12 +57,19 @@ export async function POST(
   if (!docs || docs.length === 0) {
     return NextResponse.json({ error: "Batch has no documents" }, { status: 422 });
   }
-  const toPrint = docs.filter((d) => !d.external_id).map((d) => d.id);
+  const toPrint = docs.map((d) => d.id);
 
   const client = service as unknown as ProductionClient;
 
   try {
-    const outcome = await printBatch(client, createMailAdapter, id, toPrint, new Date().toISOString());
+    const outcome = await printBatch(
+      client,
+      createMailAdapter,
+      id,
+      toPrint,
+      batch.printed_at ?? new Date().toISOString(),
+      gate.userId
+    );
     return NextResponse.json({ outcome }, { status: 200 });
   } catch (error) {
     if (error instanceof MailProductionError) {

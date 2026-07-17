@@ -24,7 +24,9 @@ export async function POST(
   const client = createServiceClient() as unknown as ProductionClient;
 
   try {
-    const outcome = await printDocument(client, createMailAdapter, id);
+    const outcome = await printDocument(client, createMailAdapter, id, {
+      printedByProfileId: gate.userId,
+    });
     return NextResponse.json({ outcome }, { status: 200 });
   } catch (error) {
     if (error instanceof MailProductionError) {

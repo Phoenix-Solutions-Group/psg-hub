@@ -120,7 +120,10 @@ interface DbError {
   message: string;
 }
 interface SelectChain {
-  eq: (col: string, val: string) => { single: () => Promise<{ data: DocumentRow | null; error: DbError | null }> };
+  eq: (
+    col: string,
+    val: string
+  ) => { single: () => Promise<{ data: DocumentRow | null; error: DbError | null }> };
 }
 interface UpdateChain {
   eq: (col: string, val: string) => Promise<{ error: DbError | null }>;
@@ -146,6 +149,13 @@ export interface DocumentRow {
   size?: string | null;
   rendered_url: string | null;
   product_id: string | null;
+  letter_eligibility_id?: string | null;
+  external_id?: string | null;
+  status?: string | null;
+  proof_url?: string | null;
+  expected_delivery_date?: string | null;
+  printed_at?: string | null;
+  printed_by_profile_id?: string | null;
   /**
    * Vendor selected for this piece (mirrors the per-template/per-shop choice
    * persisted on the parent batch at queue time). Drives adapter selection at
@@ -174,9 +184,23 @@ function resolvePrintAdapter(
 
 export interface PrintOutcome {
   documentId: string;
-  externalId: string;
+  externalId: string | null;
   status: string;
   vendor: string;
+  skippedAlreadyPrinted?: boolean;
+}
+
+async function markLetterEligibilityPrinted(
+  client: ProductionClient,
+  doc: DocumentRow,
+  printedAt: string
+): Promise<void> {
+  if (!doc.letter_eligibility_id) return;
+  const { error } = await client
+    .from("letter_eligibility")
+    .update({ printed_at: printedAt })
+    .eq("id", doc.letter_eligibility_id);
+  if (error) throw new Error(`printDocument eligibility stamp failed: ${error.message}`);
 }
 
 /** Build the vendor-agnostic MailDocument from a stored production document row. */
@@ -213,18 +237,33 @@ export function buildMailDocument(doc: DocumentRow): MailDocument {
 export async function printDocument(
   client: ProductionClient,
   adapter: MailAdapter | MailAdapterResolver,
-  documentId: string
+  documentId: string,
+  opts: { printedAt?: string; printedByProfileId?: string | null; forceReprint?: boolean } = {}
 ): Promise<PrintOutcome> {
   const { data: doc, error } = await client
     .from("production_documents")
     .select(
-      "id, batch_id, piece_type, to_address, from_address, color, size, rendered_url, product_id, vendor"
+      "id, batch_id, piece_type, to_address, from_address, color, size, rendered_url, product_id, letter_eligibility_id, external_id, status, proof_url, expected_delivery_date, printed_at, printed_by_profile_id, vendor"
     )
     .eq("id", documentId)
     .single();
   if (error) throw new Error(`printDocument load failed: ${error.message}`);
   if (!doc) throw new Error("printDocument: document not found");
 
+  if (!opts.forceReprint && (doc.printed_at || doc.external_id)) {
+    if (doc.printed_at) {
+      await markLetterEligibilityPrinted(client, doc, doc.printed_at);
+    }
+    return {
+      documentId: doc.id,
+      externalId: doc.external_id ?? null,
+      status: doc.status ?? "printed",
+      vendor: doc.vendor ?? "unknown",
+      skippedAlreadyPrinted: true,
+    };
+  }
+
+  const printedAt = opts.printedAt ?? new Date().toISOString();
   const result = await resolvePrintAdapter(adapter, doc).submit(buildMailDocument(doc));
 
   const { error: updateError } = await client
@@ -235,9 +274,12 @@ export async function printDocument(
       status: result.status,
       proof_url: result.proofUrl ?? null,
       expected_delivery_date: result.expectedDeliveryDate ?? null,
+      printed_at: printedAt,
+      printed_by_profile_id: opts.printedByProfileId ?? null,
     })
     .eq("id", documentId);
   if (updateError) throw new Error(`printDocument persist failed: ${updateError.message}`);
+  await markLetterEligibilityPrinted(client, doc, printedAt);
 
   return {
     documentId,
@@ -251,6 +293,8 @@ export interface BatchPrintOutcome {
   batchId: string;
   status: BatchStatus;
   printed: PrintOutcome[];
+  printedCount: number;
+  skippedAlreadyPrinted: number;
 }
 
 /**
@@ -267,11 +311,17 @@ export async function printBatch(
   adapter: MailAdapter | MailAdapterResolver,
   batchId: string,
   documentIds: string[],
-  printedAt: string
+  printedAt: string,
+  actorProfileId?: string | null
 ): Promise<BatchPrintOutcome> {
   const printed: PrintOutcome[] = [];
   for (const id of documentIds) {
-    printed.push(await printDocument(client, adapter, id));
+    printed.push(
+      await printDocument(client, adapter, id, {
+        printedAt,
+        printedByProfileId: actorProfileId ?? null,
+      })
+    );
   }
 
   const { error } = await client
@@ -280,7 +330,13 @@ export async function printBatch(
     .eq("id", batchId);
   if (error) throw new Error(`printBatch finalize failed: ${error.message}`);
 
-  return { batchId, status: "historical", printed };
+  return {
+    batchId,
+    status: "historical",
+    printed,
+    printedCount: printed.filter((p) => !p.skippedAlreadyPrinted).length,
+    skippedAlreadyPrinted: printed.filter((p) => p.skippedAlreadyPrinted).length,
+  };
 }
 
 /**
@@ -296,7 +352,10 @@ export async function reprintDocument(
   actorProfileId: string,
   reason?: string | null
 ): Promise<PrintOutcome> {
-  const outcome = await printDocument(client, adapter, documentId);
+  const outcome = await printDocument(client, adapter, documentId, {
+    printedByProfileId: actorProfileId,
+    forceReprint: true,
+  });
 
   const { error } = await client.from("production_reprint_log").insert({
     document_id: documentId,
