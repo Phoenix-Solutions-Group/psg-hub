@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildLocalReachStats,
   buildSetupSteps,
@@ -10,6 +10,7 @@ import {
 
 const BASE_RECOMMENDATION: LocalReachRecommendation = {
   id: "rec-1",
+  createdAt: "2026-07-17T12:00:00.000Z",
   title: "Add hail repair FAQ",
   type: "FAQ",
   status: "ready_for_review",
@@ -31,6 +32,10 @@ const BASE_RECOMMENDATION: LocalReachRecommendation = {
 };
 
 describe("Local Reach helpers", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("uses customer-safe status labels", () => {
     expect(statusLabel("approved")).toBe("Approved, not live");
     expect(statusTone("published")).toBe("success");
@@ -38,12 +43,20 @@ describe("Local Reach helpers", () => {
   });
 
   it("counts approval, publishing, and 30-day value states", () => {
-    const publishedAt = new Date().toISOString();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-17T12:00:00.000Z"));
+    const publishedAt = "2026-07-17T12:00:00.000Z";
     const stats = buildLocalReachStats([
       BASE_RECOMMENDATION,
       { ...BASE_RECOMMENDATION, id: "rec-2", status: "approved" },
       { ...BASE_RECOMMENDATION, id: "rec-3", status: "changes_requested" },
       { ...BASE_RECOMMENDATION, id: "rec-4", status: "published", publishedAt },
+      {
+        ...BASE_RECOMMENDATION,
+        id: "rec-5",
+        status: "draft",
+        createdAt: "2026-06-16T11:59:59.000Z",
+      },
     ]);
 
     expect(stats).toEqual({
@@ -100,6 +113,7 @@ describe("Local Reach helpers", () => {
         data: [
           {
             id: "rec-1",
+            created_at: "2026-07-17T12:00:00.000Z",
             title: "Add Thornhill hail repair FAQ",
             recommendation_type: "FAQ",
             status: "ready_for_review",
