@@ -23,7 +23,7 @@ export function ForgotPasswordForm() {
     const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
       // Recovery link returns through our callback, which establishes the
       // recovery session and forwards to the set-new-password screen.
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      redirectTo: `${window.location.origin}/auth/callback?type=recovery&next=/reset-password`,
     });
 
     if (authError) {
