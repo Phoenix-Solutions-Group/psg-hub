@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   ACTUAL_HOURS_FIELDS,
   ACTUAL_HOURS_REPORT_LIMIT,
+  BRANDING_PIPELINE_NAME,
+  BRANDING_STAGE_NAMES,
   BRANDING_TIER_ESTIMATES,
+  COST_BASIS_AUDIT_FILTER_NAME,
+  COST_BASIS_FIELDS,
+  COST_BASIS_REJECTION_FIELD,
   TIER_BASIS_FIELDS,
   buildActualHoursReport,
   buildPlan,
@@ -15,7 +20,7 @@ const field = (id: number, name: string, type = "varchar", options: string[] = [
   name,
   field_type: type,
   active_flag: true,
-  options: options.map((label) => ({ label })),
+  options: options.map((label, index) => ({ id: id * 10 + index, label })),
 });
 
 const fieldV2 = (id: number, name: string, type = "varchar") => ({
@@ -70,9 +75,50 @@ const auditFilter = (fieldIds: number[]) => ({
   },
 });
 
+const missingFieldsAuditFilter = (id: number, name: string, fieldIds: number[]) => ({
+  id,
+  name,
+  conditions: {
+    glue: "and",
+    conditions: [
+      {
+        glue: "and",
+        conditions: [
+          {
+            object: "deal",
+            field_id: "12462",
+            operator: "=",
+            value: "8",
+            extra_value: null,
+          },
+          {
+            object: "deal",
+            field_id: "12464",
+            operator: "=",
+            value: "59",
+            extra_value: null,
+          },
+        ],
+      },
+      {
+        glue: "or",
+        conditions: fieldIds.map((fieldId) => ({
+          object: "deal",
+          field_id: String(fieldId),
+          operator: "IS NULL",
+          value: null,
+          extra_value: null,
+        })),
+      },
+    ],
+  },
+});
+
 function configuredFields() {
   const fieldsV1 = [
     ...TIER_BASIS_FIELDS.map((spec, index) => field(1000 + index, spec.name, spec.type, spec.options)),
+    ...COST_BASIS_FIELDS.map((spec, index) => field(1500 + index, spec.name, spec.type, spec.options)),
+    field(1550, COST_BASIS_REJECTION_FIELD.name, COST_BASIS_REJECTION_FIELD.type),
     ...ACTUAL_HOURS_FIELDS.map((spec, index) => field(2000 + index, spec.name, spec.type, spec.options)),
   ];
   const fieldsV2 = fieldsV1.map((item) => fieldV2(Number(item.id), String(item.name), String(item.field_type)));
@@ -80,30 +126,66 @@ function configuredFields() {
 }
 
 describe("pipedrive-branding-tier-basis plan", () => {
-  it("creates the phase-level actual-hours fields with the Tier Basis setup", () => {
+  it("creates Cost Basis, rejected-line, and phase-level actual-hours fields with the Tier Basis setup", () => {
     const plan = buildPlan({ fieldsV1: [], fieldsV2: [], filters: [] });
 
     expect(plan.actions.filter((action) => action.type === "createDealField")).toHaveLength(
-      TIER_BASIS_FIELDS.length + ACTUAL_HOURS_FIELDS.length,
+      TIER_BASIS_FIELDS.length + COST_BASIS_FIELDS.length + 1 + ACTUAL_HOURS_FIELDS.length,
     );
     expect(TIER_BASIS_FIELDS).toHaveLength(9);
+    expect(COST_BASIS_FIELDS.map((spec) => spec.name)).toEqual([
+      "Cost basis",
+      "Cost basis source",
+      "Cost basis date",
+    ]);
+    expect(COST_BASIS_REJECTION_FIELD).toEqual(
+      expect.objectContaining({
+        name: "Cost basis rejected lines",
+        type: "double",
+      }),
+    );
     expect(TIER_BASIS_FIELDS).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          name: "T3 - Named vendors",
+          name: "Tier Basis - T3 Named vendors",
           type: "text",
           description: expect.stringContaining("Tier 3 only"),
         }),
       ]),
     );
     expect(TIER_BASIS_FIELDS.map((spec) => spec.name)).not.toContain("T3 - Priority surfaces");
+    expect(TIER_BASIS_FIELDS.map((spec) => spec.name)).not.toContain("T3 - Named vendors");
     expect(plan.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          fieldName: "T3 - Named vendors",
+          fieldName: "Tier Basis - T3 Named vendors",
           body: expect.objectContaining({
             field_type: "text",
             description: expect.stringContaining("Every vendor PSG coordinates with"),
+          }),
+        }),
+      ]),
+    );
+    for (const spec of COST_BASIS_FIELDS) {
+      expect(plan.actions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            fieldName: spec.name,
+            body: expect.objectContaining({
+              field_type: spec.type,
+              required_fields: { enabled: false, stage_ids: [], statuses: {} },
+            }),
+          }),
+        ]),
+      );
+    }
+    expect(plan.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldName: "Cost basis rejected lines",
+          body: expect.objectContaining({
+            field_type: "double",
+            description: expect.stringContaining("queryable by saved filter"),
           }),
         }),
       ]),
@@ -260,7 +342,7 @@ describe("pipedrive-branding-tier-basis plan", () => {
     );
   });
 
-  it("updates an existing audit filter when the ninth Tier Basis field is missing from it", () => {
+  it("updates the Tier Basis audit filter to include the T3 vendor field fallback", () => {
     const { fieldsV1, fieldsV2 } = configuredFields();
     const tierBasisIds = fieldsV1.slice(0, TIER_BASIS_FIELDS.length).map((item) => item.id);
     const plan = buildPlan({
@@ -269,25 +351,167 @@ describe("pipedrive-branding-tier-basis plan", () => {
       filters: [auditFilter(tierBasisIds.slice(0, 8))],
     });
 
-    expect(plan.actions).toEqual([
-      expect.objectContaining({
-        type: "updateFilter",
-        filterId: 1237,
-        filterName: "Branding audit - Proposal Sent missing Tier Basis",
-        body: expect.objectContaining({
-          conditions: expect.objectContaining({
-            conditions: expect.arrayContaining([
-              expect.objectContaining({
-                glue: "or",
-                conditions: expect.arrayContaining([
-                  expect.objectContaining({ field_id: String(tierBasisIds[8]) }),
-                ]),
-              }),
-            ]),
+    expect(plan.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "updateFilter",
+          filterId: 1237,
+          filterName: "Branding audit - Proposal Sent missing Tier Basis",
+          body: expect.objectContaining({
+            conditions: expect.objectContaining({
+              conditions: expect.arrayContaining([
+	                expect.objectContaining({
+	                  glue: "or",
+	                  conditions: expect.arrayContaining([
+	                    expect.objectContaining({ field_id: "1008", operator: "IS NULL" }),
+	                  ]),
+	                }),
+              ]),
+            }),
           }),
         }),
+      ]),
+    );
+    expect(tierBasisIds[8]).toBe(1008);
+  });
+
+  it("renames the legacy T3 vendor field instead of creating a duplicate", () => {
+    const legacyT3 = field(1008, "T3 - Named vendors", "text");
+    const fieldsV1 = [
+      ...TIER_BASIS_FIELDS.slice(0, 8).map((spec, index) => field(1000 + index, spec.name, spec.type, spec.options)),
+      legacyT3,
+    ];
+    const fieldsV2 = fieldsV1.map((item) => fieldV2(Number(item.id), String(item.name), String(item.field_type)));
+    const plan = buildPlan({ fieldsV1, fieldsV2, filters: [] });
+
+    expect(plan.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "updateDealField",
+          fieldId: 1008,
+          fieldName: "Tier Basis - T3 Named vendors",
+          body: expect.objectContaining({ field_name: "Tier Basis - T3 Named vendors" }),
+        }),
+      ]),
+    );
+    expect(
+      plan.actions.filter((action) => action.type === "createDealField" && action.fieldName === "Tier Basis - T3 Named vendors"),
+    ).toHaveLength(0);
+  });
+
+  it("creates a branding-only pipeline path and requires Tier Basis fields at Branding Proposal Sent", () => {
+    const { fieldsV1, fieldsV2 } = configuredFields();
+    const plan = buildPlan({
+      fieldsV1,
+      fieldsV2,
+      filters: [],
+      pipelines: [{ id: 10, name: BRANDING_PIPELINE_NAME }],
+      stages: BRANDING_STAGE_NAMES.map((name, index) => ({ id: 70 + index, name, pipeline_id: 10, order_nr: index + 1 })),
+      useBrandingPipeline: true,
+    });
+
+    expect(plan.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "updateDealField",
+          fieldId: 1000,
+          body: expect.objectContaining({
+            required_fields: { enabled: true, stage_ids: [73], statuses: {} },
+            ui_visibility: expect.objectContaining({
+              show_in_pipelines: { show_in_all: false, pipeline_ids: [8, 10] },
+            }),
+          }),
+        }),
+      ]),
+    );
+    expect(plan.verification.pipeline).toEqual({ id: 10, name: BRANDING_PIPELINE_NAME, proposalSentStageId: 73 });
+    expect(plan.verification.enforcement).toContain("Branding / Proposal Sent");
+  });
+
+  it("creates Cost Basis audit filters after the Cost Basis fields exist", () => {
+    const { fieldsV1, fieldsV2 } = configuredFields();
+    const tierBasisIds = fieldsV1.slice(0, TIER_BASIS_FIELDS.length).map((item) => item.id);
+    const costBasisStart = TIER_BASIS_FIELDS.length;
+    const costBasisIds = fieldsV1
+      .slice(costBasisStart, costBasisStart + COST_BASIS_FIELDS.length)
+      .map((item) => item.id);
+
+    const plan = buildPlan({
+      fieldsV1,
+      fieldsV2,
+      filters: [auditFilter(tierBasisIds)],
+    });
+
+    expect(plan.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "createFilter",
+          filterName: COST_BASIS_AUDIT_FILTER_NAME,
+          body: expect.objectContaining({
+            conditions: expect.objectContaining({
+              conditions: expect.arrayContaining([
+                expect.objectContaining({
+                  glue: "or",
+                  conditions: expect.arrayContaining([
+                    expect.objectContaining({ field_id: String(costBasisIds[0]) }),
+                    expect.objectContaining({ field_id: String(costBasisIds[1]) }),
+                    expect.objectContaining({ field_id: String(costBasisIds[2]) }),
+                  ]),
+                }),
+              ]),
+            }),
+          }),
+        }),
+      ]),
+    );
+    expect(plan.verification.costBasisRejectionField).toEqual(
+      expect.objectContaining({
+        id: 1550,
+        name: "Cost basis rejected lines",
+        type: "double",
       }),
-    ]);
+    );
+    expect(plan.actions.map((action) => action.filterName)).not.toContain("Cost basis audit - Rejected lines");
+  });
+
+  it("updates an existing Cost Basis audit filter when a Cost Basis field is missing from it", () => {
+    const { fieldsV1, fieldsV2 } = configuredFields();
+    const tierBasisIds = fieldsV1.slice(0, TIER_BASIS_FIELDS.length).map((item) => item.id);
+    const costBasisStart = TIER_BASIS_FIELDS.length;
+    const costBasisIds = fieldsV1
+      .slice(costBasisStart, costBasisStart + COST_BASIS_FIELDS.length)
+      .map((item) => item.id);
+
+    const plan = buildPlan({
+      fieldsV1,
+      fieldsV2,
+      filters: [
+        auditFilter(tierBasisIds),
+        missingFieldsAuditFilter(1501, COST_BASIS_AUDIT_FILTER_NAME, costBasisIds.slice(0, 2)),
+      ],
+    });
+
+    expect(plan.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "updateFilter",
+          filterId: 1501,
+          filterName: COST_BASIS_AUDIT_FILTER_NAME,
+          body: expect.objectContaining({
+            conditions: expect.objectContaining({
+              conditions: expect.arrayContaining([
+                expect.objectContaining({
+                  glue: "or",
+                  conditions: expect.arrayContaining([
+                    expect.objectContaining({ field_id: String(costBasisIds[2]) }),
+                  ]),
+                }),
+              ]),
+            }),
+          }),
+        }),
+      ]),
+    );
   });
 
   it("does not mark the report ready until the Pipedrive fields exist", () => {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PSG-1757 — create Branding Tier Basis deal fields and audit filter in Pipedrive.
+// PSG-1757 / PSG-1805 — create Branding Tier Basis and Cost Basis deal fields and audit filters in Pipedrive.
 //
 // Dry-run:
 //   node --env-file=.env.local apps/psg-hub/scripts/pipedrive-branding-tier-basis.mjs
@@ -7,6 +7,8 @@
 //   node --env-file=.env.local apps/psg-hub/scripts/pipedrive-branding-tier-basis.mjs --apply
 // Also require fields at PSG Sales / Proposal Sent (broad gate, affects all PSG Sales quotes):
 //   node --env-file=.env.local apps/psg-hub/scripts/pipedrive-branding-tier-basis.mjs --apply --require-proposal-sent
+// Create/use a dedicated Branding pipeline and require Tier Basis fields at its Proposal Sent stage:
+//   node --env-file=.env.local apps/psg-hub/scripts/pipedrive-branding-tier-basis.mjs --apply --branding-pipeline
 // Export the first closed branding jobs with estimated-vs-actual hours:
 //   node --env-file=.env.local apps/psg-hub/scripts/pipedrive-branding-tier-basis.mjs --actual-hours-report
 
@@ -17,7 +19,17 @@ const TOKEN_ENV_CANDIDATES = ["PIPEDRIVE_API_TOKEN", "PIPEDRIVE_TOKEN", "PIPEDRI
 
 export const PSG_SALES_PIPELINE_ID = 8;
 export const PROPOSAL_SENT_STAGE_ID = 59;
+export const BRANDING_PIPELINE_NAME = "Branding";
+export const BRANDING_STAGE_NAMES = [
+  "New Lead",
+  "Contacted / Discovery",
+  "Qualified",
+  "Proposal Sent",
+  "Verbal / Negotiation",
+  "Won",
+];
 export const AUDIT_FILTER_NAME = "Branding audit - Proposal Sent missing Tier Basis";
+export const COST_BASIS_AUDIT_FILTER_NAME = "Cost basis audit - Proposal Sent missing Cost Basis";
 export const ACTUAL_HOURS_REPORT_LIMIT = 3;
 
 export const BRANDING_PHASES = [
@@ -105,12 +117,41 @@ export const TIER_BASIS_FIELDS = [
     type: "varchar",
   },
   {
-    name: "T3 - Named vendors",
+    name: "Tier Basis - T3 Named vendors",
     type: "text",
+    legacyNames: ["T3 - Named vendors"],
     description:
       "PSG-1810: Tier 3 only. Every vendor PSG coordinates with, named at quote so the included coordination rounds can be enforced.",
   },
 ];
+
+export const COST_BASIS_FIELDS = [
+  {
+    name: "Cost basis",
+    type: "text",
+    description:
+      "PSG-1805: the named cost basis behind the quoted price, for example '$85 per sellable design hour'.",
+  },
+  {
+    name: "Cost basis source",
+    type: "text",
+    description:
+      "PSG-1805: the named source for the cost basis, for example 'PSG-1756 doc rebuild rev 1 (CFO)'.",
+  },
+  {
+    name: "Cost basis date",
+    type: "date",
+    description:
+      "PSG-1805: the date of the source used for the cost basis, in YYYY-MM-DD form.",
+  },
+];
+
+export const COST_BASIS_REJECTION_FIELD = {
+  name: "Cost basis rejected lines",
+  type: "double",
+  description:
+    "PSG-1805: count quote lines turned away because the cost basis was missing, unnamed, or out of date. Any filled-in value is queryable by saved filter.",
+};
 
 const ROLE_HELP_TEXT =
   "Attribute hours by the role assigned in the PSG-658 task graph, not by the person who did the work. Round to the nearest 0.5 hour.";
@@ -167,20 +208,20 @@ function optionLabels(field) {
     : [];
 }
 
-function visibleInSales() {
+function visibleInPipelines(pipelineIds = [PSG_SALES_PIPELINE_ID]) {
   return {
     ui_visibility: {
       add_visible_flag: true,
       details_visible_flag: true,
       projects_detail_visible_flag: true,
-      show_in_pipelines: { show_in_all: false, pipeline_ids: [PSG_SALES_PIPELINE_ID] },
+      show_in_pipelines: { show_in_all: false, pipeline_ids: pipelineIds },
     },
   };
 }
 
-function requiredFields(requireProposalSent) {
-  return requireProposalSent
-    ? { enabled: true, stage_ids: [PROPOSAL_SENT_STAGE_ID], statuses: {} }
+function requiredFields(stageId) {
+  return stageId
+    ? { enabled: true, stage_ids: [stageId], statuses: {} }
     : { enabled: false, stage_ids: [], statuses: {} };
 }
 
@@ -193,7 +234,7 @@ function requiredMatches(actual, expected) {
   );
 }
 
-function visibilityMatches(actual) {
+function visibilityMatches(actual, expectedPipelineIds = [PSG_SALES_PIPELINE_ID]) {
   const pipelines = actual?.show_in_pipelines ?? {};
   return (
     actual?.add_visible_flag === true &&
@@ -201,12 +242,16 @@ function visibilityMatches(actual) {
     actual?.projects_detail_visible_flag === true &&
     pipelines.show_in_all === false &&
     JSON.stringify((pipelines.pipeline_ids ?? []).map(Number).sort((a, b) => a - b)) ===
-      JSON.stringify([PSG_SALES_PIPELINE_ID])
+      JSON.stringify(expectedPipelineIds.map(Number).sort((a, b) => a - b))
   );
 }
 
 function fieldByName(fields, name) {
   return fields.find((field) => clean(field.name ?? field.field_name) === clean(name)) ?? null;
+}
+
+function fieldBySpec(fields, spec) {
+  return [spec.name, ...(spec.legacyNames ?? [])].map((name) => fieldByName(fields, name)).find(Boolean) ?? null;
 }
 
 function fieldKeyByName(fields, name) {
@@ -237,7 +282,17 @@ function missingActualsLabel(designTotal, pmTotal) {
   return designTotal == null || pmTotal == null ? "missing actuals" : null;
 }
 
-function filterConditions(fieldIds) {
+function missingFieldCondition(fieldId) {
+  return {
+    object: "deal",
+    field_id: String(fieldId),
+    operator: "IS NULL",
+    value: null,
+    extra_value: null,
+  };
+}
+
+function proposalSentMissingFieldConditions(fieldIds, { pipelineId = PSG_SALES_PIPELINE_ID, stageId = PROPOSAL_SENT_STAGE_ID } = {}) {
   return {
     glue: "and",
     conditions: [
@@ -248,30 +303,28 @@ function filterConditions(fieldIds) {
             object: "deal",
             field_id: "12462",
             operator: "=",
-            value: String(PSG_SALES_PIPELINE_ID),
+            value: String(pipelineId),
             extra_value: null,
           },
           {
             object: "deal",
             field_id: "12464",
             operator: "=",
-            value: String(PROPOSAL_SENT_STAGE_ID),
+            value: String(stageId),
             extra_value: null,
           },
         ],
       },
       {
         glue: "or",
-        conditions: fieldIds.map((id) => ({
-          object: "deal",
-          field_id: String(id),
-          operator: "IS NULL",
-          value: null,
-          extra_value: null,
-        })),
+        conditions: fieldIds.map((id) => missingFieldCondition(id)),
       },
     ],
   };
+}
+
+function tierBasisAuditConditions({ fields, pipelineId = PSG_SALES_PIPELINE_ID, stageId = PROPOSAL_SENT_STAGE_ID }) {
+  return proposalSentMissingFieldConditions(fields.map((field) => field.id), { pipelineId, stageId });
 }
 
 function normalizeConditionTree(value) {
@@ -291,20 +344,93 @@ function filterConditionsMatch(actual, expected) {
   return JSON.stringify(normalizeConditionTree(actual)) === JSON.stringify(normalizeConditionTree(expected));
 }
 
-export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = false }) {
+function pipelineByName(pipelines, name) {
+  return pipelines.find((pipeline) => clean(pipeline.name) === clean(name)) ?? null;
+}
+
+function stagePipelineId(stage) {
+  return Number(stage?.pipeline_id?.value ?? stage?.pipeline_id);
+}
+
+function stageByName(stages, pipelineId, name) {
+  return stages.find((stage) => stagePipelineId(stage) === Number(pipelineId) && clean(stage.name) === clean(name)) ?? null;
+}
+
+export function buildPlan({
+  fieldsV1,
+  fieldsV2,
+  filters,
+  pipelines = [],
+  stages = [],
+  requireProposalSent = false,
+  useBrandingPipeline = false,
+}) {
   const actions = [];
   const unresolved = [];
   const notices = [];
   const createdOrExisting = [];
+  const costBasisCreatedOrExisting = [];
   const existingV2ByCode = new Map(fieldsV2.map((field) => [String(field.field_code), field]));
   const existingFilter = filters.find((filter) => clean(filter.name) === clean(AUDIT_FILTER_NAME)) ?? null;
+  const existingCostBasisFilter =
+    filters.find((filter) => clean(filter.name) === clean(COST_BASIS_AUDIT_FILTER_NAME)) ?? null;
+  const brandingPipeline = pipelineByName(pipelines, BRANDING_PIPELINE_NAME);
+  const brandingProposalStage = brandingPipeline ? stageByName(stages, brandingPipeline.id, "Proposal Sent") : null;
+  const tierBasisStageId = useBrandingPipeline
+    ? Number(brandingProposalStage?.id) || null
+    : requireProposalSent
+      ? PROPOSAL_SENT_STAGE_ID
+      : null;
+  const tierBasisPipelineId = useBrandingPipeline && brandingPipeline ? Number(brandingPipeline.id) : PSG_SALES_PIPELINE_ID;
+  const tierBasisFilterStageId = useBrandingPipeline && brandingProposalStage
+    ? Number(brandingProposalStage.id)
+    : PROPOSAL_SENT_STAGE_ID;
+  const tierBasisVisibilityPipelineIds = useBrandingPipeline && brandingPipeline
+    ? [PSG_SALES_PIPELINE_ID, Number(brandingPipeline.id)]
+    : [PSG_SALES_PIPELINE_ID];
+
+  if (useBrandingPipeline && !brandingPipeline) {
+    actions.push({
+      type: "createPipeline",
+      pipelineName: BRANDING_PIPELINE_NAME,
+      body: { name: BRANDING_PIPELINE_NAME },
+    });
+  }
+
+  if (useBrandingPipeline && brandingPipeline) {
+    for (const stageName of BRANDING_STAGE_NAMES) {
+      if (!stageByName(stages, brandingPipeline.id, stageName)) {
+        actions.push({
+          type: "createStage",
+          pipelineId: Number(brandingPipeline.id),
+          stageName,
+          body: { name: stageName, pipeline_id: Number(brandingPipeline.id) },
+        });
+      }
+    }
+  }
+
+  if (useBrandingPipeline && (!brandingPipeline || !brandingProposalStage)) {
+    notices.push({
+      label: `${BRANDING_PIPELINE_NAME} / Proposal Sent`,
+      reason: "required-field enforcement will be applied after the branding pipeline and Proposal Sent stage exist",
+    });
+  }
 
   for (const spec of [
     ...TIER_BASIS_FIELDS.map((field) => ({ ...field, category: "tierBasis" })),
+    ...COST_BASIS_FIELDS.map((field) => ({ ...field, category: "costBasis" })),
+    { ...COST_BASIS_REJECTION_FIELD, category: "costBasisRejection" },
     ...ACTUAL_HOURS_FIELDS.map((field) => ({ ...field, category: "actualHours" })),
   ]) {
-    const existing = fieldByName(fieldsV1, spec.name);
-    const fieldRequiredState = spec.category === "tierBasis" ? requiredFields(requireProposalSent) : requiredFields(false);
+    const existing = fieldBySpec(fieldsV1, spec);
+    const visibilityPipelineIds = spec.category === "tierBasis" ? tierBasisVisibilityPipelineIds : [PSG_SALES_PIPELINE_ID];
+    const fieldRequiredState =
+      spec.category === "tierBasis"
+        ? requiredFields(tierBasisStageId)
+        : spec.category === "costBasis"
+          ? requiredFields(requireProposalSent ? PROPOSAL_SENT_STAGE_ID : null)
+          : requiredFields(null);
     if (!existing) {
       actions.push({
         type: "createDealField",
@@ -316,7 +442,7 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
             spec.description ??
             `PSG-1757: Branding quote Tier Basis field. Required before quote only after the enforcement gate is approved.`,
           ...(spec.options ? { options: spec.options.map((label) => ({ label })) } : {}),
-          ...visibleInSales(),
+          ...visibleInPipelines(visibilityPipelineIds),
           required_fields: fieldRequiredState,
         },
       });
@@ -324,6 +450,7 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
     }
 
     if (spec.category === "tierBasis") createdOrExisting.push(existing);
+    if (spec.category === "costBasis") costBasisCreatedOrExisting.push(existing);
     if (existing.field_type !== spec.type) {
       unresolved.push({
         label: spec.name,
@@ -334,11 +461,20 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
 
     const existingV2 = existingV2ByCode.get(String(existing.key));
     const updateBody = {};
-    if (!visibilityMatches(existingV2?.ui_visibility)) {
-      Object.assign(updateBody, visibleInSales());
+    if (clean(existing.name ?? existing.field_name) !== clean(spec.name)) {
+      updateBody.field_name = spec.name;
+    }
+    if (!visibilityMatches(existingV2?.ui_visibility, visibilityPipelineIds)) {
+      Object.assign(updateBody, visibleInPipelines(visibilityPipelineIds));
     }
     if (!requiredMatches(existingV2?.required_fields, fieldRequiredState)) {
-      if (spec.category === "tierBasis" ? requireProposalSent : Boolean(existingV2?.required_fields?.enabled)) {
+      if (
+        spec.category === "tierBasis"
+          ? Boolean(tierBasisStageId)
+          : spec.category === "costBasis"
+            ? requireProposalSent
+          : Boolean(existingV2?.required_fields?.enabled)
+      ) {
         updateBody.required_fields = fieldRequiredState;
       }
     }
@@ -367,9 +503,12 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
     }
   }
 
-  if (createdOrExisting.length === TIER_BASIS_FIELDS.length) {
-    const fieldIds = createdOrExisting.map((field) => field.id);
-    const expectedFilterConditions = filterConditions(fieldIds);
+  if (createdOrExisting.length === TIER_BASIS_FIELDS.length && (!useBrandingPipeline || brandingProposalStage)) {
+    const expectedFilterConditions = tierBasisAuditConditions({
+      fields: createdOrExisting,
+      pipelineId: tierBasisPipelineId,
+      stageId: tierBasisFilterStageId,
+    });
     if (!existingFilter) {
       actions.push({
         type: "createFilter",
@@ -396,7 +535,43 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
   } else {
     notices.push({
       label: AUDIT_FILTER_NAME,
-      reason: "audit filter can be created after all nine Tier Basis fields exist and have field IDs",
+      reason:
+        createdOrExisting.length === TIER_BASIS_FIELDS.length
+          ? "audit filter can be updated after the Branding Proposal Sent stage exists"
+          : "audit filter can be created after all nine Tier Basis fields exist and have field IDs",
+    });
+  }
+
+  if (costBasisCreatedOrExisting.length === COST_BASIS_FIELDS.length) {
+    const fieldIds = costBasisCreatedOrExisting.map((field) => field.id);
+    const expectedFilterConditions = proposalSentMissingFieldConditions(fieldIds);
+    if (!existingCostBasisFilter) {
+      actions.push({
+        type: "createFilter",
+        filterId: null,
+        filterName: COST_BASIS_AUDIT_FILTER_NAME,
+        body: {
+          name: COST_BASIS_AUDIT_FILTER_NAME,
+          type: "deals",
+          conditions: expectedFilterConditions,
+        },
+      });
+    } else if (!filterConditionsMatch(existingCostBasisFilter.conditions, expectedFilterConditions)) {
+      actions.push({
+        type: "updateFilter",
+        filterId: existingCostBasisFilter.id,
+        filterName: COST_BASIS_AUDIT_FILTER_NAME,
+        body: {
+          name: COST_BASIS_AUDIT_FILTER_NAME,
+          type: "deals",
+          conditions: expectedFilterConditions,
+        },
+      });
+    }
+  } else {
+    notices.push({
+      label: COST_BASIS_AUDIT_FILTER_NAME,
+      reason: "audit filter can be created after all three Cost Basis fields exist and have field IDs",
     });
   }
 
@@ -406,7 +581,7 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
     notices,
     verification: {
       fields: TIER_BASIS_FIELDS.map((spec) => {
-        const field = fieldByName(fieldsV1, spec.name);
+        const field = fieldBySpec(fieldsV1, spec);
         const fieldV2 = field ? existingV2ByCode.get(String(field.key)) : null;
         return {
           id: field?.id ?? null,
@@ -417,6 +592,28 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
           required_fields: fieldV2?.required_fields ?? null,
         };
       }),
+      costBasisFields: COST_BASIS_FIELDS.map((spec) => {
+        const field = fieldByName(fieldsV1, spec.name);
+        const fieldV2 = field ? existingV2ByCode.get(String(field.key)) : null;
+        return {
+          id: field?.id ?? null,
+          key: field?.key ?? null,
+          name: spec.name,
+          type: field?.field_type ?? null,
+          required_fields: fieldV2?.required_fields ?? null,
+        };
+      }),
+      costBasisRejectionField: (() => {
+        const field = fieldByName(fieldsV1, COST_BASIS_REJECTION_FIELD.name);
+        const fieldV2 = field ? existingV2ByCode.get(String(field.key)) : null;
+        return {
+          id: field?.id ?? null,
+          key: field?.key ?? null,
+          name: COST_BASIS_REJECTION_FIELD.name,
+          type: field?.field_type ?? null,
+          required_fields: fieldV2?.required_fields ?? null,
+        };
+      })(),
       actualHoursFields: ACTUAL_HOURS_FIELDS.map((spec) => {
         const field = fieldByName(fieldsV1, spec.name);
         const fieldV2 = field ? existingV2ByCode.get(String(field.key)) : null;
@@ -430,9 +627,21 @@ export function buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent = f
         };
       }),
       filter: existingFilter ? { id: existingFilter.id, name: existingFilter.name } : null,
+      costBasisFilter: existingCostBasisFilter
+        ? { id: existingCostBasisFilter.id, name: existingCostBasisFilter.name }
+        : null,
+      pipeline: useBrandingPipeline
+        ? {
+            id: brandingPipeline?.id ?? null,
+            name: brandingPipeline?.name ?? BRANDING_PIPELINE_NAME,
+            proposalSentStageId: brandingProposalStage?.id ?? null,
+          }
+        : { id: PSG_SALES_PIPELINE_ID, name: "PSG Sales", proposalSentStageId: PROPOSAL_SENT_STAGE_ID },
       enforcement: requireProposalSent
         ? "Configured as required at PSG Sales / Proposal Sent. This is broader than branding-only because Pipedrive has no Branding pipeline in this account."
-        : "Not enabled by this run. Native Pipedrive required fields can target stages/statuses, but this account has no Branding pipeline to target without affecting all PSG Sales proposal moves.",
+        : useBrandingPipeline && brandingProposalStage
+          ? "Configured as required at Branding / Proposal Sent. This avoids blocking unrelated PSG Sales quotes."
+          : "Not enabled by this run. Nick chose the branding-only path on PSG-1763, so native required fields stay off until PSG-1757 creates a branding-only Pipedrive path.",
     },
   };
 }
@@ -615,6 +824,16 @@ class PipedriveApi {
     );
   }
 
+  async listPipelines() {
+    const json = await this.request("GET", "v2", "pipelines?limit=500", null);
+    return Array.isArray(json.data) ? json.data : [];
+  }
+
+  async listStages() {
+    const json = await this.request("GET", "v2", "stages?limit=500", null);
+    return Array.isArray(json.data) ? json.data : [];
+  }
+
   async listDealsByFilter(filterId) {
     const json = await this.request("GET", "v1", `deals?filter_id=${filterId}&limit=50`, null);
     return Array.isArray(json.data) ? json.data : [];
@@ -650,23 +869,35 @@ class PipedriveApi {
     if (action.type === "updateFilter") {
       return this.request("PUT", "v1", `filters/${action.filterId}?include_field_code=true`, action.body);
     }
+    if (action.type === "createPipeline") {
+      return this.request("POST", "v2", "pipelines", action.body);
+    }
+    if (action.type === "createStage") {
+      return this.request("POST", "v2", "stages", action.body);
+    }
     throw new Error(`Unsupported action type: ${action.type}`);
   }
 }
 
-async function snapshot(api, requireProposalSent) {
-  const [fieldsV1, fieldsV2, filters] = await Promise.all([
+async function snapshot(api, requireProposalSent, useBrandingPipeline) {
+  const [fieldsV1, fieldsV2, filters, pipelines, stages] = await Promise.all([
     api.listDealFieldsV1(),
     api.listDealFieldsV2(),
     api.listFilters(),
+    api.listPipelines(),
+    api.listStages(),
   ]);
-  return buildPlan({ fieldsV1, fieldsV2, filters, requireProposalSent });
+  return buildPlan({ fieldsV1, fieldsV2, filters, pipelines, stages, requireProposalSent, useBrandingPipeline });
 }
 
 async function main() {
   const apply = process.argv.includes("--apply");
   const actualHoursReport = process.argv.includes("--actual-hours-report");
   const requireProposalSent = process.argv.includes("--require-proposal-sent");
+  const useBrandingPipeline = process.argv.includes("--branding-pipeline");
+  if (requireProposalSent && useBrandingPipeline) {
+    throw new Error("Use either --require-proposal-sent or --branding-pipeline, not both.");
+  }
   const token = resolveToken();
   if (!token) throw new Error(`Missing Pipedrive token. Set one of: ${TOKEN_ENV_CANDIDATES.join(", ")}`);
 
@@ -681,7 +912,7 @@ async function main() {
     return;
   }
 
-  let plan = await snapshot(api, requireProposalSent);
+  let plan = await snapshot(api, requireProposalSent, useBrandingPipeline);
   if (plan.unresolved.length > 0) {
     console.log(JSON.stringify({ mode: apply ? "apply" : "dry-run", ...plan }, null, 2));
     throw new Error(`Unresolved configuration: ${plan.unresolved.map((item) => item.label).join(", ")}`);
@@ -700,9 +931,12 @@ async function main() {
           fieldName: action.fieldName ?? null,
           filterId: action.filterId ?? null,
           filterName: action.filterName ?? null,
+          pipelineId: action.pipelineId ?? null,
+          pipelineName: action.pipelineName ?? null,
+          stageName: action.stageName ?? null,
         });
       }
-      plan = await snapshot(api, requireProposalSent);
+      plan = await snapshot(api, requireProposalSent, useBrandingPipeline);
       if (plan.unresolved.length > 0) {
         console.log(JSON.stringify({ mode: "apply", applied, ...plan }, null, 2));
         throw new Error(`Unresolved configuration after apply pass ${pass}: ${plan.unresolved.map((item) => item.label).join(", ")}`);
@@ -713,32 +947,51 @@ async function main() {
   const auditFilter = plan.verification.filter;
   const sampleDeals = apply && auditFilter?.id ? await api.listDealsByFilter(auditFilter.id) : [];
   const result = {
-    issue: "PSG-1757",
-    includes: ["PSG-1810 T3 named-vendors Tier Basis field", "PSG-1779 actual-hours capture fields"],
+    issue: useBrandingPipeline ? "PSG-1757" : "PSG-1805",
+    includes: [
+      "PSG-1757 Tier Basis fields and audit filter",
+      "PSG-1805 Cost Basis fields, audit filter, and rejected-lines counter",
+      "PSG-1810 T3 named-vendors Tier Basis field",
+      "PSG-1779 actual-hours capture fields",
+    ],
     mode: apply ? "apply" : "dry-run",
     generatedAt: new Date().toISOString(),
     sourceEndpoints: [
       "GET /api/v1/dealFields",
       "GET /api/v2/dealFields?include_fields=ui_visibility,required_fields",
       "GET /api/v1/filters?type=deals",
+      "GET /api/v2/pipelines",
+      "GET /api/v2/stages",
     ],
     target: {
-      pipeline: { id: PSG_SALES_PIPELINE_ID, name: "PSG Sales" },
-      quoteStage: { id: PROPOSAL_SENT_STAGE_ID, name: "Proposal Sent" },
+      pipeline: plan.verification.pipeline,
+      quoteStage: { id: plan.verification.pipeline.proposalSentStageId ?? PROPOSAL_SENT_STAGE_ID, name: "Proposal Sent" },
     },
     counts: {
       plannedActions: plan.actions.length,
       appliedActions: applied.length,
       fieldsExpected: TIER_BASIS_FIELDS.length + ACTUAL_HOURS_FIELDS.length,
+      costBasisFieldsExpected: COST_BASIS_FIELDS.length,
+      costBasisRejectionFieldsExpected: 1,
       auditFilterSampleDealCount: sampleDeals.length,
     },
     decisions: {
       brandingPipelineGap:
-        "Live Pipedrive has no Branding pipeline. The safe apply creates the fields and audit filter in PSG Sales, but does not turn on the broad Proposal Sent required-field gate unless --require-proposal-sent is used.",
+        useBrandingPipeline
+          ? "Nick chose the dedicated Branding path. This run creates or reuses the Branding pipeline and targets its Proposal Sent stage."
+          : "Live Pipedrive has no Branding pipeline. The safe apply creates the fields and audit filter in PSG Sales, but does not turn on the broad Proposal Sent required-field gate unless --require-proposal-sent is used.",
       nativeEnforcement:
-        "Pipedrive deal-field required_fields supports stage-based web UI enforcement. It cannot target only branding quotes here without a real Branding pipeline or another approved pipeline/stage split.",
+        useBrandingPipeline
+          ? "Pipedrive deal-field required_fields supports stage-based web UI enforcement. This run requires Tier Basis fields at Branding / Proposal Sent."
+          : "Pipedrive deal-field required_fields supports stage-based web UI enforcement. It cannot target only branding quotes here without a real Branding pipeline or another approved pipeline/stage split.",
       auditFilter:
-        "The saved filter lists PSG Sales deals in Proposal Sent where any Tier Basis field is empty.",
+        useBrandingPipeline
+          ? "The saved filter lists Branding deals in Proposal Sent where any Tier Basis field is empty. Pipedrive rejected the conditional saved-filter shape for Tier 3-only vendors, so this catches Tier 3 missing vendors but may also show Tier 1/2 deals where the vendor field is blank."
+          : "The saved filter lists PSG Sales deals in Proposal Sent where any Tier Basis field is empty.",
+      costBasisAuditFilter:
+        "The saved filter lists PSG Sales deals in Proposal Sent where Cost basis, Cost basis source, or Cost basis date is empty.",
+      rejectedLines:
+        "A numeric deal field named Cost basis rejected lines makes turned-away lines queryable in Pipedrive and exports. Pipedrive rejected saved-filter API operators for this numeric counter, so the durable control is the queryable field, not a saved filter.",
       actualHours:
         "Ten optional numeric deal fields capture Phase 1-4 design/project-management hours plus separate paid change-order design/project-management hours. Run this script with --actual-hours-report after branding job #3 closes to compare fixed-scope actuals with the approved tier baseline.",
     },
@@ -752,9 +1005,15 @@ async function main() {
     },
   };
 
-  const outDir = new URL("../../../artifacts/PSG-1779/", import.meta.url);
+  const outDir = new URL(useBrandingPipeline ? "../../../artifacts/PSG-1757/" : "../../../artifacts/PSG-1805/", import.meta.url);
   await mkdir(outDir, { recursive: true });
-  const filename = apply ? "pipedrive_branding_hours_apply_summary.json" : "pipedrive_branding_hours_dry-run_summary.json";
+  const filename = useBrandingPipeline
+    ? apply
+      ? "pipedrive_branding_tier_basis_apply_summary.json"
+      : "pipedrive_branding_tier_basis_dry-run_summary.json"
+    : apply
+      ? "pipedrive_cost_basis_apply_summary.json"
+      : "pipedrive_cost_basis_dry-run_summary.json";
   await writeFile(new URL(filename, outDir), `${JSON.stringify(result, null, 2)}\n`);
   console.log(JSON.stringify(result, null, 2));
 }
