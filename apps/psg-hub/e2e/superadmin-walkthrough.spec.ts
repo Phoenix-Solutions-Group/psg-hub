@@ -10,7 +10,30 @@ const operatorStatePath =
 test.describe("superadmin walkthrough QA environment", () => {
   test.use({ storageState: operatorStatePath });
 
-  test("operator can reach user access, module access, and audit pages", async ({ page }) => {
+  test("operator can reach the BSM operations MVP routes", async ({ page }) => {
+    await page.goto("/ops", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Internal Operations" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Companies & ROs/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Production/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /BSM Content Approvals/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Superadmin/ })).toBeVisible();
+
+    await page.goto("/ops/companies", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Companies", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "+ New company" })).toBeVisible();
+
+    await page.goto("/ops/production", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Production", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Print queue" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Historical" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Recent documents" })).toBeVisible();
+
+    await page.goto("/ops/bsm-content-approvals", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "BSM Content Approvals" })).toBeVisible();
+    await expect(page.getByLabel("Shop")).toBeVisible();
+    await expect(page.getByLabel("Review title")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Review library" })).toBeVisible();
+
     await page.goto("/ops/admin/users", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "User Access" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Invite user" })).toBeVisible();
