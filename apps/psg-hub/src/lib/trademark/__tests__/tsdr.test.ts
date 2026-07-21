@@ -52,13 +52,13 @@ describe("USPTO TSDR trademark status client", () => {
     );
   });
 
-  it("builds the official TSDR status JSON endpoint", () => {
+  it("builds the official TSDR status XML endpoint", () => {
     expect(buildTsdrStatusUrl("sn78787878")).toBe(
-      "https://tsdrapi.uspto.gov/ts/cd/casestatus/sn78787878/info.json"
+      "https://tsdrapi.uspto.gov/ts/cd/casestatus/sn78787878/info.xml"
     );
   });
 
-  it("sends the USPTO-API-KEY header and returns the JSON body", async () => {
+  it("sends the USPTO-API-KEY header and returns the XML body", async () => {
     let capturedUrl = "";
     let capturedHeaders: HeadersInit | undefined;
     const fetchImpl: TsdrFetch = async (url, init) => {
@@ -67,8 +67,7 @@ describe("USPTO TSDR trademark status client", () => {
       return {
         ok: true,
         status: 200,
-        text: async () => "",
-        json: async () => ({ status: "ok" }),
+        text: async () => "<CaseUpdateInfo />",
       };
     };
 
@@ -79,12 +78,17 @@ describe("USPTO TSDR trademark status client", () => {
       retry: { retries: 0 },
     });
 
-    expect(capturedUrl).toContain("/casestatus/sn78787878/info.json");
+    expect(capturedUrl).toContain("/casestatus/sn78787878/info.xml");
     expect(capturedHeaders).toMatchObject({
-      Accept: "application/json",
+      Accept: "application/xml",
       "USPTO-API-KEY": "registered-key",
     });
-    expect(out).toEqual({ status: "ok" });
+    expect(out).toEqual({
+      caseId: "sn78787878",
+      format: "xml",
+      sourceUrl: "https://tsdrapi.uspto.gov/ts/cd/casestatus/sn78787878/info.xml",
+      xml: "<CaseUpdateInfo />",
+    });
   });
 
   it("fails closed when no key is configured", async () => {
@@ -114,7 +118,6 @@ describe("USPTO TSDR trademark status client", () => {
       ok: false,
       status: 401,
       text: async () => "missing key",
-      json: async () => ({}),
     });
 
     await expect(
@@ -135,13 +138,11 @@ describe("USPTO TSDR trademark status client", () => {
         ok: false,
         status: 503,
         text: async () => "temporary outage",
-        json: async () => ({}),
       })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        text: async () => "",
-        json: async () => ({ ok: true }),
+        text: async () => "<CaseUpdateInfo />",
       });
 
     await expect(
@@ -151,7 +152,11 @@ describe("USPTO TSDR trademark status client", () => {
         breaker: freshBreaker(),
         retry: { retries: 3, baseDelayMs: 1, sleep: async () => {} },
       })
-    ).resolves.toEqual({ ok: true });
+    ).resolves.toMatchObject({
+      caseId: "sn78787878",
+      format: "xml",
+      xml: "<CaseUpdateInfo />",
+    });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 

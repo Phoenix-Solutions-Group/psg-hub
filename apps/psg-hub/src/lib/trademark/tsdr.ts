@@ -22,7 +22,12 @@ export type TsdrConfig = {
   keySource: string;
 };
 
-export type TsdrStatusResponse = Record<string, unknown>;
+export type TsdrStatusResponse = {
+  caseId: string;
+  format: "xml";
+  sourceUrl: string;
+  xml: string;
+};
 
 export class TsdrConfigError extends Error {
   constructor(message: string) {
@@ -44,7 +49,7 @@ export class TsdrHttpError extends Error {
 export type TsdrFetch = (
   requestUrl: string,
   init: RequestInit
-) => Promise<Pick<Response, "ok" | "status" | "text" | "json">>;
+) => Promise<Pick<Response, "ok" | "status" | "text">>;
 
 export type FetchTsdrStatusDeps = {
   apiKey?: string;
@@ -90,7 +95,7 @@ export function normalizeTsdrCaseId(input: TsdrCaseInput | string): string {
 
 export function buildTsdrStatusUrl(caseInput: TsdrCaseInput | string): string {
   const caseId = normalizeTsdrCaseId(caseInput);
-  return `${TSDR_BASE_URL}/casestatus/${caseId}/info.json`;
+  return `${TSDR_BASE_URL}/casestatus/${caseId}/info.xml`;
 }
 
 export function isRetryableTsdrError(error: unknown): boolean {
@@ -113,7 +118,8 @@ export async function fetchTsdrStatus(
     );
   }
 
-  const requestUrl = buildTsdrStatusUrl(caseInput);
+  const caseId = normalizeTsdrCaseId(caseInput);
+  const requestUrl = buildTsdrStatusUrl(caseId);
   const fetchImpl = deps.fetchImpl ?? defaultFetch;
   const breaker = deps.breaker ?? defaultBreaker;
   const retry: RetryOptions = {
@@ -128,7 +134,7 @@ export async function fetchTsdrStatus(
     withRetry(async () => {
       const res = await fetchImpl(requestUrl, {
         headers: {
-          Accept: "application/json",
+          Accept: "application/xml",
           "USPTO-API-KEY": config.apiKey,
         },
         cache: "no-store",
@@ -147,7 +153,12 @@ export async function fetchTsdrStatus(
         );
       }
 
-      return (await res.json()) as TsdrStatusResponse;
+      return {
+        caseId,
+        format: "xml",
+        sourceUrl: requestUrl,
+        xml: await res.text(),
+      };
     }, retry)
   );
 }

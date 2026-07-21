@@ -30,10 +30,11 @@ function normalizeCaseId(input) {
 }
 
 async function lookup(caseId, apiKey) {
-  const url = `${BASE_URL}/casestatus/${normalizeCaseId(caseId)}/info.json`;
+  const normalizedCaseId = normalizeCaseId(caseId);
+  const url = `${BASE_URL}/casestatus/${normalizedCaseId}/info.xml`;
   const res = await fetch(url, {
     headers: {
-      Accept: "application/json",
+      Accept: "application/xml",
       "USPTO-API-KEY": apiKey,
     },
   });
@@ -45,7 +46,12 @@ async function lookup(caseId, apiKey) {
     );
   }
 
-  return res.json();
+  return {
+    caseId: normalizedCaseId,
+    format: "xml",
+    sourceUrl: url,
+    xml: await res.text(),
+  };
 }
 
 function usage() {
@@ -76,7 +82,7 @@ async function main() {
   const results = [];
   for (const caseId of cases) {
     const data = await lookup(caseId, apiKey.value);
-    results.push({ caseId: normalizeCaseId(caseId), data });
+    results.push(data);
   }
 
   console.log(JSON.stringify({ source: "USPTO TSDR", results }, null, 2));
