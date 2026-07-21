@@ -25,7 +25,7 @@ describe("USPTO TSDR trademark status client", () => {
     const env = {
       USPTO_TSDR_API_KEY: " tsdr-key ",
       USPTO_API_KEY: "generic-key",
-    } as NodeJS.ProcessEnv;
+    } as unknown as NodeJS.ProcessEnv;
 
     expect(resolveTsdrConfig(env)).toEqual({
       apiKey: "tsdr-key",
@@ -35,7 +35,7 @@ describe("USPTO TSDR trademark status client", () => {
   });
 
   it("keeps USPTO_API_KEY as a backward-compatible alias", () => {
-    const env = { USPTO_API_KEY: "generic-key" } as NodeJS.ProcessEnv;
+    const env = { USPTO_API_KEY: "generic-key" } as unknown as NodeJS.ProcessEnv;
 
     expect(resolveTsdrConfig(env)).toEqual({
       apiKey: "generic-key",
@@ -47,15 +47,29 @@ describe("USPTO TSDR trademark status client", () => {
     expect(normalizeTsdrCaseId("SN 78787878")).toBe("sn78787878");
     expect(normalizeTsdrCaseId("rn-1234567")).toBe("rn1234567");
     expect(normalizeTsdrCaseId("78787878")).toBe("sn78787878");
+    expect(normalizeTsdrCaseId("3500030")).toBe("rn3500030");
+    expect(normalizeTsdrCaseId("3,500,030")).toBe("rn3500030");
+    expect(normalizeTsdrCaseId("IR 0835690")).toBe("ir0835690");
     expect(normalizeTsdrCaseId({ type: "rn", value: "7654321" })).toBe(
       "rn7654321"
     );
   });
 
-  it("builds the official TSDR status XML endpoint", () => {
+  it("builds the official TSDR status XML endpoint for serial numbers", () => {
     expect(buildTsdrStatusUrl("sn78787878")).toBe(
       "https://tsdrapi.uspto.gov/ts/cd/casestatus/sn78787878/info.xml"
     );
+  });
+
+  it("builds the official TSDR status XML endpoint for bare registration numbers", () => {
+    expect(buildTsdrStatusUrl("3500030")).toBe(
+      "https://tsdrapi.uspto.gov/ts/cd/casestatus/rn3500030/info.xml"
+    );
+  });
+
+  it("rejects ambiguous bare case numbers", () => {
+    expect(() => normalizeTsdrCaseId("123456")).toThrow(TsdrConfigError);
+    expect(() => normalizeTsdrCaseId("123456789")).toThrow(TsdrConfigError);
   });
 
   it("sends the USPTO-API-KEY header and returns the XML body", async () => {
@@ -129,6 +143,42 @@ describe("USPTO TSDR trademark status client", () => {
       })
     ).rejects.toMatchObject({ status: 401 });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the official HTML status endpoint when XML is missing", async () => {
+    const fetchImpl = vi
+      .fn<TsdrFetch>()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: async () => "missing XML",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => "<html>TSDR status</html>",
+      });
+
+    await expect(
+      fetchTsdrStatus("sn78787878", {
+        apiKey: "registered-key",
+        fetchImpl,
+        breaker: freshBreaker(),
+        retry: { retries: 0 },
+      })
+    ).resolves.toEqual({
+      caseId: "sn78787878",
+      format: "html",
+      sourceUrl: "https://tsdrapi.uspto.gov/ts/cd/casestatus/sn78787878/content",
+      xml: "<html>TSDR status</html>",
+    });
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "https://tsdrapi.uspto.gov/ts/cd/casestatus/sn78787878/content",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Accept: "text/html" }),
+      })
+    );
   });
 
   it("retries transient USPTO outages", async () => {

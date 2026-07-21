@@ -10,6 +10,10 @@
 
 const API_KEY_ENV_CANDIDATES = ["USPTO_TSDR_API_KEY", "USPTO_API_KEY"];
 const BASE_URL = "https://tsdrapi.uspto.gov/ts/cd";
+const STATUS_ENDPOINTS = [
+  { format: "xml", path: "info.xml", accept: "application/xml" },
+  { format: "html", path: "content", accept: "text/html" },
+];
 
 function resolveApiKey(env = process.env) {
   for (const name of API_KEY_ENV_CANDIDATES) {
@@ -20,38 +24,52 @@ function resolveApiKey(env = process.env) {
 }
 
 function normalizeCaseId(input) {
-  const compact = String(input).trim().toLowerCase().replace(/[\s-]+/g, "");
-  const explicit = compact.match(/^(sn|rn)(\d+)$/);
+  const compact = String(input).trim().toLowerCase().replace(/[\s,-]+/g, "");
+  const explicit = compact.match(/^(sn|rn|ref|ir)([a-z0-9]+)$/);
   if (explicit) return `${explicit[1]}${explicit[2]}`;
-  if (/^\d+$/.test(compact)) return `sn${compact}`;
+  if (/^\d+$/.test(compact)) {
+    if (compact.length === 8) return `sn${compact}`;
+    if (compact.length === 7) return `rn${compact}`;
+  }
   throw new Error(
-    `Invalid USPTO case id "${input}". Use sn12345678 for a serial number or rn1234567 for a registration number.`
+    `Invalid USPTO case id "${input}". Use an 8-digit serial number, 7-digit registration number, or explicit sn/rn/ref/ir prefix.`
   );
 }
 
 async function lookup(caseId, apiKey) {
   const normalizedCaseId = normalizeCaseId(caseId);
-  const url = `${BASE_URL}/casestatus/${normalizedCaseId}/info.xml`;
-  const res = await fetch(url, {
-    headers: {
-      Accept: "application/xml",
-      "USPTO-API-KEY": apiKey,
-    },
-  });
+  let lastNotFound = null;
 
-  if (!res.ok) {
-    const body = (await res.text()).replace(/\s+/g, " ").trim().slice(0, 500);
-    throw new Error(
-      body ? `USPTO TSDR HTTP ${res.status}: ${body}` : `USPTO TSDR HTTP ${res.status}`
-    );
+  for (const endpoint of STATUS_ENDPOINTS) {
+    const url = `${BASE_URL}/casestatus/${normalizedCaseId}/${endpoint.path}`;
+    const res = await fetch(url, {
+      headers: {
+        Accept: endpoint.accept,
+        "USPTO-API-KEY": apiKey,
+      },
+    });
+
+    if (!res.ok) {
+      const body = (await res.text()).replace(/\s+/g, " ").trim().slice(0, 500);
+      const message = body
+        ? `USPTO TSDR HTTP ${res.status} for ${url}: ${body}`
+        : `USPTO TSDR HTTP ${res.status} for ${url}`;
+      if (res.status === 404) {
+        lastNotFound = new Error(message);
+        continue;
+      }
+      throw new Error(message);
+    }
+
+    return {
+      caseId: normalizedCaseId,
+      format: endpoint.format,
+      sourceUrl: url,
+      xml: await res.text(),
+    };
   }
 
-  return {
-    caseId: normalizedCaseId,
-    format: "xml",
-    sourceUrl: url,
-    xml: await res.text(),
-  };
+  throw lastNotFound ?? new Error(`USPTO TSDR case not found for ${normalizedCaseId}.`);
 }
 
 function usage() {
@@ -61,6 +79,7 @@ function usage() {
       "",
       "Set USPTO_TSDR_API_KEY in the shell, .env.local, or deployment secret store.",
       "Use tmsearch.uspto.gov first to find candidate serial or registration numbers, then run this helper to pull official TSDR status details.",
+      "Bare 8-digit inputs are treated as serial numbers; bare 7-digit inputs are treated as registration numbers.",
     ].join("\n")
   );
 }

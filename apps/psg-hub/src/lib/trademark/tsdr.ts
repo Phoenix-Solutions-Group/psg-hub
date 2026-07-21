@@ -10,7 +10,7 @@ const TSDR_TIMEOUT_MS = 30_000;
 
 const API_KEY_ENV_CANDIDATES = ["USPTO_TSDR_API_KEY", "USPTO_API_KEY"];
 
-export type TsdrCasePrefix = "sn" | "rn";
+export type TsdrCasePrefix = "sn" | "rn" | "ref" | "ir";
 
 export type TsdrCaseInput = {
   type?: TsdrCasePrefix;
@@ -24,7 +24,7 @@ export type TsdrConfig = {
 
 export type TsdrStatusResponse = {
   caseId: string;
-  format: "xml";
+  format: "xml" | "html";
   sourceUrl: string;
   xml: string;
 };
@@ -58,6 +58,17 @@ export type FetchTsdrStatusDeps = {
   retry?: RetryOptions;
 };
 
+type TsdrStatusEndpoint = {
+  format: TsdrStatusResponse["format"];
+  path: string;
+  accept: string;
+};
+
+const TSDR_STATUS_ENDPOINTS: TsdrStatusEndpoint[] = [
+  { format: "xml", path: "info.xml", accept: "application/xml" },
+  { format: "html", path: "content", accept: "text/html" },
+];
+
 const defaultBreaker = new CircuitBreaker({
   failureThreshold: 5,
   resetTimeoutMs: 30_000,
@@ -81,21 +92,32 @@ export function resolveTsdrConfig(
 export function normalizeTsdrCaseId(input: TsdrCaseInput | string): string {
   const raw =
     typeof input === "string" ? input : `${input.type ?? ""}${input.value}`;
-  const compact = raw.trim().toLowerCase().replace(/[\s-]+/g, "");
-  const explicit = compact.match(/^(sn|rn)(\d+)$/);
+  const compact = raw.trim().toLowerCase().replace(/[\s,-]+/g, "");
+  const explicit = compact.match(/^(sn|rn|ref|ir)([a-z0-9]+)$/);
   if (explicit) return `${explicit[1]}${explicit[2]}`;
 
   const digits = compact.match(/^\d+$/);
-  if (digits) return `sn${compact}`;
+  if (digits) {
+    if (compact.length === 8) return `sn${compact}`;
+    if (compact.length === 7) return `rn${compact}`;
+  }
 
   throw new TsdrConfigError(
-    "Enter a USPTO serial number as sn12345678 or a registration number as rn1234567."
+    "Enter an 8-digit USPTO serial number as sn12345678, a 7-digit registration number as rn1234567, a reference number as ref12345678, or an international registration number as ir12345678."
   );
 }
 
 export function buildTsdrStatusUrl(caseInput: TsdrCaseInput | string): string {
   const caseId = normalizeTsdrCaseId(caseInput);
-  return `${TSDR_BASE_URL}/casestatus/${caseId}/info.xml`;
+  return buildTsdrStatusEndpointUrls(caseId)[0].url;
+}
+
+function buildTsdrStatusEndpointUrls(caseInput: TsdrCaseInput | string) {
+  const caseId = normalizeTsdrCaseId(caseInput);
+  return TSDR_STATUS_ENDPOINTS.map((endpoint) => ({
+    ...endpoint,
+    url: `${TSDR_BASE_URL}/casestatus/${caseId}/${endpoint.path}`,
+  }));
 }
 
 export function isRetryableTsdrError(error: unknown): boolean {
@@ -119,7 +141,6 @@ export async function fetchTsdrStatus(
   }
 
   const caseId = normalizeTsdrCaseId(caseInput);
-  const requestUrl = buildTsdrStatusUrl(caseId);
   const fetchImpl = deps.fetchImpl ?? defaultFetch;
   const breaker = deps.breaker ?? defaultBreaker;
   const retry: RetryOptions = {
@@ -132,33 +153,44 @@ export async function fetchTsdrStatus(
 
   return breaker.execute(() =>
     withRetry(async () => {
-      const res = await fetchImpl(requestUrl, {
-        headers: {
-          Accept: "application/xml",
-          "USPTO-API-KEY": config.apiKey,
-        },
-        cache: "no-store",
-      });
+      let lastNotFound: TsdrHttpError | null = null;
 
-      if (!res.ok) {
-        let body = "";
-        try {
-          body = (await res.text()).replace(/\s+/g, " ").trim().slice(0, 500);
-        } catch {
-          // Ignore unreadable error bodies. The HTTP status is still actionable.
+      for (const endpoint of buildTsdrStatusEndpointUrls(caseId)) {
+        const res = await fetchImpl(endpoint.url, {
+          headers: {
+            Accept: endpoint.accept,
+            "USPTO-API-KEY": config.apiKey,
+          },
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          let body = "";
+          try {
+            body = (await res.text()).replace(/\s+/g, " ").trim().slice(0, 500);
+          } catch {
+            // Ignore unreadable error bodies. The HTTP status is still actionable.
+          }
+          const message = body
+            ? `USPTO TSDR HTTP ${res.status} for ${endpoint.url}: ${body}`
+            : `USPTO TSDR HTTP ${res.status} for ${endpoint.url}`;
+          const error = new TsdrHttpError(res.status, message);
+          if (res.status === 404) {
+            lastNotFound = error;
+            continue;
+          }
+          throw error;
         }
-        throw new TsdrHttpError(
-          res.status,
-          body ? `USPTO TSDR HTTP ${res.status}: ${body}` : `USPTO TSDR HTTP ${res.status}`
-        );
+
+        return {
+          caseId,
+          format: endpoint.format,
+          sourceUrl: endpoint.url,
+          xml: await res.text(),
+        };
       }
 
-      return {
-        caseId,
-        format: "xml",
-        sourceUrl: requestUrl,
-        xml: await res.text(),
-      };
+      throw lastNotFound ?? new TsdrHttpError(404, `USPTO TSDR case not found for ${caseId}.`);
     }, retry)
   );
 }
