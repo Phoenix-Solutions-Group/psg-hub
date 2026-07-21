@@ -11,6 +11,12 @@
 const API_KEY_ENV_CANDIDATES = ["USPTO_TSDR_API_KEY", "USPTO_API_KEY"];
 const BASE_URL = "https://tsdrapi.uspto.gov/ts/cd";
 const STATUS_ENDPOINTS = [
+  {
+    format: "json",
+    accept: "application/json",
+    buildUrl: (caseId) =>
+      `${BASE_URL}/last-update/info.json?${buildCaseQueryParam(caseId)}`,
+  },
   { format: "xml", path: "info.xml", accept: "application/xml" },
   { format: "html", path: "content", accept: "text/html" },
 ];
@@ -41,7 +47,10 @@ async function lookup(caseId, apiKey) {
   let lastNotFound = null;
 
   for (const endpoint of STATUS_ENDPOINTS) {
-    const url = `${BASE_URL}/casestatus/${normalizedCaseId}/${endpoint.path}`;
+    const url =
+      typeof endpoint.buildUrl === "function"
+        ? endpoint.buildUrl(normalizedCaseId)
+        : `${BASE_URL}/casestatus/${normalizedCaseId}/${endpoint.path}`;
     const res = await fetch(url, {
       headers: {
         Accept: endpoint.accept,
@@ -70,6 +79,13 @@ async function lookup(caseId, apiKey) {
   }
 
   throw lastNotFound ?? new Error(`USPTO TSDR case not found for ${normalizedCaseId}.`);
+}
+
+function buildCaseQueryParam(normalizedCaseId) {
+  const match = String(normalizedCaseId).match(/^(sn|rn|ref|ir)(.+)$/);
+  const type = match ? match[1] : "sn";
+  const value = match ? match[2] : String(normalizedCaseId);
+  return `${type}=${value}`;
 }
 
 function usage() {

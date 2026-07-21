@@ -24,7 +24,7 @@ export type TsdrConfig = {
 
 export type TsdrStatusResponse = {
   caseId: string;
-  format: "xml" | "html";
+  format: "json" | "xml" | "html";
   sourceUrl: string;
   xml: string;
 };
@@ -60,13 +60,21 @@ export type FetchTsdrStatusDeps = {
 
 type TsdrStatusEndpoint = {
   format: TsdrStatusResponse["format"];
-  path: string;
   accept: string;
+  buildUrl: (caseInput: string) => string;
 };
 
 const TSDR_STATUS_ENDPOINTS: TsdrStatusEndpoint[] = [
-  { format: "xml", path: "info.xml", accept: "application/xml" },
-  { format: "html", path: "content", accept: "text/html" },
+  {
+    format: "json",
+    accept: "application/json",
+    buildUrl: (caseInput) => {
+      const { type, value } = splitCaseId(normalizeTsdrCaseId(caseInput));
+      return `${TSDR_BASE_URL}/last-update/info.json?${type}=${value}`;
+    },
+  },
+  { format: "xml", accept: "application/xml", buildUrl: (caseInput) => `${TSDR_BASE_URL}/casestatus/${caseInput}/info.xml` },
+  { format: "html", accept: "text/html", buildUrl: (caseInput) => `${TSDR_BASE_URL}/casestatus/${caseInput}/content` },
 ];
 
 const defaultBreaker = new CircuitBreaker({
@@ -115,9 +123,18 @@ export function buildTsdrStatusUrl(caseInput: TsdrCaseInput | string): string {
 function buildTsdrStatusEndpointUrls(caseInput: TsdrCaseInput | string) {
   const caseId = normalizeTsdrCaseId(caseInput);
   return TSDR_STATUS_ENDPOINTS.map((endpoint) => ({
-    ...endpoint,
-    url: `${TSDR_BASE_URL}/casestatus/${caseId}/${endpoint.path}`,
+    format: endpoint.format,
+    accept: endpoint.accept,
+    url: endpoint.buildUrl(caseId),
   }));
+}
+
+function splitCaseId(caseInput: string) {
+  const match = caseInput.match(/^(sn|rn|ref|ir)(.+)$/);
+  if (!match) {
+    return { type: "sn" as const, value: caseInput };
+  }
+  return { type: match[1], value: match[2] };
 }
 
 export function isRetryableTsdrError(error: unknown): boolean {

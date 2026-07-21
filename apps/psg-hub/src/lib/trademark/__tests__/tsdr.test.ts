@@ -55,15 +55,15 @@ describe("USPTO TSDR trademark status client", () => {
     );
   });
 
-  it("builds the official TSDR status XML endpoint for serial numbers", () => {
+  it("builds the official TSDR JSON endpoint for serial numbers", () => {
     expect(buildTsdrStatusUrl("sn78787878")).toBe(
-      "https://tsdrapi.uspto.gov/ts/cd/casestatus/sn78787878/info.xml"
+      "https://tsdrapi.uspto.gov/ts/cd/last-update/info.json?sn=78787878"
     );
   });
 
-  it("builds the official TSDR status XML endpoint for bare registration numbers", () => {
+  it("builds the official TSDR JSON endpoint for bare registration numbers", () => {
     expect(buildTsdrStatusUrl("3500030")).toBe(
-      "https://tsdrapi.uspto.gov/ts/cd/casestatus/rn3500030/info.xml"
+      "https://tsdrapi.uspto.gov/ts/cd/last-update/info.json?rn=3500030"
     );
   });
 
@@ -72,7 +72,7 @@ describe("USPTO TSDR trademark status client", () => {
     expect(() => normalizeTsdrCaseId("123456789")).toThrow(TsdrConfigError);
   });
 
-  it("sends the USPTO-API-KEY header and returns the XML body", async () => {
+  it("sends the USPTO-API-KEY header and returns the JSON body", async () => {
     let capturedUrl = "";
     let capturedHeaders: HeadersInit | undefined;
     const fetchImpl: TsdrFetch = async (url, init) => {
@@ -81,7 +81,7 @@ describe("USPTO TSDR trademark status client", () => {
       return {
         ok: true,
         status: 200,
-        text: async () => "<CaseUpdateInfo />",
+        text: async () => "{\"status\":\"live\"}",
       };
     };
 
@@ -92,16 +92,18 @@ describe("USPTO TSDR trademark status client", () => {
       retry: { retries: 0 },
     });
 
-    expect(capturedUrl).toContain("/casestatus/sn78787878/info.xml");
+    expect(capturedUrl).toBe(
+      "https://tsdrapi.uspto.gov/ts/cd/last-update/info.json?sn=78787878"
+    );
     expect(capturedHeaders).toMatchObject({
-      Accept: "application/xml",
+      Accept: "application/json",
       "USPTO-API-KEY": "registered-key",
     });
     expect(out).toEqual({
       caseId: "sn78787878",
-      format: "xml",
-      sourceUrl: "https://tsdrapi.uspto.gov/ts/cd/casestatus/sn78787878/info.xml",
-      xml: "<CaseUpdateInfo />",
+      format: "json",
+      sourceUrl: "https://tsdrapi.uspto.gov/ts/cd/last-update/info.json?sn=78787878",
+      xml: "{\"status\":\"live\"}",
     });
   });
 
@@ -145,7 +147,7 @@ describe("USPTO TSDR trademark status client", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to the official HTML status endpoint when XML is missing", async () => {
+  it("falls back to the official XML status endpoint when the JSON endpoint misses", async () => {
     const fetchImpl = vi
       .fn<TsdrFetch>()
       .mockResolvedValueOnce({
@@ -156,7 +158,7 @@ describe("USPTO TSDR trademark status client", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        text: async () => "<html>TSDR status</html>",
+        text: async () => "<CaseUpdateInfo />",
       });
 
     await expect(
@@ -168,15 +170,15 @@ describe("USPTO TSDR trademark status client", () => {
       })
     ).resolves.toEqual({
       caseId: "sn78787878",
-      format: "html",
-      sourceUrl: "https://tsdrapi.uspto.gov/ts/cd/casestatus/sn78787878/content",
-      xml: "<html>TSDR status</html>",
+      format: "xml",
+      sourceUrl: "https://tsdrapi.uspto.gov/ts/cd/casestatus/sn78787878/info.xml",
+      xml: "<CaseUpdateInfo />",
     });
     expect(fetchImpl).toHaveBeenNthCalledWith(
       2,
-      "https://tsdrapi.uspto.gov/ts/cd/casestatus/sn78787878/content",
+      "https://tsdrapi.uspto.gov/ts/cd/casestatus/sn78787878/info.xml",
       expect.objectContaining({
-        headers: expect.objectContaining({ Accept: "text/html" }),
+        headers: expect.objectContaining({ Accept: "application/xml" }),
       })
     );
   });
@@ -204,7 +206,7 @@ describe("USPTO TSDR trademark status client", () => {
       })
     ).resolves.toMatchObject({
       caseId: "sn78787878",
-      format: "xml",
+      format: "json",
       xml: "<CaseUpdateInfo />",
     });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
