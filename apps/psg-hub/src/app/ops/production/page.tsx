@@ -26,12 +26,23 @@ type BatchRow = {
 
 type DocRow = {
   id: string;
+  batch_id: string;
+  company_id: string;
+  repair_customer_id: string | null;
   status: string;
   piece_type: string;
   vendor: string | null;
   external_id: string | null;
+  proof_url: string | null;
+  rendered_url: string | null;
   expected_delivery_date: string | null;
   created_at: string;
+  production_batches: { name: string | null } | { name: string | null }[] | null;
+  companies: { name: string | null } | { name: string | null }[] | null;
+  repair_customers:
+    | { first_name: string | null; last_name: string | null }
+    | { first_name: string | null; last_name: string | null }[]
+    | null;
 };
 
 const ACTIVE = new Set(["draft", "queued", "printing"]);
@@ -64,14 +75,16 @@ export default async function ProductionPage() {
       .limit(100),
     service
       .from("production_documents")
-      .select("id, status, piece_type, vendor, external_id, expected_delivery_date, created_at")
+      .select(
+        "id, batch_id, company_id, repair_customer_id, status, piece_type, vendor, external_id, proof_url, rendered_url, expected_delivery_date, created_at, production_batches(name), companies(name), repair_customers(first_name, last_name)"
+      )
       .order("created_at", { ascending: false })
-      .limit(50),
+      .limit(100),
   ]);
   const batches = (batchData ?? []) as BatchRow[];
   const docs = (docData ?? []) as DocRow[];
   const queue = batches.filter((b) => ACTIVE.has(b.status));
-  const historical = batches.filter((b) => b.status === "historical");
+  const historicalCount = batches.filter((b) => b.status === "historical").length;
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
@@ -79,22 +92,8 @@ export default async function ProductionPage() {
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Production</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Mail production via Lob. {queue.length} active {queue.length === 1 ? "batch" : "batches"} ·{" "}
-          {historical.length} historical.
+          {historicalCount} historical.
         </p>
-        {hasOpsFn(access, "design_mail_artwork") ? (
-          <div className="mt-4 rounded-lg border border-border p-4">
-            <p className="text-sm text-muted-foreground">
-              Need a manual front/back build for postcards? Open the PSG freeform artwork
-              canvas.
-            </p>
-            <a
-              href="/ops/production/artwork"
-              className="mt-2 inline-flex rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              Open Mail Artwork Editor
-            </a>
-          </div>
-        ) : null}
       </div>
 
       <section className="space-y-3">
@@ -115,56 +114,41 @@ export default async function ProductionPage() {
 
       <section className="space-y-3">
         <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Historical
-        </h2>
-        <BatchTable rows={historical} emptyLabel="Nothing printed yet." />
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Recent documents
         </h2>
-        <ProductionDocumentsTable rows={docs} />
+        <ProductionDocumentsTable
+          rows={docs.map((d) => {
+            const company = one(d.companies);
+            const customer = one(d.repair_customers);
+            const batch = one(d.production_batches);
+            const customerName = [customer?.first_name, customer?.last_name]
+              .filter(Boolean)
+              .join(" ");
+            return {
+              id: d.id,
+              batch_id: d.batch_id,
+              batch_name: batch?.name ?? null,
+              company_id: d.company_id,
+              shop_name: company?.name ?? null,
+              repair_customer_id: d.repair_customer_id,
+              customer_name: customerName || null,
+              status: d.status,
+              piece_type: d.piece_type,
+              vendor: d.vendor,
+              external_id: d.external_id,
+              proof_url: d.proof_url,
+              rendered_url: d.rendered_url,
+              expected_delivery_date: d.expected_delivery_date,
+              created_at: d.created_at,
+            };
+          })}
+        />
       </section>
     </div>
   );
 }
 
-function BatchTable({ rows, emptyLabel }: { rows: BatchRow[]; emptyLabel: string }) {
-  return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/40 text-left font-heading text-xs uppercase tracking-wide text-muted-foreground">
-          <tr>
-            <th className="px-4 py-3">Batch</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Vendor</th>
-            <th className="px-4 py-3">Documents</th>
-            <th className="px-4 py-3">Printed</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                {emptyLabel}
-              </td>
-            </tr>
-          ) : (
-            rows.map((b) => (
-              <tr key={b.id} className="border-t border-border">
-                <td className="px-4 py-3 font-medium">{b.name}</td>
-                <td className="px-4 py-3">{b.status}</td>
-                <td className="px-4 py-3 text-muted-foreground">{b.vendor ?? "—"}</td>
-                <td className="px-4 py-3 text-muted-foreground">{b.document_count}</td>
-                <td className="px-4 py-3 text-muted-foreground">
-                  {b.printed_at ? new Date(b.printed_at).toLocaleDateString() : "—"}
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
+function one<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
 }

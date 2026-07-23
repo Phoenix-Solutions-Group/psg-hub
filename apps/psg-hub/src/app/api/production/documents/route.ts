@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   let query = service
     .from("production_documents")
     .select(
-      "id, batch_id, company_id, repair_customer_id, product_id, piece_type, status, vendor, external_id, proof_url, expected_delivery_date, created_at"
+      "id, batch_id, company_id, repair_customer_id, product_id, piece_type, status, vendor, external_id, proof_url, rendered_url, expected_delivery_date, created_at, production_batches(name), companies(name), repair_customers(first_name, last_name)"
     )
     .order(column, { ascending })
     .limit(200);
@@ -40,5 +40,54 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: "Failed to search documents" }, { status: 500 });
-  return NextResponse.json({ documents: data ?? [] });
+  return NextResponse.json({
+    documents: (data ?? []).map((d) => {
+      const row = d as {
+        id: string;
+        batch_id: string;
+        company_id: string;
+        repair_customer_id: string | null;
+        piece_type: string;
+        status: string;
+        vendor: string | null;
+        external_id: string | null;
+        proof_url: string | null;
+        rendered_url: string | null;
+        expected_delivery_date: string | null;
+        created_at: string;
+        production_batches?: { name: string | null } | { name: string | null }[] | null;
+        companies?: { name: string | null } | { name: string | null }[] | null;
+        repair_customers?:
+          | { first_name: string | null; last_name: string | null }
+          | { first_name: string | null; last_name: string | null }[]
+          | null;
+      };
+      const company = one(row.companies);
+      const customer = one(row.repair_customers);
+      const batch = one(row.production_batches);
+      const customerName = [customer?.first_name, customer?.last_name].filter(Boolean).join(" ");
+      return {
+        id: row.id,
+        batch_id: row.batch_id,
+        batch_name: batch?.name ?? null,
+        company_id: row.company_id,
+        shop_name: company?.name ?? null,
+        repair_customer_id: row.repair_customer_id,
+        customer_name: customerName || null,
+        status: row.status,
+        piece_type: row.piece_type,
+        vendor: row.vendor,
+        external_id: row.external_id,
+        proof_url: row.proof_url,
+        rendered_url: row.rendered_url,
+        expected_delivery_date: row.expected_delivery_date,
+        created_at: row.created_at,
+      };
+    }),
+  });
+}
+
+function one<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
 }
