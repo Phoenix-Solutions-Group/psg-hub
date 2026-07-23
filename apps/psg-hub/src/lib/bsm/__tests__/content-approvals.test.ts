@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ApprovalUploadInputError,
   BSM_CONTENT_APPROVALS_BUCKET,
+  archiveBsmContentApproval,
   approvalStoragePath,
   createBsmGeneratedPageApproval,
   createBsmContentApprovalUpload,
@@ -31,6 +32,44 @@ function createFakeClient() {
               return Promise.resolve({ error: null });
             },
           };
+        },
+      };
+    },
+  };
+  return { client, inserts, updates };
+}
+
+function createArchiveFakeClient(item: Record<string, unknown>) {
+  const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const updates: Array<{ table: string; payload: Record<string, unknown>; id: string }> = [];
+  const client = {
+    from(table: string) {
+      return {
+        select() {
+          return {
+            eq(column: string, id: string) {
+              expect(table).toBe("bsm_content_review_items");
+              expect(column).toBe("id");
+              expect(id).toBe(item.id);
+              return {
+                single: () => Promise.resolve({ data: item, error: null }),
+              };
+            },
+          };
+        },
+        update(payload: Record<string, unknown>) {
+          return {
+            eq(column: string, id: string) {
+              expect(table).toBe("bsm_content_review_items");
+              expect(column).toBe("id");
+              updates.push({ table, payload, id });
+              return Promise.resolve({ error: null });
+            },
+          };
+        },
+        insert(payload: Record<string, unknown>) {
+          inserts.push({ table, payload });
+          return Promise.resolve({ error: null });
         },
       };
     },
@@ -153,5 +192,41 @@ describe("BSM content approval upload helpers", () => {
     expect(version.source_metadata_jsonb).toMatchObject({
       generatedPagePath: "/generated/wallace/july-landing-page",
     });
+  });
+
+  it("archives review items and records the archive event", async () => {
+    const item = {
+      id: "55555555-5555-4555-8555-555555555555",
+      shop_id: SHOP_ID,
+      title: "Old proof",
+      status: "draft",
+    };
+    const { client, inserts, updates } = createArchiveFakeClient(item);
+
+    const result = await archiveBsmContentApproval(
+      { itemId: item.id, actorProfileId: ACTOR_ID },
+      { client: client as never },
+    );
+
+    expect(result).toEqual({
+      id: item.id,
+      shopId: SHOP_ID,
+      title: "Old proof",
+      status: "archived",
+    });
+    expect(updates).toHaveLength(1);
+    expect(updates[0].payload).toMatchObject({ status: "archived" });
+    expect(updates[0].payload.archived_at).toEqual(expect.any(String));
+    expect(inserts).toEqual([
+      {
+        table: "bsm_content_review_events",
+        payload: expect.objectContaining({
+          shop_id: SHOP_ID,
+          review_item_id: item.id,
+          event_type: "review_item_archived",
+          actor_profile_id: ACTOR_ID,
+        }),
+      },
+    ]);
   });
 });

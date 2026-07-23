@@ -5,6 +5,7 @@ import { recordAuditEvent } from "@/lib/audit/access-audit";
 import { requireOpsFn } from "@/lib/auth/ops-access";
 import {
   ApprovalUploadInputError,
+  archiveBsmContentApproval,
   createBsmGeneratedPageApproval,
   createBsmContentApprovalUpload,
   listBsmContentApprovals,
@@ -112,6 +113,42 @@ export async function POST(request: Request): Promise<Response> {
     }
     return NextResponse.json(
       { error: "Could not start the upload. The file was not saved; please try again." },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(request: Request): Promise<Response> {
+  const gate = await requireOpsFn("manage_bsm_content_approvals");
+  if (!gate.ok) return gate.response;
+
+  const url = new URL(request.url);
+  const itemId = url.searchParams.get("itemId");
+
+  try {
+    const result = await archiveBsmContentApproval({
+      itemId: itemId ?? "",
+      actorProfileId: gate.userId,
+    });
+
+    await recordAuditEvent({
+      actorProfileId: gate.userId,
+      action: "bsm_content_approval.archive",
+      targetShopId: result.shopId,
+      payload: {
+        reviewItemId: result.id,
+        title: result.title,
+        status: result.status,
+      },
+    });
+
+    return NextResponse.json({ item: result });
+  } catch (error) {
+    if (error instanceof ApprovalUploadInputError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return NextResponse.json(
+      { error: "Could not remove the review item from the active library. Please try again." },
       { status: 500 },
     );
   }

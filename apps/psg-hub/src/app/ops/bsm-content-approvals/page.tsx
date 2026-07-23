@@ -36,6 +36,22 @@ function mergeShopOptions(
   );
 }
 
+function companyBackedShopOptions(
+  companyRows: Array<{ shop_id: unknown; name: unknown }>
+): Array<{ id: string; name: string }> {
+  const shopsById = new Map<string, { id: string; name: string }>();
+
+  for (const row of companyRows) {
+    if (typeof row.shop_id !== "string") continue;
+    const name = typeof row.name === "string" && row.name.trim()
+      ? row.name.trim()
+      : row.shop_id;
+    shopsById.set(row.shop_id, { id: row.shop_id, name });
+  }
+
+  return [...shopsById.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export default async function BsmContentApprovalsPage() {
   const supabase = await createClient();
   const {
@@ -78,12 +94,14 @@ export default async function BsmContentApprovalsPage() {
 
   try {
     const { data, error } = await service
-      .from("shops")
-      .select("id, name")
+      .from("companies")
+      .select("shop_id, name")
+      .eq("status", "active")
+      .not("shop_id", "is", null)
       .order("name", { ascending: true })
       .limit(500);
     if (error) throw error;
-    shops = mergeShopOptions(data ?? [], contextShops);
+    shops = mergeShopOptions(companyBackedShopOptions(data ?? []), contextShops);
   } catch {
     loadError = true;
     shops = mergeShopOptions([], contextShops);

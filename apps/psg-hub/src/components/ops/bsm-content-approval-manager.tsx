@@ -1,6 +1,6 @@
 "use client";
 
-import { FileUp, Link, RefreshCw } from "lucide-react";
+import { FileUp, Link, RefreshCw, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -56,6 +56,8 @@ export function BsmContentApprovalManager({
   const [previewUrl, setPreviewUrl] = useState("");
   const [sourceContentItemId, setSourceContentItemId] = useState("");
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const [archiveItemId, setArchiveItemId] = useState<string | null>(null);
+  const [archivingItemId, setArchivingItemId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const validationError = useMemo(() => {
@@ -167,6 +169,30 @@ export function BsmContentApprovalManager({
     setSourceContentItemId("");
     if (fileRef.current) fileRef.current.value = "";
     setPhase({ kind: "success", message: "The item is in the customer review library." });
+  }
+
+  async function archiveReviewItem(item: BsmContentApprovalListItem) {
+    setArchivingItemId(item.id);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch(`/api/ops/bsm/content-approvals?itemId=${encodeURIComponent(item.id)}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "The review item could not be archived.");
+      }
+      setApprovals((current) => current.filter((entry) => entry.id !== item.id));
+      setArchiveItemId(null);
+      setPhase({ kind: "success", message: "The review item was removed from the active library." });
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The review item could not be archived.",
+      });
+    } finally {
+      setArchivingItemId(null);
+    }
   }
 
   return (
@@ -360,12 +386,13 @@ export function BsmContentApprovalManager({
                 <th className="px-4 py-3">File</th>
                 <th className="px-4 py-3">Feedback</th>
                 <th className="px-4 py-3">Updated</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {approvals.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                     No review files yet.
                   </td>
                 </tr>
@@ -396,6 +423,45 @@ export function BsmContentApprovalManager({
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {formatDate(item.updatedAt)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {archiveItemId === item.id ? (
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <span className="text-xs text-muted-foreground">Remove from library?</span>
+                          <button
+                            type="button"
+                            onClick={() => archiveReviewItem(item)}
+                            disabled={archivingItemId === item.id}
+                            className={cn(buttonVariants({ variant: "destructive", size: "sm" }), "gap-1")}
+                          >
+                            {archivingItemId === item.id ? (
+                              <RefreshCw className="size-3.5 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <Trash2 className="size-3.5" aria-hidden="true" />
+                            )}
+                            {archivingItemId === item.id ? "Removing" : "Remove"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setArchiveItemId(null)}
+                            disabled={archivingItemId === item.id}
+                            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setArchiveItemId(item.id)}
+                          disabled={Boolean(archivingItemId)}
+                          className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
+                          aria-label={`Remove ${item.title} from the active review library`}
+                          title="Remove from active library"
+                        >
+                          <Trash2 className="size-4" aria-hidden="true" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

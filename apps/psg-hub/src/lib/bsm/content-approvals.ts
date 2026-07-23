@@ -64,6 +64,13 @@ export type GeneratedPageApprovalResult = {
   item: BsmContentApprovalListItem;
 };
 
+export type ArchivedContentApprovalResult = {
+  id: string;
+  shopId: string;
+  title: string;
+  status: "archived";
+};
+
 export class ApprovalUploadInputError extends Error {
   constructor(message: string) {
     super(message);
@@ -388,6 +395,46 @@ export async function createBsmGeneratedPageApproval(
   };
 }
 
+export async function archiveBsmContentApproval(
+  input: { itemId: string; actorProfileId: string },
+  deps: { client?: SupabaseClient } = {},
+): Promise<ArchivedContentApprovalResult> {
+  const itemId = assertUuid("itemId", input.itemId);
+  const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
+  const client = deps.client ?? createServiceClient();
+  const archivedAt = new Date().toISOString();
+
+  const { data: item, error: readError } = await client
+    .from("bsm_content_review_items")
+    .select("id, shop_id, title, status")
+    .eq("id", itemId)
+    .single();
+  if (readError || !item) {
+    throw new ApprovalUploadInputError("Review item not found");
+  }
+
+  const row = item as Record<string, unknown>;
+  const shopId = assertUuid("shopId", row.shop_id);
+  const title = typeof row.title === "string" ? row.title : "Review item";
+
+  const { error: updateError } = await client
+    .from("bsm_content_review_items")
+    .update({ status: "archived", archived_at: archivedAt, updated_at: archivedAt })
+    .eq("id", itemId);
+  if (updateError) throw new Error(`Could not archive review item: ${updateError.message}`);
+
+  const { error: eventError } = await client.from("bsm_content_review_events").insert({
+    shop_id: shopId,
+    review_item_id: itemId,
+    event_type: "review_item_archived",
+    actor_profile_id: actorProfileId,
+    payload_jsonb: { title, archivedAt },
+  });
+  if (eventError) throw new Error(`Could not record archive event: ${eventError.message}`);
+
+  return { id: itemId, shopId, title, status: "archived" };
+}
+
 export async function listBsmContentApprovals(
   client: SupabaseClient,
   opts: { shopId?: string | null } = {},
@@ -395,6 +442,8 @@ export async function listBsmContentApprovals(
   let query = client
     .from("bsm_content_review_items")
     .select("id, shop_id, customer_profile_id, title, status, content_type, admin_context_note, current_version_id, updated_at, metadata_jsonb")
+    .is("archived_at", null)
+    .neq("status", "archived")
     .order("updated_at", { ascending: false })
     .limit(100);
   if (opts.shopId) query = query.eq("shop_id", opts.shopId);
