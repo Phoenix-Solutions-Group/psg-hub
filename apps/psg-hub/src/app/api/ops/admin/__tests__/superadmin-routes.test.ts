@@ -635,6 +635,39 @@ describe("admin user routes", () => {
 
     expect(auditEvents.map((event) => event.action)).toEqual(["shop.assign", "shop.unassign"]);
   });
+
+  it("adds another shop to the same login without removing existing shop access", async () => {
+    queue("profiles", "select", { data: { id: PROFILE_ID, display_name: "Ada" }, error: null });
+    queue("shops", "select", { data: { id: SHOP_ID, name: "Wallace", slug: "wallace" }, error: null });
+    queue("shop_users", "select", { data: null, error: null });
+    queue("shop_users", "upsert", {
+      data: { user_id: PROFILE_ID, shop_id: SHOP_ID, role: "manager" },
+      error: null,
+    });
+
+    const res = await userShopsRoute.POST(
+      req("POST", `/api/ops/admin/users/${PROFILE_ID}/shops`, {
+        shopId: SHOP_ID,
+        role: "manager",
+      }),
+      params({ profileId: PROFILE_ID })
+    );
+
+    expect(res.status).toBe(201);
+    expect(operations).toEqual([
+      {
+        table: "shop_users",
+        op: "upsert",
+        payload: { user_id: PROFILE_ID, shop_id: SHOP_ID, role: "manager" },
+      },
+    ]);
+    expect(auditEvents[0]).toMatchObject({
+      action: "shop.assign",
+      targetProfileId: PROFILE_ID,
+      targetShopId: SHOP_ID,
+      payload: expect.objectContaining({ beforeRole: null, afterRole: "manager" }),
+    });
+  });
 });
 
 describe("admin shop tier route", () => {

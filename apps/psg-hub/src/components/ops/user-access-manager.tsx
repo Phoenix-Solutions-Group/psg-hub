@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ export type ManagedShop = {
   name: string;
   slug: string | null;
   tier: AdminTier | null;
+  tierLabel: string;
   subscriptionStatus: string | null;
 };
 
@@ -65,7 +67,8 @@ export function UserAccessManager({
           <div>
             <h2 className="font-heading text-lg font-semibold">Users and shop access</h2>
             <p className="text-sm text-muted-foreground">
-              Find a user, set their role, assign shops, and adjust a shop tier.
+              Search by name or email. Users with an invite but no profile are still listed when
+              Supabase Auth returns them.
             </p>
           </div>
           <Input
@@ -82,7 +85,8 @@ export function UserAccessManager({
           ))}
           {filtered.length === 0 && (
             <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
-              No users match that search.
+              No users match that search. If an invited person is missing, search their email,
+              then check Supabase Auth if the invite was sent from outside this page.
             </p>
           )}
         </div>
@@ -142,7 +146,7 @@ function InviteUserForm({ shops }: { shops: ManagedShop[] }) {
         <div>
           <h2 className="font-heading text-lg font-semibold">Invite user</h2>
           <p className="text-sm text-muted-foreground">
-            Send an invite and set the starting role and optional shop access.
+            Send the login email, choose the starting role, and optionally attach the first shop.
           </p>
         </div>
         <Button type="submit" size="sm" disabled={busy || !email.trim()}>
@@ -199,10 +203,13 @@ function InviteUserForm({ shops }: { shops: ManagedShop[] }) {
             <option value="">No shop assignment</option>
             {shops.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name}
+                {s.name} - {s.tierLabel}
               </option>
             ))}
           </select>
+          <Link href="/ops/companies" className="text-xs text-muted-foreground hover:text-ember">
+            Need a new shop? Create it in Companies first.
+          </Link>
         </div>
       </div>
 
@@ -310,23 +317,25 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
 
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor={`shop-${user.profileId}`}>
-            Assign shop
+            Add shop access
           </label>
           <select
             id={`shop-${user.profileId}`}
             value={shopId}
             onChange={(e) => setShopId(e.target.value)}
+            disabled={shops.length === 0}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
             {shops.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name}
+                {s.name} - {s.tierLabel}
               </option>
             ))}
           </select>
           <select
             value={shopRole}
             onChange={(e) => setShopRole(e.target.value as ShopMemberRole)}
+            disabled={shops.length === 0}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
             {SHOP_MEMBER_ROLES.map((r) => (
@@ -347,13 +356,20 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
               )
             }
           >
-            Assign shop
+            Add shop access
           </Button>
+          <p className="text-xs text-muted-foreground">
+            One login can have access to multiple shops. Re-adding a listed shop updates that
+            shop role.
+          </p>
+          <Link href="/ops/companies" className="text-xs text-muted-foreground hover:text-ember">
+            Create or edit shops in Companies.
+          </Link>
         </div>
 
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor={`tier-${user.profileId}`}>
-            Shop tier
+            Shop to update
           </label>
           <select
             id={`tier-${user.profileId}`}
@@ -371,7 +387,11 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
               </option>
             ))}
           </select>
+          <label className="text-sm font-medium" htmlFor={`tier-value-${user.profileId}`}>
+            Tier for selected shop
+          </label>
           <select
+            id={`tier-value-${user.profileId}`}
             value={tier}
             onChange={(e) => setTier(e.target.value as AdminTier)}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -396,6 +416,9 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
           >
             Save tier
           </Button>
+          <p className="text-xs text-muted-foreground">
+            Current tier: {tierShop?.tierLabel ?? "Choose a shop"}
+          </p>
           {tierShop?.subscriptionStatus && (
             <p className="text-xs text-muted-foreground">Status: {tierShop.subscriptionStatus}</p>
           )}
