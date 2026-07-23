@@ -146,6 +146,22 @@ test("production happy path: generate -> print (Lob test) -> historical -> repri
   const customerId = (await customerRes.json()).customer.id as string;
   expect(customerId).toMatch(UUID_RE);
 
+  // The warranty template maps to the one-year letter. Current production
+  // generation evaluates direct-mail eligibility before it creates documents,
+  // so the fixture needs a completed repair order inside that one-year window.
+  const completedAt = new Date(Date.now() - 370 * 86_400_000).toISOString().slice(0, 10);
+  const roRes = await page.request.post("/api/repair-orders", {
+    data: {
+      company_id: companyId,
+      repair_customer_id: customerId,
+      ro_number: `E2E-WARRANTY-${Date.now()}`,
+      status: "closed",
+      dates_json: { completed_at: completedAt },
+    },
+  });
+  const roBody = await roRes.json().catch(() => null);
+  expect(roRes.status(), `create repair order body=${JSON.stringify(roBody)}`).toBe(201);
+
   // --- Step 4: generate the batch (1 letter document for the customer) ---------
   const genRes = await page.request.post("/api/production/generate", {
     data: {
