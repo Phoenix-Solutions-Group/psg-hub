@@ -261,8 +261,8 @@ export function ProductionDocumentsTable({ rows: initialRows }: { rows: ActionDo
         >
           <div className="grid gap-2 sm:grid-cols-3">
             <Input
-              aria-label="Search visible production history"
-              placeholder="Search shop, customer, batch, proof"
+              aria-label="Search production history"
+              placeholder="Search shop, customer, batch, print ID, status"
               value={filters.q}
               onChange={(e) => setField("q", e.target.value)}
             />
@@ -272,22 +272,22 @@ export function ProductionDocumentsTable({ rows: initialRows }: { rows: ActionDo
               onChange={(e) => setField("external_id", e.target.value)}
             />
             <Input
-              placeholder="Company ID"
+              placeholder="Company ID (optional)"
               value={filters.company_id}
               onChange={(e) => setField("company_id", e.target.value)}
             />
             <Input
-              placeholder="Repair customer ID"
+              placeholder="Repair customer ID (optional)"
               value={filters.repair_customer_id}
               onChange={(e) => setField("repair_customer_id", e.target.value)}
             />
             <Input
-              placeholder="Product ID"
+              placeholder="Product ID (optional)"
               value={filters.product_id}
               onChange={(e) => setField("product_id", e.target.value)}
             />
             <Input
-              placeholder="Batch ID"
+              placeholder="Batch ID (optional)"
               value={filters.batch_id}
               onChange={(e) => setField("batch_id", e.target.value)}
             />
