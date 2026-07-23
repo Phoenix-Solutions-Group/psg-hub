@@ -778,12 +778,12 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
 
   // 2. Real UI login per role -> persist @supabase/ssr cookies as storageState.
   for (const fx of [
-    { email: OWNER.email, statePath: OWNER.statePath },
-    { email: MULTI.email, statePath: MULTI.statePath },
-    { email: MEGA.email, statePath: MEGA.statePath },
-    // PSG-40 ops staff. Staff bypass the customer-id gate, so login lands on
-    // /dashboard with the same shell (Sign out) as customers.
-    { email: OPS_STAFF.email, statePath: OPS_STAFF.statePath },
+    { email: OWNER.email, statePath: OWNER.statePath, landingPath: "/dashboard" },
+    { email: MULTI.email, statePath: MULTI.statePath, landingPath: "/dashboard" },
+    { email: MEGA.email, statePath: MEGA.statePath, landingPath: "/dashboard" },
+    // PSG-40 ops staff. Staff bypass the customer-id gate and now lands on /ops,
+    // which keeps Superadmin demo walkthroughs out of the customer shell.
+    { email: OPS_STAFF.email, statePath: OPS_STAFF.statePath, landingPath: "/ops" },
   ]) {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
@@ -791,8 +791,12 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
     await page.getByLabel("Email").fill(fx.email);
     await page.getByLabel("Password").fill(PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL("**/dashboard", { timeout: 20_000 });
-    await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+    await page.waitForURL(`**${fx.landingPath}`, { timeout: 20_000 });
+    if (fx.landingPath === "/ops") {
+      await expect(page.getByText("PSG Internal Operations")).toBeVisible();
+    } else {
+      await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+    }
     await ctx.storageState({ path: fx.statePath });
     await ctx.close();
   }

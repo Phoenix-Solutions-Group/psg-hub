@@ -16,7 +16,7 @@ test.describe("clean BSM demo admin walkthrough", () => {
     await expect(page.getByRole("heading", { name: "Internal Operations" })).toBeVisible();
     await expect(page.getByRole("link", { name: /Companies & ROs/ })).toBeVisible();
     await expect(page.getByRole("link", { name: "Production", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: /BSM Content Approvals/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: "BSM Content Approvals", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Superadmin/ })).toBeVisible();
     await shoot(page, "focused-bsm-ops-home");
 
@@ -28,13 +28,13 @@ test.describe("clean BSM demo admin walkthrough", () => {
     await page.goto("/ops/production", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Production", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Print queue" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Historical" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Recent documents" })).toBeVisible();
+    await expect(page.getByLabel("Search production history")).toBeAttached();
     await shoot(page, "focused-bsm-ops-production");
 
     await page.goto("/ops/bsm-content-approvals", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "BSM Content Approvals" })).toBeVisible();
-    await expect(page.getByLabel("Shop")).toBeVisible();
+    await expect(page.getByLabel("Shop", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Review title")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Review library" })).toBeVisible();
     await shoot(page, "focused-bsm-ops-bsm-content-approvals");
@@ -45,13 +45,17 @@ test.describe("clean BSM demo admin walkthrough", () => {
     await expect(page.getByRole("button", { name: "Send invite" })).toBeVisible();
     await expect(page.getByText("Users and shop access")).toBeVisible();
     await expect(page.getByPlaceholder("Search users")).toBeVisible();
+    await expect(page.getByRole("link", { name: /Create it in Companies first/ })).toBeVisible();
     const demoAdminCard = page.locator("article").filter({
       hasText: BSM_DEMO_ADMIN.displayName,
     });
     await expect(demoAdminCard.getByText(BSM_DEMO_ADMIN.email)).toBeVisible();
     await expect(page.getByRole("button", { name: "Save role" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Assign shop" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add shop access" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Save tier" }).first()).toBeVisible();
+    await expect(demoAdminCard.getByText("Current shop access")).toBeVisible();
+    await expect(page.getByRole("option", { name: /Growth/ }).first()).toBeAttached();
+    await expect(page.getByRole("option", { name: /Performance/ }).first()).toBeAttached();
     await shoot(page, "focused-bsm-ops-admin-users");
 
     await page.goto("/ops/admin/modules", { waitUntil: "domcontentloaded" });
