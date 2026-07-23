@@ -56,8 +56,11 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get("code");
   const token = requestUrl.searchParams.get("token");
   const tokenHash = requestUrl.searchParams.get("token_hash");
-  const next = resolveNextPath(requestUrl.searchParams.get("next"), "/dashboard");
   const otpType = normalizeOtpType(requestUrl.searchParams.get("type"));
+  const next = resolveNextPath(
+    requestUrl.searchParams.get("next"),
+    otpType === "recovery" ? "/reset-password" : "/dashboard"
+  );
 
   const response = NextResponse.redirect(
     new URL(next, requestUrl.origin),
@@ -77,7 +80,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to process callback code." }, { status: 400 });
     }
 
-    return redirectTo(next);
+    return redirectTo(otpType === "recovery" ? "/reset-password" : next);
   }
 
   if (token && tokenHash) {

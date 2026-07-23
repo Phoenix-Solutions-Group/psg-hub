@@ -1,0 +1,187 @@
+# Auth happy-path E2E (PSG-791) — the live/E2E gate that ships the B1 fix (PSG-766).
+#
+# Runs e2e/auth-happy-paths.spec.ts against a throwaway LOCAL Supabase stack +
+# its bundled test inbox (Inbucket) on a Docker-capable GitHub-hosted runner.
+# It submits the sign-up / login / reset forms and follows the real email links
+# in both email-confirmation modes.
+#
+# No Lob key and no heavy fixture seed: this is isolated from the production
+# happy-path suite (e2e.yml) on purpose. The auth spec seeds the one account it
+# needs via the service role.
+#
+# Agents have no raw-log access, so the Playwright `github` reporter + explicit
+# ::error:: annotations surface failures through the public check-runs API.
+
+name: E2E Auth
+
+on:
+  push:
+    branches: [main, feat/psg-766]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-auth-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auth-e2e:
+    name: auth happy-path E2E (confirm=${{ matrix.confirm }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        confirm: ["off", "on"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser (chromium)
+        run: pnpm --filter psg-hub exec playwright install --with-deps chromium
+
+      # Toggle the email-confirmation mode for this matrix leg and allow-list the
+      # E2E app origin (port 3100) so GoTrue accepts our /auth/callback redirect.
+      # The prior sed-based edit replaced only the first line of a multiline TOML
+      # array, leaving stale array entries behind and breaking `supabase start`.
+      - name: Configure local Supabase for this leg
+        working-directory: apps/psg-hub
+        env:
+          CONFIRM: ${{ matrix.confirm }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+          import tomllib
+
+          path = Path("supabase/config.toml")
+          text = path.read_text()
+          confirm = "true" if "${{ matrix.confirm }}" == "on" else "false"
+          redirects = [
+              "http://localhost:3100",
+              "http://localhost:3100/**",
+              "http://localhost:3100/auth/callback",
+              "http://localhost:3100/auth/callback?next=/dashboard",
+              "http://localhost:3100/auth/callback?type=recovery&next=/reset-password",
+              "http://127.0.0.1:3100",
+              "http://127.0.0.1:3100/**",
+              "http://127.0.0.1:3100/auth/callback",
+              "http://127.0.0.1:3100/auth/callback?next=/dashboard",
+              "http://127.0.0.1:3100/auth/callback?type=recovery&next=/reset-password",
+          ]
+
+          def replace_scalar(source: str, key: str, value: str) -> str:
+              pattern = re.compile(rf"(?m)^{re.escape(key)}\s*=.*$")
+              updated, count = pattern.subn(f"{key} = {value}", source, count=1)
+              if count != 1:
+                  raise SystemExit(f"Could not replace {key}")
+              return updated
+
+          def replace_array(source: str, key: str, values: list[str]) -> str:
+              rendered = key + " = [\n" + "".join(f'  "{value}",\n' for value in values) + "]"
+              pattern = re.compile(rf"(?ms)^{re.escape(key)}\s*=\s*\[.*?^\]")
+              updated, count = pattern.subn(rendered, source, count=1)
+              if count != 1:
+                  raise SystemExit(f"Could not replace {key}")
+              return updated
+
+          text = replace_scalar(text, "site_url", '"http://localhost:3100"')
+          text = replace_array(text, "additional_redirect_urls", redirects)
+
+          auth_email = re.search(r"(?ms)^\\[auth\\.email\\].*?(?=^\\[|\\Z)", text)
+          if not auth_email:
+              raise SystemExit("Could not find [auth.email] section")
+          section = replace_scalar(auth_email.group(0), "enable_confirmations", confirm)
+          text = text[: auth_email.start()] + section + text[auth_email.end() :]
+
+          tomllib.loads(text)
+          path.write_text(text)
+          PY
+          echo "--- effective auth config ---"
+          python3 - <<'PY'
+          import tomllib
+          from pathlib import Path
+          data = tomllib.loads(Path("supabase/config.toml").read_text())
+          print("site_url =", data["auth"]["site_url"])
+          print("additional_redirect_urls =", data["auth"]["additional_redirect_urls"])
+          print("auth.email.enable_confirmations =", data["auth"]["email"]["enable_confirmations"])
+          PY
+
+      # Spins up the local Supabase stack (Docker) + Inbucket and applies
+      # supabase/migrations/*. Same error-annotation handling as e2e.yml.
+      - name: Start local Supabase
+        working-directory: apps/psg-hub
+        run: |
+          pnpm exec supabase start 2>&1 | tee /tmp/supabase-start.log
+          SUPABASE_EXIT=${PIPESTATUS[0]}
+          if [ "$SUPABASE_EXIT" -ne 0 ]; then
+            echo "::error::supabase start failed (exit $SUPABASE_EXIT) — error lines:"
+            grep -iE "error|fatal|failed|panic" /tmp/supabase-start.log | tail -30 | while IFS= read -r line; do
+              echo "::error::  $line"
+            done
+            tail -20 /tmp/supabase-start.log | while IFS= read -r line; do echo "::error::  $line"; done
+            exit 1
+          fi
+
+      - name: Write .env.test.local (local Supabase)
+        working-directory: apps/psg-hub
+        run: |
+          set +e
+          pnpm exec supabase status -o env > supabase-status.env 2>&1
+          STATUS_EXIT=$?
+          set -e
+          if [ $STATUS_EXIT -ne 0 ]; then
+            echo "::error::supabase status failed (exit $STATUS_EXIT):"
+            cat supabase-status.env | while IFS= read -r line; do echo "::error::  $line"; done
+            exit 1
+          fi
+          get() { grep -E "^$1=" supabase-status.env | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }
+          API_URL="$(get API_URL)"
+          ANON_KEY="$(get ANON_KEY)"
+          SERVICE_ROLE_KEY="$(get SERVICE_ROLE_KEY)"
+          if [ -z "$API_URL" ] || [ -z "$ANON_KEY" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
+            echo "::error::Could not parse local Supabase status env. Keys: $(cut -d= -f1 supabase-status.env | tr '\n' ' ')"
+            exit 1
+          fi
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+          } > .env.test.local
+          rm -f supabase-status.env
+          echo "----- .env.test.local (keys only) -----"
+          cut -d= -f1 .env.test.local
+
+      - name: Run auth happy-path E2E
+        env:
+          E2E_CONFIRM_MODE: ${{ matrix.confirm }}
+          INBUCKET_URL: http://127.0.0.1:54354
+        run: pnpm --filter psg-hub exec playwright test -c playwright.auth.config.ts
+
+      - name: Upload Playwright artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-auth-artifacts-${{ matrix.confirm }}
+          path: |
+            apps/psg-hub/test-results/
+            apps/psg-hub/playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Stop local Supabase
+        if: ${{ always() }}
+        working-directory: apps/psg-hub
+        run: pnpm exec supabase stop --no-backup || true

@@ -37,6 +37,13 @@ describe("GET /auth/callback", () => {
     expect(mockVerifyOtp).not.toHaveBeenCalled();
   });
 
+  it("routes recovery code links to reset-password when type=recovery", async () => {
+    const res = await GET(req("http://localhost/auth/callback?code=abc&type=recovery"));
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("http://localhost/reset-password");
+    expect(mockExchangeCode).toHaveBeenCalledWith("abc");
+  });
+
   it("falls back to OTP verification for recovery links", async () => {
     const res = await GET(
       req("http://localhost/auth/callback?token=tok&token_hash=hash&type=recovery")
