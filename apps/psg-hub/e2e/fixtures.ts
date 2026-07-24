@@ -11,11 +11,18 @@ export const PASSWORD = "e2e-Test-Password-123";
 export const AUTH_DIR = path.join(__dirname, ".auth");
 export const SHOTS_DIR = path.join(__dirname, "screenshots");
 
+// The clean BSM demo walkthrough uses exactly two visible actors:
+// BSM_DEMO_ADMIN sets up the account from /ops, then BSM_DEMO_USER signs in
+// and exercises the customer portal.
+
 // 1-shop owner — drives auth.spec + customer.spec.
 export const OWNER = {
   email: "owner@e2e.test",
   statePath: path.join(AUTH_DIR, "owner.json"),
-  shopName: "E2E Owner Auto Body",
+  shopName: "BSM Demo Collision Center",
+  contentItemId: "11111111-cccc-4ccc-8ccc-111111111111",
+  reviewItemId: "11111111-dddd-4ddd-8ddd-111111111111",
+  bsmReviewItemId: "11111111-aaaa-4aaa-8aaa-111111111111",
 };
 
 // 2-shop user (owner of A, viewer of B) — drives shop-switch.spec.
@@ -24,6 +31,7 @@ export const MULTI = {
   statePath: path.join(AUTH_DIR, "multi.json"),
   shopA: "E2E Multi Shop A",
   shopB: "E2E Multi Shop B",
+  bsmReviewItemId: "22222222-bbbb-4bbb-8bbb-222222222222",
 };
 
 // 9-shop owner (big MSO) — drives the 09-02 switcher-typeahead branch (>=8).
@@ -44,6 +52,22 @@ export const OPS_STAFF = {
   // Unique-per-run company name so the happy path stays idempotent without a
   // dedicated cleanup pass over the (test-created) companies table.
   companyName: "E2E Ops Happy Path Co",
+};
+
+export const BSM_DEMO_ADMIN = {
+  email: OPS_STAFF.email,
+  statePath: OPS_STAFF.statePath,
+  displayName: "BSM Demo Admin",
+};
+
+export const BSM_DEMO_USER = {
+  email: OWNER.email,
+  statePath: OWNER.statePath,
+  displayName: "BSM Demo User",
+  shopName: OWNER.shopName,
+  contentItemId: OWNER.contentItemId,
+  reviewItemId: OWNER.reviewItemId,
+  bsmReviewItemId: OWNER.bsmReviewItemId,
 };
 
 // PSG-52: v1.3 Production happy path (batch → print → reprint → historical).
