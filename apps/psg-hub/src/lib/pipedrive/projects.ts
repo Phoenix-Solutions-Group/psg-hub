@@ -128,6 +128,11 @@ export interface PipedriveUser {
   /** Whether the user is active (deactivated users should not be assigned work). */
   active: boolean;
 }
+export interface PipedriveDealPerson {
+  id: number;
+  name: string | null;
+  email: string | null;
+}
 export interface CreateProjectInput {
   title: string;
   board_id: number;
@@ -333,6 +338,7 @@ export interface DealActivitySummary {
   subject: string;
   type: string | null;
   dueDate: string | null;
+  dueTime?: string | null;
   done: boolean;
 }
 
@@ -362,6 +368,8 @@ export interface PipedriveProjectsClient {
    * interface so existing test fakes stay valid; the concrete client always implements it.
    */
   listDealProducts?(dealId: number): Promise<DealProduct[]>;
+  /** Deal-linked people with primary email addresses, used for proposal draft recipients. */
+  listDealPersons?(dealId: number): Promise<PipedriveDealPerson[]>;
   /** Read connected account state before calendar/mail automations write anything. */
   listUserConnections?(): Promise<PipedriveUserConnections>;
   /** Lightweight mailbox probe, used to confirm Nick's Pipedrive mailbox drafts folder is reachable. */
@@ -576,6 +584,28 @@ export function createProjectsClient(
         };
       });
     },
+    async listDealPersons(dealId) {
+      const data = await call<
+        Array<{
+          id?: number | null;
+          name?: string | null;
+          email?: string | Array<{ value?: string | null; primary?: boolean | null }> | null;
+        }>
+      >("GET", "v2", "persons", { deal_id: String(dealId), limit: "500" });
+      return (data ?? []).map((person) => {
+        const email =
+          typeof person.email === "string"
+            ? person.email
+            : Array.isArray(person.email)
+              ? ((person.email.find((e) => e.primary)?.value ?? person.email[0]?.value) ?? null)
+              : null;
+        return {
+          id: Number(person.id),
+          name: typeof person.name === "string" && person.name.trim() !== "" ? person.name : null,
+          email: typeof email === "string" && email.trim() !== "" ? email.trim() : null,
+        };
+      });
+    },
     async listUserConnections() {
       const data = await call<PipedriveUserConnections>("GET", "v1", "userConnections");
       return data ?? {};
@@ -596,6 +626,7 @@ export function createProjectsClient(
           subject?: string | null;
           type?: string | null;
           due_date?: string | null;
+          due_time?: string | null;
           done?: boolean | number | null;
         }>
       >("GET", "v2", "activities", { deal_id: String(dealId), limit: "100" });
@@ -604,6 +635,7 @@ export function createProjectsClient(
         subject: String(activity.subject ?? ""),
         type: typeof activity.type === "string" ? activity.type : null,
         dueDate: typeof activity.due_date === "string" ? activity.due_date : null,
+        dueTime: typeof activity.due_time === "string" ? activity.due_time : null,
         done: activity.done === true || activity.done === 1,
       }));
     },
