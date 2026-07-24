@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { recordAuditEvent } from "@/lib/audit/access-audit";
 import { requireSuperadmin } from "@/lib/auth/ops-access";
@@ -67,6 +68,38 @@ async function findAuthUserByEmail(
   }
 }
 
+function isReservedTestEmail(email: string) {
+  const domain = email.split("@").at(-1)?.toLowerCase();
+  return (
+    domain === "example.com" ||
+    domain === "example.org" ||
+    domain === "example.net" ||
+    domain?.endsWith(".test") === true ||
+    domain?.endsWith(".invalid") === true
+  );
+}
+
+async function createDemoInviteUser(
+  service: ReturnType<typeof createServiceClient>,
+  email: string
+) {
+  const existingAuthUser = await findAuthUserByEmail(service, email);
+  if (existingAuthUser.error) return { error: existingAuthUser.error };
+  if (existingAuthUser.user) {
+    return { user: existingAuthUser.user, delivery: "supabase_invite_recorded" };
+  }
+
+  const created = await service.auth.admin.createUser({
+    email,
+    password: `${randomUUID()}${randomUUID()}`,
+    email_confirm: false,
+    user_metadata: { display_name: email },
+  });
+  if (created.error) return { error: created.error };
+
+  return { user: created.data.user, delivery: "demo_reserved_email_user_created" };
+}
+
 export async function POST(request: NextRequest) {
   const gate = await requireSuperadmin();
   if (!gate.ok) return gate.response;
@@ -116,12 +149,27 @@ export async function POST(request: NextRequest) {
     ...(redirectTo ? { redirectTo } : {}),
   });
 
+  let invitedUser = invite.data.user;
+  let delivery = "supabase_invite_email";
   if (invite.error) {
     console.error("[api/ops/admin/users invite POST] invite failed:", invite.error.message);
-    return NextResponse.json({ error: "Failed to send user invite" }, { status: 500 });
+    if (!isReservedTestEmail(email)) {
+      return NextResponse.json({ error: "Failed to send user invite" }, { status: 500 });
+    }
+
+    const demoInvite = await createDemoInviteUser(service, email);
+    if (demoInvite.error) {
+      console.error(
+        "[api/ops/admin/users invite POST] demo invite fallback failed:",
+        demoInvite.error.message
+      );
+      return NextResponse.json({ error: "Failed to send user invite" }, { status: 500 });
+    }
+    invitedUser = demoInvite.user;
+    delivery = demoInvite.delivery;
   }
 
-  const invitedUserId = invite.data.user?.id;
+  const invitedUserId = invitedUser?.id;
   if (!invitedUserId) {
     return NextResponse.json({ error: "Invite did not return a user profile" }, { status: 500 });
   }
@@ -168,7 +216,7 @@ export async function POST(request: NextRequest) {
       role,
       shopRole,
       shopName: shop ? shop.name ?? shop.slug ?? shop.id : null,
-      delivery: "supabase_invite_email",
+      delivery,
     },
   });
 

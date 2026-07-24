@@ -15,6 +15,7 @@ const operations: Operation[] = [];
 const responses = new Map<string, DbResponse[]>();
 const listUsersMock = vi.fn();
 const inviteUserByEmailMock = vi.fn();
+const createUserMock = vi.fn();
 
 function key(table: string, op: string) {
   return `${table}:${op}`;
@@ -101,6 +102,7 @@ vi.mock("@/lib/supabase/service", () => ({
       admin: {
         listUsers: listUsersMock,
         inviteUserByEmail: inviteUserByEmailMock,
+        createUser: createUserMock,
       },
     },
   }),
@@ -152,8 +154,13 @@ beforeEach(() => {
   fromMock.mockClear();
   listUsersMock.mockReset();
   inviteUserByEmailMock.mockReset();
+  createUserMock.mockReset();
   listUsersMock.mockResolvedValue({ data: { users: [] }, error: null });
   inviteUserByEmailMock.mockResolvedValue({
+    data: { user: { id: PROFILE_ID, email: "new@example.com" } },
+    error: null,
+  });
+  createUserMock.mockResolvedValue({
     data: { user: { id: PROFILE_ID, email: "new@example.com" } },
     error: null,
   });
@@ -492,6 +499,83 @@ describe("admin user routes", () => {
       data: { display_name: "stable@example.com" },
       redirectTo: "https://hub.psgweb.me/login",
     });
+  });
+
+  it("creates a demo user for reserved test emails when Supabase cannot send the invite email", async () => {
+    inviteUserByEmailMock.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: "Email address is not deliverable" },
+    });
+    listUsersMock
+      .mockResolvedValueOnce({ data: { users: [] }, error: null })
+      .mockResolvedValueOnce({ data: { users: [] }, error: null });
+    queue("shops", "select", { data: { id: SHOP_ID, name: "Wallace", slug: "wallace" }, error: null });
+    queue("profiles", "upsert", { data: null, error: null });
+    queue("app_user_roles", "upsert", { data: null, error: null });
+    queue("shop_users", "upsert", { data: null, error: null });
+
+    const res = await userInviteRoute.POST(
+      req("POST", "/api/ops/admin/users/invite", {
+        email: "qa@example.com",
+        role: "customer",
+        shopId: SHOP_ID,
+        shopRole: "viewer",
+      })
+    );
+
+    expect(res.status).toBe(201);
+    expect(createUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "qa@example.com",
+        email_confirm: false,
+        user_metadata: { display_name: "qa@example.com" },
+      })
+    );
+    expect(operations).toEqual([
+      {
+        table: "profiles",
+        op: "upsert",
+        payload: { id: PROFILE_ID, display_name: "qa@example.com" },
+      },
+      {
+        table: "app_user_roles",
+        op: "upsert",
+        payload: { profile_id: PROFILE_ID, role: "customer" },
+      },
+      {
+        table: "shop_users",
+        op: "upsert",
+        payload: { user_id: PROFILE_ID, shop_id: SHOP_ID, role: "viewer" },
+      },
+    ]);
+    expect(auditEvents).toEqual([
+      expect.objectContaining({
+        action: "user.invite",
+        payload: expect.objectContaining({
+          email: "qa@example.com",
+          delivery: "demo_reserved_email_user_created",
+        }),
+      }),
+    ]);
+  });
+
+  it("does not create a demo user for real email domains when Supabase cannot send the invite email", async () => {
+    inviteUserByEmailMock.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: "SMTP provider rejected the message" },
+    });
+
+    const res = await userInviteRoute.POST(
+      req("POST", "/api/ops/admin/users/invite", {
+        email: "person@real-shop.testmail",
+        role: "customer",
+      })
+    );
+
+    expect(res.status).toBe(500);
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(operations).toHaveLength(0);
+    expect(auditEvents).toHaveLength(0);
   });
 
   it("rejects invalid invite payloads before sending an invite", async () => {
