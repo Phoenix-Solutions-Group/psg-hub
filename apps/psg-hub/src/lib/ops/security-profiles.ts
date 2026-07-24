@@ -20,6 +20,7 @@ export const OPS_FUNCTION_LABELS: Record<OpsFunction, string> = {
   manage_production: "Production",
   ads_mutations: "Ads Mutation Studio",
   view_sales_pipeline: "Sales Pipeline (view)",
+  manage_bsm_content_approvals: "BSM Content Approvals",
   design_mail_artwork: "Mail Artwork Editor",
 };
 
