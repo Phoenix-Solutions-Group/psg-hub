@@ -6,6 +6,7 @@ import {
   MAX_APPROVAL_FILE_BYTES,
   SUPPORTED_APPROVAL_FILE_TYPES,
   type BsmContentApprovalListItem,
+  normalizeApprovalMimeType,
 } from "@/lib/bsm/content-approvals-shared";
 
 export {
@@ -13,6 +14,7 @@ export {
   MAX_APPROVAL_FILE_BYTES,
   SUPPORTED_APPROVAL_FILE_TYPES,
   type BsmContentApprovalListItem,
+  normalizeApprovalMimeType,
 } from "@/lib/bsm/content-approvals-shared";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -151,10 +153,11 @@ export function normalizeApprovalFileName(fileName: unknown): string {
   return segment;
 }
 
-export function validateApprovalFile(contentType: unknown, byteSize: unknown) {
-  if (typeof contentType !== "string" || !(contentType in SUPPORTED_APPROVAL_FILE_TYPES)) {
+export function validateApprovalFile(contentType: unknown, byteSize: unknown, fileName?: unknown) {
+  const normalizedContentType = normalizeApprovalMimeType(fileName, contentType);
+  if (!normalizedContentType) {
     throw new ApprovalUploadInputError(
-      "This file type is not supported. Upload a PDF, image, Word document, or text file.",
+      "This file type is not supported. Upload a PDF, MD, HTML, image, Word document, or text file.",
     );
   }
   if (typeof byteSize !== "number" || !Number.isFinite(byteSize) || byteSize <= 0) {
@@ -163,7 +166,10 @@ export function validateApprovalFile(contentType: unknown, byteSize: unknown) {
   if (byteSize > MAX_APPROVAL_FILE_BYTES) {
     throw new ApprovalUploadInputError("The file is too large. Upload a file under 25 MB.");
   }
-  return SUPPORTED_APPROVAL_FILE_TYPES[contentType as keyof typeof SUPPORTED_APPROVAL_FILE_TYPES];
+  return {
+    ...SUPPORTED_APPROVAL_FILE_TYPES[normalizedContentType],
+    mimeType: normalizedContentType,
+  };
 }
 
 export function approvalStoragePath(input: {
@@ -189,7 +195,7 @@ export async function createBsmContentApprovalUpload(
   const title = cleanText("title", input.title, 160);
   const contextNote = cleanText("contextNote", input.contextNote, 3000);
   const fileName = normalizeApprovalFileName(input.fileName);
-  const file = validateApprovalFile(input.contentType, input.byteSize);
+  const file = validateApprovalFile(input.contentType, input.byteSize, fileName);
   const itemId = randomUUID();
   const versionId = randomUUID();
   const path = approvalStoragePath({ shopId, itemId, versionId, fileName });
@@ -216,7 +222,7 @@ export async function createBsmContentApprovalUpload(
     storage_bucket: BSM_CONTENT_APPROVALS_BUCKET,
     storage_path: path,
     original_filename: fileName,
-    content_type: input.contentType,
+    content_type: file.mimeType,
     byte_size: input.byteSize,
     preview_type: file.contentType === "image" ? "image" : "file",
     created_by_profile_id: actorProfileId,
@@ -270,7 +276,7 @@ export async function createBsmContentApprovalUpload(
       currentVersion: {
         id: versionId,
         originalFilename: fileName,
-        contentType: input.contentType,
+        contentType: file.mimeType,
         byteSize: input.byteSize,
         storagePath: path,
         previewType: file.contentType === "image" ? "image" : "file",
