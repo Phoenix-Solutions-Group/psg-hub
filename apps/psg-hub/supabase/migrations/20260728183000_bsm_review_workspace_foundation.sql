@@ -318,6 +318,7 @@ alter table if exists public.bsm_content_review_reviewers
 
 alter table if exists public.bsm_content_review_comments
   alter column author_profile_id drop not null,
+  add column if not exists project_id uuid references public.bsm_content_review_projects (id) on delete set null,
   add column if not exists thread_id uuid references public.bsm_content_review_comment_threads (id) on delete set null,
   add column if not exists round_id uuid references public.bsm_content_review_rounds (id) on delete set null,
   add column if not exists invitation_id uuid references public.bsm_content_review_invitations (id) on delete set null,
@@ -348,12 +349,25 @@ alter table public.bsm_content_review_items
   on delete set null deferrable initially deferred;
 
 alter table if exists public.bsm_content_review_decisions
+  alter column actor_profile_id drop not null,
   add column if not exists project_id uuid references public.bsm_content_review_projects (id) on delete set null,
   add column if not exists round_id uuid references public.bsm_content_review_rounds (id) on delete set null,
   add column if not exists invitation_id uuid references public.bsm_content_review_invitations (id) on delete set null,
   add column if not exists carried_from_decision_id uuid references public.bsm_content_review_decisions (id) on delete set null,
   add column if not exists submitted_at timestamptz,
   add column if not exists locked_at timestamptz;
+
+alter table public.bsm_content_review_decisions
+  drop constraint if exists bsm_content_review_decisions_decision_check;
+alter table public.bsm_content_review_decisions
+  add constraint bsm_content_review_decisions_decision_check
+  check (decision in ('approve', 'decline', 'request_updates', 'approved', 'changes_requested'));
+
+alter table public.bsm_content_review_decisions
+  drop constraint if exists bsm_content_review_decisions_actor_role_check;
+alter table public.bsm_content_review_decisions
+  add constraint bsm_content_review_decisions_actor_role_check
+  check (actor_role in ('customer', 'psg', 'psg_admin', 'system'));
 
 do $$
 begin

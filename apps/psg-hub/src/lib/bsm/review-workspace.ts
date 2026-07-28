@@ -459,7 +459,7 @@ export async function createInternalReviewWorkspaceSlice(
       required: true,
       title: docTitle,
       content_type: "generated_page",
-      status: "ready_for_review",
+      status: "in_review",
       admin_context_note: input.description ?? null,
       processing_status: "ready",
       created_by_profile_id: actorProfileId,
@@ -483,7 +483,7 @@ export async function createInternalReviewWorkspaceSlice(
       processed_content_type: "text/html",
       scan_status: "clean",
       conversion_status: "not_needed",
-      sanitization_status: "passed",
+      sanitization_status: "complete",
       source_metadata_jsonb: { sourceKind: "internal_review_workspace", sourceUrl },
       created_by_profile_id: actorProfileId,
     });
@@ -738,7 +738,7 @@ export async function addGuestReviewPinComment(
     review_item_id: reviewItemId,
     version_id: versionId,
     owner_invitation_id: access.invitationId,
-    root_comment_id: commentId,
+    root_comment_id: null,
     pin_number: input.pinNumber,
     status: "draft",
   });
@@ -771,6 +771,12 @@ export async function addGuestReviewPinComment(
     .select("id, thread_id, body, draft_status")
     .single();
   if (commentError) throw new Error(`Could not add reviewer comment: ${commentError.message}`);
+
+  const { error: threadUpdateError } = await client
+    .from("bsm_content_review_comment_threads")
+    .update({ root_comment_id: commentId, updated_at: new Date().toISOString() })
+    .eq("id", threadId);
+  if (threadUpdateError) throw new Error(`Could not link reviewer comment thread: ${threadUpdateError.message}`);
 
   await insertEvent(client, {
     shop_id: access.shopId,
@@ -930,7 +936,8 @@ export async function submitGuestReviewRound(
       version_id: versionId,
       decision: decision.decision,
       message: cleanOptionalText("message", decision.message, 2000),
-      author_profile_id: null,
+      actor_profile_id: null,
+      actor_role: "customer",
       submitted_at: now.toISOString(),
       locked_at: now.toISOString(),
     });
