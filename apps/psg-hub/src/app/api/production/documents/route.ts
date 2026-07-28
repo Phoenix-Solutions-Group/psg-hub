@@ -2,11 +2,22 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireOpsFn } from "@/lib/auth/ops-access";
 import { resolveDocumentSort } from "@/lib/ops/production";
+import { type ActionDocRow } from "@/components/ops/production-actions";
 
 // v1.3 / PSG-27 (PSG-41) — Historical Production search over documents.
 // Allow-listed exact filters (never interpolate raw input): by print ID
 // (external_id), company, product, repair customer, status. Indexes for each
 // path shipped in 20260618180001_production_module_v1_3.sql.
+
+type RawDocRow = Omit<ActionDocRow, "batch_name" | "shop_name" | "customer_name"> & {
+  product_id: string | null;
+  production_batches: { name: string | null } | { name: string | null }[] | null;
+  companies: { name: string | null } | { name: string | null }[] | null;
+  repair_customers:
+    | { first_name: string | null; last_name: string | null }
+    | { first_name: string | null; last_name: string | null }[]
+    | null;
+};
 
 export async function GET(request: NextRequest) {
   const gate = await requireOpsFn("manage_production");
@@ -19,7 +30,7 @@ export async function GET(request: NextRequest) {
   let query = service
     .from("production_documents")
     .select(
-      "id, batch_id, company_id, repair_customer_id, product_id, piece_type, status, vendor, external_id, proof_url, expected_delivery_date, created_at"
+      "id, batch_id, company_id, repair_customer_id, product_id, piece_type, status, vendor, external_id, proof_url, rendered_url, expected_delivery_date, created_at, production_batches(name), companies(name), repair_customers(first_name, last_name)"
     )
     .order(column, { ascending })
     .limit(200);
@@ -40,5 +51,36 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: "Failed to search documents" }, { status: 500 });
-  return NextResponse.json({ documents: data ?? [] });
+  return NextResponse.json({ documents: ((data ?? []) as RawDocRow[]).map(toDocRow) });
+}
+
+function firstRelation<T>(value: T | T[] | null): T | null {
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+function toDocRow(row: RawDocRow): ActionDocRow {
+  const batch = firstRelation(row.production_batches);
+  const company = firstRelation(row.companies);
+  const customer = firstRelation(row.repair_customers);
+  const customerName = customer
+    ? [customer.first_name, customer.last_name].filter(Boolean).join(" ").trim() || null
+    : null;
+
+  return {
+    id: row.id,
+    batch_id: row.batch_id,
+    batch_name: batch?.name ?? null,
+    company_id: row.company_id,
+    shop_name: company?.name ?? null,
+    repair_customer_id: row.repair_customer_id,
+    customer_name: customerName,
+    status: row.status,
+    piece_type: row.piece_type,
+    vendor: row.vendor,
+    external_id: row.external_id,
+    proof_url: row.proof_url,
+    rendered_url: row.rendered_url,
+    expected_delivery_date: row.expected_delivery_date,
+    created_at: row.created_at,
+  };
 }

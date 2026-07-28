@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
 import {
+  type ActionDocRow,
   ProductionDocumentsTable,
   ProductionQueueTable,
 } from "@/components/ops/production-actions";
@@ -26,12 +27,29 @@ type BatchRow = {
 
 type DocRow = {
   id: string;
+  batch_id: string;
+  batch_name: string | null;
+  company_id: string;
+  shop_name: string | null;
+  repair_customer_id: string | null;
+  customer_name: string | null;
   status: string;
   piece_type: string;
   vendor: string | null;
   external_id: string | null;
+  proof_url: string | null;
+  rendered_url: string | null;
   expected_delivery_date: string | null;
   created_at: string;
+};
+
+type RawDocRow = Omit<DocRow, "batch_name" | "shop_name" | "customer_name"> & {
+  production_batches: { name: string | null } | { name: string | null }[] | null;
+  companies: { name: string | null } | { name: string | null }[] | null;
+  repair_customers:
+    | { first_name: string | null; last_name: string | null }
+    | { first_name: string | null; last_name: string | null }[]
+    | null;
 };
 
 const ACTIVE = new Set(["draft", "queued", "printing"]);
@@ -64,12 +82,14 @@ export default async function ProductionPage() {
       .limit(100),
     service
       .from("production_documents")
-      .select("id, status, piece_type, vendor, external_id, expected_delivery_date, created_at")
+      .select(
+        "id, batch_id, company_id, repair_customer_id, piece_type, status, vendor, external_id, proof_url, rendered_url, expected_delivery_date, created_at, production_batches(name), companies(name), repair_customers(first_name, last_name)"
+      )
       .order("created_at", { ascending: false })
       .limit(50),
   ]);
   const batches = (batchData ?? []) as BatchRow[];
-  const docs = (docData ?? []) as DocRow[];
+  const docs = ((docData ?? []) as RawDocRow[]).map(toDocRow);
   const queue = batches.filter((b) => ACTIVE.has(b.status));
   const historical = batches.filter((b) => b.status === "historical");
 
@@ -128,6 +148,37 @@ export default async function ProductionPage() {
       </section>
     </div>
   );
+}
+
+function firstRelation<T>(value: T | T[] | null): T | null {
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+function toDocRow(row: RawDocRow): ActionDocRow {
+  const batch = firstRelation(row.production_batches);
+  const company = firstRelation(row.companies);
+  const customer = firstRelation(row.repair_customers);
+  const customerName = customer
+    ? [customer.first_name, customer.last_name].filter(Boolean).join(" ").trim() || null
+    : null;
+
+  return {
+    id: row.id,
+    batch_id: row.batch_id,
+    batch_name: batch?.name ?? null,
+    company_id: row.company_id,
+    shop_name: company?.name ?? null,
+    repair_customer_id: row.repair_customer_id,
+    customer_name: customerName,
+    status: row.status,
+    piece_type: row.piece_type,
+    vendor: row.vendor,
+    external_id: row.external_id,
+    proof_url: row.proof_url,
+    rendered_url: row.rendered_url,
+    expected_delivery_date: row.expected_delivery_date,
+    created_at: row.created_at,
+  };
 }
 
 function BatchTable({ rows, emptyLabel }: { rows: BatchRow[]; emptyLabel: string }) {
