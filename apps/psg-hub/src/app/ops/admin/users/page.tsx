@@ -141,10 +141,15 @@ export default async function UsersAdminPage() {
       const authUser = authUsersById.get(profileId);
       const email = authUser?.email ?? null;
       const displayName = profileNameById.get(profileId) || email || profileId.slice(0, 8);
+      const bannedUntil = authUser?.banned_until ? new Date(authUser.banned_until) : null;
+      const isSuspended = bannedUntil ? bannedUntil.getTime() > Date.now() : false;
       return {
         profileId,
         displayName,
         email,
+        bannedUntil: authUser?.banned_until ?? null,
+        isDeleted: Boolean(authUser?.deleted_at),
+        isSuspended,
         role: roleByProfileId.get(profileId) ?? null,
         memberships: membershipsByUserId.get(profileId) ?? [],
       };

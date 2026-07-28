@@ -16,6 +16,9 @@ const responses = new Map<string, DbResponse[]>();
 const listUsersMock = vi.fn();
 const inviteUserByEmailMock = vi.fn();
 const createUserMock = vi.fn();
+const getUserByIdMock = vi.fn();
+const updateUserByIdMock = vi.fn();
+const deleteUserMock = vi.fn();
 
 function key(table: string, op: string) {
   return `${table}:${op}`;
@@ -110,6 +113,9 @@ vi.mock("@/lib/supabase/service", () => ({
         listUsers: listUsersMock,
         inviteUserByEmail: inviteUserByEmailMock,
         createUser: createUserMock,
+        getUserById: getUserByIdMock,
+        updateUserById: updateUserByIdMock,
+        deleteUser: deleteUserMock,
       },
     },
   }),
@@ -129,6 +135,8 @@ const securityProfilesRoute = await import("@/app/api/ops/security-profiles/rout
 const securityProfileRoute = await import("@/app/api/ops/security-profiles/[id]/route");
 const securityAssignmentsRoute = await import("@/app/api/ops/security-profiles/assignments/route");
 const userInviteRoute = await import("@/app/api/ops/admin/users/invite/route");
+const userProfileRoute = await import("@/app/api/ops/admin/users/[profileId]/route");
+const userLifecycleRoute = await import("@/app/api/ops/admin/users/[profileId]/lifecycle/route");
 const userRoleRoute = await import("@/app/api/ops/admin/users/[profileId]/role/route");
 const userShopsRoute = await import("@/app/api/ops/admin/users/[profileId]/shops/route");
 const shopTierRoute = await import("@/app/api/ops/admin/shops/[shopId]/tier/route");
@@ -162,6 +170,9 @@ beforeEach(() => {
   listUsersMock.mockReset();
   inviteUserByEmailMock.mockReset();
   createUserMock.mockReset();
+  getUserByIdMock.mockReset();
+  updateUserByIdMock.mockReset();
+  deleteUserMock.mockReset();
   listUsersMock.mockResolvedValue({ data: { users: [] }, error: null });
   inviteUserByEmailMock.mockResolvedValue({
     data: { user: { id: PROFILE_ID, email: "new@example.com" } },
@@ -169,6 +180,18 @@ beforeEach(() => {
   });
   createUserMock.mockResolvedValue({
     data: { user: { id: PROFILE_ID, email: "new@example.com" } },
+    error: null,
+  });
+  getUserByIdMock.mockResolvedValue({
+    data: { user: { id: PROFILE_ID, email: "ada@example.com", user_metadata: {} } },
+    error: null,
+  });
+  updateUserByIdMock.mockResolvedValue({
+    data: { user: { id: PROFILE_ID, email: "ada@example.com" } },
+    error: null,
+  });
+  deleteUserMock.mockResolvedValue({
+    data: { user: {} },
     error: null,
   });
 });
@@ -192,6 +215,30 @@ describe("superadmin-gated admin API routes", () => {
       () =>
         userRoleRoute.PATCH(
           req("PATCH", `/api/ops/admin/users/${PROFILE_ID}/role`, { role: "psg_internal" }),
+          params({ profileId: PROFILE_ID })
+        ),
+    ],
+    [
+      "admin user profile edits",
+      () =>
+        userProfileRoute.PATCH(
+          req("PATCH", `/api/ops/admin/users/${PROFILE_ID}`, { displayName: "Ada" }),
+          params({ profileId: PROFILE_ID })
+        ),
+    ],
+    [
+      "admin user lifecycle edits",
+      () =>
+        userLifecycleRoute.PATCH(
+          req("PATCH", `/api/ops/admin/users/${PROFILE_ID}/lifecycle`, { status: "suspended" }),
+          params({ profileId: PROFILE_ID })
+        ),
+    ],
+    [
+      "admin user deletes",
+      () =>
+        userProfileRoute.DELETE(
+          req("DELETE", `/api/ops/admin/users/${PROFILE_ID}`),
           params({ profileId: PROFILE_ID })
         ),
     ],
@@ -710,6 +757,143 @@ describe("admin user routes", () => {
     expect(roleRes.status).toBe(403);
     expect(operations).toHaveLength(0);
     expect(auditEvents).toHaveLength(0);
+  });
+
+  it("updates a user's display name and login email, then audits the change", async () => {
+    queue("profiles", "select", { data: { id: PROFILE_ID, display_name: "Ada Old" }, error: null });
+    queue("profiles", "upsert", { data: null, error: null });
+
+    const res = await userProfileRoute.PATCH(
+      req("PATCH", `/api/ops/admin/users/${PROFILE_ID}`, {
+        displayName: "Ada New",
+        email: "ADA.NEW@Example.com",
+      }),
+      params({ profileId: PROFILE_ID })
+    );
+
+    expect(res.status).toBe(200);
+    expect(operations).toContainEqual({
+      table: "profiles",
+      op: "upsert",
+      payload: { id: PROFILE_ID, display_name: "Ada New" },
+    });
+    expect(updateUserByIdMock).toHaveBeenCalledWith(
+      PROFILE_ID,
+      expect.objectContaining({
+        email: "ada.new@example.com",
+        user_metadata: expect.objectContaining({ display_name: "Ada New" }),
+      })
+    );
+    expect(auditEvents).toEqual([
+      expect.objectContaining({
+        action: "user.update",
+        targetProfileId: PROFILE_ID,
+        payload: {
+          before: { displayName: "Ada Old", email: "ada@example.com" },
+          after: { displayName: "Ada New", email: "ada.new@example.com" },
+        },
+      }),
+    ]);
+  });
+
+  it("suspends and reactivates users through Supabase Auth and audits each change", async () => {
+    queue("profiles", "select", { data: { id: PROFILE_ID, display_name: "Ada" }, error: null });
+    let res = await userLifecycleRoute.PATCH(
+      req("PATCH", `/api/ops/admin/users/${PROFILE_ID}/lifecycle`, { status: "suspended" }),
+      params({ profileId: PROFILE_ID })
+    );
+
+    expect(res.status).toBe(200);
+    expect(updateUserByIdMock).toHaveBeenCalledWith(PROFILE_ID, { ban_duration: "876000h" });
+
+    getUserByIdMock.mockResolvedValueOnce({
+      data: {
+        user: {
+          id: PROFILE_ID,
+          email: "ada@example.com",
+          banned_until: "2126-07-28T00:00:00Z",
+        },
+      },
+      error: null,
+    });
+    queue("profiles", "select", { data: { id: PROFILE_ID, display_name: "Ada" }, error: null });
+    res = await userLifecycleRoute.PATCH(
+      req("PATCH", `/api/ops/admin/users/${PROFILE_ID}/lifecycle`, { status: "active" }),
+      params({ profileId: PROFILE_ID })
+    );
+
+    expect(res.status).toBe(200);
+    expect(updateUserByIdMock).toHaveBeenLastCalledWith(PROFILE_ID, { ban_duration: "none" });
+    expect(auditEvents.map((event) => event.action)).toEqual(["user.suspend", "user.reactivate"]);
+  });
+
+  it("does not allow a superadmin to suspend or delete their own account", async () => {
+    const suspendRes = await userLifecycleRoute.PATCH(
+      req("PATCH", "/api/ops/admin/users/super-1/lifecycle", { status: "suspended" }),
+      params({ profileId: "super-1" })
+    );
+    expect(suspendRes.status).toBe(400);
+
+    const deleteRes = await userProfileRoute.DELETE(
+      req("DELETE", "/api/ops/admin/users/super-1"),
+      params({ profileId: "super-1" })
+    );
+    expect(deleteRes.status).toBe(400);
+    expect(updateUserByIdMock).not.toHaveBeenCalled();
+    expect(deleteUserMock).not.toHaveBeenCalled();
+    expect(auditEvents).toHaveLength(0);
+  });
+
+  it("requires a superadmin for suspend and delete actions", async () => {
+    gate = { ok: true, userId: "manager-1", access: { role: "psg_internal" } };
+
+    const suspendRes = await userLifecycleRoute.PATCH(
+      req("PATCH", `/api/ops/admin/users/${PROFILE_ID}/lifecycle`, { status: "suspended" }),
+      params({ profileId: PROFILE_ID })
+    );
+    expect(suspendRes.status).toBe(403);
+
+    const deleteRes = await userProfileRoute.DELETE(
+      req("DELETE", `/api/ops/admin/users/${PROFILE_ID}`),
+      params({ profileId: PROFILE_ID })
+    );
+    expect(deleteRes.status).toBe(403);
+    expect(updateUserByIdMock).not.toHaveBeenCalled();
+    expect(deleteUserMock).not.toHaveBeenCalled();
+    expect(auditEvents).toHaveLength(0);
+  });
+
+  it("soft-deletes auth users, clears access rows, and audits deletion", async () => {
+    queue("profiles", "select", { data: { id: PROFILE_ID, display_name: "Ada" }, error: null });
+    queue("app_user_roles", "select", { data: { role: "customer" }, error: null });
+    queue("shop_users", "delete", { data: null, error: null });
+    queue("app_user_roles", "delete", { data: null, error: null });
+    queue("user_security_profile_assignments", "delete", { data: null, error: null });
+
+    const res = await userProfileRoute.DELETE(
+      req("DELETE", `/api/ops/admin/users/${PROFILE_ID}`),
+      params({ profileId: PROFILE_ID })
+    );
+
+    expect(res.status).toBe(200);
+    expect(deleteUserMock).toHaveBeenCalledWith(PROFILE_ID, true);
+    expect(operations).toEqual([
+      { table: "shop_users", op: "delete" },
+      { table: "app_user_roles", op: "delete" },
+      { table: "user_security_profile_assignments", op: "delete" },
+    ]);
+    expect(auditEvents).toEqual([
+      expect.objectContaining({
+        action: "user.delete",
+        targetProfileId: PROFILE_ID,
+        payload: expect.objectContaining({
+          email: "ada@example.com",
+          displayName: "Ada",
+          role: "customer",
+          softDelete: true,
+        }),
+      }),
+    ]);
   });
 
   it("audits shop assignment and removal", async () => {

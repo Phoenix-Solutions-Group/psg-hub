@@ -33,6 +33,9 @@ export type ManagedUser = {
   profileId: string;
   displayName: string;
   email: string | null;
+  bannedUntil: string | null;
+  isDeleted: boolean;
+  isSuspended: boolean;
   role: AdminAppRole | null;
   memberships: Array<{
     shopId: string;
@@ -244,6 +247,8 @@ function InviteUserForm({ shops }: { shops: ManagedShop[] }) {
 
 function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop[] }) {
   const router = useRouter();
+  const [displayName, setDisplayName] = useState(user.displayName);
+  const [email, setEmail] = useState(user.email ?? "");
   const [role, setRole] = useState<AdminAppRole>(user.role ?? "customer");
   const [shopId, setShopId] = useState(shops[0]?.id ?? "");
   const [shopRole, setShopRole] = useState<ShopMemberRole>("viewer");
@@ -273,6 +278,9 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
   }
 
   const tierShop = shops.find((s) => s.id === tierShopId);
+  const accountStatus = user.isDeleted ? "Deleted" : user.isSuspended ? "Suspended" : "Active";
+  const profileChanged =
+    displayName.trim() !== user.displayName || email.trim().toLowerCase() !== (user.email ?? "");
 
   return (
     <article className="rounded-lg border border-border p-4">
@@ -281,10 +289,59 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
           <div className="font-heading font-semibold">{user.displayName}</div>
           <div className="text-sm text-muted-foreground">{user.email ?? user.profileId}</div>
         </div>
-        <Badge variant="secondary">{user.role ? ADMIN_APP_ROLE_LABELS[user.role] : "No role"}</Badge>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="secondary">
+            {user.role ? ADMIN_APP_ROLE_LABELS[user.role] : "No role"}
+          </Badge>
+          <Badge variant={user.isSuspended || user.isDeleted ? "destructive" : "outline"}>
+            {accountStatus}
+          </Badge>
+        </div>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+      <div className="mt-4 grid gap-4 lg:grid-cols-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium" htmlFor={`display-name-${user.profileId}`}>
+            Display name
+          </label>
+          <Input
+            id={`display-name-${user.profileId}`}
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            disabled={busy !== null || user.isDeleted}
+          />
+          <label className="text-sm font-medium" htmlFor={`email-${user.profileId}`}>
+            Email
+          </label>
+          <Input
+            id={`email-${user.profileId}`}
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={busy !== null || user.isDeleted}
+          />
+          <Button
+            type="button"
+            size="sm"
+            disabled={busy !== null || user.isDeleted || !profileChanged || !displayName.trim()}
+            onClick={() =>
+              callApi(
+                `/api/ops/admin/users/${user.profileId}`,
+                {
+                  method: "PATCH",
+                  body: JSON.stringify({
+                    displayName: displayName.trim(),
+                    email: email.trim() || undefined,
+                  }),
+                },
+                "profile"
+              )
+            }
+          >
+            Save user
+          </Button>
+        </div>
+
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor={`role-${user.profileId}`}>
             Global role
@@ -293,6 +350,7 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
             id={`role-${user.profileId}`}
             value={role}
             onChange={(e) => setRole(e.target.value as AdminAppRole)}
+            disabled={user.isDeleted}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
             {ADMIN_APP_ROLES.map((r) => (
@@ -304,7 +362,7 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
           <Button
             type="button"
             size="sm"
-            disabled={busy !== null || role === user.role}
+            disabled={busy !== null || user.isDeleted || role === user.role}
             onClick={() =>
               callApi(
                 `/api/ops/admin/users/${user.profileId}/role`,
@@ -325,7 +383,7 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
             id={`shop-${user.profileId}`}
             value={shopId}
             onChange={(e) => setShopId(e.target.value)}
-            disabled={shops.length === 0}
+            disabled={shops.length === 0 || user.isDeleted}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
             {shops.map((s) => (
@@ -337,7 +395,7 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
           <select
             value={shopRole}
             onChange={(e) => setShopRole(e.target.value as ShopMemberRole)}
-            disabled={shops.length === 0}
+            disabled={shops.length === 0 || user.isDeleted}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
             {SHOP_MEMBER_ROLES.map((r) => (
@@ -349,7 +407,7 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
           <Button
             type="button"
             size="sm"
-            disabled={busy !== null || !shopId}
+            disabled={busy !== null || user.isDeleted || !shopId}
             onClick={() =>
               callApi(
                 `/api/ops/admin/users/${user.profileId}/shops`,
@@ -381,6 +439,7 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
               setTierShopId(e.target.value);
               setTier(nextShop?.tier ?? null);
             }}
+            disabled={user.isDeleted}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
             {shops.map((s) => (
@@ -399,6 +458,7 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
               const value = e.target.value;
               setTier(value === NO_TIER_VALUE ? null : (value as AdminTier));
             }}
+            disabled={user.isDeleted}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
             <option value={NO_TIER_VALUE}>No subscription tier</option>
@@ -411,7 +471,7 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
           <Button
             type="button"
             size="sm"
-            disabled={busy !== null || !tierShopId || tierShop?.tier === tier}
+            disabled={busy !== null || user.isDeleted || !tierShopId || tierShop?.tier === tier}
             onClick={() =>
               callApi(
                 `/api/ops/admin/shops/${tierShopId}/tier`,
@@ -446,7 +506,7 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
                 <span className="text-muted-foreground">({SHOP_MEMBER_ROLE_LABELS[m.role]})</span>
                 <button
                   type="button"
-                  disabled={busy !== null}
+                  disabled={busy !== null || user.isDeleted}
                   onClick={() =>
                     callApi(
                       `/api/ops/admin/users/${user.profileId}/shops`,
@@ -461,6 +521,54 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
               </span>
             ))}
           </div>
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy !== null || user.isDeleted}
+          onClick={() => {
+            const status = user.isSuspended ? "active" : "suspended";
+            const action = user.isSuspended ? "reactivate" : "suspend";
+            if (!window.confirm(`Are you sure you want to ${action} ${user.displayName}?`)) return;
+            callApi(
+              `/api/ops/admin/users/${user.profileId}/lifecycle`,
+              { method: "PATCH", body: JSON.stringify({ status }) },
+              "lifecycle"
+            );
+          }}
+        >
+          {user.isSuspended ? "Reactivate user" : "Suspend user"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="destructive"
+          disabled={busy !== null || user.isDeleted}
+          onClick={() => {
+            if (
+              !window.confirm(
+                `Delete ${user.displayName}? This removes login access and shop assignments.`
+              )
+            ) {
+              return;
+            }
+            callApi(
+              `/api/ops/admin/users/${user.profileId}`,
+              { method: "DELETE" },
+              "delete"
+            );
+          }}
+        >
+          Delete user
+        </Button>
+        {user.bannedUntil && user.isSuspended && (
+          <p className="basis-full text-xs text-muted-foreground">
+            Suspended until {new Date(user.bannedUntil).toLocaleDateString()}.
+          </p>
         )}
       </div>
 

@@ -14,6 +14,10 @@
 export const AUDIT_ACTIONS = [
   // users / roles / shops
   "user.invite",
+  "user.update",
+  "user.suspend",
+  "user.reactivate",
+  "user.delete",
   "role.grant",
   "role.revoke",
   "shop.assign",
