@@ -20,7 +20,20 @@ function loadEnv(file: string): Record<string, string> {
 }
 
 const isDemoCapture = process.env.DEMO_CAPTURE === "1";
-const testEnv = isDemoCapture ? {} : loadEnv(path.join(__dirname, ".env.test.local"));
+const localEnv = loadEnv(path.join(__dirname, ".env.test.local"));
+const demoEnvNames = [
+  "DEMO_BASE_URL",
+  "DEMO_OPERATOR_EMAIL",
+  "DEMO_OPERATOR_PASSWORD",
+  "DEMO_SHOP_EMAIL",
+  "DEMO_SHOP_PASSWORD",
+];
+const demoEnv = Object.fromEntries(
+  demoEnvNames
+    .filter((key) => process.env[key] === undefined && localEnv[key] !== undefined)
+    .map((key) => [key, localEnv[key]]),
+);
+const testEnv = isDemoCapture ? demoEnv : localEnv;
 
 // The focused customer walkthrough uses the seeded OWNER shop and must exercise
 // the Google Ads setup/link state, not the billing upgrade gate. Keep this
