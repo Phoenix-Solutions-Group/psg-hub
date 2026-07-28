@@ -19,12 +19,75 @@ function loadEnv(file: string): Record<string, string> {
   return out;
 }
 
-const testEnv = loadEnv(path.join(__dirname, ".env.test.local"));
+const isDemoCapture = process.env.DEMO_CAPTURE === "1";
+const localEnv = loadEnv(path.join(__dirname, ".env.test.local"));
+const demoEnvNames = [
+  "DEMO_BASE_URL",
+  "DEMO_OPERATOR_EMAIL",
+  "DEMO_OPERATOR_PASSWORD",
+  "DEMO_SHOP_EMAIL",
+  "DEMO_SHOP_PASSWORD",
+];
+const demoEnv = Object.fromEntries(
+  demoEnvNames
+    .filter((key) => process.env[key] === undefined && localEnv[key] !== undefined)
+    .map((key) => [key, localEnv[key]]),
+);
+const testEnv = isDemoCapture ? demoEnv : localEnv;
+
+// The focused customer walkthrough uses the seeded OWNER shop and must exercise
+// the Google Ads setup/link state, not the billing upgrade gate. Keep this
+// deterministic even when a local, gitignored .env.test.local omits the override.
+if (
+  !isDemoCapture &&
+  !process.env.SHOP_ADS_TIER_OVERRIDE &&
+  !testEnv.SHOP_ADS_TIER_OVERRIDE
+) {
+  testEnv.SHOP_ADS_TIER_OVERRIDE = "e2e-owner-auto-body";
+}
 
 // Also expose the local target to the Playwright runner process itself, so
 // global.setup.ts (service-role seed) and the local-only guard see the same
 // LOCAL stack. Local values win — this is the zero-PII guarantee.
 Object.assign(process.env, testEnv);
+const demoBaseURL = process.env.DEMO_BASE_URL?.trim();
+
+if (isDemoCapture && !demoBaseURL) {
+  throw new Error(
+    "[PSG-986] DEMO_CAPTURE=1 requires DEMO_BASE_URL to target the production-like demo host."
+  );
+}
+const baseURL =
+  isDemoCapture && demoBaseURL
+    ? demoBaseURL
+    : "http://localhost:3100";
+
+const localProjects = [
+  // Seeds fixtures (service role) + produces a storageState per role via real
+  // UI login. The chromium project depends on it.
+  { name: "setup", testMatch: /global\.setup\.ts/ },
+  {
+    name: "chromium",
+    testIgnore: /global\.setup\.ts/,
+    dependencies: ["setup"],
+    use: { ...devices["Desktop Chrome"] },
+  },
+];
+const demoProjects = [
+  { name: "demo-session-setup", testMatch: /demo-session-setup\.ts/ },
+  {
+    name: "superadmin-walkthrough",
+    testMatch: /superadmin-walkthrough\.spec\.ts/,
+    dependencies: ["demo-session-setup"],
+    use: { ...devices["Desktop Chrome"] },
+  },
+  {
+    name: "demo-capture",
+    testMatch: /demo-capture\.spec\.ts/,
+    dependencies: ["demo-session-setup"],
+    use: { ...devices["Desktop Chrome"] },
+  },
+];
 
 export default defineConfig({
   testDir: "./e2e",
@@ -39,27 +102,23 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   use: {
     // Port 3100 (not the Next default 3000) to avoid a local squatter on 3000.
-    baseURL: "http://localhost:3100",
+    baseURL,
     trace: "on-first-retry",
+    // The Paperclip runtime blocks unprivileged user namespaces (Ubuntu 24.04
+    // AppArmor + docker-default), so Chromium's own sandbox cannot start here.
+    // The Docker container is the isolation boundary; disable the inner sandbox.
+    launchOptions: { chromiumSandbox: false },
   },
-  projects: [
-    // Seeds fixtures (service role) + produces a storageState per role via real
-    // UI login. The chromium project depends on it.
-    { name: "setup", testMatch: /global\.setup\.ts/ },
-    {
-      name: "chromium",
-      testIgnore: /global\.setup\.ts/,
-      dependencies: ["setup"],
-      use: { ...devices["Desktop Chrome"] },
-    },
-  ],
+  projects: isDemoCapture ? demoProjects : localProjects,
   // Build + start with the LOCAL env injected. reuseExistingServer is false so a
   // stray prod-pointed dev server can never be the E2E target (zero-PII guarantee).
-  webServer: {
-    command: "pnpm build && pnpm start -p 3100",
-    url: "http://localhost:3100/login",
-    timeout: 240_000,
-    reuseExistingServer: false,
-    env: { ...process.env, ...testEnv } as Record<string, string>,
-  },
+  webServer: isDemoCapture
+    ? undefined
+    : {
+        command: "pnpm build && pnpm start -p 3100",
+        url: "http://localhost:3100/login",
+        timeout: 240_000,
+        reuseExistingServer: false,
+        env: { ...process.env, ...testEnv } as Record<string, string>,
+      },
 });

@@ -7,6 +7,10 @@ const operatorStatePath =
   process.env.DEMO_CAPTURE === "1"
     ? DEMO_SESSIONS.operator.statePath
     : BSM_DEMO_ADMIN.statePath;
+const operatorEmail =
+  process.env.DEMO_CAPTURE === "1"
+    ? process.env.DEMO_OPERATOR_EMAIL ?? BSM_DEMO_ADMIN.email
+    : BSM_DEMO_ADMIN.email;
 
 test.describe("clean BSM demo admin walkthrough", () => {
   test.use({ storageState: operatorStatePath });
@@ -49,7 +53,7 @@ test.describe("clean BSM demo admin walkthrough", () => {
     const demoAdminCard = page.locator("article").filter({
       hasText: BSM_DEMO_ADMIN.displayName,
     });
-    await expect(demoAdminCard.getByText(BSM_DEMO_ADMIN.email)).toBeVisible();
+    await expect(demoAdminCard.getByText(operatorEmail)).toBeVisible();
     await expect(page.getByRole("button", { name: "Save role" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Add shop access" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Save tier" }).first()).toBeVisible();
