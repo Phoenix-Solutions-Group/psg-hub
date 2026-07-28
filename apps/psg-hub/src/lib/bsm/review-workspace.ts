@@ -52,6 +52,8 @@ export type GuestSessionAccess = {
   roundId: string;
   shopId: string;
   reviewerEmail: string;
+  invitationStatus: string;
+  submittedAt: string | null;
 };
 
 export type AddGuestPinCommentInput = {
@@ -102,9 +104,10 @@ export type VerifyGuestInvitationInput = {
 export type GuestReviewWorkspace = {
   project: { id: string; title: string; status: string };
   round: { id: string; status: string };
-  reviewer: { email: string };
+  reviewer: { email: string; submittedAt: string | null; readOnly: boolean };
   documents: Array<{ itemId: string; versionId: string; title: string; processingStatus: string; sectionTitle: string | null }>;
   comments: Array<{ id: string; reviewItemId: string; versionId: string; body: string; pinNumber: number | null; draftStatus: string }>;
+  decisions: Array<{ reviewItemId: string; versionId: string; decision: string; message: string | null; submittedAt: string | null }>;
 };
 
 export type StaffReviewWorkspaceResult = {
@@ -663,6 +666,7 @@ export async function requireGuestReviewSession(
       invitation:bsm_content_review_invitations!inner (
         id,
         status,
+        submitted_at,
         expires_at,
         revoked_at,
         reviewer_email,
@@ -700,6 +704,8 @@ export async function requireGuestReviewSession(
     roundId: data.round_id as string,
     shopId: data.shop_id as string,
     reviewerEmail: invitation.reviewer_email as string,
+    invitationStatus: invitation.status as string,
+    submittedAt: (invitation.submitted_at as string | null) ?? null,
   };
 }
 
@@ -709,6 +715,9 @@ export async function addGuestReviewPinComment(
 ) {
   const client = resolveClient(deps.client);
   const access = await requireGuestReviewSession(client, input.sessionHash);
+  if (access.invitationStatus === "submitted" || access.submittedAt) {
+    throw new ReviewWorkspaceInputError(409, "This review round was already submitted");
+  }
   const reviewItemId = assertUuid("reviewItemId", input.reviewItemId);
   const versionId = assertUuid("versionId", input.versionId);
   const body = cleanText("body", input.body, 2000);
@@ -789,7 +798,7 @@ export async function getGuestReviewWorkspace(
   const client = resolveClient(deps.client);
   const access = await requireGuestReviewSession(client, sessionHash);
 
-  const [{ data: project }, { data: round }, { data: docs }, { data: comments }] = await Promise.all([
+  const [{ data: project }, { data: round }, { data: docs }, { data: comments }, { data: decisions }] = await Promise.all([
     client.from("bsm_content_review_projects").select("id, title, status").eq("id", access.projectId).single(),
     client.from("bsm_content_review_rounds").select("id, status").eq("id", access.roundId).single(),
     client
@@ -802,6 +811,11 @@ export async function getGuestReviewWorkspace(
       .eq("round_id", access.roundId)
       .eq("invitation_id", access.invitationId)
       .order("created_at", { ascending: true }),
+    client
+      .from("bsm_content_review_decisions")
+      .select("review_item_id, version_id, decision, message, submitted_at")
+      .eq("round_id", access.roundId)
+      .eq("invitation_id", access.invitationId),
   ]);
 
   const itemIds = ((docs ?? []) as Array<Record<string, unknown>>)
@@ -833,7 +847,11 @@ export async function getGuestReviewWorkspace(
       id: (round as Record<string, unknown>).id as string,
       status: (round as Record<string, unknown>).status as string,
     },
-    reviewer: { email: access.reviewerEmail },
+    reviewer: {
+      email: access.reviewerEmail,
+      submittedAt: access.submittedAt,
+      readOnly: access.invitationStatus === "submitted" || Boolean(access.submittedAt),
+    },
     documents: ((docs ?? []) as Array<Record<string, unknown>>).map((row) => {
       const item = itemsById.get(row.review_item_id as string) ?? null;
       const sectionId = (item?.section_id as string | null) ?? null;
@@ -852,6 +870,13 @@ export async function getGuestReviewWorkspace(
       body: row.body as string,
       pinNumber: (row.pin_number as number | null) ?? null,
       draftStatus: row.draft_status as string,
+    })),
+    decisions: ((decisions ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      reviewItemId: row.review_item_id as string,
+      versionId: row.version_id as string,
+      decision: row.decision as string,
+      message: (row.message as string | null) ?? null,
+      submittedAt: (row.submitted_at as string | null) ?? null,
     })),
   };
 }

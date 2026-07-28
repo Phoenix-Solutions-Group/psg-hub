@@ -151,6 +151,22 @@ class Query {
     if (this.table === "bsm_content_review_sections") {
       return { data: [{ id: SECTION_ID, title: "Website" }], error: null };
     }
+    if (this.table === "bsm_content_review_decisions") {
+      return {
+        data: this.options.submitted
+          ? [
+              {
+                review_item_id: REVIEW_ITEM_ID,
+                version_id: VERSION_ID,
+                decision: "changes_requested",
+                message: "Update the offer.",
+                submitted_at: "2026-07-28T19:00:00.000Z",
+              },
+            ]
+          : [],
+        error: null,
+      };
+    }
     return { data: [], error: null };
   }
 
@@ -182,7 +198,8 @@ class Query {
           revoked_at: null,
           invitation: {
             id: INVITATION_ID,
-            status: "sent",
+            status: this.options.submitted ? "submitted" : "sent",
+            submitted_at: this.options.submitted ? "2026-07-28T19:00:00.000Z" : null,
             expires_at: expires,
             revoked_at: null,
             reviewer_email: "owner@example.com",
@@ -410,6 +427,7 @@ describe("BSM review workspace foundation service", () => {
         draftStatus: "draft",
       }),
     ]);
+    expect(workspace.reviewer.readOnly).toBe(false);
   });
 
   it("stores reviewer pin comments against the reviewer invitation only", async () => {
@@ -449,6 +467,32 @@ describe("BSM review workspace foundation service", () => {
       x_ratio: 0.4,
       y_ratio: 0.6,
     });
+  });
+
+  it("blocks new reviewer comments after submit", async () => {
+    const submitted = createFakeClient({ submitted: true });
+
+    await expect(
+      addGuestReviewPinComment(
+        {
+          sessionHash: "session-hash",
+          reviewItemId: REVIEW_ITEM_ID,
+          versionId: VERSION_ID,
+          body: "Please update this offer.",
+          pinNumber: 1,
+          viewport: "desktop",
+          xRatio: 0.4,
+          yRatio: 0.6,
+        },
+        { client: submitted.client as never },
+      ),
+    ).rejects.toThrow("already submitted");
+
+    const workspace = await getGuestReviewWorkspace("session-hash", { client: submitted.client as never });
+    expect(workspace.reviewer.readOnly).toBe(true);
+    expect(workspace.decisions).toEqual([
+      expect.objectContaining({ decision: "changes_requested", message: "Update the offer." }),
+    ]);
   });
 
   it("locks comments and records immutable decisions on one-time submit", async () => {

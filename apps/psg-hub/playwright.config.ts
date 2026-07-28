@@ -45,6 +45,13 @@ if (
 ) {
   testEnv.SHOP_ADS_TIER_OVERRIDE = "e2e-owner-auto-body";
 }
+if (
+  !isDemoCapture &&
+  !process.env.BSM_REVIEW_WORKSPACE_INTERNAL_ENABLED &&
+  !testEnv.BSM_REVIEW_WORKSPACE_INTERNAL_ENABLED
+) {
+  testEnv.BSM_REVIEW_WORKSPACE_INTERNAL_ENABLED = "1";
+}
 
 // Also expose the local target to the Playwright runner process itself, so
 // global.setup.ts (service-role seed) and the local-only guard see the same
