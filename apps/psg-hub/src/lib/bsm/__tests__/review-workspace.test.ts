@@ -26,6 +26,26 @@ const MIGRATION = readFileSync(
   join(process.cwd(), "supabase/migrations/20260728183000_bsm_review_workspace_foundation.sql"),
   "utf8",
 );
+const PROCESSING_CONTRACT_MIGRATION = readFileSync(
+  join(process.cwd(), "supabase/migrations/20260728174500_bsm_review_workspace_processing_contract.sql"),
+  "utf8",
+);
+
+function collectProcessingJobColumnsAfterMigrations(...migrations: string[]) {
+  const columns = new Set<string>();
+  for (const migration of migrations) {
+    const createMatch = migration.match(/create table if not exists public\.bsm_content_review_processing_jobs \(([\s\S]*?)\n\);/);
+    if (createMatch) {
+      for (const line of createMatch[1].split("\n")) {
+        const match = line.trim().match(/^([a-z_][a-z0-9_]*)\s/);
+        if (match && match[1] !== "constraint") columns.add(match[1]);
+      }
+    }
+    const alterMatches = migration.matchAll(/add column if not exists ([a-z_][a-z0-9_]*)\s/g);
+    for (const match of alterMatches) columns.add(match[1]);
+  }
+  return columns;
+}
 
 function createFakeClient(options: { collaborator?: boolean; expiredSession?: boolean; submitted?: boolean; hasPin?: boolean } = {}) {
   const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
@@ -294,6 +314,17 @@ describe("BSM review workspace foundation service", () => {
     expect(upserts).toEqual([
       expect.objectContaining({
         table: "bsm_content_review_processing_jobs",
+        payload: expect.objectContaining({
+          project_id: PROJECT_ID,
+          shop_id: SHOP_ID,
+          kind: "upload_scan",
+          status: "queued",
+          idempotency_key: "scan:project:item:version",
+          review_item_id: REVIEW_ITEM_ID,
+          version_id: VERSION_ID,
+          created_by_profile_id: ACTOR_ID,
+          input_jsonb: {},
+        }),
         options: { onConflict: "idempotency_key", ignoreDuplicates: false },
       }),
       expect.objectContaining({
@@ -478,6 +509,27 @@ describe("BSM review workspace foundation service", () => {
     expect(MIGRATION).toContain("bsm_content_review_comments_submitted_no_mutate");
     expect(MIGRATION).toContain("bsm_content_review_decisions_no_mutate");
     expect(MIGRATION).toContain("on public.bsm_content_review_processing_jobs (idempotency_key)");
+    expect(MIGRATION).toContain("revoke all on table public.bsm_content_review_processing_jobs from authenticated");
+    expect(MIGRATION).not.toContain("grant select on table public.bsm_content_review_processing_jobs to authenticated");
     expect(MIGRATION).toContain("Guest reviewers are intentionally not granted anon database access");
+  });
+
+  it("keeps processing-job migrations compatible with the enqueue service write contract", () => {
+    const migratedColumns = collectProcessingJobColumnsAfterMigrations(PROCESSING_CONTRACT_MIGRATION, MIGRATION);
+
+    expect([...migratedColumns].sort()).toEqual(
+      expect.arrayContaining([
+        "project_id",
+        "shop_id",
+        "kind",
+        "status",
+        "idempotency_key",
+        "review_item_id",
+        "version_id",
+        "round_id",
+        "created_by_profile_id",
+        "input_jsonb",
+      ]),
+    );
   });
 });
