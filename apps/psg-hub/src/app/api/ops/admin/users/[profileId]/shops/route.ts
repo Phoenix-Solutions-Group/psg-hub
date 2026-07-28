@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { recordAuditEvent } from "@/lib/audit/access-audit";
-import { requireSuperadmin } from "@/lib/auth/ops-access";
+import { requireOpsFn } from "@/lib/auth/ops-access";
 import { createServiceClient } from "@/lib/supabase/service";
 import { SHOP_MEMBER_ROLES } from "@/lib/ops/user-management";
 
@@ -26,7 +26,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ profileId: string }> }
 ) {
-  const gate = await requireSuperadmin();
+  const gate = await requireOpsFn("manage_users");
   if (!gate.ok) return gate.response;
   const { profileId } = await params;
 
@@ -88,7 +88,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ profileId: string }> }
 ) {
-  const gate = await requireSuperadmin();
+  const gate = await requireOpsFn("manage_users");
   if (!gate.ok) return gate.response;
   const { profileId } = await params;
 

@@ -16,6 +16,7 @@ const shops: ManagedShop[] = [
     name: "Wallace Collision",
     slug: "wallace",
     tier: "growth",
+    tierLabel: "Growth",
     subscriptionStatus: "active",
   },
   {
@@ -23,6 +24,7 @@ const shops: ManagedShop[] = [
     name: "Tedesco Auto Body",
     slug: "tedesco",
     tier: "performance",
+    tierLabel: "Performance",
     subscriptionStatus: "active",
   },
 ];
@@ -56,20 +58,23 @@ describe("UserAccessManager", () => {
     expect(html).toContain("Manager");
   });
 
-  it("uses existing shops for assignment and tier edits", () => {
+  it("uses existing shops for assignment and points admins to Companies for new shops", () => {
     const html = render();
 
-    expect(html).toContain("Assign shop");
-    expect(html).toContain("Wallace Collision");
-    expect(html).toContain("Tedesco Auto Body");
-    expect(html).toContain("Shop tier");
+    expect(html).toContain("Add shop access");
+    expect(html).toContain("Wallace Collision - Growth");
+    expect(html).toContain("Tedesco Auto Body - Performance");
+    expect(html).toContain("One login can have access to multiple shops");
+    expect(html).toContain("href=\"/ops/companies\"");
   });
 
-  it("lets admins clear or set a selected shop tier", () => {
+  it("shows tier labels separately from shop names", () => {
     const html = render();
 
+    expect(html).toContain("Shop to update");
+    expect(html).toContain("Tier for selected shop");
+    expect(html).toContain("Current tier: Growth");
     expect(html).toContain(">No subscription tier</option>");
-    expect(html).toContain(">Essentials</option>");
     expect(html).toContain(">Growth</option>");
     expect(html).toContain(">Performance</option>");
   });

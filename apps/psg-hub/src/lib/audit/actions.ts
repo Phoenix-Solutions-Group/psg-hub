@@ -91,6 +91,7 @@ export const AUDIT_ACTIONS = [
   // is attributable without executing any Google Ads mutation.
   "google_ads_request.create",
   "google_ads_request.update",
+  "google_ads_request.customer_reply",
   // Review response restore workflow (PSG-1719) — customers can request an
   // older response version, but PSG staff must approve or reject the restore
   // before a previous version becomes active again.
@@ -106,6 +107,7 @@ export const AUDIT_ACTIONS = [
   // review item, add the context note, mint a private upload path, and create
   // the initial immutable version.
   "bsm_content_approval.create",
+  "bsm_content_approval.archive",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

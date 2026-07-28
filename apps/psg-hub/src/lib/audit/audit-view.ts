@@ -61,9 +61,11 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "google_ads.audit_report.publish": "Published Google Ads audit report",
   "google_ads_request.create": "Submitted Google Ads request",
   "google_ads_request.update": "Updated Google Ads request",
+  "google_ads_request.customer_reply": "Answered Google Ads request",
   "review_response_restore.approve": "Approved review response restore",
   "review_response_restore.reject": "Rejected review response restore",
   "bsm_content_approval.create": "Created BSM content approval",
+  "bsm_content_approval.archive": "Archived BSM content approval",
   "intake.signed_upload.mint": "Minted pilot-intake upload link",
 };
 

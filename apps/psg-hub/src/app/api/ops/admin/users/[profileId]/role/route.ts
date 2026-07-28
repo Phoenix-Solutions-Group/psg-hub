@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { recordAuditEvent } from "@/lib/audit/access-audit";
-import { requireSuperadmin } from "@/lib/auth/ops-access";
+import { requireOpsFn } from "@/lib/auth/ops-access";
 import { createServiceClient } from "@/lib/supabase/service";
-import { ADMIN_APP_ROLES, auditActionForRoleChange } from "@/lib/ops/user-management";
+import { ADMIN_APP_ROLES, asAdminAppRole, auditActionForRoleChange } from "@/lib/ops/user-management";
 
 const roleSchema = z.object({
   role: z.enum(ADMIN_APP_ROLES),
@@ -13,7 +13,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ profileId: string }> }
 ) {
-  const gate = await requireSuperadmin();
+  const gate = await requireOpsFn("manage_users");
   if (!gate.ok) return gate.response;
   const { profileId } = await params;
 
@@ -32,6 +32,14 @@ export async function PATCH(
     );
   }
 
+  const nextRole = parsed.data.role;
+  if (nextRole === "psg_superadmin" && gate.access.role !== "psg_superadmin") {
+    return NextResponse.json(
+      { error: "Only an existing superadmin can grant the superadmin role" },
+      { status: 403 }
+    );
+  }
+
   const service = createServiceClient();
   const [{ data: targetProfile }, { data: existing }] = await Promise.all([
     service.from("profiles").select("id, display_name").eq("id", profileId).maybeSingle(),
@@ -42,8 +50,7 @@ export async function PATCH(
     return NextResponse.json({ error: "User profile not found" }, { status: 404 });
   }
 
-  const beforeRole = (existing?.role as string | undefined) ?? null;
-  const nextRole = parsed.data.role;
+  const beforeRole = asAdminAppRole(existing?.role) ?? null;
 
   const { data, error } = await service
     .from("app_user_roles")
@@ -58,7 +65,7 @@ export async function PATCH(
 
   await recordAuditEvent({
     actorProfileId: gate.userId,
-    action: auditActionForRoleChange(nextRole),
+    action: auditActionForRoleChange(nextRole, beforeRole),
     targetProfileId: profileId,
     payload: {
       beforeRole,

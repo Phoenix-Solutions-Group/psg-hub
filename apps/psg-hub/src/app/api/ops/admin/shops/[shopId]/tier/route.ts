@@ -1,7 +1,7 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 import { recordAuditEvent } from "@/lib/audit/access-audit";
-import { requireSuperadmin } from "@/lib/auth/ops-access";
+import { requireOpsFn } from "@/lib/auth/ops-access";
 import { createServiceClient } from "@/lib/supabase/service";
 import { ADMIN_TIERS } from "@/lib/ops/user-management";
 
@@ -10,10 +10,10 @@ const tierSchema = z.object({
 });
 
 export async function PATCH(
-  request: NextRequest,
+  request: Request,
   { params }: { params: Promise<{ shopId: string }> }
 ) {
-  const gate = await requireSuperadmin();
+  const gate = await requireOpsFn("manage_users");
   if (!gate.ok) return gate.response;
   const { shopId } = await params;
 

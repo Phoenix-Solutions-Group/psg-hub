@@ -1,43 +1,14 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Logo } from "@/components/brand/logo";
-import { getOpsAccess, hasOpsFn, isOpsStaff, type OpsAccess } from "@/lib/auth/ops-access";
+import { getOpsAccess, isOpsStaff } from "@/lib/auth/ops-access";
+import { visibleOpsNavItems } from "@/lib/ops/navigation";
 
 // Internal-ops backbone shell (v1.1 / PSG-25). psg_internal + psg_superadmin only;
 // fine-grained module access is enforced per-route via requireOpsFn() + RLS.
 // `superadminOnly` items (e.g. Competitor Intel, PSG-210) are hidden from psg_internal so the
 // nav matches the route's own superadmin gate — visibility is not access control, but not
 // advertising a surface a user cannot reach keeps the nav honest.
-const OPS_NAV: { href: string; label: string; superadminOnly?: boolean }[] = [
-  { href: "/ops", label: "Ops Home" },
-  { href: "/ops/companies", label: "Companies" },
-  { href: "/ops/repair-customers", label: "Repair Customers" },
-  { href: "/ops/repair-orders", label: "Repair Orders" },
-  { href: "/ops/estimates", label: "Estimates" },
-  { href: "/ops/intake", label: "Pilot Intake", superadminOnly: true },
-  { href: "/ops/data-import/ros", label: "Import ROs" },
-  { href: "/ops/data-import/estimates", label: "Import Estimates" },
-  { href: "/ops/surveys", label: "Surveys" },
-  { href: "/ops/production", label: "Production" },
-  { href: "/ops/production/templates", label: "Mail Templates" },
-  { href: "/ops/production/artwork", label: "Mail Artwork" },
-  { href: "/ops/ads-mutations", label: "Ads Mutations" },
-  { href: "/ops/bsm-content-approvals", label: "Content Approvals" },
-  { href: "/ops/sitemap", label: "Sitemap", superadminOnly: true },
-  { href: "/ops/bsm-progress", label: "BSM Progress", superadminOnly: true },
-  { href: "/ops/sales-pipeline", label: "Sales Pipeline", superadminOnly: true },
-  { href: "/ops/intel", label: "Competitor Intel", superadminOnly: true },
-  { href: "/ops/admin/integrations/ccc", label: "CCC Connections", superadminOnly: true },
-  { href: "/ops/sys-config", label: "System Config" },
-];
-
-const canSeeArtwork = (item: { href: string }, access: OpsAccess) =>
-  item.href !== "/ops/production/artwork" || hasOpsFn(access, "design_mail_artwork");
-
-const canSeeContentApprovals = (item: { href: string }, access: OpsAccess) =>
-  item.href !== "/ops/bsm-content-approvals" ||
-  hasOpsFn(access, "manage_bsm_content_approvals");
-
 export default async function OpsLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const {
@@ -66,12 +37,7 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
           </span>
         </div>
         <nav className="flex-1 space-y-1 p-3">
-          {OPS_NAV.filter(
-            (item) =>
-              (!item.superadminOnly || access.role === "psg_superadmin") &&
-              canSeeArtwork(item, access) &&
-              canSeeContentApprovals(item, access),
-          ).map((item) => (
+          {visibleOpsNavItems(access).map((item) => (
             <a
               key={item.href}
               href={item.href}

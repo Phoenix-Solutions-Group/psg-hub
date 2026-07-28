@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getOpsAccess } from "@/lib/auth/ops-access";
+import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
 import {
   UserAccessManager,
   type ManagedShop,
@@ -10,6 +11,7 @@ import {
 import {
   ADMIN_APP_ROLES,
   ADMIN_TIERS,
+  ADMIN_TIER_LABELS,
   SHOP_MEMBER_ROLES,
   type AdminAppRole,
   type AdminTier,
@@ -32,6 +34,20 @@ function cleanTier(tier: unknown): AdminTier | null {
   return (ADMIN_TIERS as readonly string[]).includes(tier as string) ? (tier as AdminTier) : null;
 }
 
+async function listAllAuthUsers(service: ReturnType<typeof createServiceClient>) {
+  const perPage = 1000;
+  const users: User[] = [];
+  for (let page = 1; ; page += 1) {
+    const result = await service.auth.admin.listUsers({ page, perPage });
+    if (result.error) {
+      throw result.error;
+    }
+    users.push(...result.data.users);
+    if (result.data.users.length < perPage) break;
+  }
+  return users;
+}
+
 export default async function UsersAdminPage() {
   const supabase = await createClient();
   const {
@@ -40,12 +56,12 @@ export default async function UsersAdminPage() {
   if (!user) redirect("/login");
 
   const access = await getOpsAccess(user.id);
-  if (access.role !== "psg_superadmin") {
+  if (!hasOpsFn(access, "manage_users")) {
     return (
       <div className="mx-auto max-w-2xl rounded-lg border border-border p-6">
         <h1 className="font-heading text-lg font-semibold">User Access</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          This area is restricted to superadmins.
+          Your security profile does not grant access to manage users.
         </p>
       </div>
     );
@@ -53,14 +69,14 @@ export default async function UsersAdminPage() {
 
   const service = createServiceClient();
   const [
-    authUsersResult,
+    authUsers,
     { data: profiles },
     { data: roleRows },
     { data: memberships },
     { data: shopsRaw },
     { data: subscriptions },
   ] = await Promise.all([
-    service.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    listAllAuthUsers(service),
     service.from("profiles").select("id, display_name"),
     service.from("app_user_roles").select("profile_id, role"),
     service.from("shop_users").select("user_id, shop_id, role"),
@@ -94,6 +110,7 @@ export default async function UsersAdminPage() {
       name: ((s.name as string | null) ?? (s.slug as string | null) ?? id).trim(),
       slug: (s.slug as string | null) ?? null,
       tier: sub?.tier ?? null,
+      tierLabel: sub?.tier ? ADMIN_TIER_LABELS[sub.tier] : "No subscription tier set",
       subscriptionStatus: sub?.status ?? null,
     };
   });
@@ -111,11 +128,12 @@ export default async function UsersAdminPage() {
     membershipsByUserId.set(userId, rows);
   }
 
-  const authUsers = authUsersResult.data?.users ?? [];
   const authUsersById = new Map(authUsers.map((u) => [u.id, u]));
   const profileIds = new Set<string>([
     ...authUsers.map((u) => u.id),
     ...(profiles ?? []).map((p) => p.id as string),
+    ...(roleRows ?? []).map((r) => r.profile_id as string),
+    ...(memberships ?? []).map((m) => m.user_id as string),
   ]);
 
   const users: ManagedUser[] = [...profileIds]
@@ -141,8 +159,8 @@ export default async function UsersAdminPage() {
         </a>
         <h1 className="mt-2 font-heading text-2xl font-semibold tracking-tight">User Access</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage user roles, shop assignments, and shop tiers. Every saved change writes to the
-          access audit.
+          Invite people, set their PSG-wide role, connect one login to one or more shops, and
+          adjust each shop service tier. Every saved change is recorded in the access audit.
         </p>
       </div>
 
