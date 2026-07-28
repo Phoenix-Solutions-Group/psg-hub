@@ -6,6 +6,8 @@ export const SUPPORTED_APPROVAL_FILE_TYPES = {
   "image/png": { extension: "png", contentType: "image" },
   "image/jpeg": { extension: "jpg", contentType: "image" },
   "image/webp": { extension: "webp", contentType: "image" },
+  "text/markdown": { extension: "md", contentType: "document" },
+  "text/html": { extension: "html", contentType: "document" },
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
     extension: "docx",
     contentType: "document",
@@ -15,6 +17,38 @@ export const SUPPORTED_APPROVAL_FILE_TYPES = {
 
 export type BsmApprovalContentType =
   (typeof SUPPORTED_APPROVAL_FILE_TYPES)[keyof typeof SUPPORTED_APPROVAL_FILE_TYPES]["contentType"];
+export type BsmApprovalUploadMimeType = keyof typeof SUPPORTED_APPROVAL_FILE_TYPES;
+
+const APPROVAL_FILE_EXTENSION_MIME_TYPES: Record<string, BsmApprovalUploadMimeType> = {
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  htm: "text/html",
+  html: "text/html",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  markdown: "text/markdown",
+  md: "text/markdown",
+  pdf: "application/pdf",
+  png: "image/png",
+  txt: "text/plain",
+  webp: "image/webp",
+};
+
+export function normalizeApprovalMimeType(
+  fileName: unknown,
+  contentType: unknown,
+): BsmApprovalUploadMimeType | null {
+  if (typeof contentType === "string") {
+    const normalized = contentType.trim().toLowerCase();
+    if (normalized in SUPPORTED_APPROVAL_FILE_TYPES) {
+      return normalized as BsmApprovalUploadMimeType;
+    }
+  }
+
+  if (typeof fileName !== "string") return null;
+  const extension = fileName.trim().toLowerCase().split(".").pop();
+  if (!extension) return null;
+  return APPROVAL_FILE_EXTENSION_MIME_TYPES[extension] ?? null;
+}
 
 export type BsmContentApprovalListItem = {
   id: string;

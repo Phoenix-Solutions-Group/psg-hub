@@ -43,6 +43,22 @@ describe("BSM content approval upload helpers", () => {
     expect(validateApprovalFile("application/pdf", 1024)).toEqual({
       extension: "pdf",
       contentType: "pdf",
+      mimeType: "application/pdf",
+    });
+    expect(validateApprovalFile("", 1024, "proof.PDF")).toEqual({
+      extension: "pdf",
+      contentType: "pdf",
+      mimeType: "application/pdf",
+    });
+    expect(validateApprovalFile("text/markdown", 1024, "copy.md")).toEqual({
+      extension: "md",
+      contentType: "document",
+      mimeType: "text/markdown",
+    });
+    expect(validateApprovalFile("", 1024, "landing-page.html")).toEqual({
+      extension: "html",
+      contentType: "document",
+      mimeType: "text/html",
     });
 
     expect(() => validateApprovalFile("application/zip", 1024)).toThrow(

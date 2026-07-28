@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BsmContentApprovalManager } from "@/components/ops/bsm-content-approval-manager";
+import {
+  BSM_CONTENT_APPROVAL_FILE_ACCEPT,
+  BsmContentApprovalManager,
+} from "@/components/ops/bsm-content-approval-manager";
 
 describe("BsmContentApprovalManager", () => {
   it("preselects the active shop and renders readable shop names", () => {
@@ -29,5 +32,18 @@ describe("BsmContentApprovalManager", () => {
 
     expect(html).toContain('placeholder="No shops available"');
     expect(html).not.toContain("00000000-0000-0000-0000-000000000000");
+  });
+
+  it("allows admins to select PDF, Markdown, and HTML documents from the file picker", () => {
+    const html = renderToStaticMarkup(
+      <BsmContentApprovalManager initialApprovals={[]} activeShopId={null} shops={[]} />,
+    );
+
+    expect(html).toContain(`accept="${BSM_CONTENT_APPROVAL_FILE_ACCEPT}"`);
+    expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".pdf");
+    expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".md");
+    expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".markdown");
+    expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".html");
+    expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".htm");
   });
 });

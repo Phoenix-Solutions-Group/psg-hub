@@ -8,6 +8,7 @@ import {
   MAX_APPROVAL_FILE_BYTES,
   SUPPORTED_APPROVAL_FILE_TYPES,
   type BsmContentApprovalListItem,
+  normalizeApprovalMimeType,
 } from "@/lib/bsm/content-approvals-shared";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,9 @@ type Phase =
   | { kind: "uploading" }
   | { kind: "success"; message: string }
   | { kind: "error"; message: string };
+
+export const BSM_CONTENT_APPROVAL_FILE_ACCEPT =
+  ".pdf,.md,.markdown,.html,.htm,.png,.jpg,.jpeg,.webp,.docx,.txt,application/pdf,text/markdown,text/html,image/png,image/jpeg,image/webp,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
 
 export type BsmContentApprovalShopOption = { id: string; name: string };
 
@@ -75,8 +79,8 @@ export function BsmContentApprovalManager({
       return null;
     }
     if (!file) return null;
-    if (!(file.type in SUPPORTED_APPROVAL_FILE_TYPES)) {
-      return "This file type is not supported. Upload a PDF, image, Word document, or text file.";
+    if (!normalizeApprovalMimeType(file.name, file.type)) {
+      return "This file type is not supported. Upload a PDF, MD, HTML, image, Word document, or text file.";
     }
     if (file.size <= 0) return "The selected file is empty.";
     if (file.size > MAX_APPROVAL_FILE_BYTES) return "The file is too large. Upload a file under 25 MB.";
@@ -90,7 +94,8 @@ export function BsmContentApprovalManager({
     (sourceKind === "generated_page" ? Boolean(generatedPagePath.trim()) : Boolean(file));
 
   async function startReviewItem() {
-    if (validationError || (sourceKind === "uploaded_file" && !file)) {
+    const selectedFile = sourceKind === "uploaded_file" ? file : null;
+    if (validationError || (sourceKind === "uploaded_file" && !selectedFile)) {
       setPhase({
         kind: "error",
         message: validationError ?? "Choose a file before uploading.",
@@ -117,9 +122,11 @@ export function BsmContentApprovalManager({
                 sourceContentItemId: sourceContentItemId.trim() || null,
               }
             : {
-                fileName: file?.name,
-                contentType: file?.type,
-                byteSize: file?.size,
+                fileName: selectedFile?.name,
+                contentType: selectedFile
+                  ? normalizeApprovalMimeType(selectedFile.name, selectedFile.type)
+                  : null,
+                byteSize: selectedFile?.size,
               }),
         }),
       });
@@ -143,14 +150,16 @@ export function BsmContentApprovalManager({
     }
 
     if ("upload" in body) {
-      if (!file) {
+      if (!selectedFile) {
         setPhase({ kind: "error", message: "Choose a file before uploading." });
         return;
       }
       const supabase = createClient();
+      const contentType = normalizeApprovalMimeType(selectedFile.name, selectedFile.type) ?? selectedFile.type;
+      const fileBody = await selectedFile.arrayBuffer();
       const { error } = await supabase.storage
         .from(BSM_CONTENT_APPROVALS_BUCKET)
-        .uploadToSignedUrl(body.upload.path, body.upload.token, file);
+        .uploadToSignedUrl(body.upload.path, body.upload.token, fileBody, { contentType });
       if (error) {
         setPhase({ kind: "error", message: `Upload failed: ${error.message}` });
         return;
@@ -302,7 +311,7 @@ export function BsmContentApprovalManager({
                 ref={fileRef}
                 id="bsm-approval-file"
                 type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.txt,application/pdf,image/png,image/jpeg,image/webp,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                accept={BSM_CONTENT_APPROVAL_FILE_ACCEPT}
                 disabled={uploading}
                 onChange={(event) => {
                   setFile(event.target.files?.[0] ?? null);
