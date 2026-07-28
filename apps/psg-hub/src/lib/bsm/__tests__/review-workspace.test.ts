@@ -384,7 +384,13 @@ describe("BSM review workspace foundation service", () => {
     expect(inserts.find((entry) => entry.table === "bsm_content_review_items")?.payload).toMatchObject({
       project_id: slice.projectId,
       processing_status: "ready",
+      status: "in_review",
       position: 1,
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload).toMatchObject({
+      scan_status: "clean",
+      conversion_status: "not_needed",
+      sanitization_status: "complete",
     });
     expect(inserts.find((entry) => entry.table === "bsm_content_review_invitations")?.payload).toMatchObject({
       reviewer_email: "owner@example.com",
