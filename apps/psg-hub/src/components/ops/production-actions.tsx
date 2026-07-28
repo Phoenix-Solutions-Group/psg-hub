@@ -273,22 +273,22 @@ export function ProductionDocumentsTable({ rows: initialRows }: { rows: ActionDo
               onChange={(e) => setField("external_id", e.target.value)}
             />
             <Input
-              placeholder="Company ID (optional)"
+              placeholder="Shop name or ID (optional)"
               value={filters.company_id}
               onChange={(e) => setField("company_id", e.target.value)}
             />
             <Input
-              placeholder="Repair customer ID (optional)"
+              placeholder="Customer name or ID (optional)"
               value={filters.repair_customer_id}
               onChange={(e) => setField("repair_customer_id", e.target.value)}
             />
             <Input
-              placeholder="Product ID (optional)"
+              placeholder="Mail piece type or product ID (optional)"
               value={filters.product_id}
               onChange={(e) => setField("product_id", e.target.value)}
             />
             <Input
-              placeholder="Batch ID (optional)"
+              placeholder="Batch name or ID (optional)"
               value={filters.batch_id}
               onChange={(e) => setField("batch_id", e.target.value)}
             />

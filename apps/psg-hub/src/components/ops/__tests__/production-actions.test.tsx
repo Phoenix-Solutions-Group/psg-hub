@@ -47,6 +47,16 @@ describe("ProductionDocumentsTable", () => {
     expect(html).toContain('href="https://proofs.example/psc_123.pdf"');
   });
 
+  it("labels optional search filters in admin-friendly terms", () => {
+    const html = renderToStaticMarkup(<ProductionDocumentsTable rows={[row()]} />);
+
+    expect(html).toContain("Search shop, customer, batch, print ID, status");
+    expect(html).toContain("Shop name or ID (optional)");
+    expect(html).toContain("Customer name or ID (optional)");
+    expect(html).toContain("Mail piece type or product ID (optional)");
+    expect(html).toContain("Batch name or ID (optional)");
+  });
+
   it("falls back to the rendered artwork when a vendor proof is not present", () => {
     const html = renderToStaticMarkup(
       <ProductionDocumentsTable rows={[row({ proof_url: null })]} />
