@@ -206,7 +206,7 @@ describe("review workspace processing contract", () => {
     expect(updates[0]).toMatchObject({
       table: "bsm_content_review_processing_jobs",
       filters: { shop_id: SHOP_ID, idempotency_key: idempotencyKey },
-      payload: { status: "succeeded", scan_status: "clean" },
+      payload: { status: "succeeded", scan_status: "clean", output_jsonb: expect.any(Object), finished_at: completedAt },
     });
     expect(updates[1]).toMatchObject({
       table: "bsm_content_review_versions",

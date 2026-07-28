@@ -327,9 +327,11 @@ export async function recordReviewWorkspaceProcessingResult(
       conversion_status: input.conversionStatus,
       sanitization_status: input.sanitizationStatus,
       result_manifest_jsonb: input.resultManifest,
+      output_jsonb: input.resultManifest,
       error_code: input.errorCode ?? null,
       error_message: input.errorMessage ?? null,
       completed_at: completedAt,
+      finished_at: completedAt,
       updated_at: completedAt,
     })
     .eq("shop_id", assertUuid("shopId", input.shopId))

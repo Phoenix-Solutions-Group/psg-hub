@@ -208,6 +208,32 @@ create table if not exists public.bsm_content_review_processing_jobs (
     check (status in ('queued', 'running', 'succeeded', 'failed', 'cancelled'))
 );
 
+-- PSG-2372: the processing worker contract migration runs before this
+-- foundation migration and may have already created this table. Keep the
+-- contract additive so the service enqueue write always has matching columns.
+alter table public.bsm_content_review_processing_jobs
+  add column if not exists project_id uuid references public.bsm_content_review_projects (id) on delete cascade,
+  add column if not exists round_id uuid references public.bsm_content_review_rounds (id) on delete cascade,
+  add column if not exists kind text not null default 'upload_scan',
+  add column if not exists attempt_count integer not null default 0 check (attempt_count >= 0),
+  add column if not exists input_jsonb jsonb not null default '{}'::jsonb,
+  add column if not exists output_jsonb jsonb not null default '{}'::jsonb,
+  add column if not exists queued_at timestamptz not null default now(),
+  add column if not exists finished_at timestamptz,
+  add column if not exists created_by_profile_id uuid references public.profiles (id) on delete set null;
+
+alter table public.bsm_content_review_processing_jobs
+  drop constraint if exists bsm_content_review_processing_jobs_kind_check;
+alter table public.bsm_content_review_processing_jobs
+  add constraint bsm_content_review_processing_jobs_kind_check
+    check (kind in ('upload_scan', 'pdf_preview', 'doc_to_pdf', 'html_sanitize', 'zip_extract', 'summary_pdf', 'purge'));
+
+alter table public.bsm_content_review_processing_jobs
+  drop constraint if exists bsm_content_review_processing_jobs_status_check;
+alter table public.bsm_content_review_processing_jobs
+  add constraint bsm_content_review_processing_jobs_status_check
+    check (status in ('queued', 'running', 'succeeded', 'failed', 'quarantined', 'blocked_runtime', 'retry_scheduled', 'dead_letter', 'cancelled'));
+
 create unique index if not exists bsm_content_review_processing_jobs_idempotency_uniq
   on public.bsm_content_review_processing_jobs (idempotency_key);
 
@@ -570,13 +596,6 @@ create policy bsm_content_review_comment_threads_select_owner_or_staff
   );
 
 drop policy if exists bsm_content_review_processing_jobs_select_staff on public.bsm_content_review_processing_jobs;
-create policy bsm_content_review_processing_jobs_select_staff
-  on public.bsm_content_review_processing_jobs
-  for select to authenticated
-  using (
-    (select private.current_user_has_fn('manage_bsm_content_approvals'))
-    and (select private.bsm_content_review_user_can_access_project(project_id))
-  );
 
 drop policy if exists bsm_content_review_summaries_select_authorized on public.bsm_content_review_summaries;
 create policy bsm_content_review_summaries_select_authorized
@@ -664,9 +683,10 @@ grant select on table public.bsm_content_review_round_documents to authenticated
 grant select on table public.bsm_content_review_invitations to authenticated;
 grant select on table public.bsm_content_review_sessions to authenticated;
 grant select on table public.bsm_content_review_comment_threads to authenticated;
-grant select on table public.bsm_content_review_processing_jobs to authenticated;
 grant select on table public.bsm_content_review_summaries to authenticated;
 grant select on table public.bsm_content_review_deletion_tombstones to authenticated;
+revoke all on table public.bsm_content_review_processing_jobs from anon;
+revoke all on table public.bsm_content_review_processing_jobs from authenticated;
 
 grant all on table public.bsm_content_review_projects to service_role;
 grant all on table public.bsm_content_review_project_collaborators to service_role;
