@@ -44,10 +44,13 @@ test("ops happy path: create company -> add employees -> import RO", async ({ pa
   ).toBeVisible();
 
   await page.getByRole("button", { name: "+ New company" }).click();
-  await page.getByPlaceholder("Company name").fill(OPS_STAFF.companyName);
-  await page.getByPlaceholder("Contact").fill("Pat Owner");
-  await page.getByPlaceholder("Phone").fill("555-0142");
-  await page.getByRole("button", { name: /^(Create|Save|Add)/ }).click();
+  const newCompanyForm = page.locator("form").filter({
+    has: page.getByPlaceholder("Company name"),
+  });
+  await newCompanyForm.getByPlaceholder("Company name").fill(OPS_STAFF.companyName);
+  await newCompanyForm.getByPlaceholder("Contact").fill("Pat Owner");
+  await newCompanyForm.getByPlaceholder("Phone").fill("555-0142");
+  await newCompanyForm.getByRole("button", { name: /^(Create|Save|Add)/ }).click();
 
   // The server list refreshes (router.refresh) — the new row links to the
   // company detail page, which is our proof the create round-tripped.

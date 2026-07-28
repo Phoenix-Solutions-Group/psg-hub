@@ -83,6 +83,7 @@ test("production happy path: generate -> print (Lob test) -> historical -> repri
   page,
 }) => {
   await seedReleasedWarrantyTemplate();
+  const batchName = `${PROD_OPS.batchName} ${Date.now()}`;
 
   // --- /ops/production landing: staff has the manage_production surface --------
   await page.goto("/ops/production");
@@ -165,7 +166,7 @@ test("production happy path: generate -> print (Lob test) -> historical -> repri
   // --- Step 4: generate the batch (1 letter document for the customer) ---------
   const genRes = await page.request.post("/api/production/generate", {
     data: {
-      name: PROD_OPS.batchName,
+      name: batchName,
       company_id: companyId,
       product_id: productId,
       product: "warranty",
@@ -187,8 +188,10 @@ test("production happy path: generate -> print (Lob test) -> historical -> repri
 
   // The queued batch shows up in the /ops/production print queue.
   await page.goto("/ops/production");
-  const batchRow = page.locator("tr").filter({ hasText: PROD_OPS.batchName });
-  await expect(page.getByText(PROD_OPS.batchName)).toBeVisible();
+  const batchRow = page.locator("tr").filter({ hasText: batchName }).filter({
+    has: page.getByRole("button", { name: "Print batch" }),
+  });
+  await expect(batchRow).toHaveCount(1);
   await expect(batchRow.getByRole("button", { name: "Print batch" })).toBeVisible();
 
   // --- Step 5: print the batch through the Lob TEST API ------------------------
@@ -218,7 +221,7 @@ test("production happy path: generate -> print (Lob test) -> historical -> repri
   const historical = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Historical" }),
   });
-  await expect(historical.getByText(PROD_OPS.batchName)).toBeVisible();
+  await expect(historical.getByText(batchName)).toBeVisible();
   await expect(page.getByText(externalId)).toBeVisible();
 
   // --- Step 6: historical search finds the printed piece -----------------------
