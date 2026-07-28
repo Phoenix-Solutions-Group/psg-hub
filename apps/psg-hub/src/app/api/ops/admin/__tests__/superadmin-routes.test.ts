@@ -779,4 +779,33 @@ describe("admin shop tier route", () => {
       targetShopId: SHOP_ID,
     });
   });
+
+  it("clears a shop tier and writes an audit event", async () => {
+    queue("shops", "select", { data: { id: SHOP_ID, name: "Wallace", slug: "wallace" }, error: null });
+    queue("subscriptions", "select", {
+      data: { id: "sub-1", tier: "growth", status: "active" },
+      error: null,
+    });
+    queue("subscriptions", "update", {
+      data: { shop_id: SHOP_ID, tier: null, status: "active" },
+      error: null,
+    });
+
+    const res = await shopTierRoute.PATCH(
+      req("PATCH", `/api/ops/admin/shops/${SHOP_ID}/tier`, { tier: null }),
+      params({ shopId: SHOP_ID })
+    );
+
+    expect(res.status).toBe(200);
+    expect(operations).toContainEqual({
+      table: "subscriptions",
+      op: "update",
+      payload: { tier: null },
+    });
+    expect(auditEvents[0]).toMatchObject({
+      action: "tier.change",
+      targetShopId: SHOP_ID,
+      payload: expect.objectContaining({ beforeTier: "growth", afterTier: null }),
+    });
+  });
 });

@@ -74,6 +74,7 @@ describe("UserAccessManager", () => {
     expect(html).toContain("Shop to update");
     expect(html).toContain("Tier for selected shop");
     expect(html).toContain("Current tier: Growth");
+    expect(html).toContain(">No subscription tier</option>");
     expect(html).toContain(">Growth</option>");
     expect(html).toContain(">Performance</option>");
   });

@@ -18,6 +18,8 @@ import {
   type ShopMemberRole,
 } from "@/lib/ops/user-management";
 
+const NO_TIER_VALUE = "__no_tier__";
+
 export type ManagedShop = {
   id: string;
   name: string;
@@ -246,7 +248,7 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
   const [shopId, setShopId] = useState(shops[0]?.id ?? "");
   const [shopRole, setShopRole] = useState<ShopMemberRole>("viewer");
   const [tierShopId, setTierShopId] = useState(shops[0]?.id ?? "");
-  const [tier, setTier] = useState<AdminTier>(shops[0]?.tier ?? "essentials");
+  const [tier, setTier] = useState<AdminTier | null>(shops[0]?.tier ?? null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -377,7 +379,7 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
             onChange={(e) => {
               const nextShop = shops.find((s) => s.id === e.target.value);
               setTierShopId(e.target.value);
-              setTier(nextShop?.tier ?? "essentials");
+              setTier(nextShop?.tier ?? null);
             }}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
@@ -392,10 +394,14 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
           </label>
           <select
             id={`tier-value-${user.profileId}`}
-            value={tier}
-            onChange={(e) => setTier(e.target.value as AdminTier)}
+            value={tier ?? NO_TIER_VALUE}
+            onChange={(e) => {
+              const value = e.target.value;
+              setTier(value === NO_TIER_VALUE ? null : (value as AdminTier));
+            }}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
+            <option value={NO_TIER_VALUE}>No subscription tier</option>
             {ADMIN_TIERS.map((t) => (
               <option key={t} value={t}>
                 {ADMIN_TIER_LABELS[t]}

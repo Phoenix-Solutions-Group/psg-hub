@@ -6,7 +6,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { ADMIN_TIERS } from "@/lib/ops/user-management";
 
 const tierSchema = z.object({
-  tier: z.enum(ADMIN_TIERS),
+  tier: z.union([z.enum(ADMIN_TIERS), z.null()]),
 });
 
 export async function PATCH(
