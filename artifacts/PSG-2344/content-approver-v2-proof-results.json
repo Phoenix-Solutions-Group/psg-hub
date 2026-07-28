@@ -1,0 +1,144 @@
+{
+  "startedAt": "2026-07-28T17:17:11.787Z",
+  "largePdf": {
+    "status": "pass",
+    "sizeBytes": 104857600,
+    "createdMs": 201,
+    "copiedMs": 205,
+    "previewedMs": 6,
+    "deletedMs": 80,
+    "peakRssMiB": 115.5,
+    "previewHeaderOk": true,
+    "previewFooterOk": true
+  },
+  "conversionAndScanning": {
+    "docConversion": {
+      "status": "blocked",
+      "availableConverter": null,
+      "finding": "No LibreOffice/soffice binary is available, so legacy .doc and .docx conversion cannot be proven in this runtime."
+    },
+    "malwareScanning": {
+      "status": "blocked",
+      "availableScanner": null,
+      "finding": "No ClamAV scanner is available, so the infected EICAR fixture cannot be rejected before reviewer access in this runtime."
+    }
+  },
+  "htmlAndZip": {
+    "status": "pass",
+    "html": {
+      "safe": {
+        "ok": true,
+        "failures": []
+      },
+      "script": {
+        "ok": false,
+        "failures": [
+          "script tag"
+        ]
+      },
+      "handler": {
+        "ok": false,
+        "failures": [
+          "inline event handler"
+        ]
+      },
+      "form": {
+        "ok": false,
+        "failures": [
+          "form tag"
+        ]
+      },
+      "external": {
+        "ok": false,
+        "failures": [
+          "unsafe URL or external call"
+        ]
+      },
+      "javascript": {
+        "ok": false,
+        "failures": [
+          "unsafe URL or external call"
+        ]
+      }
+    },
+    "zip": {
+      "safe": {
+        "ok": true,
+        "failures": [],
+        "entries": 1,
+        "totalUncompressed": 67
+      },
+      "traversal": {
+        "ok": false,
+        "failures": [
+          "unsafe path: ../secret.html"
+        ],
+        "entries": 1,
+        "totalUncompressed": 1
+      },
+      "absolute": {
+        "ok": false,
+        "failures": [
+          "unsafe path: /etc/passwd"
+        ],
+        "entries": 1,
+        "totalUncompressed": 1
+      },
+      "symlink": {
+        "ok": false,
+        "failures": [
+          "symlink entry: link"
+        ],
+        "entries": 1,
+        "totalUncompressed": 6
+      },
+      "executable": {
+        "ok": false,
+        "failures": [
+          "executable entry: run.sh"
+        ],
+        "entries": 1,
+        "totalUncompressed": 9
+      },
+      "expansion": {
+        "ok": false,
+        "failures": [
+          "excessive expansion: huge.bin",
+          "ZIP exceeds total expansion limit"
+        ],
+        "entries": 1,
+        "totalUncompressed": 209715200
+      }
+    }
+  },
+  "batch": {
+    "status": "pass",
+    "documents": 50,
+    "testedBytes": 104857600,
+    "totalMs": 656,
+    "mbPerSecond": 152.4,
+    "projected50x100MbSeconds": 33,
+    "failureReportingShape": {
+      "documentId": "doc-17",
+      "status": "failed",
+      "reason": "Unsupported file type or unsafe content detected"
+    }
+  },
+  "storage": {
+    "status": "pass",
+    "maxDocuments": 50,
+    "maxFileSizeMb": 100,
+    "originalsOnlyGiB": 4.88,
+    "originalsPlusReviewCopiesGiB": 9.77,
+    "estimatedMonthlyStorageUsdAtSupabaseRate": 0.21,
+    "note": "Estimate uses 100 MB originals plus 100 MB processed review copies for every document; database, transfer, image/video transforms, and backups are excluded."
+  },
+  "summary": {
+    "status": "pass",
+    "generatedBytes": 343,
+    "attributionIncluded": true,
+    "nonResponderIncluded": true,
+    "caveat": "This proves the summary data contract and attribution wording, not browser-rendered PDF fidelity."
+  },
+  "finishedAt": "2026-07-28T17:17:12.945Z"
+}
