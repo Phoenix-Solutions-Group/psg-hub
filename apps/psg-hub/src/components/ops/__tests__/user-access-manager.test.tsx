@@ -34,6 +34,9 @@ const users: ManagedUser[] = [
     profileId: "11111111-1111-4111-8111-111111111111",
     displayName: "BSM Demo Admin",
     email: "demo-admin@psgweb.me",
+    bannedUntil: null,
+    isDeleted: false,
+    isSuspended: false,
     role: "psg_superadmin",
     memberships: [
       { shopId: shops[0].id, shopName: shops[0].name, role: "owner" },
@@ -52,6 +55,7 @@ describe("UserAccessManager", () => {
 
     expect(html).toContain("BSM Demo Admin");
     expect(html).toContain("demo-admin@psgweb.me");
+    expect(html).toContain("Active");
     expect(html).toContain("Wallace Collision");
     expect(html).toContain("Tedesco Auto Body");
     expect(html).toContain("Owner");

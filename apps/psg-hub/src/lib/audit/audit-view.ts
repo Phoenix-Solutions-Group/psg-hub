@@ -28,6 +28,10 @@ export type AuditCategory =
 
 const ACTION_LABELS: Record<AuditAction, string> = {
   "user.invite": "Invited user",
+  "user.update": "Edited user",
+  "user.suspend": "Suspended user",
+  "user.reactivate": "Reactivated user",
+  "user.delete": "Deleted user",
   "role.grant": "Granted role",
   "role.revoke": "Revoked role",
   "shop.assign": "Assigned to shop",
