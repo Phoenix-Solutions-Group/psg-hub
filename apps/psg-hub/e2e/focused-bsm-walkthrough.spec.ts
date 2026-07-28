@@ -132,6 +132,99 @@ test.describe("clean BSM demo user walkthrough", () => {
     await expect(page.getByRole("heading", { name: "404", exact: true })).toBeVisible();
   });
 
+  test("customer can add one phone photo to a Content Approver reply", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/dashboard/approvals");
+    await page.getByRole("link", { name: /E2E BSM homepage approval/ }).click();
+    await expect(page.getByRole("heading", { name: "E2E BSM homepage approval" })).toBeVisible();
+
+    const commentInput = page.getByLabel("Comment");
+    const photoInput = page.locator("#bsm-comment-photo");
+    const addButton = page.getByRole("button", { name: "Add comment" });
+
+    await commentInput.fill("Non-photo browser rejection");
+    await photoInput.setInputFiles({
+      name: "not-a-photo.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("not a photo"),
+    });
+    await expect(page.getByText("not-a-photo.txt")).toBeVisible();
+    await addButton.click();
+    await expect(page.getByText("Only JPG, PNG, or WebP photos can be attached.")).toBeVisible();
+    await expect(page.getByText("Non-photo browser rejection").first()).not.toBeVisible();
+
+    await page.getByRole("button", { name: "Remove photo" }).click();
+    await commentInput.fill("Oversize photo browser rejection");
+    await photoInput.setInputFiles({
+      name: "oversize-photo.png",
+      mimeType: "image/png",
+      buffer: Buffer.concat([
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        Buffer.alloc(8 * 1024 * 1024),
+      ]),
+    });
+    await addButton.click();
+    await expect(page.getByText("The photo is too large. Attach one photo under 8 MB.")).toBeVisible();
+    await expect(page.getByText("Oversize photo browser rejection").first()).not.toBeVisible();
+
+    const twoPhotoResult = await page.evaluate(async (reviewItemId) => {
+      const body = new FormData();
+      body.set("body", "Two photo browser rejection");
+      body.append(
+        "photo",
+        new File([new Uint8Array([0xff, 0xd8, 0xff, 0x00])], "first-photo.jpg", { type: "image/jpeg" }),
+      );
+      body.append(
+        "photo",
+        new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "second-photo.png", {
+          type: "image/png",
+        }),
+      );
+      const response = await fetch(`/api/bsm/content-approvals/${reviewItemId}/comments`, {
+        method: "POST",
+        body,
+      });
+      return { status: response.status, json: await response.json() };
+    }, BSM_DEMO_USER.bsmReviewItemId);
+    expect(twoPhotoResult).toEqual({
+      status: 400,
+      json: { error: "Attach only one photo to this reply." },
+    });
+    await page.reload();
+    await expect(page.getByText("Two photo browser rejection").first()).not.toBeVisible();
+
+    await commentInput.fill("Phone photo clarification reply");
+    await photoInput.setInputFiles({
+      name: "first-photo.png",
+      mimeType: "image/png",
+      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]),
+    });
+    await expect(page.getByText("first-photo.png")).toBeVisible();
+    await page.getByRole("button", { name: "Remove photo" }).click();
+    await expect(page.getByText("first-photo.png")).not.toBeVisible();
+
+    await photoInput.setInputFiles({
+      name: "candidate-photo.webp",
+      mimeType: "image/webp",
+      buffer: Buffer.from([0x52, 0x49, 0x46, 0x46, 0x0c, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]),
+    });
+    await expect(page.getByText("candidate-photo.webp")).toBeVisible();
+    await photoInput.setInputFiles({
+      name: "replacement-photo.png",
+      mimeType: "image/png",
+      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x02]),
+    });
+    await expect(page.getByText("replacement-photo.png")).toBeVisible();
+    await expect(page.getByText("candidate-photo.webp")).not.toBeVisible();
+
+    await addButton.click();
+    await expect(page.getByText("Phone photo clarification reply").first()).toBeVisible();
+    await expect(page.getByText("replacement-photo.png").first()).toBeVisible();
+    await expect(page.getByText("1 KB").first()).toBeVisible();
+    await expect(page.getByText("Photo passed upload screening").first()).toBeVisible();
+    await shoot(page, "focused-bsm-content-approval-phone-photo-reply");
+  });
+
   for (const route of [
     { path: "/dashboard/analytics", label: "focused-bsm-analytics" },
     { path: "/dashboard/ads", label: "focused-bsm-ads" },
