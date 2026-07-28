@@ -428,6 +428,21 @@ export function BsmContentApprovalManager({
                           ? `${item.latestDecision.decision.replaceAll("_", " ")}`
                           : "No decision yet"}
                       </div>
+                      {item.replyAttachments.length > 0 ? (
+                        <div className="mt-2 space-y-1">
+                          {item.replyAttachments.map((attachment) => (
+                            <a
+                              key={attachment.id}
+                              href={`/api/bsm/content-approvals/attachments/${attachment.id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block font-medium text-ember hover:text-foreground"
+                            >
+                              Open photo: {attachment.originalFilename}
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {formatDate(item.updatedAt)}

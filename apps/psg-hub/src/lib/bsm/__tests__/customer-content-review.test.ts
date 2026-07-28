@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   addBsmCustomerReviewComment,
+  getBsmReviewCommentAttachmentDownload,
   recordBsmCustomerReviewDecision,
   requestBsmContentRestore,
 } from "@/lib/bsm/customer-content-review";
@@ -11,15 +12,29 @@ const REVIEW_ITEM_ID = "11111111-1111-4111-8111-111111111111";
 const SHOP_ID = "22222222-2222-4222-8222-222222222222";
 const USER_ID = "33333333-3333-4333-8333-333333333333";
 const VERSION_ID = "44444444-4444-4444-8444-444444444444";
+const ATTACHMENT_ID = "55555555-5555-4555-8555-555555555555";
 
 const serviceState = {
   inserts: [] as Array<{ table: string; payload: Record<string, unknown> }>,
   updates: [] as Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }>,
   uploads: [] as Array<{ bucket: string; path: string; contentType: string }>,
+  downloads: [] as Array<{ bucket: string; path: string }>,
+  opsRole: null as "psg_internal" | "psg_superadmin" | null,
+  opsFunctions: new Set<string>(),
 };
 
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => createFakeServiceClient(),
+}));
+
+vi.mock("@/lib/auth/ops-access", () => ({
+  getOpsAccess: () =>
+    Promise.resolve({
+      role: serviceState.opsRole,
+      functions: serviceState.opsFunctions,
+    }),
+  hasOpsFn: (access: { role: string | null; functions: Set<string> }, fn: string) =>
+    access.role === "psg_superadmin" || (access.role === "psg_internal" && access.functions.has(fn)),
 }));
 
 function createAccessClient(role: string | null = "owner") {
@@ -56,6 +71,10 @@ function createFakeServiceClient() {
           upload(path: string, _bytes: Uint8Array, options: { contentType?: string }) {
             serviceState.uploads.push({ bucket, path, contentType: options.contentType ?? "" });
             return Promise.resolve({ data: { path }, error: null });
+          },
+          download(path: string) {
+            serviceState.downloads.push({ bucket, path });
+            return Promise.resolve({ data: new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }), error: null });
           },
         };
       },
@@ -102,6 +121,21 @@ class Query {
     if (this.table === "bsm_content_review_versions") {
       return Promise.resolve({ data: { id: VERSION_ID }, error: null });
     }
+    if (this.table === "bsm_content_review_comment_attachments") {
+      if (this.filters.id !== ATTACHMENT_ID) return Promise.resolve({ data: null, error: null });
+      return Promise.resolve({
+        data: {
+          id: ATTACHMENT_ID,
+          shop_id: SHOP_ID,
+          original_filename: "reply-photo.png",
+          content_type: "image/png",
+          byte_size: 3,
+          storage_bucket: "bsm-content-approvals",
+          storage_path: `${SHOP_ID}/${REVIEW_ITEM_ID}/comments/comment-1/${ATTACHMENT_ID}/reply-photo.png`,
+        },
+        error: null,
+      });
+    }
     return Promise.resolve({ data: null, error: null });
   }
 
@@ -144,6 +178,9 @@ describe("customer content review actions", () => {
     serviceState.inserts = [];
     serviceState.updates = [];
     serviceState.uploads = [];
+    serviceState.downloads = [];
+    serviceState.opsRole = null;
+    serviceState.opsFunctions = new Set();
 
     await addBsmCustomerReviewComment(createAccessClient() as never, REVIEW_ITEM_ID, USER_ID, "Looks good.");
 
@@ -168,6 +205,9 @@ describe("customer content review actions", () => {
     serviceState.inserts = [];
     serviceState.updates = [];
     serviceState.uploads = [];
+    serviceState.downloads = [];
+    serviceState.opsRole = null;
+    serviceState.opsFunctions = new Set();
 
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
     await addBsmCustomerReviewComment(createAccessClient() as never, REVIEW_ITEM_ID, USER_ID, "Logo attached.", {
@@ -207,6 +247,9 @@ describe("customer content review actions", () => {
     serviceState.inserts = [];
     serviceState.updates = [];
     serviceState.uploads = [];
+    serviceState.downloads = [];
+    serviceState.opsRole = null;
+    serviceState.opsFunctions = new Set();
 
     await expect(
       addBsmCustomerReviewComment(createAccessClient() as never, REVIEW_ITEM_ID, USER_ID, "Not a photo.", {
@@ -237,6 +280,9 @@ describe("customer content review actions", () => {
     serviceState.inserts = [];
     serviceState.updates = [];
     serviceState.uploads = [];
+    serviceState.downloads = [];
+    serviceState.opsRole = null;
+    serviceState.opsFunctions = new Set();
     const jpg = new Uint8Array([0xff, 0xd8, 0xff, 0x00]);
 
     await expect(
@@ -250,6 +296,57 @@ describe("customer content review actions", () => {
 
     expect(serviceState.uploads).toEqual([]);
     expect(serviceState.inserts).toEqual([]);
+  });
+
+  it("downloads a reply attachment for a same-shop customer", async () => {
+    serviceState.downloads = [];
+    serviceState.opsRole = null;
+    serviceState.opsFunctions = new Set();
+
+    const attachment = await getBsmReviewCommentAttachmentDownload(
+      createAccessClient() as never,
+      ATTACHMENT_ID,
+      USER_ID,
+    );
+
+    expect(attachment).toMatchObject({
+      originalFilename: "reply-photo.png",
+      contentType: "image/png",
+      byteSize: 3,
+    });
+    expect(serviceState.downloads).toEqual([
+      {
+        bucket: "bsm-content-approvals",
+        path: `${SHOP_ID}/${REVIEW_ITEM_ID}/comments/comment-1/${ATTACHMENT_ID}/reply-photo.png`,
+      },
+    ]);
+  });
+
+  it("denies reply attachment downloads for a different shop customer", async () => {
+    serviceState.downloads = [];
+    serviceState.opsRole = null;
+    serviceState.opsFunctions = new Set();
+
+    await expect(
+      getBsmReviewCommentAttachmentDownload(createAccessClient(null) as never, ATTACHMENT_ID, USER_ID),
+    ).rejects.toMatchObject({ status: 403 });
+
+    expect(serviceState.downloads).toEqual([]);
+  });
+
+  it("downloads a reply attachment for PSG staff with approval access", async () => {
+    serviceState.downloads = [];
+    serviceState.opsRole = "psg_internal";
+    serviceState.opsFunctions = new Set(["manage_bsm_content_approvals"]);
+
+    const attachment = await getBsmReviewCommentAttachmentDownload(
+      createAccessClient(null) as never,
+      ATTACHMENT_ID,
+      USER_ID,
+    );
+
+    expect(attachment.originalFilename).toBe("reply-photo.png");
+    expect(serviceState.downloads).toHaveLength(1);
   });
 
   it("records an event when a customer decision changes approval status", async () => {

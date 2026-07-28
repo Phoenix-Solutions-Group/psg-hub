@@ -75,5 +75,12 @@ export type BsmContentApprovalListItem = {
     message: string | null;
     createdAt: string;
   } | null;
+  replyAttachments: Array<{
+    id: string;
+    originalFilename: string;
+    byteSize: number;
+    screeningStatus: string;
+    createdAt: string;
+  }>;
   commentCount: number;
 };

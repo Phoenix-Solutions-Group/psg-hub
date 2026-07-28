@@ -110,6 +110,14 @@ export default async function BsmContentApprovalReviewPage({
                         ? "Photo passed upload screening"
                         : label(comment.attachment.screeningStatus)}
                     </p>
+                    <a
+                      className="mt-2 inline-flex font-medium text-ember hover:text-foreground"
+                      href={`/api/bsm/content-approvals/attachments/${comment.attachment.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open photo
+                    </a>
                   </div>
                 )}
                 <p className="mt-1 text-xs text-muted-foreground">{formatDate(comment.createdAt)}</p>

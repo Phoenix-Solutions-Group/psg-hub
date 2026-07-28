@@ -284,6 +284,7 @@ export async function createBsmContentApprovalUpload(
         createdAt: new Date().toISOString(),
       },
       latestDecision: null,
+      replyAttachments: [],
       commentCount: 0,
     },
     upload: {
@@ -396,6 +397,7 @@ export async function createBsmGeneratedPageApproval(
         createdAt: new Date().toISOString(),
       },
       latestDecision: null,
+      replyAttachments: [],
       commentCount: 0,
     },
   };
@@ -462,7 +464,7 @@ export async function listBsmContentApprovals(
   const itemIds = rows.map((row) => row.id as string);
   const versionIds = rows.map((row) => row.current_version_id).filter(Boolean) as string[];
 
-  const [{ data: versions }, { data: decisions }, { data: comments }] = await Promise.all([
+  const [{ data: versions }, { data: decisions }, { data: comments }, { data: attachments }] = await Promise.all([
     versionIds.length
       ? client
           .from("bsm_content_review_versions")
@@ -478,6 +480,11 @@ export async function listBsmContentApprovals(
       .from("bsm_content_review_comments")
       .select("review_item_id")
       .in("review_item_id", itemIds),
+    client
+      .from("bsm_content_review_comment_attachments")
+      .select("id, review_item_id, original_filename, byte_size, screening_status, created_at")
+      .in("review_item_id", itemIds)
+      .order("created_at", { ascending: false }),
   ]);
 
   const versionsById = new Map((versions ?? []).map((v) => [(v as { id: string }).id, v as Record<string, unknown>]));
@@ -490,6 +497,11 @@ export async function listBsmContentApprovals(
   for (const comment of (comments ?? []) as Array<Record<string, unknown>>) {
     const itemId = comment.review_item_id as string;
     commentCounts.set(itemId, (commentCounts.get(itemId) ?? 0) + 1);
+  }
+  const attachmentsByItem = new Map<string, Array<Record<string, unknown>>>();
+  for (const attachment of (attachments ?? []) as Array<Record<string, unknown>>) {
+    const itemId = attachment.review_item_id as string;
+    attachmentsByItem.set(itemId, [...(attachmentsByItem.get(itemId) ?? []), attachment]);
   }
 
   return rows.map((row) => {
@@ -526,6 +538,13 @@ export async function listBsmContentApprovals(
             createdAt: decision.created_at as string,
           }
         : null,
+      replyAttachments: (attachmentsByItem.get(row.id as string) ?? []).map((attachment) => ({
+        id: attachment.id as string,
+        originalFilename: attachment.original_filename as string,
+        byteSize: attachment.byte_size as number,
+        screeningStatus: attachment.screening_status as string,
+        createdAt: attachment.created_at as string,
+      })),
       commentCount: commentCounts.get(row.id as string) ?? 0,
     };
   });

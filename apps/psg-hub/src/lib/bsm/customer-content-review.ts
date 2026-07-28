@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
 import { BSM_CONTENT_APPROVALS_BUCKET } from "@/lib/bsm/content-approvals-shared";
+import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
 
 const DECISION_STATUS: Record<"approve" | "decline" | "request_updates", string> = {
   approve: "approved",
@@ -56,6 +57,13 @@ export type BsmCustomerReplyPhotoAttachment = {
   contentType: string;
   byteSize: number;
   bytes: ArrayBuffer | Uint8Array;
+};
+
+export type BsmReviewAttachmentDownload = {
+  data: Blob;
+  originalFilename: string;
+  contentType: string;
+  byteSize: number;
 };
 
 export class BsmCustomerReviewError extends Error {
@@ -371,6 +379,56 @@ export async function addBsmCustomerReviewComment(
           screeningStatus: "passed_basic_screen",
         }
       : null,
+  };
+}
+
+export async function getBsmReviewCommentAttachmentDownload(
+  client: SupabaseClient,
+  attachmentId: string,
+  userId: string,
+): Promise<BsmReviewAttachmentDownload> {
+  const service = createServiceClient();
+  const { data: attachment, error } = await service
+    .from("bsm_content_review_comment_attachments")
+    .select("id, shop_id, original_filename, content_type, byte_size, storage_bucket, storage_path")
+    .eq("id", attachmentId)
+    .maybeSingle();
+
+  if (error) throw new BsmCustomerReviewError(500, error.message);
+  if (!attachment) throw new BsmCustomerReviewError(404, "Not found");
+
+  const row = attachment as Record<string, unknown>;
+  const shopId = row.shop_id as string;
+
+  const { data: membership, error: membershipError } = await client
+    .from("shop_users")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("shop_id", shopId)
+    .maybeSingle();
+  if (membershipError) throw new BsmCustomerReviewError(500, membershipError.message);
+
+  if (!membership) {
+    const opsAccess = await getOpsAccess(userId);
+    if (!hasOpsFn(opsAccess, "manage_bsm_content_approvals")) {
+      throw new BsmCustomerReviewError(403, "Forbidden");
+    }
+  }
+
+  if (row.storage_bucket !== BSM_CONTENT_APPROVALS_BUCKET || typeof row.storage_path !== "string") {
+    throw new BsmCustomerReviewError(404, "Not found");
+  }
+
+  const { data, error: downloadError } = await service.storage
+    .from(BSM_CONTENT_APPROVALS_BUCKET)
+    .download(row.storage_path);
+  if (downloadError || !data) throw new BsmCustomerReviewError(404, "Not found");
+
+  return {
+    data,
+    originalFilename: row.original_filename as string,
+    contentType: row.content_type as string,
+    byteSize: row.byte_size as number,
   };
 }
 
