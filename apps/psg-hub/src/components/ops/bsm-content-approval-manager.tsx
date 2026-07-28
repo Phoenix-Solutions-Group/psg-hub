@@ -30,6 +30,9 @@ type Phase =
   | { kind: "success"; message: string }
   | { kind: "error"; message: string };
 
+export const BSM_CONTENT_APPROVAL_FILE_ACCEPT =
+  ".pdf,.md,.markdown,.html,.htm,.png,.jpg,.jpeg,.webp,.docx,.txt,application/pdf,text/markdown,text/html,image/png,image/jpeg,image/webp,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
+
 export type BsmContentApprovalShopOption = { id: string; name: string };
 
 export function BsmContentApprovalManager({
@@ -333,7 +336,7 @@ export function BsmContentApprovalManager({
                 ref={fileRef}
                 id="bsm-approval-file"
                 type="file"
-                accept=".pdf,.md,.markdown,.html,.htm,.png,.jpg,.jpeg,.webp,.docx,.txt,application/pdf,text/markdown,text/html,image/png,image/jpeg,image/webp,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                accept={BSM_CONTENT_APPROVAL_FILE_ACCEPT}
                 disabled={uploading}
                 onChange={(event) => {
                   setFile(event.target.files?.[0] ?? null);
