@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { recordAuditEvent } from "@/lib/audit/access-audit";
-import { requireSuperadmin } from "@/lib/auth/ops-access";
+import { requireOpsFn } from "@/lib/auth/ops-access";
 import { ADMIN_APP_ROLES, SHOP_MEMBER_ROLES } from "@/lib/ops/user-management";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -101,7 +101,7 @@ async function createDemoInviteUser(
 }
 
 export async function POST(request: NextRequest) {
-  const gate = await requireSuperadmin();
+  const gate = await requireOpsFn("manage_users");
   if (!gate.ok) return gate.response;
 
   const { body, error: jsonError } = await readJson(request);
@@ -116,6 +116,12 @@ export async function POST(request: NextRequest) {
   }
 
   const { email, role, shopId } = parsed.data;
+  if (role === "psg_superadmin" && gate.access.role !== "psg_superadmin") {
+    return NextResponse.json(
+      { error: "Only an existing superadmin can grant the superadmin role" },
+      { status: 403 }
+    );
+  }
   const shopRole = shopId ? parsed.data.shopRole ?? "viewer" : null;
   const service = createServiceClient();
 

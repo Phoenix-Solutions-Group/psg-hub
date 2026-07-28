@@ -7,8 +7,9 @@ const MODULES: {
   label: string;
   href: string;
   note: string;
-  // Admin / security-profile management gates on superadmin, not a capability
-  // flag — its RLS is psg_superadmin-only (PSG-39).
+  // Security-profile management remains superadmin-only at the route/API layer;
+  // the admin landing also includes user access and audit surfaces for the
+  // manage_users capability.
   superadminOnly?: boolean;
 }[] = [
   { fn: "manage_companies", label: "Companies & ROs", href: "/ops/companies", note: "Companies, employees, repair customers, ROs, estimates" },
@@ -18,7 +19,7 @@ const MODULES: {
   { fn: "manage_production", label: "Mail Templates", href: "/ops/production/templates", note: "Proof letters and self-mailers, then run Lob test-mode seed proofs" },
   { fn: "design_mail_artwork", label: "Mail Editor", href: "/ops/production/artwork", note: "Build postcard front/back artwork before production" },
   { fn: "manage_bsm_content_approvals", label: "BSM Content Approvals", href: "/ops/bsm-content-approvals", note: "Upload customer review files, add context notes, and track approval status" },
-  { fn: "manage_users", label: "Superadmin", href: "/ops/admin", note: "Security profiles & access matrix", superadminOnly: true },
+  { fn: "manage_users", label: "Superadmin", href: "/ops/admin", note: "Security profiles & access matrix" },
   { fn: "manage_users", label: "BSM Progress", href: "/ops/bsm-progress", note: "Build status, roadmap, time, cost, tool notes, and feature ideas", superadminOnly: true },
 ];
 

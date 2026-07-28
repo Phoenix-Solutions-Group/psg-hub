@@ -30,12 +30,12 @@ const row = (overrides: Partial<ActionDocRow> = {}): ActionDocRow => ({
 });
 
 describe("ProductionDocumentsTable", () => {
-  it("keeps Recent Documents history collapsed by default", () => {
+  it("shows the production history search by default", () => {
     const html = renderToStaticMarkup(<ProductionDocumentsTable rows={[row()]} />);
 
     expect(html).toContain("<details");
-    expect(html).not.toContain("<details open");
-    expect(html).toContain("Search history");
+    expect(html).toContain("<details open");
+    expect(html).toContain("Search production history");
   });
 
   it("shows customer, shop, and proof access on document rows", () => {

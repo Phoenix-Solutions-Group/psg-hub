@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/client";
 import {
   BSM_CONTENT_APPROVALS_BUCKET,
   MAX_APPROVAL_FILE_BYTES,
-  SUPPORTED_APPROVAL_FILE_TYPES,
   type BsmContentApprovalListItem,
   normalizeApprovalMimeType,
 } from "@/lib/bsm/content-approvals-shared";
@@ -461,11 +460,12 @@ export function BsmContentApprovalManager({
                           type="button"
                           onClick={() => setArchiveItemId(item.id)}
                           disabled={Boolean(archivingItemId)}
-                          className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
+                          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
                           aria-label={`Remove ${item.title} from the active review library`}
                           title="Remove from active library"
                         >
                           <Trash2 className="size-4" aria-hidden="true" />
+                          Remove
                         </button>
                       )}
                     </td>

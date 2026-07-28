@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getOpsAccess } from "@/lib/auth/ops-access";
+import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
 import {
   UserAccessManager,
   type ManagedShop,
@@ -56,12 +56,12 @@ export default async function UsersAdminPage() {
   if (!user) redirect("/login");
 
   const access = await getOpsAccess(user.id);
-  if (access.role !== "psg_superadmin") {
+  if (!hasOpsFn(access, "manage_users")) {
     return (
       <div className="mx-auto max-w-2xl rounded-lg border border-border p-6">
         <h1 className="font-heading text-lg font-semibold">User Access</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          This area is restricted to superadmins.
+          Your security profile does not grant access to manage users.
         </p>
       </div>
     );

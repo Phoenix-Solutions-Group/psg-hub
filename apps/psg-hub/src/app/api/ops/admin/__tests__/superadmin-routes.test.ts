@@ -9,7 +9,7 @@ type DbError = { message: string; code?: string };
 type DbResponse = { data?: unknown; error?: DbError | null };
 type Operation = { table: string; op: string; payload?: unknown };
 
-let gate: Gate = { ok: true, userId: "super-1", access: {} };
+let gate: Gate = { ok: true, userId: "super-1", access: { role: "psg_superadmin" } };
 const auditEvents: Array<Record<string, unknown>> = [];
 const operations: Operation[] = [];
 const responses = new Map<string, DbResponse[]>();
@@ -91,7 +91,14 @@ class Query {
 const fromMock = vi.fn((table: string) => new Query(table));
 
 vi.mock("@/lib/auth/ops-access", () => ({
-  OPS_FUNCTIONS: ["manage_companies", "manage_reports", "manage_sysconfig", "manage_production"],
+  OPS_FUNCTIONS: [
+    "manage_companies",
+    "manage_reports",
+    "manage_sysconfig",
+    "manage_production",
+    "manage_users",
+  ],
+  requireOpsFn: async () => gate,
   requireSuperadmin: async () => gate,
 }));
 
@@ -144,7 +151,7 @@ function params<T extends Record<string, string>>(value: T) {
 }
 
 beforeEach(() => {
-  gate = { ok: true, userId: "super-1", access: {} };
+  gate = { ok: true, userId: "super-1", access: { role: "psg_superadmin" } };
   delete process.env.NEXT_PUBLIC_APP_URL;
   delete process.env.SUPABASE_INVITE_REDIRECT_URL;
   delete process.env.VERCEL_ENV;
@@ -683,6 +690,26 @@ describe("admin user routes", () => {
       "superadmin.add",
       "superadmin.remove",
     ]);
+  });
+
+  it("does not let a non-superadmin user manager grant the superadmin role", async () => {
+    gate = { ok: true, userId: "manager-1", access: { role: "psg_internal" } };
+
+    const inviteRes = await userInviteRoute.POST(
+      req("POST", "/api/ops/admin/users/invite", {
+        email: "new@example.com",
+        role: "psg_superadmin",
+      })
+    );
+    expect(inviteRes.status).toBe(403);
+
+    const roleRes = await userRoleRoute.PATCH(
+      req("PATCH", `/api/ops/admin/users/${PROFILE_ID}/role`, { role: "psg_superadmin" }),
+      params({ profileId: PROFILE_ID })
+    );
+    expect(roleRes.status).toBe(403);
+    expect(operations).toHaveLength(0);
+    expect(auditEvents).toHaveLength(0);
   });
 
   it("audits shop assignment and removal", async () => {

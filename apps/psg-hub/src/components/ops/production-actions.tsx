@@ -244,11 +244,11 @@ export function ProductionDocumentsTable({ rows: initialRows }: { rows: ActionDo
   }
 
   return (
-    <details className="space-y-3 rounded-lg border border-border">
+    <details open className="space-y-3 rounded-lg border border-border">
       <summary className="cursor-pointer list-none px-4 py-3 font-heading text-sm font-semibold">
-        Search history
+        Search production history
         <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">
-          {rows.length} recent {rows.length === 1 ? "document" : "documents"} · collapsed by default
+          {rows.length} recent {rows.length === 1 ? "document" : "documents"}
         </span>
       </summary>
       <div className="space-y-3 border-t border-border p-3">
@@ -262,6 +262,7 @@ export function ProductionDocumentsTable({ rows: initialRows }: { rows: ActionDo
           <div className="grid gap-2 sm:grid-cols-3">
             <Input
               aria-label="Search production history"
+              title="Search production history"
               placeholder="Search shop, customer, batch, print ID, status"
               value={filters.q}
               onChange={(e) => setField("q", e.target.value)}
