@@ -3,11 +3,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   addGuestReviewPinComment,
+  createInternalReviewWorkspaceSlice,
   createReviewWorkspaceDeletionTombstone,
   createReviewWorkspaceProject,
   enqueueReviewWorkspaceProcessingJob,
+  getGuestReviewWorkspace,
   requireGuestReviewSession,
   requireReviewWorkspaceStaffAccess,
+  submitGuestReviewRound,
 } from "@/lib/bsm/review-workspace";
 
 const SHOP_ID = "11111111-1111-4111-8111-111111111111";
@@ -18,14 +21,16 @@ const INVITATION_ID = "55555555-5555-4555-8555-555555555555";
 const SESSION_ID = "66666666-6666-4666-8666-666666666666";
 const REVIEW_ITEM_ID = "77777777-7777-4777-8777-777777777777";
 const VERSION_ID = "88888888-8888-4888-8888-888888888888";
+const SECTION_ID = "99999999-9999-4999-8999-999999999999";
 const MIGRATION = readFileSync(
   join(process.cwd(), "supabase/migrations/20260728183000_bsm_review_workspace_foundation.sql"),
   "utf8",
 );
 
-function createFakeClient(options: { collaborator?: boolean; expiredSession?: boolean } = {}) {
+function createFakeClient(options: { collaborator?: boolean; expiredSession?: boolean; submitted?: boolean; hasPin?: boolean } = {}) {
   const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const upserts: Array<{ table: string; payload: Record<string, unknown>; options: Record<string, unknown> | undefined }> = [];
+  const updates: Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }> = [];
   const client = {
     from(table: string) {
       return {
@@ -48,28 +53,85 @@ function createFakeClient(options: { collaborator?: boolean; expiredSession?: bo
             single: () => Promise.resolve({ data: { id: "job-1", project_id: payload.project_id, status: payload.status, idempotency_key: payload.idempotency_key }, error: null }),
           };
         },
+        update(payload: Record<string, unknown>) {
+          return new MutationQuery(table, payload, updates);
+        },
         select() {
           return new Query(table, options);
         },
       };
     },
   };
-  return { client, inserts, upserts };
+  return { client, inserts, upserts, updates };
 }
+
+type FakeClientOptions = { collaborator?: boolean; expiredSession?: boolean; submitted?: boolean; hasPin?: boolean };
 
 class Query {
   private filters: Record<string, unknown> = {};
 
-  constructor(private table: string, private options: { collaborator?: boolean; expiredSession?: boolean }) {}
+  constructor(private table: string, private options: FakeClientOptions) {}
 
   eq(column: string, value: unknown) {
     this.filters[column] = value;
     return this;
   }
 
+  in(column: string, value: unknown[]) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  limit(value: number) {
+    this.filters.limit = value;
+    return this;
+  }
+
+  order() {
+    return this;
+  }
+
   is(column: string, value: unknown) {
     this.filters[column] = value;
     return this;
+  }
+
+  then(resolve: (value: { data: unknown[]; error: null }) => unknown) {
+    return Promise.resolve(this.rows()).then(resolve);
+  }
+
+  private rows() {
+    if (this.table === "bsm_content_review_round_documents") {
+      return { data: [{ review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID }], error: null };
+    }
+    if (this.table === "bsm_content_review_comments") {
+      if (this.filters.limit === 1) {
+        return { data: this.options.hasPin === false ? [] : [{ id: "comment-1" }], error: null };
+      }
+      return {
+        data: [
+          {
+            id: "comment-1",
+            review_item_id: REVIEW_ITEM_ID,
+            version_id: VERSION_ID,
+            body: "Owner one private note",
+            pin_number: 1,
+            draft_status: "draft",
+          },
+        ],
+        error: null,
+      };
+    }
+    if (this.table === "bsm_content_review_items") {
+      return {
+        data: [{ id: REVIEW_ITEM_ID, title: "Home page", processing_status: "ready", section_id: SECTION_ID }],
+        error: null,
+      };
+    }
+    if (this.table === "bsm_content_review_sections") {
+      return { data: [{ id: SECTION_ID, title: "Website" }], error: null };
+    }
+    return { data: [], error: null };
   }
 
   maybeSingle() {
@@ -110,7 +172,56 @@ class Query {
         error: null,
       });
     }
+    if (this.table === "bsm_content_review_invitations") {
+      return Promise.resolve({
+        data: {
+          id: INVITATION_ID,
+          project_id: PROJECT_ID,
+          round_id: ROUND_ID,
+          shop_id: SHOP_ID,
+          reviewer_email: "owner@example.com",
+          status: this.options.submitted ? "submitted" : "sent",
+          submitted_at: this.options.submitted ? "2026-07-28T19:00:00.000Z" : null,
+          token_hash: "fixture-token-hash",
+          code_hash: "fixture-code-hash",
+          code_attempt_count: 0,
+          expires_at: "2999-01-01T00:00:00.000Z",
+          revoked_at: null,
+        },
+        error: null,
+      });
+    }
     return Promise.resolve({ data: null, error: null });
+  }
+
+  single() {
+    if (this.table === "bsm_content_review_projects") {
+      return Promise.resolve({ data: { id: PROJECT_ID, title: "Website review", status: "active" }, error: null });
+    }
+    if (this.table === "bsm_content_review_rounds") {
+      return Promise.resolve({ data: { id: ROUND_ID, status: "active" }, error: null });
+    }
+    return Promise.resolve({ data: null, error: null });
+  }
+}
+
+class MutationQuery {
+  private filters: Record<string, unknown> = {};
+
+  constructor(
+    private table: string,
+    private payload: Record<string, unknown>,
+    private updates: Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }>,
+  ) {}
+
+  eq(column: string, value: unknown) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  then(resolve: (value: { error: null }) => unknown) {
+    this.updates.push({ table: this.table, payload: this.payload, filters: { ...this.filters } });
+    return Promise.resolve({ error: null }).then(resolve);
   }
 }
 
@@ -192,6 +303,48 @@ describe("BSM review workspace foundation service", () => {
     ]);
   });
 
+  it("creates the internal vertical slice project, ordered document, round, and test-only invite/code", async () => {
+    const { client, inserts, updates } = createFakeClient();
+
+    const slice = await createInternalReviewWorkspaceSlice(
+      {
+        shopId: SHOP_ID,
+        title: "Website approval",
+        description: "Review the new home page.",
+        actorProfileId: ACTOR_ID,
+        reviewerEmail: "Owner@Example.com",
+        reviewerName: "Owner",
+        documents: [{ sectionTitle: "Website", title: "Home page", sourceUrl: "https://example.com", position: 1 }],
+      },
+      { client: client as never, now: new Date("2026-07-28T19:00:00.000Z") },
+    );
+
+    expect(slice).toMatchObject({ invitationId: expect.any(String), inviteToken: expect.any(String), inviteCode: expect.stringMatching(/^\d{6}$/) });
+    expect(inserts.map((entry) => entry.table)).toEqual([
+      "bsm_content_review_projects",
+      "bsm_content_review_project_collaborators",
+      "bsm_content_review_events",
+      "bsm_content_review_sections",
+      "bsm_content_review_items",
+      "bsm_content_review_versions",
+      "bsm_content_review_rounds",
+      "bsm_content_review_round_documents",
+      "bsm_content_review_invitations",
+      "bsm_content_review_reviewers",
+      "bsm_content_review_events",
+    ]);
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_items")?.payload).toMatchObject({
+      project_id: slice.projectId,
+      processing_status: "ready",
+      position: 1,
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_invitations")?.payload).toMatchObject({
+      reviewer_email: "owner@example.com",
+      status: "sent",
+    });
+    expect(updates.some((entry) => entry.table === "bsm_content_review_projects" && entry.payload.status === "active")).toBe(true);
+  });
+
   it("requires a live invitation-backed reviewer session for guest access", async () => {
     const allowed = createFakeClient();
     await expect(requireGuestReviewSession(allowed.client as never, "session-hash")).resolves.toMatchObject({
@@ -204,6 +357,28 @@ describe("BSM review workspace foundation service", () => {
     await expect(requireGuestReviewSession(expired.client as never, "session-hash")).rejects.toThrow(
       "expired or was revoked",
     );
+  });
+
+  it("loads only the active reviewer invitation comments in the guest workspace", async () => {
+    const { client } = createFakeClient();
+
+    const workspace = await getGuestReviewWorkspace("session-hash", { client: client as never });
+
+    expect(workspace.documents).toEqual([
+      {
+        itemId: REVIEW_ITEM_ID,
+        versionId: VERSION_ID,
+        title: "Home page",
+        processingStatus: "ready",
+        sectionTitle: "Website",
+      },
+    ]);
+    expect(workspace.comments).toEqual([
+      expect.objectContaining({
+        body: "Owner one private note",
+        draftStatus: "draft",
+      }),
+    ]);
   });
 
   it("stores reviewer pin comments against the reviewer invitation only", async () => {
@@ -243,6 +418,56 @@ describe("BSM review workspace foundation service", () => {
       x_ratio: 0.4,
       y_ratio: 0.6,
     });
+  });
+
+  it("locks comments and records immutable decisions on one-time submit", async () => {
+    const { client, inserts, updates } = createFakeClient();
+
+    await expect(
+      submitGuestReviewRound(
+        {
+          sessionHash: "session-hash",
+          decisions: [{ reviewItemId: REVIEW_ITEM_ID, versionId: VERSION_ID, decision: "changes_requested", message: "Update the offer." }],
+        },
+        { client: client as never, now: new Date("2026-07-28T19:30:00.000Z") },
+      ),
+    ).resolves.toMatchObject({ status: "submitted", invitationId: INVITATION_ID });
+
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_decisions")?.payload).toMatchObject({
+      invitation_id: INVITATION_ID,
+      decision: "changes_requested",
+      locked_at: "2026-07-28T19:30:00.000Z",
+    });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_comments")?.payload).toMatchObject({
+      draft_status: "locked",
+      locked_at: "2026-07-28T19:30:00.000Z",
+    });
+  });
+
+  it("rejects duplicate submit and changes-requested decisions without a pin", async () => {
+    const submitted = createFakeClient({ submitted: true });
+    await expect(
+      submitGuestReviewRound(
+        { sessionHash: "session-hash", decisions: [{ reviewItemId: REVIEW_ITEM_ID, versionId: VERSION_ID, decision: "approved" }] },
+        { client: submitted.client as never },
+      ),
+    ).rejects.toThrow("already submitted");
+
+    const noPin = createFakeClient({ hasPin: false });
+    await expect(
+      submitGuestReviewRound(
+        { sessionHash: "session-hash", decisions: [{ reviewItemId: REVIEW_ITEM_ID, versionId: VERSION_ID, decision: "changes_requested" }] },
+        { client: noPin.client as never },
+      ),
+    ).rejects.toThrow("requires at least one pin");
+  });
+
+  it("keeps route exposure behind an explicit internal feature gate", async () => {
+    const { bsmReviewWorkspaceInternalEnabled } = await import("@/lib/bsm/review-workspace");
+
+    expect(bsmReviewWorkspaceInternalEnabled({})).toBe(false);
+    expect(bsmReviewWorkspaceInternalEnabled({ BSM_REVIEW_WORKSPACE_INTERNAL_ENABLED: "1" })).toBe(true);
+    expect(bsmReviewWorkspaceInternalEnabled({ BSM_REVIEW_WORKSPACE_INTERNAL_ENABLED: "true" })).toBe(true);
   });
 
   it("keeps the database foundation shop-scoped, reviewer-private, immutable, and default-deny", () => {
