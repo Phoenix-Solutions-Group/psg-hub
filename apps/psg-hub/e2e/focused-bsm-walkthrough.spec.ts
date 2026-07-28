@@ -140,6 +140,10 @@ test.describe("clean BSM demo user walkthrough", () => {
 
     const commentInput = page.getByLabel("Comment");
     const photoInput = page.locator("#bsm-comment-photo");
+    const selectedPhoto = page.getByTestId("bsm-comment-photo-selection");
+    const commentsSection = page.locator("section").filter({
+      has: page.getByRole("heading", { name: "Comments" }),
+    });
     const addButton = page.getByRole("button", { name: "Add comment" });
 
     await commentInput.fill("Non-photo browser rejection");
@@ -148,7 +152,7 @@ test.describe("clean BSM demo user walkthrough", () => {
       mimeType: "text/plain",
       buffer: Buffer.from("not a photo"),
     });
-    await expect(page.getByText("not-a-photo.txt")).toBeVisible();
+    await expect(selectedPhoto.getByText("not-a-photo.txt")).toBeVisible();
     await addButton.click();
     await expect(page.getByText("Only JPG, PNG, or WebP photos can be attached.")).toBeVisible();
     await expect(page.getByText("Non-photo browser rejection").first()).not.toBeVisible();
@@ -199,29 +203,32 @@ test.describe("clean BSM demo user walkthrough", () => {
       mimeType: "image/png",
       buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]),
     });
-    await expect(page.getByText("first-photo.png")).toBeVisible();
+    await expect(selectedPhoto.getByText("first-photo.png")).toBeVisible();
     await page.getByRole("button", { name: "Remove photo" }).click();
-    await expect(page.getByText("first-photo.png")).not.toBeVisible();
+    await expect(selectedPhoto).not.toBeVisible();
 
     await photoInput.setInputFiles({
       name: "candidate-photo.webp",
       mimeType: "image/webp",
       buffer: Buffer.from([0x52, 0x49, 0x46, 0x46, 0x0c, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]),
     });
-    await expect(page.getByText("candidate-photo.webp")).toBeVisible();
+    await expect(selectedPhoto.getByText("candidate-photo.webp")).toBeVisible();
     await photoInput.setInputFiles({
       name: "replacement-photo.png",
       mimeType: "image/png",
       buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x02]),
     });
-    await expect(page.getByText("replacement-photo.png")).toBeVisible();
-    await expect(page.getByText("candidate-photo.webp")).not.toBeVisible();
+    await expect(selectedPhoto.getByText("replacement-photo.png")).toBeVisible();
+    await expect(selectedPhoto.getByText("candidate-photo.webp")).not.toBeVisible();
 
     await addButton.click();
-    await expect(page.getByText("Phone photo clarification reply").first()).toBeVisible();
-    await expect(page.getByText("replacement-photo.png").first()).toBeVisible();
-    await expect(page.getByText("1 KB").first()).toBeVisible();
-    await expect(page.getByText("Photo passed upload screening").first()).toBeVisible();
+    const submittedComment = commentsSection.locator("div").filter({
+      hasText: "Phone photo clarification reply",
+    }).last();
+    await expect(submittedComment).toBeVisible();
+    await expect(submittedComment.getByText("replacement-photo.png")).toBeVisible();
+    await expect(submittedComment.getByText("1 KB")).toBeVisible();
+    await expect(submittedComment.getByText("Photo passed upload screening")).toBeVisible();
     await shoot(page, "focused-bsm-content-approval-phone-photo-reply");
   });
 
