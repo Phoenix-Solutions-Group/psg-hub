@@ -71,6 +71,7 @@ create or replace function public.claim_board_briefing_outbox(
   generated_at timestamptz
 )
 language sql
+set search_path = public
 as $$
   update public.board_briefing_outbox row
   set claimed_at = p_now,
