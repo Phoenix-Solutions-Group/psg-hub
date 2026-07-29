@@ -140,7 +140,19 @@ async function seedSubscription(
  * ending SNAPSHOT_END_DATE). Values are formula-derived from the day index —
  * no randomness. Upsert on the idempotency key, so re-runs net zero new rows.
  */
-async function seedSnapshots(shopId: string, days: number): Promise<void> {
+type SnapshotSeedOptions = {
+  organicTrafficBase?: number;
+  organicKeywordsBase?: number;
+  organicTrafficCostBase?: number;
+  backlinksBase?: number;
+  authorityScore?: number;
+};
+
+async function seedSnapshots(
+  shopId: string,
+  days: number,
+  options: SnapshotSeedOptions = {}
+): Promise<void> {
   const end = new Date(`${SNAPSHOT_END_DATE}T00:00:00Z`).getTime();
   const rows = Array.from({ length: days }, (_, i) => {
     const d = new Date(end - (days - 1 - i) * 86_400_000)
@@ -153,11 +165,15 @@ async function seedSnapshots(shopId: string, days: number): Promise<void> {
       period: "daily",
       synced_at: SNAPSHOT_SYNCED_AT,
       metrics: {
-        organic_traffic: 400 + i * 7,
-        organic_keywords: 120 + i,
-        organic_traffic_cost: 900 + i * 11,
-        backlinks: 60 + i * 2,
-        authority_score: 38,
+        organic_traffic:
+          options.organicTrafficBase === undefined
+            ? 400 + i * 7
+            : options.organicTrafficBase + i,
+        organic_keywords: (options.organicKeywordsBase ?? 120) + i,
+        organic_traffic_cost: (options.organicTrafficCostBase ?? 900) + i * 11,
+        backlinks:
+          options.backlinksBase === undefined ? 60 + i * 2 : options.backlinksBase + i,
+        authority_score: options.authorityScore ?? 38,
       },
     };
   });
@@ -697,7 +713,13 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
   await setSuperadminRole(opsStaffId);
 
   // 09-02: deterministic analytics snapshots (charts + MSO aggregate data).
-  await seedSnapshots(ownerShopId, 30);
+  await seedSnapshots(ownerShopId, 30, {
+    organicTrafficBase: 155,
+    organicKeywordsBase: 28,
+    organicTrafficCostBase: 580,
+    backlinksBase: 113,
+    authorityScore: 41,
+  });
   await seedSnapshots(shopAId, 14);
   await seedSnapshots(shopBId, 14);
 

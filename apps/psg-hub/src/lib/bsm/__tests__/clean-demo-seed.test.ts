@@ -9,6 +9,7 @@ import {
 describe("clean BSM demo seed", () => {
   it("requires only the two visible demo accounts by default", () => {
     const env = {
+      NODE_ENV: "test" as const,
       DEMO_OPERATOR_EMAIL: "admin@example.test",
       DEMO_OPERATOR_PASSWORD: "password",
       DEMO_SHOP_EMAIL: "shop@example.test",
@@ -26,6 +27,7 @@ describe("clean BSM demo seed", () => {
 
   it("adds the regression-only internal account only when explicitly requested", () => {
     const env = {
+      NODE_ENV: "test" as const,
       DEMO_INCLUDE_INTERNAL_REGRESSION_USER: "1",
     };
 
@@ -37,7 +39,14 @@ describe("clean BSM demo seed", () => {
   it("uses board-demo names instead of older QA walkthrough names", () => {
     expect(CLEAN_DEMO_SEED.operatorDisplayName).toBe("BSM Demo Admin");
     expect(CLEAN_DEMO_SEED.shopUserDisplayName).toBe("BSM Demo User");
-    expect(CLEAN_DEMO_SEED.shopName).toBe("BSM Demo Collision Center");
+    expect(CLEAN_DEMO_SEED.shopName).toBe("Riverside Collision");
+    expect(CLEAN_DEMO_SEED.riversideAnalytics).toEqual({
+      organicTraffic: 184,
+      organicKeywords: 57,
+      authorityScore: 41,
+      backlinks: 142,
+    });
+    expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.previousShopSlug);
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.legacyShopSlug);
   });
 });

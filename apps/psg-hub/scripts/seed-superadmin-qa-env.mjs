@@ -31,15 +31,23 @@ export const CLEAN_DEMO_SEED = {
   operatorDisplayName: "BSM Demo Admin",
   shopUserDisplayName: "BSM Demo User",
   internalDisplayName: "BSM Regression Internal Staff",
-  clientName: "BSM Demo Client",
-  shopName: "BSM Demo Collision Center",
-  shopSlug: "bsm-demo-collision-center",
+  clientName: "Riverside Collision",
+  shopName: "Riverside Collision",
+  shopSlug: "riverside-collision",
   moduleSlug: "bsm-demo-walkthrough",
   moduleDisplayName: "BSM Demo Walkthrough",
+  previousClientName: "BSM Demo Client",
+  previousShopSlug: "bsm-demo-collision-center",
   legacyClientName: "QA Superadmin Walkthrough Client",
   legacyShopSlug: "qa-superadmin-walkthrough",
   legacyModuleSlug: "qa-superadmin-walkthrough",
   legacyInternalEmail: "qa-internal-staff@psg.test",
+  riversideAnalytics: {
+    organicTraffic: 184,
+    organicKeywords: 57,
+    authorityScore: 41,
+    backlinks: 142,
+  },
 };
 
 export function shouldSeedInternalRegressionUser(env = process.env) {
@@ -164,25 +172,75 @@ async function upsertByLookup({ table, select = "id", filters, insert, update, l
 }
 
 async function cleanupLegacyDemoSeedRows() {
-  const { data: legacyShop } = await supabase
-    .from("shops")
-    .select("id, client_id")
-    .eq("slug", CLEAN_DEMO_SEED.legacyShopSlug)
-    .maybeSingle();
-  if (legacyShop) {
-    await supabase.from("module_access_grants").delete().eq("shop_id", legacyShop.id);
-    await supabase.from("subscriptions").delete().eq("shop_id", legacyShop.id);
-    await supabase.from("shop_users").delete().eq("shop_id", legacyShop.id);
-    await supabase.from("shops").delete().eq("id", legacyShop.id);
-    if (legacyShop.client_id) {
-      await supabase.from("clients").delete().eq("id", legacyShop.client_id);
+  for (const slug of [CLEAN_DEMO_SEED.legacyShopSlug, CLEAN_DEMO_SEED.previousShopSlug]) {
+    const { data: demoShop } = await supabase
+      .from("shops")
+      .select("id, client_id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (demoShop) {
+      await supabase.from("analytics_snapshots").delete().eq("shop_id", demoShop.id);
+      await supabase.from("module_access_grants").delete().eq("shop_id", demoShop.id);
+      await supabase.from("subscriptions").delete().eq("shop_id", demoShop.id);
+      await supabase.from("shop_users").delete().eq("shop_id", demoShop.id);
+      await supabase.from("shops").delete().eq("id", demoShop.id);
+      if (demoShop.client_id) {
+        await supabase.from("clients").delete().eq("id", demoShop.client_id);
+      }
     }
   }
   await supabase.from("clients").delete().eq("name", CLEAN_DEMO_SEED.legacyClientName);
+  await supabase.from("clients").delete().eq("name", CLEAN_DEMO_SEED.previousClientName);
   await supabase.from("modules").delete().eq("slug", CLEAN_DEMO_SEED.legacyModuleSlug);
   if (!includeInternalRegressionUser) {
     await deleteAuthUserByEmail(CLEAN_DEMO_SEED.legacyInternalEmail);
   }
+}
+
+function trailingDemoDates(days) {
+  const to = new Date();
+  to.setUTCHours(0, 0, 0, 0);
+  return Array.from({ length: days }, (_, index) => {
+    const d = new Date(to);
+    d.setUTCDate(to.getUTCDate() - (days - 1 - index));
+    return d.toISOString().slice(0, 10);
+  });
+}
+
+async function seedRiversideAnalytics(shopId) {
+  const dates = trailingDemoDates(30);
+  const latest = CLEAN_DEMO_SEED.riversideAnalytics;
+  const rows = dates.map((date, index) => {
+    const remainingDays = dates.length - 1 - index;
+    return {
+      shop_id: shopId,
+      source: "semrush",
+      date,
+      period: "daily",
+      synced_at: `${dates.at(-1)}T12:00:00Z`,
+      metrics: {
+        organic_traffic: latest.organicTraffic - remainingDays,
+        organic_keywords: latest.organicKeywords - remainingDays,
+        organic_traffic_cost: 580 + index * 11,
+        backlinks: latest.backlinks - remainingDays,
+        authority_score: latest.authorityScore,
+      },
+    };
+  });
+
+  const { error: deleteGoogleError } = await supabase
+    .from("analytics_snapshots")
+    .delete()
+    .eq("shop_id", shopId)
+    .in("source", ["google_ads", "ga4", "gsc", "gbp", "gbp_presence"]);
+  if (deleteGoogleError) {
+    throw new Error(`Riverside Google demo cleanup failed: ${deleteGoogleError.message}`);
+  }
+
+  const { error } = await supabase
+    .from("analytics_snapshots")
+    .upsert(rows, { onConflict: "shop_id,source,date,period" });
+  if (error) throw new Error(`Riverside analytics seed failed: ${error.message}`);
 }
 
 async function main() {
@@ -213,12 +271,12 @@ async function main() {
     filters: { name: CLEAN_DEMO_SEED.clientName },
     insert: {
       name: CLEAN_DEMO_SEED.clientName,
-      website_url: "https://bsm-demo.example",
+      website_url: "https://riversidecollision.example",
       primary_market: "San Francisco, CA",
       zip_code: "94107",
     },
     update: {
-      website_url: "https://bsm-demo.example",
+      website_url: "https://riversidecollision.example",
       primary_market: "San Francisco, CA",
       zip_code: "94107",
     },
@@ -232,7 +290,7 @@ async function main() {
       client_id: client.id,
       name: CLEAN_DEMO_SEED.shopName,
       slug: CLEAN_DEMO_SEED.shopSlug,
-      url: "https://bsm-demo.example",
+      url: "https://riversidecollision.example",
       telephone: "(555) 010-1209",
       address_locality: "San Francisco",
       address_region: "CA",
@@ -242,7 +300,7 @@ async function main() {
     update: {
       client_id: client.id,
       name: CLEAN_DEMO_SEED.shopName,
-      url: "https://bsm-demo.example",
+      url: "https://riversidecollision.example",
       telephone: "(555) 010-1209",
       address_locality: "San Francisco",
       address_region: "CA",
@@ -272,8 +330,17 @@ async function main() {
     .upsert(roleRows, { onConflict: "profile_id" });
   if (roleError) throw new Error(`Role upsert failed: ${roleError.message}`);
 
+  const { error: oldMembershipError } = await supabase
+    .from("shop_users")
+    .delete()
+    .eq("user_id", shopUser.id)
+    .neq("shop_id", shop.id);
+  if (oldMembershipError) {
+    throw new Error(`Old demo shop membership cleanup failed: ${oldMembershipError.message}`);
+  }
+
   const { error: membershipError } = await supabase.from("shop_users").upsert(
-    { user_id: shopUser.id, shop_id: shop.id, role: "manager" },
+    { user_id: shopUser.id, shop_id: shop.id, role: "owner" },
     { onConflict: "user_id,shop_id" }
   );
   if (membershipError) throw new Error(`Shop membership upsert failed: ${membershipError.message}`);
@@ -289,6 +356,8 @@ async function main() {
     { onConflict: "shop_id" }
   );
   if (subError) throw new Error(`Subscription upsert failed: ${subError.message}`);
+
+  await seedRiversideAnalytics(shop.id);
 
   await upsertByLookup({
     table: "modules",

@@ -130,8 +130,8 @@ const PRESENCE_STATUS_LABELS: Record<string, string> = {
 function GoogleDemoNote({ source }: { source: string }) {
   return (
     <p className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-      Board demo note: this panel lights up after the shop connects its own{" "}
-      {source}; no demo data is shown here.
+      Board demo note: this panel will light up when the shop connects its own
+      Google account. For this demo, {source} is not connected yet.
     </p>
   );
 }

@@ -43,6 +43,10 @@ test.describe("analytics — per-shop (OWNER)", () => {
     // KPI cards present.
     await expect(page.getByText("Organic traffic").first()).toBeVisible();
     await expect(page.getByText("Authority score")).toBeVisible();
+    await expect(page.getByText("184", { exact: true })).toBeVisible();
+    await expect(page.getByText("57", { exact: true })).toBeVisible();
+    await expect(page.getByText("41", { exact: true })).toBeVisible();
+    await expect(page.getByText("142", { exact: true })).toBeVisible();
 
     const mail = directMailSection(page);
     await expect(mail).toContainText("Letters mailed");

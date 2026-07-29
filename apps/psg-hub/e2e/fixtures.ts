@@ -19,7 +19,7 @@ export const SHOTS_DIR = path.join(__dirname, "screenshots");
 export const OWNER = {
   email: "owner@e2e.test",
   statePath: path.join(AUTH_DIR, "owner.json"),
-  shopName: "BSM Demo Collision Center",
+  shopName: "Riverside Collision",
   contentItemId: "11111111-cccc-4ccc-8ccc-111111111111",
   reviewItemId: "11111111-dddd-4ddd-8ddd-111111111111",
   bsmReviewItemId: "11111111-aaaa-4aaa-8aaa-111111111111",

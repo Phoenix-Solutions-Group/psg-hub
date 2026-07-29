@@ -5,12 +5,17 @@ type DemoUserCandidate = {
 
 const TEST_EMAIL_PATTERNS = [
   /^qa-test-/i,
-  /^psg\d+-/i,
+  /^psg\d+(?:-|@)/i,
+  /\bpsg\d+\b.*qa/i,
+  /\bqa\b.*\bpsg\d+\b/i,
+  /^[a-z0-9._%+-]*test[a-z0-9._%+-]*@example\.com$/i,
+  /^psg\d+-[a-z0-9._%+-]*@example\.com$/i,
   /@e2e\.test$/i,
 ];
 
 const TEST_NAME_PATTERNS = [
   /^qa\b/i,
+  /\bpsg\d+\b.*test/i,
   /\bqa mail-artwork\b/i,
   /\bmail-artwork\b/i,
   /\be2e\b/i,

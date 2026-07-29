@@ -103,6 +103,9 @@ test.describe("ga4 panel — unlinked state (MEGA, no ga4)", () => {
     await expect(
       page.getByText("No Google Analytics property linked")
     ).toBeVisible();
+    await expect(
+      page.getByText("will light up when the shop connects its own Google account")
+    ).toBeVisible();
 
     await checkA11y(page, "analytics-ga4-unlinked");
     await shoot(page, "analytics-ga4-unlinked");

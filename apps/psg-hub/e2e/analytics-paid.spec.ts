@@ -101,6 +101,9 @@ test.describe("paid panel — unlinked state (MEGA, no google_ads)", () => {
     // CardTitle renders a div (08-04b precedent) — match by text.
     await expect(page.getByText("No Google Ads account linked")).toBeVisible();
     await expect(
+      page.getByText("will light up when the shop connects its own Google account")
+    ).toBeVisible();
+    await expect(
       page.getByRole("link", { name: "Link Google Ads" })
     ).toBeVisible();
 

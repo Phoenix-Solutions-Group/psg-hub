@@ -21,7 +21,19 @@ describe("demo user filter", () => {
     expect(
       isInternalDemoUser({
         displayName: "PSG 2289 test",
-        email: "psg2289-qa@psgweb.me",
+        email: "psg2289-1785254167845@example.com",
+      })
+    ).toBe(true);
+    expect(
+      isInternalDemoUser({
+        displayName: "Seed test",
+        email: "qa-regression-psg2289@psgweb.me",
+      })
+    ).toBe(true);
+    expect(
+      isInternalDemoUser({
+        displayName: "Seed test",
+        email: "seed-test-1785254167845@example.com",
       })
     ).toBe(true);
   });
