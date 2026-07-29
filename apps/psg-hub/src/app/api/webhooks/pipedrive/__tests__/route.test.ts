@@ -512,8 +512,6 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
   });
 
   it("creates one busy 45-minute proposal prep block when a sales deal reaches Qualified", async () => {
-    vi.stubEnv("PIPEDRIVE_NEW_LEAD_STAGE_ID", "55");
-    vi.stubEnv("PIPEDRIVE_QUALIFIED_STAGE_ID", "56");
     isDealWonTransition.mockReturnValue(false);
     createActivity.mockResolvedValueOnce({ id: 901 });
 
@@ -531,7 +529,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
             title: "Wallace website proposal",
             status: "open",
             pipeline_id: 8,
-            stage_id: 56,
+            stage_id: 58,
             org_id: { value: 9, name: "Wallace Collision" },
             person_id: { value: 7, name: "Pat Owner" },
             value: 6500,
@@ -569,8 +567,6 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
   });
 
   it("reuses an existing proposal prep block on webhook replay", async () => {
-    vi.stubEnv("PIPEDRIVE_NEW_LEAD_STAGE_ID", "55");
-    vi.stubEnv("PIPEDRIVE_QUALIFIED_STAGE_ID", "56");
     isDealWonTransition.mockReturnValue(false);
     listDealActivities.mockResolvedValueOnce([
       {
@@ -596,7 +592,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
             title: "Wallace website proposal",
             status: "open",
             pipeline_id: 8,
-            stage_id: 56,
+            stage_id: 58,
             update_time: "2026-07-17 14:22:00",
           },
         }),
