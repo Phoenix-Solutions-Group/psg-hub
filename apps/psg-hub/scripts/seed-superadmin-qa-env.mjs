@@ -71,6 +71,11 @@ export function requiredDemoEnvNames(env = process.env) {
 
 let supabase;
 
+export function assertNoSupabaseError(result, label) {
+  if (result.error) throw new Error(`${label} failed: ${result.error.message}`);
+  return result;
+}
+
 function connectSupabase() {
   if (!url || !serviceKey) {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
@@ -131,9 +136,18 @@ async function ensureAuthUser({ email, password, displayName }) {
 async function deleteAuthUserByEmail(email) {
   const existing = await findAuthUserByEmail(email);
   if (!existing) return;
-  await supabase.from("app_user_roles").delete().eq("profile_id", existing.id);
-  await supabase.from("shop_users").delete().eq("user_id", existing.id);
-  await supabase.from("profiles").delete().eq("id", existing.id);
+  assertNoSupabaseError(
+    await supabase.from("app_user_roles").delete().eq("profile_id", existing.id),
+    `Delete roles for ${email}`
+  );
+  assertNoSupabaseError(
+    await supabase.from("shop_users").delete().eq("user_id", existing.id),
+    `Delete shop memberships for ${email}`
+  );
+  assertNoSupabaseError(
+    await supabase.from("profiles").delete().eq("id", existing.id),
+    `Delete profile for ${email}`
+  );
   const { error } = await supabase.auth.admin.deleteUser(existing.id);
   if (error) throw new Error(`Delete auth user ${email} failed: ${error.message}`);
 }
@@ -191,19 +205,73 @@ async function cleanupLegacyDemoSeedRows() {
     for (const demoShop of data ?? []) {
       if (legacyShopIds.has(demoShop.id)) continue;
       legacyShopIds.add(demoShop.id);
-      await supabase.from("analytics_snapshots").delete().eq("shop_id", demoShop.id);
-      await supabase.from("module_access_grants").delete().eq("shop_id", demoShop.id);
-      await supabase.from("subscriptions").delete().eq("shop_id", demoShop.id);
-      await supabase.from("shop_users").delete().eq("shop_id", demoShop.id);
-      await supabase.from("shops").delete().eq("id", demoShop.id);
+      assertNoSupabaseError(
+        await supabase.from("analytics_snapshots").delete().eq("shop_id", demoShop.id),
+        `Delete analytics snapshots for legacy demo shop ${demoShop.id}`
+      );
+      assertNoSupabaseError(
+        await supabase.from("module_access_grants").delete().eq("shop_id", demoShop.id),
+        `Delete module grants for legacy demo shop ${demoShop.id}`
+      );
+      assertNoSupabaseError(
+        await supabase.from("subscriptions").delete().eq("shop_id", demoShop.id),
+        `Delete subscriptions for legacy demo shop ${demoShop.id}`
+      );
+      assertNoSupabaseError(
+        await supabase.from("shop_users").delete().eq("shop_id", demoShop.id),
+        `Delete memberships for legacy demo shop ${demoShop.id}`
+      );
+
+      const deleteShopResult = await supabase.from("shops").delete().eq("id", demoShop.id);
+      if (deleteShopResult.error?.message?.includes("access_audit is append-only")) {
+        console.warn(
+          `Kept historical legacy demo shop ${demoShop.id}; append-only audit rows prevent deleting the shop record.`
+        );
+      } else {
+        assertNoSupabaseError(
+          deleteShopResult,
+          `Delete legacy demo shop ${demoShop.id}`
+        );
+      }
+
       if (demoShop.client_id) {
-        await supabase.from("clients").delete().eq("id", demoShop.client_id);
+        const deleteClientResult = await supabase
+          .from("clients")
+          .delete()
+          .eq("id", demoShop.client_id);
+        if (
+          deleteClientResult.error?.code !== "23503" &&
+          !deleteClientResult.error?.message?.includes("access_audit is append-only")
+        ) {
+          assertNoSupabaseError(
+            deleteClientResult,
+            `Delete client for legacy demo shop ${demoShop.id}`
+          );
+        } else if (deleteClientResult.error?.message?.includes("access_audit is append-only")) {
+          console.warn(
+            `Kept historical legacy demo client ${demoShop.client_id}; append-only audit rows prevent deleting the client record.`
+          );
+        }
       }
     }
   }
-  await supabase.from("clients").delete().eq("name", CLEAN_DEMO_SEED.legacyClientName);
-  await supabase.from("clients").delete().eq("name", CLEAN_DEMO_SEED.previousClientName);
-  await supabase.from("modules").delete().eq("slug", CLEAN_DEMO_SEED.legacyModuleSlug);
+  for (const clientName of [CLEAN_DEMO_SEED.legacyClientName, CLEAN_DEMO_SEED.previousClientName]) {
+    const result = await supabase.from("clients").delete().eq("name", clientName);
+    if (
+      result.error?.code !== "23503" &&
+      !result.error?.message?.includes("access_audit is append-only")
+    ) {
+      assertNoSupabaseError(result, `Delete legacy demo client ${clientName}`);
+    } else if (result.error?.message?.includes("access_audit is append-only")) {
+      console.warn(
+        `Kept historical legacy demo client ${clientName}; append-only audit rows prevent deleting the client record.`
+      );
+    }
+  }
+  assertNoSupabaseError(
+    await supabase.from("modules").delete().eq("slug", CLEAN_DEMO_SEED.legacyModuleSlug),
+    `Delete legacy demo module ${CLEAN_DEMO_SEED.legacyModuleSlug}`
+  );
   if (!includeInternalRegressionUser) {
     await deleteAuthUserByEmail(CLEAN_DEMO_SEED.legacyInternalEmail);
   }

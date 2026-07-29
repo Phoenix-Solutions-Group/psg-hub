@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assertNoSupabaseError,
   CLEAN_DEMO_SEED,
   requiredDemoEnvNames,
   shouldSeedInternalRegressionUser,
@@ -50,5 +51,14 @@ describe("clean BSM demo seed", () => {
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.legacyShopSlug);
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.previousPilotShopSlug);
     expect(CLEAN_DEMO_SEED.shopName).not.toBe(CLEAN_DEMO_SEED.previousPilotShopName);
+  });
+
+  it("fails loudly when a Supabase cleanup call fails", () => {
+    expect(() =>
+      assertNoSupabaseError(
+        { error: { message: "foreign key blocked delete" } },
+        "Delete legacy demo rows"
+      )
+    ).toThrow("Delete legacy demo rows failed: foreign key blocked delete");
   });
 });
