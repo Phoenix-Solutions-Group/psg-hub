@@ -12,6 +12,16 @@ sst-psgdigital/
 **/.DS_Store
 **/.git/
 **/.vercel/
+**/.cache/
+**/.corepack/
+**/.corepack-cache/
+**/.npm-cache/
+**/.paperclip-home/
+**/.pnpm-home/
+**/.pnpm-store/
+**/.supabase/
+**/.vercel-cache/
+**/.vercel-home/
 **/node_modules/
 **/.next/
 **/coverage/
@@ -27,3 +37,6 @@ archive/
 psg-data-lake/
 api-psghub/
 apps/psg-ads-mutations/
+artifacts/
+psg-worktrees/
+graphify-out/
