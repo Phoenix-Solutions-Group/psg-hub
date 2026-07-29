@@ -114,7 +114,11 @@ export interface QaTask {
 
 export interface QaRestClient {
   createOrganization(name: string): Promise<{ id: number }>;
-  createPerson(name: string, orgId?: number | null): Promise<{ id: number }>;
+  createPerson(
+    name: string,
+    orgId?: number | null,
+    email?: string | null,
+  ): Promise<{ id: number }>;
   deleteOrganization(orgId: number): Promise<void>;
   deletePerson(personId: number): Promise<void>;
   createDeal(
@@ -239,9 +243,10 @@ export function createQaRestClient(config: QaClientConfig = {}): QaRestClient {
       const { data } = await call<{ id: number }>("POST", "v1", "organizations", {}, { name });
       return { id: num(asRecord(data).id) ?? 0 };
     },
-    async createPerson(name, orgId) {
+    async createPerson(name, orgId, email) {
       const body: Record<string, unknown> = { name };
       if (orgId != null) body.org_id = orgId;
+      if (email != null && email.trim() !== "") body.email = [{ value: email.trim(), primary: true }];
       const { data } = await call<{ id: number }>("POST", "v1", "persons", {}, body);
       return { id: num(asRecord(data).id) ?? 0 };
     },
