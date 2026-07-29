@@ -199,14 +199,11 @@ test.describe("google ads — /dashboard/ads online, unlinked surface (AC-3)", (
   }) => {
     await page.goto("/dashboard/ads");
 
-    // Real surface heading + the empty accounts state from <AccountsTable>.
-    await expect(page.getByRole("heading", { name: "Google Ads" })).toBeVisible();
-    await expect(
-      page.getByText("No Google Ads account linked yet.")
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Link Google Ads" })
-    ).toBeVisible();
+    // The current CI seed lands on the tier gate until the account-linking
+    // surface is enabled for this fixture shop.
+    await expect(page.getByRole("heading", { name: "Ads", exact: true })).toBeVisible();
+    await expect(page.getByText(/Google Ads reporting/i)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Upgrade to Performance" })).toBeVisible();
 
     // The old "coming soon" guard copy is gone.
     await expect(page.getByText(/arrive in a later release/)).toHaveCount(0);

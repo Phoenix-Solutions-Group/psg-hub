@@ -57,7 +57,7 @@ export const OPS_STAFF = {
 export const BSM_DEMO_ADMIN = {
   email: OPS_STAFF.email,
   statePath: OPS_STAFF.statePath,
-  displayName: "BSM Demo Admin",
+  displayName: "E2E Ops Staff",
 };
 
 export const BSM_DEMO_USER = {
