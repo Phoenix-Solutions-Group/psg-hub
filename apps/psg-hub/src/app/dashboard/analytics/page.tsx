@@ -127,6 +127,15 @@ const PRESENCE_STATUS_LABELS: Record<string, string> = {
   CLOSED_TEMPORARILY: "Temporarily closed",
 };
 
+function GoogleDemoNote({ source }: { source: string }) {
+  return (
+    <p className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+      Board demo note: this panel lights up after the shop connects its own{" "}
+      {source}; no demo data is shown here.
+    </p>
+  );
+}
+
 type Props = {
   searchParams: Promise<{ scope?: string }>;
 };
@@ -620,6 +629,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 Connect a Google Ads account to see spend, clicks, conversions,
                 and cost per lead alongside your organic performance.
               </p>
+              <GoogleDemoNote source="Google Ads account" />
               <Link
                 href="/dashboard/ads"
                 className="inline-block font-heading text-sm font-medium text-primary hover:underline"
@@ -742,6 +752,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 Connect a Google Analytics property to see sessions, users, key
                 events, and engagement alongside your search and paid performance.
               </p>
+              <GoogleDemoNote source="Google Analytics property" />
               <Link
                 href="/dashboard/analytics"
                 className="inline-block font-heading text-sm font-medium text-primary hover:underline"
@@ -822,6 +833,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 Connect a Google Search Console site to see clicks, impressions,
                 click-through rate, and average position from organic search.
               </p>
+              <GoogleDemoNote source="Google Search Console site" />
               <Link
                 href="/dashboard/analytics"
                 className="inline-block font-heading text-sm font-medium text-primary hover:underline"
@@ -946,6 +958,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 Connect a Google Business Profile to see calls, direction requests,
                 website clicks, and how often your profile appears in Maps and Search.
               </p>
+              <GoogleDemoNote source="Google Business Profile" />
               <Link
                 href="/dashboard/analytics"
                 className="inline-block font-heading text-sm font-medium text-primary hover:underline"

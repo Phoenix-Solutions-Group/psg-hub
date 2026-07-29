@@ -17,6 +17,7 @@ import {
   type AdminTier,
   type ShopMemberRole,
 } from "@/lib/ops/user-management";
+import { filterInternalDemoUsers } from "@/lib/ops/demo-user-filter";
 
 function cleanRole(role: unknown): AdminAppRole | null {
   return (ADMIN_APP_ROLES as readonly string[]).includes(role as string)
@@ -136,25 +137,27 @@ export default async function UsersAdminPage() {
     ...(memberships ?? []).map((m) => m.user_id as string),
   ]);
 
-  const users: ManagedUser[] = [...profileIds]
-    .map((profileId) => {
-      const authUser = authUsersById.get(profileId);
-      const email = authUser?.email ?? null;
-      const displayName = profileNameById.get(profileId) || email || profileId.slice(0, 8);
-      const bannedUntil = authUser?.banned_until ? new Date(authUser.banned_until) : null;
-      const isSuspended = bannedUntil ? bannedUntil.getTime() > Date.now() : false;
-      return {
-        profileId,
-        displayName,
-        email,
-        bannedUntil: authUser?.banned_until ?? null,
-        isDeleted: Boolean(authUser?.deleted_at),
-        isSuspended,
-        role: roleByProfileId.get(profileId) ?? null,
-        memberships: membershipsByUserId.get(profileId) ?? [],
-      };
-    })
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const users: ManagedUser[] = filterInternalDemoUsers(
+    [...profileIds]
+      .map((profileId) => {
+        const authUser = authUsersById.get(profileId);
+        const email = authUser?.email ?? null;
+        const displayName =
+          profileNameById.get(profileId) || email || profileId.slice(0, 8);
+        const isSuspended = Boolean(authUser?.banned_until);
+        return {
+          profileId,
+          displayName,
+          email,
+          bannedUntil: authUser?.banned_until ?? null,
+          isDeleted: Boolean(authUser?.deleted_at),
+          isSuspended,
+          role: roleByProfileId.get(profileId) ?? null,
+          memberships: membershipsByUserId.get(profileId) ?? [],
+        };
+      })
+      .sort((a, b) => a.displayName.localeCompare(b.displayName))
+  );
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
