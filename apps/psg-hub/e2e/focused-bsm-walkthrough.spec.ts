@@ -134,8 +134,7 @@ test.describe("clean BSM demo user walkthrough", () => {
 
   test("customer can add one phone photo to a Content Approver reply", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/dashboard/approvals");
-    await page.getByRole("link", { name: /E2E BSM homepage approval/ }).click();
+    await page.goto(`/dashboard/approvals/content/${BSM_DEMO_USER.bsmReviewItemId}`);
     await expect(page.getByRole("heading", { name: "E2E BSM homepage approval" })).toBeVisible();
 
     const commentInput = page.getByLabel("Comment");
