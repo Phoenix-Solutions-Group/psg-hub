@@ -177,8 +177,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   const { shops, activeShopId: resolvedActiveShopId } =
     await getActiveShopContext(user.id);
-  let activeShopId = resolvedActiveShopId;
-  if (!activeShopId) {
+  if (!resolvedActiveShopId) {
     // Layout's 06-03 gate already routes no-shop users to onboarding; this is a
     // staff-without-membership edge — keep them on the dashboard home.
     redirect("/dashboard");
@@ -186,7 +185,12 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   // The scope toggle exists ONLY for multi-shop (MSO) users.
   const scopeAll = params.scope === "all" && shops.length > 1;
-  activeShopId = resolveDemoAnalyticsShopId({ shops, activeShopId, scopeAll });
+  const activeShopId =
+    resolveDemoAnalyticsShopId({
+      shops,
+      activeShopId: resolvedActiveShopId,
+      scopeAll,
+    }) ?? resolvedActiveShopId;
   const activeShopName =
     shops.find((s) => s.id === activeShopId)?.name || "Your shop";
   const isRiversideDemoContext = isRiversideDemoAnalyticsContext({
