@@ -37,6 +37,10 @@ export async function POST(request: Request): Promise<Response> {
     if (error instanceof ReviewWorkspaceInputError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
+    console.error(
+      "[ops/bsm/review-workspace/projects] create failed:",
+      error instanceof Error ? error.message : error,
+    );
     return NextResponse.json({ error: "Could not create the internal review workspace." }, { status: 500 });
   }
 }

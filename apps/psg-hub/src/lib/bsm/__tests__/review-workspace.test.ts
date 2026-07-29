@@ -383,11 +383,14 @@ describe("BSM review workspace foundation service", () => {
     ]);
     expect(inserts.find((entry) => entry.table === "bsm_content_review_items")?.payload).toMatchObject({
       project_id: slice.projectId,
+      source_kind: "generated_page",
       processing_status: "ready",
       status: "in_review",
       position: 1,
     });
     expect(inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload).toMatchObject({
+      generated_page_path: "https://example.com",
+      snapshot_jsonb: { sourceKind: "internal_review_workspace", sourceUrl: "https://example.com" },
       scan_status: "clean",
       conversion_status: "not_needed",
       sanitization_status: "complete",

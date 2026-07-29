@@ -458,6 +458,7 @@ export async function createInternalReviewWorkspaceSlice(
       position: documentInput.position,
       required: true,
       title: docTitle,
+      source_kind: "generated_page",
       content_type: "generated_page",
       status: "in_review",
       admin_context_note: input.description ?? null,
@@ -480,11 +481,13 @@ export async function createInternalReviewWorkspaceSlice(
       content_type: "text/html",
       byte_size: 1,
       preview_type: "generated_page",
+      generated_page_path: sourceUrl ?? `internal-review-workspace://${project.id}/${itemId}`,
       processed_content_type: "text/html",
       scan_status: "clean",
       conversion_status: "not_needed",
       sanitization_status: "complete",
       source_metadata_jsonb: { sourceKind: "internal_review_workspace", sourceUrl },
+      snapshot_jsonb: { sourceKind: "internal_review_workspace", sourceUrl },
       created_by_profile_id: actorProfileId,
     });
     if (versionError) throw new Error(`Could not create review workspace version: ${versionError.message}`);
