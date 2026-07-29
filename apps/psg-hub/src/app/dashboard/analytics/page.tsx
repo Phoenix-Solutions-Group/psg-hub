@@ -136,6 +136,19 @@ function GoogleDemoNote({ source }: { source: string }) {
   );
 }
 
+function GoogleConnectionCard({ source }: { source: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{source} connection</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <GoogleDemoNote source={source} />
+      </CardContent>
+    </Card>
+  );
+}
+
 type Props = {
   searchParams: Promise<{ scope?: string }>;
 };
@@ -164,7 +177,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     redirect("/login");
   }
 
-  const { shops, activeShopId } = await getActiveShopContext(user.id);
+  const { shops, activeShopId: resolvedActiveShopId } =
+    await getActiveShopContext(user.id);
+  let activeShopId = resolvedActiveShopId;
   if (!activeShopId) {
     // Layout's 06-03 gate already routes no-shop users to onboarding; this is a
     // staff-without-membership edge — keep them on the dashboard home.
@@ -173,8 +188,14 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   // The scope toggle exists ONLY for multi-shop (MSO) users.
   const scopeAll = params.scope === "all" && shops.length > 1;
+  const riversideDemoShop = shops.find((s) => s.name === "Riverside Collision");
+  if (!scopeAll && riversideDemoShop) {
+    activeShopId = riversideDemoShop.id;
+  }
   const activeShopName =
     shops.find((s) => s.id === activeShopId)?.name || "Your shop";
+  const showGoogleDemoCards =
+    !scopeAll && activeShopName === "Riverside Collision";
   // 11-01: the GA4 + GSC link is owner-only (the authorize route also enforces it).
   const activeRole =
     shops.find((s) => s.id === activeShopId)?.role ?? "viewer";
@@ -619,7 +640,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           Paid advertising
         </h2>
 
-        {googleAdsDashboard.status === "empty" ? (
+        {showGoogleDemoCards ? (
+          <GoogleConnectionCard source="Google Ads account" />
+        ) : googleAdsDashboard.status === "empty" ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Ads account linked</CardTitle>
@@ -742,7 +765,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           Website traffic
         </h2>
 
-        {gaRows.length === 0 ? (
+        {showGoogleDemoCards ? (
+          <GoogleConnectionCard source="Google Analytics property" />
+        ) : gaRows.length === 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Analytics property linked</CardTitle>
@@ -823,7 +848,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           Search performance
         </h2>
 
-        {gscRows.length === 0 ? (
+        {showGoogleDemoCards ? (
+          <GoogleConnectionCard source="Google Search Console site" />
+        ) : gscRows.length === 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Search Console site linked</CardTitle>
@@ -904,7 +931,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           Local presence
         </h2>
 
-        {presence ? (
+        {presence && !showGoogleDemoCards ? (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -948,7 +975,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </Card>
         ) : null}
 
-        {gbpRows.length === 0 ? (
+        {showGoogleDemoCards ? (
+          <GoogleConnectionCard source="Google Business Profile" />
+        ) : gbpRows.length === 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Business Profile linked</CardTitle>
@@ -1161,7 +1190,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         </section>
       ) : null}
 
-      {activeRole === "owner" ? (
+      {activeRole === "owner" && !showGoogleDemoCards ? (
         <section aria-labelledby="connect-google-heading" className="space-y-4">
           <h2
             id="connect-google-heading"
