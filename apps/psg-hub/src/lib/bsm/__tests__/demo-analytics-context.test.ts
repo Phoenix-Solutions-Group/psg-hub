@@ -4,6 +4,7 @@ import {
   isRiversideDemoAnalyticsContext,
   isRiversideDemoShop,
   resolveDemoAnalyticsShopId,
+  shouldUseRiversidePreviewDemoFallback,
 } from "@/lib/bsm/demo-analytics-context";
 
 const shops = [
@@ -51,6 +52,51 @@ describe("Riverside demo analytics context", () => {
         shops,
         activeShopId: "pilot",
         scopeAll: false,
+      })
+    ).toBe(false);
+  });
+
+  it("activates the preview fallback for the configured demo login when membership is stale", () => {
+    expect(
+      shouldUseRiversidePreviewDemoFallback({
+        userEmail: " Demo-Shop@Example.Test ",
+        activeShopName: "Tedesco Auto Body",
+        hasRiversideMembership: false,
+        env: {
+          DEMO_SHOP_EMAIL: "demo-shop@example.test",
+          VERCEL_ENV: "preview",
+        },
+      })
+    ).toBe(true);
+  });
+
+  it("does not activate the preview fallback for production, other users, or existing Riverside membership", () => {
+    const env = {
+      DEMO_SHOP_EMAIL: "demo-shop@example.test",
+      VERCEL_ENV: "preview",
+    };
+    expect(
+      shouldUseRiversidePreviewDemoFallback({
+        userEmail: env.DEMO_SHOP_EMAIL,
+        activeShopName: "Tedesco Auto Body",
+        hasRiversideMembership: false,
+        env: { ...env, VERCEL_ENV: "production" },
+      })
+    ).toBe(false);
+    expect(
+      shouldUseRiversidePreviewDemoFallback({
+        userEmail: "customer@example.test",
+        activeShopName: "Tedesco Auto Body",
+        hasRiversideMembership: false,
+        env,
+      })
+    ).toBe(false);
+    expect(
+      shouldUseRiversidePreviewDemoFallback({
+        userEmail: env.DEMO_SHOP_EMAIL,
+        activeShopName: "Tedesco Auto Body",
+        hasRiversideMembership: true,
+        env,
       })
     ).toBe(false);
   });

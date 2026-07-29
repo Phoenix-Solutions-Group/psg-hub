@@ -4,6 +4,16 @@ export type DemoAnalyticsShop = {
 };
 
 export const RIVERSIDE_DEMO_SHOP_NAME = "Riverside Collision";
+export const RIVERSIDE_DEMO_SHOP_SLUG = "riverside-collision";
+
+type DemoAnalyticsEnv = {
+  DEMO_SHOP_EMAIL?: string;
+  VERCEL_ENV?: string;
+};
+
+function normalizeEmail(email?: string | null): string {
+  return (email ?? "").trim().toLowerCase();
+}
 
 export function isRiversideDemoShop(shop: Pick<DemoAnalyticsShop, "name">): boolean {
   return shop.name.trim().toLowerCase() === RIVERSIDE_DEMO_SHOP_NAME.toLowerCase();
@@ -33,4 +43,27 @@ export function isRiversideDemoAnalyticsContext({
 }): boolean {
   if (scopeAll || !activeShopId) return false;
   return shops.some((shop) => shop.id === activeShopId && isRiversideDemoShop(shop));
+}
+
+export function shouldUseRiversidePreviewDemoFallback({
+  userEmail,
+  activeShopName,
+  hasRiversideMembership,
+  env,
+}: {
+  userEmail?: string | null;
+  activeShopName?: string | null;
+  hasRiversideMembership: boolean;
+  env?: DemoAnalyticsEnv | NodeJS.ProcessEnv;
+}): boolean {
+  const runtimeEnv = env ?? process.env;
+  if (runtimeEnv.VERCEL_ENV !== "preview") return false;
+  if (hasRiversideMembership) return false;
+  if (activeShopName === RIVERSIDE_DEMO_SHOP_NAME) return false;
+
+  const configuredDemoEmail = normalizeEmail(runtimeEnv.DEMO_SHOP_EMAIL);
+  return (
+    configuredDemoEmail.length > 0 &&
+    normalizeEmail(userEmail) === configuredDemoEmail
+  );
 }
