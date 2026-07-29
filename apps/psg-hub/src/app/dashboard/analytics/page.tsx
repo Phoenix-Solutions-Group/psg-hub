@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { getActiveShopContext } from "@/lib/shop/context";
 import {
   getSnapshots,
@@ -8,6 +9,13 @@ import {
   getLatestMonthlySnapshot,
 } from "@/lib/analytics/snapshots";
 import { getReviewSentimentSummary } from "@/lib/reviews/sentiment-summary";
+import {
+  isRiversideDemoAnalyticsContext,
+  RIVERSIDE_DEMO_SHOP_NAME,
+  RIVERSIDE_DEMO_SHOP_SLUG,
+  resolveDemoAnalyticsShopId,
+  shouldUseRiversidePreviewDemoFallback,
+} from "@/lib/bsm/demo-analytics-context";
 import {
   aggregateByDate,
   latestSnapshot,
@@ -136,9 +144,22 @@ const PRESENCE_STATUS_LABELS: Record<string, string> = {
 function GoogleDemoNote({ source }: { source: string }) {
   return (
     <p className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-      Board demo note: this panel lights up after the shop connects its own{" "}
-      {source}; no demo data is shown here.
+      Board demo note: this panel will light up when the shop connects its own
+      Google account. For this demo, {source} is not connected yet.
     </p>
+  );
+}
+
+function GoogleConnectionCard({ source }: { source: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{source} connection</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <GoogleDemoNote source={source} />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -148,6 +169,7 @@ type Props = {
 
 export default async function AnalyticsPage({ searchParams }: Props) {
   const supabase = await createClient();
+  const service = createServiceClient();
   const params = await searchParams;
 
   const {
@@ -158,8 +180,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     redirect("/login");
   }
 
-  const { shops, activeShopId } = await getActiveShopContext(user.id);
-  if (!activeShopId) {
+  const { shops, activeShopId: resolvedActiveShopId } =
+    await getActiveShopContext(user.id);
+  if (!resolvedActiveShopId) {
     // Layout's 06-03 gate already routes no-shop users to onboarding; this is a
     // staff-without-membership edge — keep them on the dashboard home.
     redirect("/dashboard");
@@ -167,11 +190,51 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   // The scope toggle exists ONLY for multi-shop (MSO) users.
   const scopeAll = params.scope === "all" && shops.length > 1;
-  const activeShopName =
+  const riversideDemoShop = shops.find(
+    (shop) => shop.name === RIVERSIDE_DEMO_SHOP_NAME
+  );
+  let analyticsReader = supabase;
+  let activeShopId =
+    resolveDemoAnalyticsShopId({
+      shops,
+      activeShopId: resolvedActiveShopId,
+      scopeAll,
+    }) ?? resolvedActiveShopId;
+  let activeShopName =
     shops.find((s) => s.id === activeShopId)?.name || "Your shop";
+  let isRiversideDemoContext = isRiversideDemoAnalyticsContext({
+    shops,
+    activeShopId,
+    scopeAll,
+  });
+  if (
+    !scopeAll &&
+    shouldUseRiversidePreviewDemoFallback({
+      userEmail: user.email,
+      activeShopName,
+      hasRiversideMembership: Boolean(riversideDemoShop),
+    })
+  ) {
+    const { data: fallbackShop } = await service
+      .from("shops")
+      .select("id, name")
+      .or(
+        `slug.eq.${RIVERSIDE_DEMO_SHOP_SLUG},name.eq.${RIVERSIDE_DEMO_SHOP_NAME}`
+      )
+      .limit(1)
+      .maybeSingle();
+    if (fallbackShop?.id) {
+      activeShopId = fallbackShop.id as string;
+      activeShopName =
+        (fallbackShop.name as string | null) ?? RIVERSIDE_DEMO_SHOP_NAME;
+      analyticsReader = service;
+      isRiversideDemoContext = true;
+    }
+  }
   // 11-01: the GA4 + GSC link is owner-only (the authorize route also enforces it).
   const activeRole =
-    shops.find((s) => s.id === activeShopId)?.role ?? "viewer";
+    shops.find((s) => s.id === activeShopId)?.role ??
+    (isRiversideDemoContext ? "owner" : "viewer");
 
   // Date window: trailing 30 days. Clock read lives in trailingWindow (server
   // helper) — client islands receive plain props so hydration stays deterministic.
@@ -189,7 +252,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             from,
             to,
           })
-        : getSnapshots(supabase, {
+        : getSnapshots(analyticsReader, {
             shopId: activeShopId,
             source: SOURCE,
             period: PERIOD,
@@ -227,7 +290,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             from,
             to,
           })
-        : getSnapshots(supabase, {
+        : getSnapshots(analyticsReader, {
             shopId: activeShopId,
             source: PAID_SOURCE,
             period: PERIOD,
@@ -264,7 +327,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             from,
             to,
           })
-        : getSnapshots(supabase, {
+        : getSnapshots(analyticsReader, {
             shopId: activeShopId,
             source: GA4_SOURCE,
             period: PERIOD,
@@ -301,7 +364,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             from,
             to,
           })
-        : getSnapshots(supabase, {
+        : getSnapshots(analyticsReader, {
             shopId: activeShopId,
             source: GSC_SOURCE,
             period: PERIOD,
@@ -338,7 +401,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             from,
             to,
           })
-        : getSnapshots(supabase, {
+        : getSnapshots(analyticsReader, {
             shopId: activeShopId,
             source: GBP_SOURCE,
             period: PERIOD,
@@ -371,7 +434,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     : await readAnalyticsSection(
         "Business Profile status",
         () =>
-          getLatestMonthlySnapshot(supabase, {
+          getLatestMonthlySnapshot(analyticsReader, {
             shopId: activeShopId,
             source: "gbp_presence",
           }),
@@ -403,7 +466,10 @@ export default async function AnalyticsPage({ searchParams }: Props) {
       ? null
       : await readAnalyticsSection(
           "review sentiment",
-          () => getReviewSentimentSummary(supabase, { shopId: activeShopId }),
+          () =>
+            getReviewSentimentSummary(analyticsReader, {
+              shopId: activeShopId,
+            }),
           null,
           readWarnings
         );
@@ -554,7 +620,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           Paid advertising
         </h2>
 
-        {paidRows.length === 0 ? (
+        {isRiversideDemoContext && paidRows.length === 0 ? (
+          <GoogleConnectionCard source="Google Ads account" />
+        ) : paidRows.length === 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Ads account linked</CardTitle>
@@ -635,7 +703,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           Website traffic
         </h2>
 
-        {gaRows.length === 0 ? (
+        {isRiversideDemoContext && gaRows.length === 0 ? (
+          <GoogleConnectionCard source="Google Analytics property" />
+        ) : gaRows.length === 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Analytics property linked</CardTitle>
@@ -716,7 +786,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           Search performance
         </h2>
 
-        {gscRows.length === 0 ? (
+        {isRiversideDemoContext && gscRows.length === 0 ? (
+          <GoogleConnectionCard source="Google Search Console site" />
+        ) : gscRows.length === 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Search Console site linked</CardTitle>
@@ -841,7 +913,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </Card>
         ) : null}
 
-        {gbpRows.length === 0 ? (
+        {isRiversideDemoContext && gbpRows.length === 0 ? (
+          <GoogleConnectionCard source="Google Business Profile" />
+        ) : gbpRows.length === 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Business Profile linked</CardTitle>
@@ -985,7 +1059,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         </section>
       ) : null}
 
-      {activeRole === "owner" ? (
+      {activeRole === "owner" && !isRiversideDemoContext ? (
         <section aria-labelledby="connect-google-heading" className="space-y-4">
           <h2
             id="connect-google-heading"
