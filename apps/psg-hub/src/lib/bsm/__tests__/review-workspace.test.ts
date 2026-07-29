@@ -47,21 +47,32 @@ function collectProcessingJobColumnsAfterMigrations(...migrations: string[]) {
   return columns;
 }
 
-function createFakeClient(options: { collaborator?: boolean; expiredSession?: boolean; submitted?: boolean; hasPin?: boolean } = {}) {
+function createFakeClient(options: { collaborator?: boolean; expiredSession?: boolean; submitted?: boolean; hasPin?: boolean; missingSourceKindOnInsert?: boolean } = {}) {
   const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const upserts: Array<{ table: string; payload: Record<string, unknown>; options: Record<string, unknown> | undefined }> = [];
   const updates: Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }> = [];
+  let sourceKindFailures = 0;
   const client = {
     from(table: string) {
       return {
         insert(payload: Record<string, unknown>) {
           inserts.push({ table, payload });
+          const error =
+            options.missingSourceKindOnInsert &&
+            table === "bsm_content_review_items" &&
+            "source_kind" in payload &&
+            sourceKindFailures++ === 0
+              ? {
+                  code: "PGRST204",
+                  message: "Could not find the 'source_kind' column of 'bsm_content_review_items' in the schema cache",
+                }
+              : null;
           return {
             select() {
               return this;
             },
-            single: () => Promise.resolve({ data: { id: payload.id ?? "inserted-1", thread_id: payload.thread_id, body: payload.body, draft_status: payload.draft_status }, error: null }),
-            then: (resolve: (value: { error: null }) => unknown) => Promise.resolve({ error: null }).then(resolve),
+            single: () => Promise.resolve({ data: { id: payload.id ?? "inserted-1", thread_id: payload.thread_id, body: payload.body, draft_status: payload.draft_status }, error }),
+            then: (resolve: (value: { error: typeof error }) => unknown) => Promise.resolve({ error }).then(resolve),
           };
         },
         upsert(payload: Record<string, unknown>, upsertOptions?: Record<string, unknown>) {
@@ -85,7 +96,7 @@ function createFakeClient(options: { collaborator?: boolean; expiredSession?: bo
   return { client, inserts, upserts, updates };
 }
 
-type FakeClientOptions = { collaborator?: boolean; expiredSession?: boolean; submitted?: boolean; hasPin?: boolean };
+type FakeClientOptions = { collaborator?: boolean; expiredSession?: boolean; submitted?: boolean; hasPin?: boolean; missingSourceKindOnInsert?: boolean };
 
 class Query {
   private filters: Record<string, unknown> = {};
@@ -405,6 +416,26 @@ describe("BSM review workspace foundation service", () => {
       status: "sent",
     });
     expect(updates.some((entry) => entry.table === "bsm_content_review_projects" && entry.payload.status === "active")).toBe(true);
+  });
+
+  it("retries review item creation without source_kind against a stale schema cache", async () => {
+    const { client, inserts } = createFakeClient({ missingSourceKindOnInsert: true });
+
+    await createInternalReviewWorkspaceSlice(
+      {
+        shopId: SHOP_ID,
+        title: "Website approval",
+        actorProfileId: ACTOR_ID,
+        reviewerEmail: "Owner@Example.com",
+        documents: [{ sectionTitle: "Website", title: "Home page", sourceUrl: "https://example.com", position: 1 }],
+      },
+      { client: client as never, now: new Date("2026-07-28T19:00:00.000Z") },
+    );
+
+    const itemInserts = inserts.filter((entry) => entry.table === "bsm_content_review_items");
+    expect(itemInserts).toHaveLength(2);
+    expect(itemInserts[0].payload).toHaveProperty("source_kind", "generated_page");
+    expect(itemInserts[1].payload).not.toHaveProperty("source_kind");
   });
 
   it("requires a live invitation-backed reviewer session for guest access", async () => {

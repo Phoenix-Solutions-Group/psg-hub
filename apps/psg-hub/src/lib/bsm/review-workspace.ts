@@ -149,6 +149,11 @@ function cleanOptionalText(label: string, value: unknown, max: number): string |
   return cleanText(label, value, max);
 }
 
+function isMissingSourceKindSchemaCacheError(error: { code?: string | null; message?: string | null } | null): boolean {
+  const message = error?.message ?? "";
+  return error?.code === "PGRST204" && message.includes("'source_kind'") && message.includes("bsm_content_review_items");
+}
+
 function assertRatio(label: string, value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
     throw new ReviewWorkspaceInputError(400, `${label} must be between 0 and 1`);
@@ -457,7 +462,7 @@ export async function createInternalReviewWorkspaceSlice(
       generatedPagePath,
       previewUrl: sourceUrl,
     };
-    const { error: itemError } = await client.from("bsm_content_review_items").insert({
+    const itemPayload = {
       id: itemId,
       shop_id: shopId,
       project_id: project.id,
@@ -472,8 +477,17 @@ export async function createInternalReviewWorkspaceSlice(
       processing_status: "ready",
       created_by_profile_id: actorProfileId,
       metadata_jsonb: { sourceKind: "internal_review_workspace", sourceUrl },
-    });
-    if (itemError) throw new Error(`Could not create review workspace document: ${itemError.message}`);
+    };
+    const { error: itemError } = await client.from("bsm_content_review_items").insert(itemPayload);
+    if (itemError) {
+      if (isMissingSourceKindSchemaCacheError(itemError)) {
+        const { source_kind: _sourceKind, ...legacyItemPayload } = itemPayload;
+        const { error: legacyItemError } = await client.from("bsm_content_review_items").insert(legacyItemPayload);
+        if (legacyItemError) throw new Error(`Could not create review workspace document: ${legacyItemError.message}`);
+      } else {
+        throw new Error(`Could not create review workspace document: ${itemError.message}`);
+      }
+    }
 
     const { error: versionError } = await client.from("bsm_content_review_versions").insert({
       id: versionId,
