@@ -666,7 +666,7 @@ describe("Pipedrive won-deal webhook nurture gate", () => {
       expect.objectContaining({
         subject: "Proposal follow-up draft Touch 1: Wallace website proposal",
         type: "email",
-        due_date: "2026-07-21",
+        due_date: "2026-07-19",
         done: false,
         note: expect.stringContaining("Gmail draft ID: gmail-1"),
       }),

@@ -34,7 +34,7 @@ export interface ProposalAutomationSummary {
 }
 
 const DEFAULT_SALES_PIPELINE_ID = 8;
-const DEFAULT_QUALIFIED_STAGE_ID = 58;
+const DEFAULT_QUALIFIED_STAGE_ID = 56;
 const DEFAULT_PROPOSAL_SENT_STAGE_ID = 59;
 const DEFAULT_PROPOSAL_DRAFT_STOP_STAGE_IDS = [60, 61];
 const PROPOSAL_PREP_SUBJECT_PREFIX = "Proposal prep:";
@@ -46,11 +46,12 @@ const DEFAULT_PROPOSAL_PREP_TIME_ZONE = "America/New_York";
 
 const PLACEHOLDER_TOUCHES = [
   { dayOffset: 2, label: "Touch 1", subject: "Quick follow-up on the proposal" },
-  { dayOffset: 5, label: "Touch 2", subject: "A quick example that might be useful" },
-  { dayOffset: 9, label: "Touch 3", subject: "Where are you landing on this?" },
-  { dayOffset: 14, label: "Touch 4", subject: "One more example, plus a quick recap" },
+  { dayOffset: 6, label: "Touch 2", subject: "One thing that might help" },
+  { dayOffset: 11, label: "Touch 3", subject: "Anything I can clear up?" },
+  { dayOffset: 16, label: "Touch 4", subject: "One more thing worth a look" },
   { dayOffset: 21, label: "Touch 5", subject: "Should I keep this open, or close it out?" },
 ] as const;
+const CUSTOMER_CONTACT_ACTIVITY_TYPES = new Set(["call", "meeting", "email", "lunch"]);
 
 function numberFromEnv(
   env: Record<string, string | undefined>,
@@ -133,19 +134,6 @@ function dealOrgName(deal: DealPayload): string | null {
   );
 }
 
-function dealPersonName(deal: DealPayload): string | null {
-  return (
-    (typeof deal.person_name === "string" && deal.person_name.trim() !== ""
-      ? deal.person_name.trim()
-      : null) ?? relName(deal.person_id)
-  );
-}
-
-function firstName(name: string | null): string {
-  const first = name?.split(/\s+/)[0]?.trim();
-  return first && first.length > 0 ? first : "there";
-}
-
 function dealValue(deal: DealPayload): string | null {
   const value = Number(deal.value);
   if (!Number.isFinite(value) || value <= 0) return null;
@@ -167,40 +155,19 @@ function proposalContext(
   current: DealPayload,
   env: Record<string, string | undefined>,
 ): {
-  firstName: string;
-  companyName: string;
-  proposalSummary: string;
-  proposedValue: string;
-  proposedTimeline: string;
   proofPoint: string;
-  proofPoint2: string;
+  nickPhone: string;
+  nickCalendarLink: string;
 } {
-  const companyName = dealOrgName(current) ?? dealTitle(current);
-  const summary =
-    stringField(current, env, "PIPEDRIVE_PROPOSAL_SUMMARY_FIELD_KEY") ??
-    stringField(current, env, "PIPEDRIVE_WHAT_WE_ARE_PROPOSING_FIELD_KEY") ??
-    "the proposal we discussed";
-  const proposedValue =
-    stringField(current, env, "PIPEDRIVE_PROPOSED_VALUE_FIELD_KEY") ??
-    summary;
-  const proposedTimeline =
-    stringField(current, env, "PIPEDRIVE_PROPOSED_TIMELINE_FIELD_KEY") ??
-    "the timeline we discussed";
   const proofPoint =
-    stringField(current, env, "PIPEDRIVE_PROOF_POINT_FIELD_KEY") ??
-    "PSG's plan is built around clear follow-up, practical execution, and measurable next steps.";
-  const proofPoint2 =
-    stringField(current, env, "PIPEDRIVE_PROOF_POINT_2_FIELD_KEY") ??
-    proofPoint;
+    stringField(current, env, "PIPEDRIVE_PROOF_BLOCK_FIELD_KEY") ??
+    env.PIPEDRIVE_PROPOSAL_FALLBACK_PROOF_BLOCK?.trim() ??
+    "Most independent shops we work with see the biggest jump in the first 90 days, once the new work is live. That is usually the point where it is worth looking at the numbers together.";
 
   return {
-    firstName: firstName(dealPersonName(current)),
-    companyName,
-    proposalSummary: summary,
-    proposedValue,
-    proposedTimeline,
     proofPoint,
-    proofPoint2,
+    nickPhone: env.PIPEDRIVE_PROPOSAL_NICK_PHONE?.trim() || "my direct line",
+    nickCalendarLink: env.PIPEDRIVE_PROPOSAL_NICK_CALENDAR_LINK?.trim() || "reply here and we can set a time",
   };
 }
 
@@ -233,6 +200,13 @@ export function addBusinessDays(startDate: string, days: number): string {
     if (!isWeekend(date)) added += 1;
   }
   while (isWeekend(date)) date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function addCalendarDays(startDate: string, days: number): string {
+  const date = new Date(`${startDate}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return startDate;
+  date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
@@ -313,6 +287,13 @@ async function existingOpenActivities(
 ): Promise<DealActivitySummary[]> {
   if (!client.listDealActivities) return [];
   return (await client.listDealActivities(currentDealId)).filter((activity) => !activity.done);
+}
+
+async function dealActivities(
+  client: PipedriveProjectsClient,
+  currentDealId: number,
+): Promise<DealActivitySummary[]> {
+  return client.listDealActivities ? client.listDealActivities(currentDealId) : [];
 }
 
 async function ensureActivity(
@@ -521,57 +502,61 @@ function proposalDraftBody(
   const ctx = proposalContext(current, env);
   if (touch.label === "Touch 1") {
     return [
-      `Hi ${ctx.firstName},`,
+      "Hi there,",
       "",
-      `Wanted to make sure the proposal I sent over for ${ctx.companyName} landed okay and made sense.`,
+      "Just making sure the proposal I sent came through OK and made sense on your end. No rush at all.",
       "",
-      "No pressure - just let me know if anything's unclear, or if you'd rather hop on a quick call and walk through it together. Happy to answer questions or adjust anything based on what matters most to you.",
+      `If anything is unclear, or you want to walk through the numbers, reply here or give me a call at ${ctx.nickPhone}.`,
       "",
-      "Talk soon,",
+      "Thanks,",
       "Nick",
     ].join("\n");
   }
   if (touch.label === "Touch 2") {
     return [
-      `Hi ${ctx.firstName},`,
+      "Hi there,",
       "",
-      `Following up on what we proposed - ${ctx.proposedValue}. Thought I'd share a quick example of what that's looked like for another shop: ${ctx.proofPoint}`,
+      "Thought this was worth passing along while you look over the proposal.",
       "",
-      `If something similar would help ${ctx.companyName}, happy to walk through how we'd set it up for you specifically.`,
+      ctx.proofPoint,
+      "",
+      "That is all. Happy to send the full details if it helps.",
       "",
       "Nick",
     ].join("\n");
   }
   if (touch.label === "Touch 3") {
     return [
-      `Hi ${ctx.firstName},`,
+      "Hi there,",
       "",
-      "Just checking in - no rush at all. Are you still working through the decision, or is this on the back burner for now?",
+      "Circling back on the proposal I sent. If there is a question on price or timing, or you are weighing a couple of options, just tell me which one. I would rather know than guess, and I can usually work with any of it.",
       "",
-      "Either answer's fine, I just want to make sure I'm being useful and not sitting in your inbox at a bad time.",
+      `If it is easier to talk it through, here is my calendar: ${ctx.nickCalendarLink}`,
       "",
       "Nick",
     ].join("\n");
   }
   if (touch.label === "Touch 4") {
     return [
-      `Hi ${ctx.firstName},`,
+      "Hi there,",
       "",
-      `Wanted to pass along one more example: ${ctx.proofPoint2}`,
+      "One more thing worth putting in front of you before you decide.",
       "",
-      `And as a reminder, here's what we put together for ${ctx.companyName}: ${ctx.proposalSummary}. If you're ready to move forward, we'd have this up and running within ${ctx.proposedTimeline}.`,
+      ctx.proofPoint,
       "",
-      "Let me know if you'd like to revisit any part of it first.",
+      "Not trying to push. I just did not want it to get lost if it is useful to you.",
       "",
       "Nick",
     ].join("\n");
   }
   return [
-    `Hi ${ctx.firstName},`,
+    "Hi there,",
     "",
-    `It's been a few weeks since I sent over the proposal for ${ctx.companyName}, so wanted to check in one last time.`,
+    "It has been a few weeks since I sent the proposal, so I will just ask straight: where do you stand?",
     "",
-    "Totally understand if the timing isn't right. Just let me know if you'd like me to keep this open for when you're ready, or close it out for now - either way, I appreciate you taking a look.",
+    "Yes, no, or \"not yet\" all work for me. I would rather know than keep it sitting open. If you need more time, tell me roughly how long and I will check back then.",
+    "",
+    `${ctx.nickPhone}, or just reply here.`,
     "",
     "Nick",
   ].join("\n");
@@ -589,6 +574,30 @@ function automationId(current: DealPayload, touch: (typeof PLACEHOLDER_TOUCHES)[
   return `pipedrive:deal:${dealId(current)}:proposal-follow-up:${touch.label
     .toLowerCase()
     .replace(/\s+/g, "-")}`;
+}
+
+function activityTimestamp(activity: DealActivitySummary): string | null {
+  return activity.markedAsDoneTime ?? activity.updateTime ?? activity.addTime ?? activity.dueDate;
+}
+
+function compareIsoDateLike(a: string, b: string): number {
+  return a.slice(0, 10).localeCompare(b.slice(0, 10));
+}
+
+function hasCustomerContactSince(
+  activities: DealActivitySummary[],
+  sinceDate: string,
+  dueDate: string,
+): boolean {
+  return activities.some((activity) => {
+    if (activity.subject.startsWith(PROPOSAL_DRAFT_SUBJECT_PREFIX)) return false;
+    if (!activity.done) return false;
+    const type = activity.type?.toLowerCase() ?? "";
+    if (!CUSTOMER_CONTACT_ACTIVITY_TYPES.has(type)) return false;
+    const timestamp = activityTimestamp(activity);
+    if (!timestamp) return false;
+    return compareIsoDateLike(timestamp, sinceDate) >= 0 && compareIsoDateLike(timestamp, dueDate) <= 0;
+  });
 }
 
 async function createProposalPrepBlock(
@@ -636,7 +645,8 @@ async function createProposalDraftSeries(
   if (!fromEmail) return { status: "connection_missing", reason: "missing_gmail_from_email" };
 
   const id = dealId(current)!;
-  const existing = await existingOpenActivities(client, id);
+  const activities = await dealActivities(client, id);
+  const existing = activities.filter((activity) => !activity.done);
   const recipients = await proposalRecipients(client, current);
   if (recipients.length === 0) return { status: "skipped", reason: "no_recipient_email" };
   const owner = await proposalOwner(client, current);
@@ -644,9 +654,14 @@ async function createProposalDraftSeries(
   const replyTo = owner?.email && validEmail(owner.email) ? { email: owner.email, name: owner.name } : null;
   const results = [];
   const draftIds: string[] = [];
-  for (const touch of PLACEHOLDER_TOUCHES) {
+  const proposalSentDate = isoDateFromDeal(current);
+  for (const [index, touch] of PLACEHOLDER_TOUCHES.entries()) {
     const subject = touch.subject;
-    const dueDate = addBusinessDays(isoDateFromDeal(current), touch.dayOffset);
+    const dueDate = addCalendarDays(proposalSentDate, touch.dayOffset);
+    const previousTouchDate =
+      index === 0
+        ? proposalSentDate
+        : addCalendarDays(proposalSentDate, PLACEHOLDER_TOUCHES[index - 1].dayOffset);
     const activitySubject = `${PROPOSAL_DRAFT_SUBJECT_PREFIX} ${touch.label}: ${dealTitle(current)}`;
     const reused = existing.find(
       (activity) => activity.subject === activitySubject && activity.dueDate === dueDate,
@@ -655,6 +670,7 @@ async function createProposalDraftSeries(
       results.push({ id: reused.id, created: false });
       continue;
     }
+    if (hasCustomerContactSince(activities, previousTouchDate, dueDate)) continue;
     const draft = await gmailDrafts.ensureDraft({
       automationId: automationId(current, touch),
       from,
@@ -678,6 +694,7 @@ async function createProposalDraftSeries(
       ),
     );
   }
+  if (results.length === 0) return { status: "skipped", reason: "recent_customer_contact" };
   return {
     status: results.some((result) => result.created) ? "created" : "reused",
     activityIds: results.map((result) => result.id),

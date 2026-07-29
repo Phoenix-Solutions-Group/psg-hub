@@ -339,6 +339,9 @@ export interface DealActivitySummary {
   type: string | null;
   dueDate: string | null;
   dueTime?: string | null;
+  addTime?: string | null;
+  updateTime?: string | null;
+  markedAsDoneTime?: string | null;
   done: boolean;
 }
 
@@ -627,6 +630,9 @@ export function createProjectsClient(
           type?: string | null;
           due_date?: string | null;
           due_time?: string | null;
+          add_time?: string | null;
+          update_time?: string | null;
+          marked_as_done_time?: string | null;
           done?: boolean | number | null;
         }>
       >("GET", "v2", "activities", { deal_id: String(dealId), limit: "100" });
@@ -636,6 +642,10 @@ export function createProjectsClient(
         type: typeof activity.type === "string" ? activity.type : null,
         dueDate: typeof activity.due_date === "string" ? activity.due_date : null,
         dueTime: typeof activity.due_time === "string" ? activity.due_time : null,
+        addTime: typeof activity.add_time === "string" ? activity.add_time : null,
+        updateTime: typeof activity.update_time === "string" ? activity.update_time : null,
+        markedAsDoneTime:
+          typeof activity.marked_as_done_time === "string" ? activity.marked_as_done_time : null,
         done: activity.done === true || activity.done === 1,
       }));
     },

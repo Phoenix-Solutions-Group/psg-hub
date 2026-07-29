@@ -71,11 +71,9 @@ const gmailEnv = {
   GOOGLE_OAUTH_CLIENT_SECRET: "client-secret",
   GMAIL_PROPOSAL_DRAFTS_FROM_EMAIL: "nick@psgweb.me",
   GOOGLE_CALENDAR_PROPOSAL_PREP_REFRESH_TOKEN: "calendar-refresh-token",
-  PIPEDRIVE_PROPOSAL_SUMMARY_FIELD_KEY: "proposal_summary",
-  PIPEDRIVE_PROPOSED_VALUE_FIELD_KEY: "proposed_value",
-  PIPEDRIVE_PROPOSED_TIMELINE_FIELD_KEY: "proposed_timeline",
-  PIPEDRIVE_PROOF_POINT_FIELD_KEY: "proof_point",
-  PIPEDRIVE_PROOF_POINT_2_FIELD_KEY: "proof_point_2",
+  PIPEDRIVE_PROOF_BLOCK_FIELD_KEY: "proof_block",
+  PIPEDRIVE_PROPOSAL_NICK_PHONE: "(555) 010-1000",
+  PIPEDRIVE_PROPOSAL_NICK_CALENDAR_LINK: "https://cal.example/nick",
 };
 
 describe("proposal automations", () => {
@@ -93,7 +91,7 @@ describe("proposal automations", () => {
           id: 42,
           title: "Wallace website proposal",
           pipeline_id: 8,
-          stage_id: 58,
+          stage_id: 56,
           value: 6500,
           currency: "USD",
           update_time: "2026-07-17 14:22:00",
@@ -132,7 +130,7 @@ describe("proposal automations", () => {
         id: 42,
         title: "Wallace website proposal",
         pipeline_id: 8,
-        stage_id: 58,
+        stage_id: 56,
         update_time: "2026-07-17 14:22:00",
       },
       { stage_id: 57 },
@@ -160,7 +158,7 @@ describe("proposal automations", () => {
         id: 42,
         title: "Wallace website proposal",
         pipeline_id: 8,
-        stage_id: 58,
+        stage_id: 56,
         update_time: "2026-07-17 14:22:00",
       },
       { stage_id: 57 },
@@ -201,13 +199,9 @@ describe("proposal automations", () => {
           org_id: { value: 9, name: "Wallace Collision" },
           user_id: { value: 11, name: "Alex Seller" },
           update_time: "2026-07-17 14:22:00",
-          proposal_summary: "a new website plus local search setup",
-          proposed_value: "getting your shop found first when someone searches after a wreck",
-          proposed_timeline: "3 weeks",
-          proof_point: "another shop used the same follow-up plan to keep prospects moving.",
-          proof_point_2: "the same approach gives owners a simple next step after the proposal.",
+          proof_block: "Most independent shops see the first useful signals after the new work is live.",
         },
-        { stage_id: 58 },
+        { stage_id: 56 },
         gmailEnv,
         gmailDrafts,
         fakeCalendar(),
@@ -238,7 +232,14 @@ describe("proposal automations", () => {
           { email: "sam@example.com", name: "Sam Partner" },
         ],
         subject: "Quick follow-up on the proposal",
-        text: expect.stringContaining("Hi Pat,"),
+        text: expect.stringContaining("Hi there,"),
+      }),
+    );
+    expect(gmailDrafts.ensureDraft).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        subject: "One thing that might help",
+        text: expect.stringContaining("Most independent shops see the first useful signals"),
       }),
     );
     expect(createActivity).toHaveBeenCalledTimes(5);
@@ -247,9 +248,64 @@ describe("proposal automations", () => {
       expect.objectContaining({
         subject: "Proposal follow-up draft Touch 1: Wallace website proposal",
         type: "email",
-        due_date: "2026-07-21",
+        due_date: "2026-07-19",
         done: false,
         note: expect.stringContaining("Gmail draft ID: gmail-draft-1"),
+      }),
+    );
+  });
+
+  it("skips only the touch whose lookback window already has logged customer contact", async () => {
+    let nextId = 9001;
+    const createActivity = vi.fn(async () => ({ id: nextId++ }));
+    const { client } = fakeClient({
+      createActivity,
+      listDealActivities: vi.fn(async () => [
+        {
+          id: 700,
+          subject: "Connected with decision maker",
+          type: "call",
+          dueDate: "2026-07-18",
+          markedAsDoneTime: "2026-07-18 13:00:00",
+          done: true,
+        },
+      ]),
+    });
+    const gmailDrafts = fakeGmailDrafts();
+
+    await expect(
+      runProposalAutomations(
+        client,
+        {
+          id: 42,
+          title: "Wallace website proposal",
+          pipeline_id: 8,
+          stage_id: 59,
+          update_time: "2026-07-17 14:22:00",
+        },
+        { stage_id: 56 },
+        gmailEnv,
+        gmailDrafts,
+        fakeCalendar(),
+      ),
+    ).resolves.toEqual({
+      proposalDraftSeries: {
+        status: "created",
+        activityIds: [9001, 9002, 9003, 9004],
+        draftIds: ["gmail-draft-1", "gmail-draft-2", "gmail-draft-3", "gmail-draft-4"],
+      },
+    });
+
+    expect(gmailDrafts.ensureDraft).toHaveBeenCalledTimes(4);
+    expect(gmailDrafts.ensureDraft).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        automationId: "pipedrive:deal:42:proposal-follow-up:touch-2",
+      }),
+    );
+    expect(createActivity).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: "Proposal follow-up draft Touch 1: Wallace website proposal",
       }),
     );
   });
