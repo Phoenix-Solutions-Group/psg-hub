@@ -38,6 +38,8 @@ export const CLEAN_DEMO_SEED = {
   moduleDisplayName: "BSM Demo Walkthrough",
   previousClientName: "BSM Demo Client",
   previousShopSlug: "bsm-demo-collision-center",
+  previousPilotShopName: "PSG Pilot Body Shop",
+  previousPilotShopSlug: "psg-pilot-body-shop",
   legacyClientName: "QA Superadmin Walkthrough Client",
   legacyShopSlug: "qa-superadmin-walkthrough",
   legacyModuleSlug: "qa-superadmin-walkthrough",
@@ -172,13 +174,23 @@ async function upsertByLookup({ table, select = "id", filters, insert, update, l
 }
 
 async function cleanupLegacyDemoSeedRows() {
-  for (const slug of [CLEAN_DEMO_SEED.legacyShopSlug, CLEAN_DEMO_SEED.previousShopSlug]) {
-    const { data: demoShop } = await supabase
+  const legacyShopFilters = [
+    { column: "slug", value: CLEAN_DEMO_SEED.legacyShopSlug },
+    { column: "slug", value: CLEAN_DEMO_SEED.previousShopSlug },
+    { column: "slug", value: CLEAN_DEMO_SEED.previousPilotShopSlug },
+    { column: "name", value: CLEAN_DEMO_SEED.previousPilotShopName },
+  ];
+
+  const legacyShopIds = new Set();
+  for (const { column, value } of legacyShopFilters) {
+    const { data, error } = await supabase
       .from("shops")
       .select("id, client_id")
-      .eq("slug", slug)
-      .maybeSingle();
-    if (demoShop) {
+      .eq(column, value);
+    if (error) throw new Error(`Legacy demo shop lookup failed: ${error.message}`);
+    for (const demoShop of data ?? []) {
+      if (legacyShopIds.has(demoShop.id)) continue;
+      legacyShopIds.add(demoShop.id);
       await supabase.from("analytics_snapshots").delete().eq("shop_id", demoShop.id);
       await supabase.from("module_access_grants").delete().eq("shop_id", demoShop.id);
       await supabase.from("subscriptions").delete().eq("shop_id", demoShop.id);
