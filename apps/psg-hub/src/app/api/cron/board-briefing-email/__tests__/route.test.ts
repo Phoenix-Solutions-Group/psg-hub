@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MailError } from "@/lib/mail/types";
 
 const sendEmail = vi.fn();
 const claimBoardBriefingOutbox = vi.fn();
@@ -118,8 +119,52 @@ describe("GET /api/cron/board-briefing-email delivery", () => {
     const res = await GET(req("Bearer cron-secret"));
 
     expect(res.status).toBe(502);
-    expect(await res.json()).toEqual({ error: "send_failed" });
+    expect(await res.json()).toEqual({ error: "send_failed", reason: "unexpected_error" });
     expect(markBoardBriefingOutboxSent).not.toHaveBeenCalled();
+  });
+
+  it("reports a safe provider status when SendGrid rejects the message", async () => {
+    sendEmail.mockRejectedValue(
+      new MailError("SendGrid send failed (status 403)", {
+        statusCode: 403,
+        retryable: false,
+      }),
+    );
+
+    const res = await GET(req("Bearer cron-secret"));
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "send_failed", reason: "sendgrid_status_403" });
+    expect(markBoardBriefingOutboxSent).not.toHaveBeenCalled();
+  });
+
+  it("reports the outbox as unavailable when the database cannot claim a row", async () => {
+    claimBoardBriefingOutbox.mockRejectedValue(
+      new Error("Could not find the table 'public.board_briefing_outbox' in the schema cache"),
+    );
+
+    const res = await GET(req("Bearer cron-secret"));
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({
+      error: "outbox_unavailable",
+      reason: "outbox_schema_unavailable",
+    });
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(markBoardBriefingOutboxSent).not.toHaveBeenCalled();
+  });
+
+  it("reports when a sent briefing cannot be stamped in the outbox", async () => {
+    markBoardBriefingOutboxSent.mockRejectedValue(new Error("update failed"));
+
+    const res = await GET(req("Bearer cron-secret"));
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({
+      error: "sent_stamp_failed",
+      reason: "unexpected_error",
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
   });
 
   it("fails honestly and never sends when the staged row has no body", async () => {
