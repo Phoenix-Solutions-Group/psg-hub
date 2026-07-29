@@ -15,6 +15,10 @@ import {
   getDirectMailMetrics,
 } from "@/lib/analytics/direct-mail";
 import {
+  RIVERSIDE_ANALYTICS_DEMO_SHOP,
+  shouldUseRiversideAnalyticsPreviewFallback,
+} from "@/lib/bsm/riverside-analytics-demo";
+import {
   aggregateByDate,
   latestSnapshot,
   latestSyncedAt,
@@ -188,17 +192,45 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   // The scope toggle exists ONLY for multi-shop (MSO) users.
   const scopeAll = params.scope === "all" && shops.length > 1;
-  const riversideDemoShop = shops.find((s) => s.name === "Riverside Collision");
+  let analyticsReader = supabase;
+  const riversideDemoShop = shops.find(
+    (s) => s.name === RIVERSIDE_ANALYTICS_DEMO_SHOP.name
+  );
   if (!scopeAll && riversideDemoShop) {
     activeShopId = riversideDemoShop.id;
   }
-  const activeShopName =
+  let activeShopName =
     shops.find((s) => s.id === activeShopId)?.name || "Your shop";
+  // Preview-only board-demo fallback: if the configured demo login still has a
+  // stale shop membership, show the seeded Riverside demo without exposing this
+  // path to normal customers or production.
+  if (
+    !scopeAll &&
+    shouldUseRiversideAnalyticsPreviewFallback({
+      userEmail: user.email,
+      activeShopName,
+      hasRiversideMembership: Boolean(riversideDemoShop),
+    })
+  ) {
+    const { data: fallbackShop } = await service
+      .from("shops")
+      .select("id, name")
+      .eq("slug", RIVERSIDE_ANALYTICS_DEMO_SHOP.slug)
+      .maybeSingle();
+    if (fallbackShop?.id) {
+      activeShopId = fallbackShop.id as string;
+      activeShopName =
+        (fallbackShop.name as string | null) ??
+        RIVERSIDE_ANALYTICS_DEMO_SHOP.name;
+      analyticsReader = service;
+    }
+  }
   const showGoogleDemoCards =
-    !scopeAll && activeShopName === "Riverside Collision";
+    !scopeAll && activeShopName === RIVERSIDE_ANALYTICS_DEMO_SHOP.name;
   // 11-01: the GA4 + GSC link is owner-only (the authorize route also enforces it).
   const activeRole =
-    shops.find((s) => s.id === activeShopId)?.role ?? "viewer";
+    shops.find((s) => s.id === activeShopId)?.role ??
+    (showGoogleDemoCards ? "owner" : "viewer");
 
   // Date window: trailing 30 days. Clock read lives in trailingWindow (server
   // helper) — client islands receive plain props so hydration stays deterministic.
@@ -217,7 +249,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             from,
             to,
           })
-        : getSnapshots(supabase, {
+        : getSnapshots(analyticsReader, {
             shopId: activeShopId,
             source: SOURCE,
             period: PERIOD,
@@ -255,7 +287,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             from,
             to,
           })
-        : getSnapshots(supabase, {
+        : getSnapshots(analyticsReader, {
             shopId: activeShopId,
             source: PAID_SOURCE,
             period: PERIOD,
@@ -280,7 +312,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             from: priorPaidWindow.from,
             to: priorPaidWindow.to,
           })
-        : getSnapshots(supabase, {
+        : getSnapshots(analyticsReader, {
             shopId: activeShopId,
             source: PAID_SOURCE,
             period: PERIOD,
@@ -321,7 +353,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             from,
             to,
           })
-        : getSnapshots(supabase, {
+        : getSnapshots(analyticsReader, {
             shopId: activeShopId,
             source: GA4_SOURCE,
             period: PERIOD,
@@ -358,7 +390,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             from,
             to,
           })
-        : getSnapshots(supabase, {
+        : getSnapshots(analyticsReader, {
             shopId: activeShopId,
             source: GSC_SOURCE,
             period: PERIOD,
@@ -395,7 +427,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             from,
             to,
           })
-        : getSnapshots(supabase, {
+        : getSnapshots(analyticsReader, {
             shopId: activeShopId,
             source: GBP_SOURCE,
             period: PERIOD,
@@ -428,7 +460,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     : await readAnalyticsSection(
         "Business Profile status",
         () =>
-          getLatestMonthlySnapshot(supabase, {
+          getLatestMonthlySnapshot(analyticsReader, {
             shopId: activeShopId,
             source: "gbp_presence",
           }),
@@ -458,7 +490,10 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     ? null
     : await readAnalyticsSection(
         "Local Falcon",
-        () => getLatestLocalFalconSnapshot(supabase, { shopId: activeShopId }),
+        () =>
+          getLatestLocalFalconSnapshot(analyticsReader, {
+            shopId: activeShopId,
+          }),
         null,
         readWarnings
       );
@@ -471,7 +506,10 @@ export default async function AnalyticsPage({ searchParams }: Props) {
       ? null
       : await readAnalyticsSection(
           "review sentiment",
-          () => getReviewSentimentSummary(supabase, { shopId: activeShopId }),
+          () =>
+            getReviewSentimentSummary(analyticsReader, {
+              shopId: activeShopId,
+            }),
           null,
           readWarnings
         );
