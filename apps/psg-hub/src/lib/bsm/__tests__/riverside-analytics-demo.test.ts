@@ -16,7 +16,6 @@ describe("Riverside Analytics preview demo fallback", () => {
       shouldUseRiversideAnalyticsPreviewFallback({
         userEmail: " Demo-Shop@Example.Test ",
         activeShopName: "Tedesco Auto Body",
-        hasRiversideMembership: false,
         env: previewEnv,
       })
     ).toBe(true);
@@ -27,8 +26,25 @@ describe("Riverside Analytics preview demo fallback", () => {
       shouldUseRiversideAnalyticsPreviewFallback({
         userEmail: " Test@PsgHub.Me ",
         activeShopName: "Tedesco Auto Body",
-        hasRiversideMembership: false,
         env: { VERCEL_ENV: "preview" },
+      })
+    ).toBe(true);
+  });
+
+  it("activates on PSG Vercel preview hosts when VERCEL_ENV is unavailable", () => {
+    expect(
+      shouldUseRiversideAnalyticsPreviewFallback({
+        userEmail: "test@psghub.me",
+        activeShopName: "Tedesco Auto Body",
+        requestHost: "psg-acephccxk-psg-digital.vercel.app",
+        env: {},
+      })
+    ).toBe(true);
+    expect(
+      shouldUseRiversideAnalyticsPreviewFallback({
+        userEmail: "test@psghub.me",
+        activeShopName: "Tedesco Auto Body",
+        env: { VERCEL_URL: "https://psg-acephccxk-psg-digital.vercel.app" },
       })
     ).toBe(true);
   });
@@ -38,7 +54,6 @@ describe("Riverside Analytics preview demo fallback", () => {
       shouldUseRiversideAnalyticsPreviewFallback({
         userEmail: previewEnv.DEMO_SHOP_EMAIL,
         activeShopName: "Tedesco Auto Body",
-        hasRiversideMembership: false,
         env: { ...previewEnv, VERCEL_ENV: "production" },
       })
     ).toBe(false);
@@ -49,7 +64,6 @@ describe("Riverside Analytics preview demo fallback", () => {
       shouldUseRiversideAnalyticsPreviewFallback({
         userEmail: "customer@example.test",
         activeShopName: "Tedesco Auto Body",
-        hasRiversideMembership: false,
         env: previewEnv,
       })
     ).toBe(false);
@@ -57,17 +71,18 @@ describe("Riverside Analytics preview demo fallback", () => {
       shouldUseRiversideAnalyticsPreviewFallback({
         userEmail: previewEnv.DEMO_SHOP_EMAIL,
         activeShopName: RIVERSIDE_ANALYTICS_DEMO_SHOP.name,
-        hasRiversideMembership: false,
         env: previewEnv,
       })
     ).toBe(false);
+  });
+
+  it("still activates when the preview user has a stale non-Riverside active shop", () => {
     expect(
       shouldUseRiversideAnalyticsPreviewFallback({
         userEmail: previewEnv.DEMO_SHOP_EMAIL,
         activeShopName: "Tedesco Auto Body",
-        hasRiversideMembership: true,
         env: previewEnv,
       })
-    ).toBe(false);
+    ).toBe(true);
   });
 });

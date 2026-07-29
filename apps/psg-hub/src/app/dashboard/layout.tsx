@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { Logo } from "@/components/brand/logo";
 import { OnboardingScreen } from "@/components/dashboard/onboarding-screen";
@@ -7,6 +8,10 @@ import { MobileNav } from "@/components/dashboard/mobile-nav";
 import { getDashboardAccess, decideDashboardAccess } from "@/lib/auth/shop-access";
 import { getOpsAccess, isOpsStaff } from "@/lib/auth/ops-access";
 import { getActiveShopContext } from "@/lib/shop/context";
+import {
+  RIVERSIDE_ANALYTICS_DEMO_SHOP,
+  shouldUseRiversideAnalyticsPreviewFallback,
+} from "@/lib/bsm/riverside-analytics-demo";
 import { buildDashboardNav } from "@/lib/dashboard/nav";
 
 export default async function DashboardLayout({
@@ -32,7 +37,33 @@ export default async function DashboardLayout({
   }
 
   // Active-shop context for the switcher (additive; the gate above is unchanged).
-  const { shops, activeShopId } = await getActiveShopContext(user.id);
+  const { shops, activeShopId: resolvedActiveShopId } =
+    await getActiveShopContext(user.id);
+  let activeShopId = resolvedActiveShopId;
+  let displayShops = shops;
+  const activeShopName =
+    shops.find((shop) => shop.id === activeShopId)?.name ?? null;
+  const requestHost = (await headers()).get("host");
+  const riversideDemoShop = shops.find(
+    (shop) => shop.name === RIVERSIDE_ANALYTICS_DEMO_SHOP.name
+  );
+  if (
+    shouldUseRiversideAnalyticsPreviewFallback({
+      userEmail: user.email,
+      activeShopName,
+      requestHost,
+    })
+  ) {
+    if (riversideDemoShop) {
+      activeShopId = riversideDemoShop.id;
+    } else if (activeShopId) {
+      displayShops = shops.map((shop) =>
+        shop.id === activeShopId
+          ? { ...shop, name: RIVERSIDE_ANALYTICS_DEMO_SHOP.name }
+          : shop
+      );
+    }
+  }
   const nav = buildDashboardNav(activeShopId);
 
   // Internal-ops staff (psg_internal / psg_superadmin) land here on /dashboard with
@@ -50,9 +81,9 @@ export default async function DashboardLayout({
         <div className="flex h-16 items-center border-b border-sidebar-border px-5">
           <Logo variant="reverse" className="h-7 w-auto" />
         </div>
-        {shops.length > 0 && (
+        {displayShops.length > 0 && (
           <div className="border-b border-sidebar-border px-3 py-3">
-            <ShopSwitcher shops={shops} activeShopId={activeShopId} />
+            <ShopSwitcher shops={displayShops} activeShopId={activeShopId} />
           </div>
         )}
         <nav className="flex-1 space-y-1 p-3">
@@ -77,7 +108,11 @@ export default async function DashboardLayout({
       <div className="flex flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-border px-6">
           <div className="flex items-center gap-3">
-            <MobileNav nav={nav} shops={shops} activeShopId={activeShopId} />
+            <MobileNav
+              nav={nav}
+              shops={displayShops}
+              activeShopId={activeShopId}
+            />
             <Logo variant="primary" className="h-5 w-auto lg:hidden" />
             <span className="hidden font-heading text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground lg:inline">
               Client Hub

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -201,6 +202,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   }
   let activeShopName =
     shops.find((s) => s.id === activeShopId)?.name || "Your shop";
+  const requestHost = (await headers()).get("host");
   // Preview-only board-demo fallback: if the configured demo login still has a
   // stale shop membership, show the seeded Riverside demo without exposing this
   // path to normal customers or production.
@@ -209,7 +211,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     shouldUseRiversideAnalyticsPreviewFallback({
       userEmail: user.email,
       activeShopName,
-      hasRiversideMembership: Boolean(riversideDemoShop),
+      requestHost,
     })
   ) {
     const { data: fallbackShop } = await service
@@ -223,6 +225,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         (fallbackShop.name as string | null) ??
         RIVERSIDE_ANALYTICS_DEMO_SHOP.name;
       analyticsReader = service;
+    } else {
+      activeShopName = RIVERSIDE_ANALYTICS_DEMO_SHOP.name;
     }
   }
   const showGoogleDemoCards =
