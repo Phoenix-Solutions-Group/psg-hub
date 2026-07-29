@@ -130,17 +130,19 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
 
   if (!inviteToken) {
     return (
-      <Card className="mx-auto max-w-lg">
-        <CardHeader>
-          <CardTitle>Review link missing</CardTitle>
-          <CardDescription>The private invitation token is required to open this review.</CardDescription>
-        </CardHeader>
-      </Card>
+      <main className="flex min-h-svh w-full flex-1 items-start justify-center px-4 py-10 sm:px-6 sm:py-16">
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>Review link missing</CardTitle>
+            <CardDescription>The private invitation token is required to open this review.</CardDescription>
+          </CardHeader>
+        </Card>
+      </main>
     );
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:py-10">
+    <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <header className="border-b border-border pb-5">
         <div className="text-xs font-medium uppercase text-muted-foreground">Body Shop Marketer Review</div>
         <h1 className="mt-2 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -170,8 +172,8 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <section className="space-y-4">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
+          <section className="min-w-0 space-y-4">
             {workspace.documents.map((doc) => (
               <Card key={doc.itemId}>
                 <CardHeader>
@@ -184,25 +186,25 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="min-h-64 rounded-lg border border-border bg-background p-5">
-                    <div className="max-w-2xl space-y-4">
+                  <div className="min-h-64 rounded-lg border border-border bg-background p-4 sm:p-5">
+                    <div className="max-w-3xl space-y-4">
                       <h2 className="font-heading text-xl font-semibold">Collision repair page proof</h2>
                       <p className="text-sm leading-6 text-muted-foreground">
                         Review this proof for customer-facing accuracy. Private comments remain tied to
                         your invitation and are visible to PSG staff after submission.
                       </p>
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-md border border-border p-3">
+                      <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="min-w-0 rounded-md border border-border p-3">
                           <div className="text-xs text-muted-foreground">Status</div>
-                          <div className="font-medium">{doc.processingStatus}</div>
+                          <div className="break-words font-medium">{doc.processingStatus}</div>
                         </div>
-                        <div className="rounded-md border border-border p-3">
+                        <div className="min-w-0 rounded-md border border-border p-3">
                           <div className="text-xs text-muted-foreground">Comments</div>
-                          <div className="font-medium">{workspace.comments.filter((item) => item.reviewItemId === doc.itemId).length}</div>
+                          <div className="break-words font-medium">{workspace.comments.filter((item) => item.reviewItemId === doc.itemId).length}</div>
                         </div>
-                        <div className="rounded-md border border-border p-3">
+                        <div className="min-w-0 rounded-md border border-border p-3">
                           <div className="text-xs text-muted-foreground">Decision</div>
-                          <div className="font-medium">{workspace.decisions.find((item) => item.reviewItemId === doc.itemId)?.decision.replace("_", " ") ?? "Open"}</div>
+                          <div className="break-words font-medium">{workspace.decisions.find((item) => item.reviewItemId === doc.itemId)?.decision.replace("_", " ") ?? "Open"}</div>
                         </div>
                       </div>
                     </div>
@@ -212,7 +214,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
             ))}
           </section>
 
-          <aside className="space-y-4">
+          <aside className="min-w-0 space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>{isReadOnly ? "Submitted review" : "Your review"}</CardTitle>
