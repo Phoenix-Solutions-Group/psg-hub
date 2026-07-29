@@ -10,6 +10,7 @@ import {
   claimBoardBriefingOutbox,
   markBoardBriefingOutboxSent,
 } from "@/lib/board-briefing/outbox";
+import { MailError } from "@/lib/mail/types";
 import { createServiceClient } from "@/lib/supabase/service";
 
 // PSG-973 — Vercel-owned daily board briefing delivery.
@@ -30,6 +31,16 @@ function authorized(request: Request): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+function safeFailureReason(error: unknown): string {
+  if (error instanceof MailError) {
+    return error.statusCode ? `sendgrid_status_${error.statusCode}` : "sendgrid_error";
+  }
+  if (error instanceof Error && /schema cache|Could not find the table/i.test(error.message)) {
+    return "outbox_schema_unavailable";
+  }
+  return "unexpected_error";
+}
+
 async function handle(request: Request): Promise<NextResponse> {
   if (!authorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -38,13 +49,22 @@ async function handle(request: Request): Promise<NextResponse> {
   const service = createServiceClient();
   const claimToken = randomUUID();
 
+  let row: Awaited<ReturnType<typeof claimBoardBriefingOutbox>>;
   try {
-    const row = await claimBoardBriefingOutbox(service, { claimToken });
+    row = await claimBoardBriefingOutbox(service, { claimToken });
     if (!row) {
       console.error("[board-briefing-email] no unsent briefing row available");
       return NextResponse.json({ error: "no_board_briefing_ready" }, { status: 503 });
     }
+  } catch (error) {
+    console.error("[board-briefing-email] outbox claim failed:", error);
+    return NextResponse.json(
+      { error: "outbox_unavailable", reason: safeFailureReason(error) },
+      { status: 502 },
+    );
+  }
 
+  try {
     const payload = parseBoardBriefingPayload({
       body: row.bodyMarkdown,
       briefingUrl: row.briefingUrl,
@@ -52,9 +72,17 @@ async function handle(request: Request): Promise<NextResponse> {
       generatedAt: row.generatedAt,
     });
     const result = await sendBoardBriefing(payload);
-    await markBoardBriefingOutboxSent(service, row.id, claimToken, {
-      messageId: result.messageId,
-    });
+    try {
+      await markBoardBriefingOutboxSent(service, row.id, claimToken, {
+        messageId: result.messageId,
+      });
+    } catch (error) {
+      console.error("[board-briefing-email] sent briefing was not stamped:", error);
+      return NextResponse.json(
+        { error: "sent_stamp_failed", reason: safeFailureReason(error) },
+        { status: 502 },
+      );
+    }
 
     return NextResponse.json({
       ok: true,
@@ -75,7 +103,10 @@ async function handle(request: Request): Promise<NextResponse> {
     }
 
     console.error("[board-briefing-email] send failed:", error);
-    return NextResponse.json({ error: "send_failed" }, { status: 502 });
+    return NextResponse.json(
+      { error: "send_failed", reason: safeFailureReason(error) },
+      { status: 502 },
+    );
   }
 }
 
