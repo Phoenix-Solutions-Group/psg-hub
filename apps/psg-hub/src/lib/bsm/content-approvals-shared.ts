@@ -83,4 +83,18 @@ export type BsmContentApprovalListItem = {
     createdAt: string;
   }>;
   commentCount: number;
+  reviewWorkspace: {
+    projectId: string;
+    projectTitle: string | null;
+    roundId: string | null;
+  } | null;
+};
+
+export type BsmContentApprovalWorkspaceOption = {
+  id: string;
+  shopId: string;
+  title: string;
+  status: string;
+  currentRoundId: string | null;
+  documentCount: number;
 };

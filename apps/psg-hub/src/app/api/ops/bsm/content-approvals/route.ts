@@ -9,6 +9,8 @@ import {
   createBsmGeneratedPageApproval,
   createBsmContentApprovalUpload,
   listBsmContentApprovals,
+  listBsmContentApprovalWorkspaces,
+  updateBsmContentApproval,
 } from "@/lib/bsm/content-approvals";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -16,6 +18,7 @@ type UploadPayload = {
   sourceKind?: unknown;
   shopId?: unknown;
   customerProfileId?: unknown;
+  reviewWorkspaceProjectId?: unknown;
   title?: unknown;
   contextNote?: unknown;
   fileName?: unknown;
@@ -36,8 +39,12 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const approvals = await listBsmContentApprovals(createServiceClient(), { shopId });
+    const workspaces = await listBsmContentApprovalWorkspaces(createServiceClient(), {
+      shopId,
+      actorProfileId: gate.userId,
+    });
     return NextResponse.json(
-      { approvals },
+      { approvals, workspaces },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch {
@@ -65,6 +72,7 @@ export async function POST(request: Request): Promise<Response> {
       ? await createBsmGeneratedPageApproval({
           shopId: payload.shopId as string,
           customerProfileId: payload.customerProfileId as string | null | undefined,
+          reviewWorkspaceProjectId: payload.reviewWorkspaceProjectId as string | null | undefined,
           title: payload.title as string,
           contextNote: payload.contextNote as string,
           generatedPagePath: payload.generatedPagePath as string,
@@ -78,6 +86,7 @@ export async function POST(request: Request): Promise<Response> {
       : await createBsmContentApprovalUpload({
           shopId: payload.shopId as string,
           customerProfileId: payload.customerProfileId as string | null | undefined,
+          reviewWorkspaceProjectId: payload.reviewWorkspaceProjectId as string | null | undefined,
           title: payload.title as string,
           contextNote: payload.contextNote as string,
           fileName: payload.fileName as string,
@@ -103,6 +112,8 @@ export async function POST(request: Request): Promise<Response> {
         generatedPagePath: result.item.currentVersion?.sourceMetadata.generatedPagePath ?? null,
         title: result.item.title,
         status: result.item.status,
+        reviewWorkspaceProjectId: result.item.reviewWorkspace?.projectId ?? null,
+        reviewWorkspaceRoundId: result.item.reviewWorkspace?.roundId ?? null,
       },
     });
 
@@ -113,6 +124,55 @@ export async function POST(request: Request): Promise<Response> {
     }
     return NextResponse.json(
       { error: "Could not start the upload. The file was not saved; please try again." },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PATCH(request: Request): Promise<Response> {
+  const gate = await requireOpsFn("manage_bsm_content_approvals");
+  if (!gate.ok) return gate.response;
+
+  let payload: UploadPayload & { itemId?: unknown };
+  try {
+    payload = (await request.json()) as UploadPayload & { itemId?: unknown };
+  } catch {
+    return NextResponse.json({ error: "The edit request was not readable." }, { status: 400 });
+  }
+
+  try {
+    const result = await updateBsmContentApproval({
+      itemId: payload.itemId as string,
+      title: payload.title as string,
+      contextNote: payload.contextNote as string,
+      fileName: payload.fileName as string | null | undefined,
+      contentType: payload.contentType as string | null | undefined,
+      byteSize: payload.byteSize as number | null | undefined,
+      actorProfileId: gate.userId,
+    });
+
+    await recordAuditEvent({
+      actorProfileId: gate.userId,
+      action: "bsm_content_approval.update",
+      targetShopId: result.item.shopId,
+      targetProfileId: result.item.customerProfileId,
+      payload: {
+        reviewItemId: result.item.id,
+        storagePath: result.upload?.path ?? null,
+        title: result.item.title,
+        status: result.item.status,
+        reviewWorkspaceProjectId: result.item.reviewWorkspace?.projectId ?? null,
+        reviewWorkspaceRoundId: result.item.reviewWorkspace?.roundId ?? null,
+      },
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof ApprovalUploadInputError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return NextResponse.json(
+      { error: "Could not save the review item edits. Please try again." },
       { status: 500 },
     );
   }

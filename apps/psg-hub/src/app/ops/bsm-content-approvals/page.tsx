@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { BsmContentApprovalManager } from "@/components/ops/bsm-content-approval-manager";
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
-import { listBsmContentApprovals } from "@/lib/bsm/content-approvals";
-import type { BsmContentApprovalListItem } from "@/lib/bsm/content-approvals-shared";
+import { listBsmContentApprovals, listBsmContentApprovalWorkspaces } from "@/lib/bsm/content-approvals";
+import type { BsmContentApprovalListItem, BsmContentApprovalWorkspaceOption } from "@/lib/bsm/content-approvals-shared";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -72,6 +72,7 @@ export default async function BsmContentApprovalsPage() {
   }
 
   let approvals: BsmContentApprovalListItem[] = [];
+  let workspaces: BsmContentApprovalWorkspaceOption[] = [];
   let shops: Array<{ id: string; name: string }> = [];
   let activeShopId: string | null = null;
   let loadError = false;
@@ -79,6 +80,7 @@ export default async function BsmContentApprovalsPage() {
 
   try {
     approvals = await listBsmContentApprovals(service);
+    workspaces = await listBsmContentApprovalWorkspaces(service, { actorProfileId: user.id });
   } catch {
     loadError = true;
   }
@@ -128,6 +130,7 @@ export default async function BsmContentApprovalsPage() {
 
       <BsmContentApprovalManager
         initialApprovals={approvals}
+        workspaces={workspaces}
         shops={shops}
         activeShopId={activeShopId}
       />

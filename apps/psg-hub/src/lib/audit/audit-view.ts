@@ -69,6 +69,7 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "review_response_restore.approve": "Approved review response restore",
   "review_response_restore.reject": "Rejected review response restore",
   "bsm_content_approval.create": "Created BSM content approval",
+  "bsm_content_approval.update": "Updated BSM content approval",
   "bsm_content_approval.archive": "Archived BSM content approval",
   "intake.signed_upload.mint": "Minted pilot-intake upload link",
 };

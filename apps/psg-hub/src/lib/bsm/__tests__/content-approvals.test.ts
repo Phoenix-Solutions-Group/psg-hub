@@ -7,12 +7,17 @@ import {
   createBsmGeneratedPageApproval,
   createBsmContentApprovalUpload,
   normalizeApprovalFileName,
+  updateBsmContentApproval,
   validateApprovalFile,
 } from "@/lib/bsm/content-approvals";
 
 const SHOP_ID = "11111111-1111-4111-8111-111111111111";
 const ACTOR_ID = "22222222-2222-4222-8222-222222222222";
 const PROFILE_ID = "33333333-3333-4333-8333-333333333333";
+const PROJECT_ID = "44444444-4444-4444-8444-444444444444";
+const ROUND_ID = "55555555-5555-4555-8555-555555555555";
+const ITEM_ID = "66666666-6666-4666-8666-666666666666";
+const VERSION_ID = "77777777-7777-4777-8777-777777777777";
 
 function createFakeClient() {
   const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
@@ -70,6 +75,153 @@ function createArchiveFakeClient(item: Record<string, unknown>) {
         insert(payload: Record<string, unknown>) {
           inserts.push({ table, payload });
           return Promise.resolve({ error: null });
+        },
+      };
+    },
+  };
+  return { client, inserts, updates };
+}
+
+class ChainUpdate {
+  private filters: Record<string, unknown> = {};
+
+  constructor(
+    private table: string,
+    private payload: Record<string, unknown>,
+    private updates: Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }>,
+  ) {}
+
+  eq(column: string, value: unknown) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  then(resolve: (value: { error: null }) => unknown) {
+    this.updates.push({ table: this.table, payload: this.payload, filters: { ...this.filters } });
+    return Promise.resolve({ error: null }).then(resolve);
+  }
+}
+
+class ChainSelect {
+  private filters: Record<string, unknown> = {};
+
+  constructor(private table: string) {}
+
+  eq(column: string, value: unknown) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  in(column: string, value: unknown) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  is(column: string, value: unknown) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  order() {
+    return this;
+  }
+
+  limit() {
+    return this;
+  }
+
+  maybeSingle() {
+    if (this.table === "bsm_content_review_projects") {
+      return Promise.resolve({
+        data: {
+          id: PROJECT_ID,
+          shop_id: SHOP_ID,
+          title: "July customer review",
+          status: "active",
+          current_round_id: ROUND_ID,
+          deleted_at: null,
+        },
+        error: null,
+      });
+    }
+    if (this.table === "bsm_content_review_project_collaborators") {
+      return Promise.resolve({ data: { role: "owner" }, error: null });
+    }
+    if (this.table === "bsm_content_review_versions") {
+      return Promise.resolve({
+        data: {
+          id: VERSION_ID,
+          original_filename: "proof-v1.pdf",
+          content_type: "application/pdf",
+          byte_size: 1024,
+          storage_path: `${SHOP_ID}/${ITEM_ID}/${VERSION_ID}/proof-v1.pdf`,
+          preview_type: "file",
+          source_metadata_jsonb: {},
+        },
+        error: null,
+      });
+    }
+    return Promise.resolve({ data: null, error: null });
+  }
+
+  single() {
+    if (this.table === "bsm_content_review_items") {
+      return Promise.resolve({
+        data: {
+          id: ITEM_ID,
+          shop_id: SHOP_ID,
+          customer_profile_id: PROFILE_ID,
+          title: "Old proof",
+          status: "in_review",
+          content_type: "pdf",
+          project_id: PROJECT_ID,
+          current_version_id: VERSION_ID,
+        },
+        error: null,
+      });
+    }
+    return Promise.resolve({ data: null, error: null });
+  }
+
+  then(resolve: (value: { data: Array<Record<string, unknown>>; error: null }) => unknown) {
+    if (this.table === "bsm_content_review_items") {
+      return Promise.resolve({ data: [{ position: 2 }], error: null }).then(resolve);
+    }
+    if (this.table === "bsm_content_review_versions") {
+      return Promise.resolve({ data: [{ version_number: 1 }], error: null }).then(resolve);
+    }
+    if (this.table === "bsm_content_review_invitations") {
+      return Promise.resolve({
+        data: [
+          {
+            id: "88888888-8888-4888-8888-888888888888",
+            reviewer_profile_id: PROFILE_ID,
+            reviewer_email: "owner@example.com",
+            reviewer_name: "Shop Owner",
+          },
+        ],
+        error: null,
+      }).then(resolve);
+    }
+    return Promise.resolve({ data: [], error: null }).then(resolve);
+  }
+}
+
+function createWorkspaceFakeClient() {
+  const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const updates: Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }> = [];
+  const client = {
+    from(table: string) {
+      return {
+        select() {
+          return new ChainSelect(table);
+        },
+        insert(payload: Record<string, unknown>) {
+          inserts.push({ table, payload });
+          return Promise.resolve({ error: null });
+        },
+        update(payload: Record<string, unknown>) {
+          return new ChainUpdate(table, payload, updates);
         },
       };
     },
@@ -166,6 +318,64 @@ describe("BSM content approval upload helpers", () => {
     );
   });
 
+  it("attaches an uploaded document to the selected Review Workspace current round without sending customer email", async () => {
+    const { client, inserts } = createWorkspaceFakeClient();
+    const createSignedUploadUrl = vi.fn(async (path: string) => ({
+      data: { path, signedUrl: "https://upload.example", token: "token-1" },
+      error: null,
+    }));
+    const storage = {
+      from: vi.fn(() => ({ createSignedUploadUrl })),
+    };
+
+    const result = await createBsmContentApprovalUpload(
+      {
+        shopId: SHOP_ID,
+        customerProfileId: PROFILE_ID,
+        reviewWorkspaceProjectId: PROJECT_ID,
+        actorProfileId: ACTOR_ID,
+        title: "July homepage proof",
+        contextNote: "Please confirm the offer and phone number.",
+        fileName: "proof.pdf",
+        contentType: "application/pdf",
+        byteSize: 2048,
+      },
+      { client: client as never, storage },
+    );
+
+    expect(result.item.reviewWorkspace).toMatchObject({
+      projectId: PROJECT_ID,
+      roundId: ROUND_ID,
+      projectTitle: "July customer review",
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_items")?.payload).toMatchObject({
+      project_id: PROJECT_ID,
+      status: "in_review",
+      processing_status: "ready",
+      position: 3,
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_round_documents")?.payload).toMatchObject({
+      project_id: PROJECT_ID,
+      round_id: ROUND_ID,
+      review_item_id: result.item.id,
+      version_id: result.item.currentVersion?.id,
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_reviewers")?.payload).toEqual([
+      expect.objectContaining({
+        review_item_id: result.item.id,
+        shop_id: SHOP_ID,
+        profile_id: PROFILE_ID,
+        invitation_id: "88888888-8888-4888-8888-888888888888",
+        round_id: ROUND_ID,
+        reviewer_email: "owner@example.com",
+        reviewer_name: "Shop Owner",
+        submission_status: "not_started",
+      }),
+    ]);
+    expect(inserts.map((entry) => entry.table)).not.toContain("bsm_content_review_invitations");
+    expect(createSignedUploadUrl).toHaveBeenCalledOnce();
+  });
+
   it("creates generated page review items without a storage upload", async () => {
     const { client, inserts, updates } = createFakeClient();
 
@@ -244,5 +454,49 @@ describe("BSM content approval upload helpers", () => {
         }),
       },
     ]);
+  });
+
+  it("saves an edit as a new usable version in the selected Review Workspace round", async () => {
+    const { client, inserts, updates } = createWorkspaceFakeClient();
+    const createSignedUploadUrl = vi.fn(async (path: string) => ({
+      data: { path, signedUrl: "https://upload.example", token: "token-2" },
+      error: null,
+    }));
+    const storage = {
+      from: vi.fn(() => ({ createSignedUploadUrl })),
+    };
+
+    const result = await updateBsmContentApproval(
+      {
+        itemId: ITEM_ID,
+        actorProfileId: ACTOR_ID,
+        title: "Updated proof",
+        contextNote: "Use this updated offer.",
+        fileName: "proof-v2.pdf",
+        contentType: "application/pdf",
+        byteSize: 4096,
+      },
+      { client: client as never, storage },
+    );
+
+    expect(result.upload?.token).toBe("token-2");
+    expect(result.item.currentVersion?.originalFilename).toBe("proof-v2.pdf");
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload).toMatchObject({
+      review_item_id: ITEM_ID,
+      project_id: PROJECT_ID,
+      round_id: ROUND_ID,
+      version_number: 2,
+      status: "current",
+    });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_round_documents")?.payload).toMatchObject({
+      version_id: result.item.currentVersion?.id,
+    });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_items")?.payload).toMatchObject({
+      title: "Updated proof",
+      admin_context_note: "Use this updated offer.",
+      current_version_id: result.item.currentVersion?.id,
+      processing_status: "ready",
+    });
+    expect(inserts.map((entry) => entry.table)).not.toContain("bsm_content_review_invitations");
   });
 });
