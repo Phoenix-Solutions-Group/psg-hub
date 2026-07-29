@@ -156,6 +156,12 @@ function missingSchemaCacheColumn(error: { code?: string | null; message?: strin
   return match?.[1] ?? null;
 }
 
+function isLegacyProjectEventNullItemError(error: { code?: string | null; message?: string | null } | null): boolean {
+  if (error?.code !== "23502") return false;
+  const message = error.message ?? "";
+  return message.includes("review_item_id") && message.includes("bsm_content_review_events");
+}
+
 function assertRatio(label: string, value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
     throw new ReviewWorkspaceInputError(400, `${label} must be between 0 and 1`);
@@ -202,6 +208,9 @@ async function insertEvent(
   payload: Record<string, unknown>,
 ): Promise<void> {
   const { error } = await client.from("bsm_content_review_events").insert(payload);
+  if (payload.review_item_id == null && isLegacyProjectEventNullItemError(error)) {
+    return;
+  }
   if (error) throw new Error(`Could not record review workspace event: ${error.message}`);
 }
 
@@ -238,7 +247,7 @@ async function insertWithSchemaCacheFallback(
 
 export async function createReviewWorkspaceProject(
   input: CreateReviewWorkspaceProjectInput,
-  deps: { client?: ReviewWorkspaceDbClient } = {},
+  deps: { client?: ReviewWorkspaceDbClient; skipProjectCreatedEvent?: boolean } = {},
 ): Promise<ReviewWorkspaceProject> {
   const shopId = assertUuid("shopId", input.shopId);
   const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
@@ -268,13 +277,15 @@ export async function createReviewWorkspaceProject(
   });
   if (collaboratorError) throw new Error(`Could not add review workspace owner: ${collaboratorError.message}`);
 
-  await insertEvent(client, {
-    shop_id: shopId,
-    review_item_id: null,
-    event_type: "review_workspace_project_created",
-    actor_profile_id: actorProfileId,
-    payload_jsonb: { projectId, title },
-  });
+  if (!deps.skipProjectCreatedEvent) {
+    await insertEvent(client, {
+      shop_id: shopId,
+      review_item_id: null,
+      event_type: "review_workspace_project_created",
+      actor_profile_id: actorProfileId,
+      payload_jsonb: { projectId, title },
+    });
+  }
 
   return { id: projectId, shopId, title, status: "draft", ownerProfileId: actorProfileId };
 }
@@ -458,7 +469,7 @@ export async function createInternalReviewWorkspaceSlice(
       actorProfileId,
       metadata: { featureGate: "bsm_review_workspace_internal" },
     },
-    { client },
+    { client, skipProjectCreatedEvent: true },
   );
 
   const sectionsByTitle = new Map<string, { id: string; title: string; position: number }>();
@@ -564,6 +575,15 @@ export async function createInternalReviewWorkspaceSlice(
     documents.push({ itemId, versionId, sectionId: section.id, title: docTitle, processingStatus: "ready" });
   }
 
+  await insertEvent(client, {
+    shop_id: shopId,
+    review_item_id: documents[0]?.itemId ?? null,
+    version_id: documents[0]?.versionId ?? null,
+    event_type: "review_workspace_project_created",
+    actor_profile_id: actorProfileId,
+    payload_jsonb: { projectId: project.id, title: project.title, documentCount: documents.length },
+  });
+
   const roundId = randomUUID();
   const invitationId = randomUUID();
   const inviteToken = makeInviteToken();
@@ -632,7 +652,8 @@ export async function createInternalReviewWorkspaceSlice(
 
   await insertEvent(client, {
     shop_id: shopId,
-    review_item_id: null,
+    review_item_id: documents[0]?.itemId ?? null,
+    version_id: documents[0]?.versionId ?? null,
     event_type: "review_workspace_round_started",
     actor_profile_id: actorProfileId,
     payload_jsonb: { projectId: project.id, roundId, invitationId, documentCount: documents.length },

@@ -62,11 +62,20 @@ function createFakeClient(options: FakeClientOptions = {}) {
           const missingColumns = schemaCacheMisses.get(table) ?? [];
           const missingColumnIndex = missingColumns.findIndex((column) => column in payload);
           const missingColumn = missingColumnIndex >= 0 ? missingColumns.splice(missingColumnIndex, 1)[0] : null;
+          const legacyEventNullItemError =
+            options.legacyEventsRequireReviewItem &&
+            table === "bsm_content_review_events" &&
+            payload.review_item_id == null;
           const error = missingColumn
             ? {
                 code: "PGRST204",
                 message: `Could not find the '${missingColumn}' column of '${table}' in the schema cache`,
               }
+            : legacyEventNullItemError
+              ? {
+                  code: "23502",
+                  message: 'null value in column "review_item_id" of relation "bsm_content_review_events" violates not-null constraint',
+                }
             : null;
           return {
             select() {
@@ -102,6 +111,7 @@ type FakeClientOptions = {
   expiredSession?: boolean;
   submitted?: boolean;
   hasPin?: boolean;
+  legacyEventsRequireReviewItem?: boolean;
   missingSchemaCacheColumns?: Record<string, string[]>;
 };
 
@@ -389,10 +399,10 @@ describe("BSM review workspace foundation service", () => {
     expect(inserts.map((entry) => entry.table)).toEqual([
       "bsm_content_review_projects",
       "bsm_content_review_project_collaborators",
-      "bsm_content_review_events",
       "bsm_content_review_sections",
       "bsm_content_review_items",
       "bsm_content_review_versions",
+      "bsm_content_review_events",
       "bsm_content_review_rounds",
       "bsm_content_review_round_documents",
       "bsm_content_review_invitations",
@@ -422,6 +432,22 @@ describe("BSM review workspace foundation service", () => {
       reviewer_email: "owner@example.com",
       status: "sent",
     });
+    expect(inserts.filter((entry) => entry.table === "bsm_content_review_events")).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          event_type: "review_workspace_project_created",
+          review_item_id: slice.documents[0]?.itemId,
+          version_id: slice.documents[0]?.versionId,
+        }),
+      }),
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          event_type: "review_workspace_round_started",
+          review_item_id: slice.documents[0]?.itemId,
+          version_id: slice.documents[0]?.versionId,
+        }),
+      }),
+    ]);
     expect(updates.some((entry) => entry.table === "bsm_content_review_projects" && entry.payload.status === "active")).toBe(true);
   });
 
@@ -445,6 +471,24 @@ describe("BSM review workspace foundation service", () => {
     expect(itemInserts).toHaveLength(2);
     expect(itemInserts[0].payload).toHaveProperty("source_kind", "generated_page");
     expect(itemInserts[1].payload).not.toHaveProperty("source_kind");
+  });
+
+  it("creates an internal slice when the hosted event table still requires document-scoped events", async () => {
+    const { client, inserts } = createFakeClient({ legacyEventsRequireReviewItem: true });
+
+    const slice = await createInternalReviewWorkspaceSlice(
+      {
+        shopId: SHOP_ID,
+        title: "Website approval",
+        actorProfileId: ACTOR_ID,
+        reviewerEmail: "Owner@Example.com",
+        documents: [{ sectionTitle: "Website", title: "Home page", sourceUrl: "https://example.com", position: 1 }],
+      },
+      { client: client as never, now: new Date("2026-07-28T19:00:00.000Z") },
+    );
+
+    expect(slice).toMatchObject({ inviteToken: expect.any(String), inviteCode: expect.stringMatching(/^\d{6}$/) });
+    expect(inserts.filter((entry) => entry.table === "bsm_content_review_events")).toHaveLength(2);
   });
 
   it("retries review workspace version and reviewer inserts without optional cached columns", async () => {
