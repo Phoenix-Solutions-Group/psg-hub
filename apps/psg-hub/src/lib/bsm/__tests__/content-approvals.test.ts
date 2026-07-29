@@ -373,6 +373,16 @@ describe("BSM content approval upload helpers", () => {
       }),
     ]);
     expect(inserts.map((entry) => entry.table)).not.toContain("bsm_content_review_invitations");
+    const version = inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload;
+    const expectedPath = `${SHOP_ID}/${PROJECT_ID}/${result.item.id}/${result.item.currentVersion?.id}/original/proof.pdf`;
+    expect(version).toMatchObject({
+      storage_path: expectedPath,
+      original_storage_path: expectedPath,
+      processed_storage_path: null,
+      processed_storage_bucket: null,
+    });
+    expect(result.upload.path).toBe(expectedPath);
+    expect(result.item.currentVersion?.storagePath).toBe(expectedPath);
     expect(createSignedUploadUrl).toHaveBeenCalledOnce();
   });
 
@@ -488,6 +498,15 @@ describe("BSM content approval upload helpers", () => {
       version_number: 2,
       status: "current",
     });
+    const version = inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload;
+    const expectedPath = `${SHOP_ID}/${PROJECT_ID}/${ITEM_ID}/${result.item.currentVersion?.id}/original/proof-v2.pdf`;
+    expect(version).toMatchObject({
+      storage_path: expectedPath,
+      original_storage_path: expectedPath,
+      processed_storage_path: null,
+      processed_storage_bucket: null,
+    });
+    expect(result.upload?.path).toBe(expectedPath);
     expect(updates.find((entry) => entry.table === "bsm_content_review_round_documents")?.payload).toMatchObject({
       version_id: result.item.currentVersion?.id,
     });
