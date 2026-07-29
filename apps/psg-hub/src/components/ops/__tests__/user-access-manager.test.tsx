@@ -43,6 +43,16 @@ const users: ManagedUser[] = [
       { shopId: shops[1].id, shopName: shops[1].name, role: "manager" },
     ],
   },
+  {
+    profileId: "44444444-4444-4444-8444-444444444444",
+    displayName: "Deleted Board User",
+    email: "deleted-board-user@psgweb.me",
+    bannedUntil: null,
+    isDeleted: true,
+    isSuspended: false,
+    role: "customer",
+    memberships: [{ shopId: shops[0].id, shopName: shops[0].name, role: "viewer" }],
+  },
 ];
 
 function render() {
@@ -60,6 +70,14 @@ describe("UserAccessManager", () => {
     expect(html).toContain("Tedesco Auto Body");
     expect(html).toContain("Owner");
     expect(html).toContain("Manager");
+  });
+
+  it("hides soft-deleted users from the board-facing access list", () => {
+    const html = render();
+
+    expect(html).not.toContain("Deleted Board User");
+    expect(html).not.toContain("deleted-board-user@psgweb.me");
+    expect(html).not.toContain("Deleted");
   });
 
   it("uses existing shops for assignment and points admins to Companies for new shops", () => {

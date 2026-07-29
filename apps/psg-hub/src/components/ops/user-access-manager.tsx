@@ -53,9 +53,10 @@ export function UserAccessManager({
 }) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
+    const visibleUsers = users.filter((user) => !user.isDeleted);
     const q = query.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u) =>
+    if (!q) return visibleUsers;
+    return visibleUsers.filter((u) =>
       [u.displayName, u.email ?? "", u.profileId]
         .join(" ")
         .toLowerCase()
