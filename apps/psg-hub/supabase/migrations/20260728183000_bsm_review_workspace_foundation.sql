@@ -307,6 +307,9 @@ alter table if exists public.bsm_content_review_versions
   add column if not exists introduced_by_round_id uuid references public.bsm_content_review_rounds (id) on delete set null,
   add column if not exists superseded_by_version_id uuid references public.bsm_content_review_versions (id) on delete set null;
 
+alter table if exists public.bsm_content_review_events
+  alter column review_item_id drop not null;
+
 alter table if exists public.bsm_content_review_reviewers
   add column if not exists invitation_id uuid references public.bsm_content_review_invitations (id) on delete set null,
   add column if not exists round_id uuid references public.bsm_content_review_rounds (id) on delete set null,

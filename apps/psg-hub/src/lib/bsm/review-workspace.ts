@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PGRST_SCHEMA_CACHE_COLUMN_RE = /'([^']+)' column/;
 
 export type ReviewWorkspaceDbClient = Pick<SupabaseClient, "from">;
 
@@ -149,6 +150,18 @@ function cleanOptionalText(label: string, value: unknown, max: number): string |
   return cleanText(label, value, max);
 }
 
+function missingSchemaCacheColumn(error: { code?: string | null; message?: string | null } | null): string | null {
+  if (error?.code !== "PGRST204") return null;
+  const match = error.message?.match(PGRST_SCHEMA_CACHE_COLUMN_RE);
+  return match?.[1] ?? null;
+}
+
+function isLegacyProjectEventNullItemError(error: { code?: string | null; message?: string | null } | null): boolean {
+  if (error?.code !== "23502") return false;
+  const message = error.message ?? "";
+  return message.includes("review_item_id") && message.includes("bsm_content_review_events");
+}
+
 function assertRatio(label: string, value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
     throw new ReviewWorkspaceInputError(400, `${label} must be between 0 and 1`);
@@ -195,12 +208,46 @@ async function insertEvent(
   payload: Record<string, unknown>,
 ): Promise<void> {
   const { error } = await client.from("bsm_content_review_events").insert(payload);
+  if (payload.review_item_id == null && isLegacyProjectEventNullItemError(error)) {
+    return;
+  }
   if (error) throw new Error(`Could not record review workspace event: ${error.message}`);
+}
+
+async function insertWithSchemaCacheFallback(
+  client: ReviewWorkspaceDbClient,
+  table: string,
+  payload: Record<string, unknown>,
+  fallbackColumns: ReadonlySet<string>,
+  errorPrefix: string,
+): Promise<void> {
+  const attemptedColumns = new Set<string>();
+  let nextPayload = { ...payload };
+
+  while (true) {
+    const { error } = await client.from(table).insert(nextPayload);
+    if (!error) return;
+
+    const missingColumn = missingSchemaCacheColumn(error);
+    if (
+      !missingColumn ||
+      !fallbackColumns.has(missingColumn) ||
+      attemptedColumns.has(missingColumn) ||
+      !(missingColumn in nextPayload)
+    ) {
+      throw new Error(`${errorPrefix}: ${error.message}`);
+    }
+
+    attemptedColumns.add(missingColumn);
+    const retryPayload = { ...nextPayload };
+    delete retryPayload[missingColumn];
+    nextPayload = retryPayload;
+  }
 }
 
 export async function createReviewWorkspaceProject(
   input: CreateReviewWorkspaceProjectInput,
-  deps: { client?: ReviewWorkspaceDbClient } = {},
+  deps: { client?: ReviewWorkspaceDbClient; skipProjectCreatedEvent?: boolean } = {},
 ): Promise<ReviewWorkspaceProject> {
   const shopId = assertUuid("shopId", input.shopId);
   const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
@@ -230,13 +277,15 @@ export async function createReviewWorkspaceProject(
   });
   if (collaboratorError) throw new Error(`Could not add review workspace owner: ${collaboratorError.message}`);
 
-  await insertEvent(client, {
-    shop_id: shopId,
-    review_item_id: null,
-    event_type: "review_workspace_project_created",
-    actor_profile_id: actorProfileId,
-    payload_jsonb: { projectId, title },
-  });
+  if (!deps.skipProjectCreatedEvent) {
+    await insertEvent(client, {
+      shop_id: shopId,
+      review_item_id: null,
+      event_type: "review_workspace_project_created",
+      actor_profile_id: actorProfileId,
+      payload_jsonb: { projectId, title },
+    });
+  }
 
   return { id: projectId, shopId, title, status: "draft", ownerProfileId: actorProfileId };
 }
@@ -420,7 +469,7 @@ export async function createInternalReviewWorkspaceSlice(
       actorProfileId,
       metadata: { featureGate: "bsm_review_workspace_internal" },
     },
-    { client },
+    { client, skipProjectCreatedEvent: true },
   );
 
   const sectionsByTitle = new Map<string, { id: string; title: string; position: number }>();
@@ -450,7 +499,14 @@ export async function createInternalReviewWorkspaceSlice(
     const itemId = randomUUID();
     const versionId = randomUUID();
     const sourceUrl = cleanOptionalText("sourceUrl", documentInput.sourceUrl, 1200);
-    const { error: itemError } = await client.from("bsm_content_review_items").insert({
+    const generatedPagePath = sourceUrl ?? `internal-review-workspace://${project.id}/${itemId}`;
+    const sourceMetadata = {
+      sourceKind: "internal_review_workspace",
+      sourceUrl,
+      generatedPagePath,
+      previewUrl: sourceUrl,
+    };
+    const itemPayload = {
       id: itemId,
       shop_id: shopId,
       project_id: project.id,
@@ -458,16 +514,23 @@ export async function createInternalReviewWorkspaceSlice(
       position: documentInput.position,
       required: true,
       title: docTitle,
+      source_kind: "generated_page",
       content_type: "generated_page",
       status: "in_review",
       admin_context_note: input.description ?? null,
       processing_status: "ready",
       created_by_profile_id: actorProfileId,
       metadata_jsonb: { sourceKind: "internal_review_workspace", sourceUrl },
-    });
-    if (itemError) throw new Error(`Could not create review workspace document: ${itemError.message}`);
+    };
+    await insertWithSchemaCacheFallback(
+      client,
+      "bsm_content_review_items",
+      itemPayload,
+      new Set(["source_kind", "project_id", "section_id", "position", "required", "processing_status", "deleted_at"]),
+      "Could not create review workspace document",
+    );
 
-    const { error: versionError } = await client.from("bsm_content_review_versions").insert({
+    await insertWithSchemaCacheFallback(client, "bsm_content_review_versions", {
       id: versionId,
       review_item_id: itemId,
       shop_id: shopId,
@@ -480,14 +543,28 @@ export async function createInternalReviewWorkspaceSlice(
       content_type: "text/html",
       byte_size: 1,
       preview_type: "generated_page",
+      generated_page_path: generatedPagePath,
       processed_content_type: "text/html",
       scan_status: "clean",
       conversion_status: "not_needed",
       sanitization_status: "complete",
-      source_metadata_jsonb: { sourceKind: "internal_review_workspace", sourceUrl },
+      source_metadata_jsonb: sourceMetadata,
+      snapshot_jsonb: sourceMetadata,
       created_by_profile_id: actorProfileId,
-    });
-    if (versionError) throw new Error(`Could not create review workspace version: ${versionError.message}`);
+    }, new Set([
+      "project_id",
+      "round_id",
+      "status",
+      "storage_path",
+      "original_filename",
+      "content_type",
+      "preview_type",
+      "processed_content_type",
+      "scan_status",
+      "conversion_status",
+      "sanitization_status",
+      "source_metadata_jsonb",
+    ]), "Could not create review workspace version");
 
     const { error: updateError } = await client
       .from("bsm_content_review_items")
@@ -497,6 +574,15 @@ export async function createInternalReviewWorkspaceSlice(
 
     documents.push({ itemId, versionId, sectionId: section.id, title: docTitle, processingStatus: "ready" });
   }
+
+  await insertEvent(client, {
+    shop_id: shopId,
+    review_item_id: documents[0]?.itemId ?? null,
+    version_id: documents[0]?.versionId ?? null,
+    event_type: "review_workspace_project_created",
+    actor_profile_id: actorProfileId,
+    payload_jsonb: { projectId: project.id, title: project.title, documentCount: documents.length },
+  });
 
   const roundId = randomUUID();
   const invitationId = randomUUID();
@@ -545,7 +631,7 @@ export async function createInternalReviewWorkspaceSlice(
   if (inviteError) throw new Error(`Could not create review invitation: ${inviteError.message}`);
 
   for (const doc of documents) {
-    const { error } = await client.from("bsm_content_review_reviewers").insert({
+    await insertWithSchemaCacheFallback(client, "bsm_content_review_reviewers", {
       review_item_id: doc.itemId,
       shop_id: shopId,
       invitation_id: invitationId,
@@ -555,8 +641,7 @@ export async function createInternalReviewWorkspaceSlice(
       reviewer_role: "reviewer",
       notification_preference: "email",
       submission_status: "not_started",
-    });
-    if (error) throw new Error(`Could not add review workspace reviewer: ${error.message}`);
+    }, new Set(["invitation_id", "round_id", "reviewer_email", "reviewer_name", "submission_status"]), "Could not add review workspace reviewer");
   }
 
   const { error: projectUpdateError } = await client
@@ -567,7 +652,8 @@ export async function createInternalReviewWorkspaceSlice(
 
   await insertEvent(client, {
     shop_id: shopId,
-    review_item_id: null,
+    review_item_id: documents[0]?.itemId ?? null,
+    version_id: documents[0]?.versionId ?? null,
     event_type: "review_workspace_round_started",
     actor_profile_id: actorProfileId,
     payload_jsonb: { projectId: project.id, roundId, invitationId, documentCount: documents.length },

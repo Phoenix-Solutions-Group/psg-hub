@@ -47,21 +47,42 @@ function collectProcessingJobColumnsAfterMigrations(...migrations: string[]) {
   return columns;
 }
 
-function createFakeClient(options: { collaborator?: boolean; expiredSession?: boolean; submitted?: boolean; hasPin?: boolean } = {}) {
+function createFakeClient(options: FakeClientOptions = {}) {
   const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const upserts: Array<{ table: string; payload: Record<string, unknown>; options: Record<string, unknown> | undefined }> = [];
   const updates: Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }> = [];
+  const schemaCacheMisses = new Map(
+    Object.entries(options.missingSchemaCacheColumns ?? {}).map(([table, columns]) => [table, [...columns]]),
+  );
   const client = {
     from(table: string) {
       return {
         insert(payload: Record<string, unknown>) {
           inserts.push({ table, payload });
+          const missingColumns = schemaCacheMisses.get(table) ?? [];
+          const missingColumnIndex = missingColumns.findIndex((column) => column in payload);
+          const missingColumn = missingColumnIndex >= 0 ? missingColumns.splice(missingColumnIndex, 1)[0] : null;
+          const legacyEventNullItemError =
+            options.legacyEventsRequireReviewItem &&
+            table === "bsm_content_review_events" &&
+            payload.review_item_id == null;
+          const error = missingColumn
+            ? {
+                code: "PGRST204",
+                message: `Could not find the '${missingColumn}' column of '${table}' in the schema cache`,
+              }
+            : legacyEventNullItemError
+              ? {
+                  code: "23502",
+                  message: 'null value in column "review_item_id" of relation "bsm_content_review_events" violates not-null constraint',
+                }
+            : null;
           return {
             select() {
               return this;
             },
-            single: () => Promise.resolve({ data: { id: payload.id ?? "inserted-1", thread_id: payload.thread_id, body: payload.body, draft_status: payload.draft_status }, error: null }),
-            then: (resolve: (value: { error: null }) => unknown) => Promise.resolve({ error: null }).then(resolve),
+            single: () => Promise.resolve({ data: { id: payload.id ?? "inserted-1", thread_id: payload.thread_id, body: payload.body, draft_status: payload.draft_status }, error }),
+            then: (resolve: (value: { error: typeof error }) => unknown) => Promise.resolve({ error }).then(resolve),
           };
         },
         upsert(payload: Record<string, unknown>, upsertOptions?: Record<string, unknown>) {
@@ -85,7 +106,14 @@ function createFakeClient(options: { collaborator?: boolean; expiredSession?: bo
   return { client, inserts, upserts, updates };
 }
 
-type FakeClientOptions = { collaborator?: boolean; expiredSession?: boolean; submitted?: boolean; hasPin?: boolean };
+type FakeClientOptions = {
+  collaborator?: boolean;
+  expiredSession?: boolean;
+  submitted?: boolean;
+  hasPin?: boolean;
+  legacyEventsRequireReviewItem?: boolean;
+  missingSchemaCacheColumns?: Record<string, string[]>;
+};
 
 class Query {
   private filters: Record<string, unknown> = {};
@@ -371,10 +399,10 @@ describe("BSM review workspace foundation service", () => {
     expect(inserts.map((entry) => entry.table)).toEqual([
       "bsm_content_review_projects",
       "bsm_content_review_project_collaborators",
-      "bsm_content_review_events",
       "bsm_content_review_sections",
       "bsm_content_review_items",
       "bsm_content_review_versions",
+      "bsm_content_review_events",
       "bsm_content_review_rounds",
       "bsm_content_review_round_documents",
       "bsm_content_review_invitations",
@@ -383,11 +411,19 @@ describe("BSM review workspace foundation service", () => {
     ]);
     expect(inserts.find((entry) => entry.table === "bsm_content_review_items")?.payload).toMatchObject({
       project_id: slice.projectId,
+      source_kind: "generated_page",
       processing_status: "ready",
       status: "in_review",
       position: 1,
     });
     expect(inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload).toMatchObject({
+      generated_page_path: "https://example.com",
+      snapshot_jsonb: {
+        sourceKind: "internal_review_workspace",
+        sourceUrl: "https://example.com",
+        generatedPagePath: "https://example.com",
+        previewUrl: "https://example.com",
+      },
       scan_status: "clean",
       conversion_status: "not_needed",
       sanitization_status: "complete",
@@ -396,7 +432,101 @@ describe("BSM review workspace foundation service", () => {
       reviewer_email: "owner@example.com",
       status: "sent",
     });
+    expect(inserts.filter((entry) => entry.table === "bsm_content_review_events")).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          event_type: "review_workspace_project_created",
+          review_item_id: slice.documents[0]?.itemId,
+          version_id: slice.documents[0]?.versionId,
+        }),
+      }),
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          event_type: "review_workspace_round_started",
+          review_item_id: slice.documents[0]?.itemId,
+          version_id: slice.documents[0]?.versionId,
+        }),
+      }),
+    ]);
     expect(updates.some((entry) => entry.table === "bsm_content_review_projects" && entry.payload.status === "active")).toBe(true);
+  });
+
+  it("retries review item creation without source_kind against a stale schema cache", async () => {
+    const { client, inserts } = createFakeClient({
+      missingSchemaCacheColumns: { bsm_content_review_items: ["source_kind"] },
+    });
+
+    await createInternalReviewWorkspaceSlice(
+      {
+        shopId: SHOP_ID,
+        title: "Website approval",
+        actorProfileId: ACTOR_ID,
+        reviewerEmail: "Owner@Example.com",
+        documents: [{ sectionTitle: "Website", title: "Home page", sourceUrl: "https://example.com", position: 1 }],
+      },
+      { client: client as never, now: new Date("2026-07-28T19:00:00.000Z") },
+    );
+
+    const itemInserts = inserts.filter((entry) => entry.table === "bsm_content_review_items");
+    expect(itemInserts).toHaveLength(2);
+    expect(itemInserts[0].payload).toHaveProperty("source_kind", "generated_page");
+    expect(itemInserts[1].payload).not.toHaveProperty("source_kind");
+  });
+
+  it("creates an internal slice when the hosted event table still requires document-scoped events", async () => {
+    const { client, inserts } = createFakeClient({ legacyEventsRequireReviewItem: true });
+
+    const slice = await createInternalReviewWorkspaceSlice(
+      {
+        shopId: SHOP_ID,
+        title: "Website approval",
+        actorProfileId: ACTOR_ID,
+        reviewerEmail: "Owner@Example.com",
+        documents: [{ sectionTitle: "Website", title: "Home page", sourceUrl: "https://example.com", position: 1 }],
+      },
+      { client: client as never, now: new Date("2026-07-28T19:00:00.000Z") },
+    );
+
+    expect(slice).toMatchObject({ inviteToken: expect.any(String), inviteCode: expect.stringMatching(/^\d{6}$/) });
+    expect(inserts.filter((entry) => entry.table === "bsm_content_review_events")).toHaveLength(2);
+  });
+
+  it("retries review workspace version and reviewer inserts without optional cached columns", async () => {
+    const { client, inserts } = createFakeClient({
+      missingSchemaCacheColumns: {
+        bsm_content_review_versions: ["status", "processed_content_type"],
+        bsm_content_review_reviewers: ["invitation_id", "submission_status"],
+      },
+    });
+
+    const slice = await createInternalReviewWorkspaceSlice(
+      {
+        shopId: SHOP_ID,
+        title: "Website approval",
+        actorProfileId: ACTOR_ID,
+        reviewerEmail: "Owner@Example.com",
+        documents: [{ sectionTitle: "Website", title: "Home page", sourceUrl: "https://example.com", position: 1 }],
+      },
+      { client: client as never, now: new Date("2026-07-28T19:00:00.000Z") },
+    );
+
+    expect(slice).toMatchObject({ inviteToken: expect.any(String), inviteCode: expect.stringMatching(/^\d{6}$/) });
+
+    const versionInserts = inserts.filter((entry) => entry.table === "bsm_content_review_versions");
+    expect(versionInserts).toHaveLength(3);
+    expect(versionInserts[0].payload).toHaveProperty("status", "current");
+    expect(versionInserts[1].payload).not.toHaveProperty("status");
+    expect(versionInserts[1].payload).toHaveProperty("processed_content_type", "text/html");
+    expect(versionInserts[2].payload).not.toHaveProperty("status");
+    expect(versionInserts[2].payload).not.toHaveProperty("processed_content_type");
+
+    const reviewerInserts = inserts.filter((entry) => entry.table === "bsm_content_review_reviewers");
+    expect(reviewerInserts).toHaveLength(3);
+    expect(reviewerInserts[0].payload).toHaveProperty("invitation_id", slice.invitationId);
+    expect(reviewerInserts[1].payload).not.toHaveProperty("invitation_id");
+    expect(reviewerInserts[1].payload).toHaveProperty("submission_status", "not_started");
+    expect(reviewerInserts[2].payload).not.toHaveProperty("invitation_id");
+    expect(reviewerInserts[2].payload).not.toHaveProperty("submission_status");
   });
 
   it("requires a live invitation-backed reviewer session for guest access", async () => {
@@ -556,6 +686,8 @@ describe("BSM review workspace foundation service", () => {
     expect(MIGRATION).toContain("private.bsm_content_review_user_can_access_project");
     expect(MIGRATION).toContain("private.bsm_content_review_user_can_access_invitation");
     expect(MIGRATION).toContain("owner_invitation_id");
+    expect(MIGRATION).toContain("alter table if exists public.bsm_content_review_events");
+    expect(MIGRATION).toContain("alter column review_item_id drop not null");
     expect(MIGRATION).toContain("bsm_content_review_comments_submitted_no_mutate");
     expect(MIGRATION).toContain("bsm_content_review_decisions_no_mutate");
     expect(MIGRATION).toContain("on public.bsm_content_review_processing_jobs (idempotency_key)");
