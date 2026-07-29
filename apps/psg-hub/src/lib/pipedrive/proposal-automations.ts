@@ -38,6 +38,7 @@ const DEFAULT_QUALIFIED_STAGE_ID = 58;
 const DEFAULT_PROPOSAL_SENT_STAGE_ID = 59;
 const DEFAULT_PROPOSAL_DRAFT_STOP_STAGE_IDS = [60, 61];
 const PROPOSAL_PREP_SUBJECT_PREFIX = "Proposal prep:";
+const PROPOSAL_FOLLOW_UP_SUBJECT_PREFIX = "Proposal follow-up";
 const PROPOSAL_DRAFT_SUBJECT_PREFIX = "Proposal follow-up draft";
 const PROPOSAL_PREP_DURATION_MINUTES = 45;
 const PROPOSAL_PREP_WORKDAY_START_HOUR = 7;
@@ -692,7 +693,9 @@ async function stopProposalDraftSeries(
   const id = dealId(current)!;
   const existing = await existingOpenActivities(client, id);
   const draftActivities = existing.filter((activity) =>
-    activity.subject.startsWith(PROPOSAL_DRAFT_SUBJECT_PREFIX),
+    activity.subject.startsWith(PROPOSAL_DRAFT_SUBJECT_PREFIX) ||
+    (activity.subject.startsWith(PROPOSAL_FOLLOW_UP_SUBJECT_PREFIX) &&
+      activity.type?.toLowerCase() === "email"),
   );
   if (draftActivities.length === 0) return { status: "skipped", reason: "no_open_draft_activities" };
   if (!client.deleteActivity) throw new Error("Pipedrive deleteActivity client is unavailable");

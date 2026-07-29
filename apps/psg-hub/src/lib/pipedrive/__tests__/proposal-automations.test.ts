@@ -281,4 +281,40 @@ describe("proposal automations", () => {
     });
     expect(deleteActivity).toHaveBeenCalledWith(801);
   });
+
+  it("stops manually seeded proposal follow-up email activities when the deal is lost", async () => {
+    const { client, deleteActivity } = fakeClient({
+      listDealActivities: vi.fn(async () => [
+        {
+          id: 801,
+          subject: "Proposal follow-up Touch 1: Wallace website proposal",
+          type: "email",
+          dueDate: "2026-07-21",
+          done: false,
+        },
+        {
+          id: 802,
+          subject: "Proposal follow-up manual call reminder",
+          type: "call",
+          dueDate: "2026-07-21",
+          done: false,
+        },
+      ]),
+    });
+
+    await expect(
+      runProposalAutomations(
+        client,
+        { id: 42, title: "Wallace website proposal", pipeline_id: 8, stage_id: 59, status: "lost" },
+        { stage_id: 59, status: "open" },
+        {},
+        fakeGmailDrafts(),
+        fakeCalendar(),
+      ),
+    ).resolves.toEqual({
+      proposalDraftSeries: { status: "stopped", stoppedActivityIds: [801] },
+    });
+    expect(deleteActivity).toHaveBeenCalledWith(801);
+    expect(deleteActivity).not.toHaveBeenCalledWith(802);
+  });
 });
