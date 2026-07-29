@@ -5,6 +5,11 @@ export type DemoAnalyticsShop = {
 
 export const RIVERSIDE_DEMO_SHOP_NAME = "Riverside Collision";
 export const RIVERSIDE_DEMO_SHOP_SLUG = "riverside-collision";
+const LEGACY_DEMO_SHOP_NAMES = new Set([
+  "bsm demo collision center",
+  "psg pilot body shop",
+  "tedesco auto body",
+]);
 
 type DemoAnalyticsEnv = {
   DEMO_SHOP_EMAIL?: string;
@@ -17,6 +22,10 @@ function normalizeEmail(email?: string | null): string {
 
 export function isRiversideDemoShop(shop: Pick<DemoAnalyticsShop, "name">): boolean {
   return shop.name.trim().toLowerCase() === RIVERSIDE_DEMO_SHOP_NAME.toLowerCase();
+}
+
+export function isLegacyDemoAnalyticsShopName(shopName?: string | null): boolean {
+  return LEGACY_DEMO_SHOP_NAMES.has((shopName ?? "").trim().toLowerCase());
 }
 
 export function resolveDemoAnalyticsShopId({
@@ -62,8 +71,9 @@ export function shouldUseRiversidePreviewDemoFallback({
   if (activeShopName === RIVERSIDE_DEMO_SHOP_NAME) return false;
 
   const configuredDemoEmail = normalizeEmail(runtimeEnv.DEMO_SHOP_EMAIL);
-  return (
+  const isConfiguredDemoLogin =
     configuredDemoEmail.length > 0 &&
-    normalizeEmail(userEmail) === configuredDemoEmail
-  );
+    normalizeEmail(userEmail) === configuredDemoEmail;
+
+  return isConfiguredDemoLogin || isLegacyDemoAnalyticsShopName(activeShopName);
 }

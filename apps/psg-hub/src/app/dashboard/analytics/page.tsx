@@ -218,7 +218,10 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     const { data: fallbackShop } = await service
       .from("shops")
       .select("id, name")
-      .eq("slug", RIVERSIDE_DEMO_SHOP_SLUG)
+      .or(
+        `slug.eq.${RIVERSIDE_DEMO_SHOP_SLUG},name.eq.${RIVERSIDE_DEMO_SHOP_NAME}`
+      )
+      .limit(1)
       .maybeSingle();
     if (fallbackShop?.id) {
       activeShopId = fallbackShop.id as string;

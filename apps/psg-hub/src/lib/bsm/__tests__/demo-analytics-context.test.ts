@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   isRiversideDemoAnalyticsContext,
   isRiversideDemoShop,
+  isLegacyDemoAnalyticsShopName,
   resolveDemoAnalyticsShopId,
   shouldUseRiversidePreviewDemoFallback,
 } from "@/lib/bsm/demo-analytics-context";
@@ -17,6 +18,14 @@ describe("Riverside demo analytics context", () => {
     expect(isRiversideDemoShop({ name: "Riverside Collision" })).toBe(true);
     expect(isRiversideDemoShop({ name: "  Riverside Collision  " })).toBe(true);
     expect(isRiversideDemoShop({ name: "PSG Pilot Body Shop" })).toBe(false);
+  });
+
+  it("matches stale board-demo shop names that should fall back to Riverside in previews", () => {
+    expect(isLegacyDemoAnalyticsShopName("Tedesco Auto Body")).toBe(true);
+    expect(isLegacyDemoAnalyticsShopName(" PSG Pilot Body Shop ")).toBe(true);
+    expect(isLegacyDemoAnalyticsShopName("BSM Demo Collision Center")).toBe(true);
+    expect(isLegacyDemoAnalyticsShopName("Riverside Collision")).toBe(false);
+    expect(isLegacyDemoAnalyticsShopName("Wallace Collision")).toBe(false);
   });
 
   it("selects Riverside for the single-shop Analytics demo view", () => {
@@ -64,6 +73,30 @@ describe("Riverside demo analytics context", () => {
         hasRiversideMembership: false,
         env: {
           DEMO_SHOP_EMAIL: "demo-shop@example.test",
+          VERCEL_ENV: "preview",
+        },
+      })
+    ).toBe(true);
+  });
+
+  it("activates the preview fallback for stale demo shop sessions even without the configured email", () => {
+    expect(
+      shouldUseRiversidePreviewDemoFallback({
+        userEmail: "test@psghub.me",
+        activeShopName: "Tedesco Auto Body",
+        hasRiversideMembership: false,
+        env: {
+          VERCEL_ENV: "preview",
+        },
+      })
+    ).toBe(true);
+    expect(
+      shouldUseRiversidePreviewDemoFallback({
+        userEmail: "test@psghub.me",
+        activeShopName: "PSG Pilot Body Shop",
+        hasRiversideMembership: false,
+        env: {
+          DEMO_SHOP_EMAIL: "someone-else@example.test",
           VERCEL_ENV: "preview",
         },
       })
