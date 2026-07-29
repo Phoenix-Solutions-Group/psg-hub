@@ -3,6 +3,8 @@ export const RIVERSIDE_ANALYTICS_DEMO_SHOP = {
   slug: "riverside-collision",
 } as const;
 
+const RIVERSIDE_ANALYTICS_DEMO_EMAILS = ["test@psghub.me"] as const;
+
 type RiversideAnalyticsDemoEnv = {
   DEMO_SHOP_EMAIL?: string;
   VERCEL_ENV?: string;
@@ -19,6 +21,13 @@ function normalizeEmail(email?: string | null): string {
   return (email ?? "").trim().toLowerCase();
 }
 
+function configuredDemoEmails(env: RiversideAnalyticsDemoEnv | NodeJS.ProcessEnv) {
+  return new Set([
+    ...RIVERSIDE_ANALYTICS_DEMO_EMAILS,
+    normalizeEmail(env.DEMO_SHOP_EMAIL),
+  ]);
+}
+
 export function shouldUseRiversideAnalyticsPreviewFallback({
   userEmail,
   activeShopName,
@@ -30,9 +39,9 @@ export function shouldUseRiversideAnalyticsPreviewFallback({
   if (hasRiversideMembership) return false;
   if (activeShopName === RIVERSIDE_ANALYTICS_DEMO_SHOP.name) return false;
 
-  const configuredDemoEmail = normalizeEmail(runtimeEnv.DEMO_SHOP_EMAIL);
+  const normalizedUserEmail = normalizeEmail(userEmail);
   return (
-    configuredDemoEmail.length > 0 &&
-    normalizeEmail(userEmail) === configuredDemoEmail
+    normalizedUserEmail.length > 0 &&
+    configuredDemoEmails(runtimeEnv).has(normalizedUserEmail)
   );
 }

@@ -22,6 +22,17 @@ describe("Riverside Analytics preview demo fallback", () => {
     ).toBe(true);
   });
 
+  it("activates for the board-demo login when the preview env omits the demo email", () => {
+    expect(
+      shouldUseRiversideAnalyticsPreviewFallback({
+        userEmail: " Test@PsgHub.Me ",
+        activeShopName: "Tedesco Auto Body",
+        hasRiversideMembership: false,
+        env: { VERCEL_ENV: "preview" },
+      })
+    ).toBe(true);
+  });
+
   it("does not activate outside Vercel previews", () => {
     expect(
       shouldUseRiversideAnalyticsPreviewFallback({
