@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PGRST_SCHEMA_CACHE_COLUMN_RE = /'([^']+)' column/;
 
 export type ReviewWorkspaceDbClient = Pick<SupabaseClient, "from">;
 
@@ -149,9 +150,10 @@ function cleanOptionalText(label: string, value: unknown, max: number): string |
   return cleanText(label, value, max);
 }
 
-function isMissingSourceKindSchemaCacheError(error: { code?: string | null; message?: string | null } | null): boolean {
-  const message = error?.message ?? "";
-  return error?.code === "PGRST204" && message.includes("'source_kind'") && message.includes("bsm_content_review_items");
+function missingSchemaCacheColumn(error: { code?: string | null; message?: string | null } | null): string | null {
+  if (error?.code !== "PGRST204") return null;
+  const match = error.message?.match(PGRST_SCHEMA_CACHE_COLUMN_RE);
+  return match?.[1] ?? null;
 }
 
 function assertRatio(label: string, value: unknown): number {
@@ -201,6 +203,37 @@ async function insertEvent(
 ): Promise<void> {
   const { error } = await client.from("bsm_content_review_events").insert(payload);
   if (error) throw new Error(`Could not record review workspace event: ${error.message}`);
+}
+
+async function insertWithSchemaCacheFallback(
+  client: ReviewWorkspaceDbClient,
+  table: string,
+  payload: Record<string, unknown>,
+  fallbackColumns: ReadonlySet<string>,
+  errorPrefix: string,
+): Promise<void> {
+  const attemptedColumns = new Set<string>();
+  let nextPayload = { ...payload };
+
+  while (true) {
+    const { error } = await client.from(table).insert(nextPayload);
+    if (!error) return;
+
+    const missingColumn = missingSchemaCacheColumn(error);
+    if (
+      !missingColumn ||
+      !fallbackColumns.has(missingColumn) ||
+      attemptedColumns.has(missingColumn) ||
+      !(missingColumn in nextPayload)
+    ) {
+      throw new Error(`${errorPrefix}: ${error.message}`);
+    }
+
+    attemptedColumns.add(missingColumn);
+    const retryPayload = { ...nextPayload };
+    delete retryPayload[missingColumn];
+    nextPayload = retryPayload;
+  }
 }
 
 export async function createReviewWorkspaceProject(
@@ -478,18 +511,15 @@ export async function createInternalReviewWorkspaceSlice(
       created_by_profile_id: actorProfileId,
       metadata_jsonb: { sourceKind: "internal_review_workspace", sourceUrl },
     };
-    const { error: itemError } = await client.from("bsm_content_review_items").insert(itemPayload);
-    if (itemError) {
-      if (isMissingSourceKindSchemaCacheError(itemError)) {
-        const { source_kind: _sourceKind, ...legacyItemPayload } = itemPayload;
-        const { error: legacyItemError } = await client.from("bsm_content_review_items").insert(legacyItemPayload);
-        if (legacyItemError) throw new Error(`Could not create review workspace document: ${legacyItemError.message}`);
-      } else {
-        throw new Error(`Could not create review workspace document: ${itemError.message}`);
-      }
-    }
+    await insertWithSchemaCacheFallback(
+      client,
+      "bsm_content_review_items",
+      itemPayload,
+      new Set(["source_kind", "project_id", "section_id", "position", "required", "processing_status", "deleted_at"]),
+      "Could not create review workspace document",
+    );
 
-    const { error: versionError } = await client.from("bsm_content_review_versions").insert({
+    await insertWithSchemaCacheFallback(client, "bsm_content_review_versions", {
       id: versionId,
       review_item_id: itemId,
       shop_id: shopId,
@@ -510,8 +540,20 @@ export async function createInternalReviewWorkspaceSlice(
       source_metadata_jsonb: sourceMetadata,
       snapshot_jsonb: sourceMetadata,
       created_by_profile_id: actorProfileId,
-    });
-    if (versionError) throw new Error(`Could not create review workspace version: ${versionError.message}`);
+    }, new Set([
+      "project_id",
+      "round_id",
+      "status",
+      "storage_path",
+      "original_filename",
+      "content_type",
+      "preview_type",
+      "processed_content_type",
+      "scan_status",
+      "conversion_status",
+      "sanitization_status",
+      "source_metadata_jsonb",
+    ]), "Could not create review workspace version");
 
     const { error: updateError } = await client
       .from("bsm_content_review_items")
@@ -569,7 +611,7 @@ export async function createInternalReviewWorkspaceSlice(
   if (inviteError) throw new Error(`Could not create review invitation: ${inviteError.message}`);
 
   for (const doc of documents) {
-    const { error } = await client.from("bsm_content_review_reviewers").insert({
+    await insertWithSchemaCacheFallback(client, "bsm_content_review_reviewers", {
       review_item_id: doc.itemId,
       shop_id: shopId,
       invitation_id: invitationId,
@@ -579,8 +621,7 @@ export async function createInternalReviewWorkspaceSlice(
       reviewer_role: "reviewer",
       notification_preference: "email",
       submission_status: "not_started",
-    });
-    if (error) throw new Error(`Could not add review workspace reviewer: ${error.message}`);
+    }, new Set(["invitation_id", "round_id", "reviewer_email", "reviewer_name", "submission_status"]), "Could not add review workspace reviewer");
   }
 
   const { error: projectUpdateError } = await client

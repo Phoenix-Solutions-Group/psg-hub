@@ -47,26 +47,27 @@ function collectProcessingJobColumnsAfterMigrations(...migrations: string[]) {
   return columns;
 }
 
-function createFakeClient(options: { collaborator?: boolean; expiredSession?: boolean; submitted?: boolean; hasPin?: boolean; missingSourceKindOnInsert?: boolean } = {}) {
+function createFakeClient(options: FakeClientOptions = {}) {
   const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const upserts: Array<{ table: string; payload: Record<string, unknown>; options: Record<string, unknown> | undefined }> = [];
   const updates: Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }> = [];
-  let sourceKindFailures = 0;
+  const schemaCacheMisses = new Map(
+    Object.entries(options.missingSchemaCacheColumns ?? {}).map(([table, columns]) => [table, [...columns]]),
+  );
   const client = {
     from(table: string) {
       return {
         insert(payload: Record<string, unknown>) {
           inserts.push({ table, payload });
-          const error =
-            options.missingSourceKindOnInsert &&
-            table === "bsm_content_review_items" &&
-            "source_kind" in payload &&
-            sourceKindFailures++ === 0
-              ? {
-                  code: "PGRST204",
-                  message: "Could not find the 'source_kind' column of 'bsm_content_review_items' in the schema cache",
-                }
-              : null;
+          const missingColumns = schemaCacheMisses.get(table) ?? [];
+          const missingColumnIndex = missingColumns.findIndex((column) => column in payload);
+          const missingColumn = missingColumnIndex >= 0 ? missingColumns.splice(missingColumnIndex, 1)[0] : null;
+          const error = missingColumn
+            ? {
+                code: "PGRST204",
+                message: `Could not find the '${missingColumn}' column of '${table}' in the schema cache`,
+              }
+            : null;
           return {
             select() {
               return this;
@@ -96,7 +97,13 @@ function createFakeClient(options: { collaborator?: boolean; expiredSession?: bo
   return { client, inserts, upserts, updates };
 }
 
-type FakeClientOptions = { collaborator?: boolean; expiredSession?: boolean; submitted?: boolean; hasPin?: boolean; missingSourceKindOnInsert?: boolean };
+type FakeClientOptions = {
+  collaborator?: boolean;
+  expiredSession?: boolean;
+  submitted?: boolean;
+  hasPin?: boolean;
+  missingSchemaCacheColumns?: Record<string, string[]>;
+};
 
 class Query {
   private filters: Record<string, unknown> = {};
@@ -419,7 +426,9 @@ describe("BSM review workspace foundation service", () => {
   });
 
   it("retries review item creation without source_kind against a stale schema cache", async () => {
-    const { client, inserts } = createFakeClient({ missingSourceKindOnInsert: true });
+    const { client, inserts } = createFakeClient({
+      missingSchemaCacheColumns: { bsm_content_review_items: ["source_kind"] },
+    });
 
     await createInternalReviewWorkspaceSlice(
       {
@@ -436,6 +445,44 @@ describe("BSM review workspace foundation service", () => {
     expect(itemInserts).toHaveLength(2);
     expect(itemInserts[0].payload).toHaveProperty("source_kind", "generated_page");
     expect(itemInserts[1].payload).not.toHaveProperty("source_kind");
+  });
+
+  it("retries review workspace version and reviewer inserts without optional cached columns", async () => {
+    const { client, inserts } = createFakeClient({
+      missingSchemaCacheColumns: {
+        bsm_content_review_versions: ["status", "processed_content_type"],
+        bsm_content_review_reviewers: ["invitation_id", "submission_status"],
+      },
+    });
+
+    const slice = await createInternalReviewWorkspaceSlice(
+      {
+        shopId: SHOP_ID,
+        title: "Website approval",
+        actorProfileId: ACTOR_ID,
+        reviewerEmail: "Owner@Example.com",
+        documents: [{ sectionTitle: "Website", title: "Home page", sourceUrl: "https://example.com", position: 1 }],
+      },
+      { client: client as never, now: new Date("2026-07-28T19:00:00.000Z") },
+    );
+
+    expect(slice).toMatchObject({ inviteToken: expect.any(String), inviteCode: expect.stringMatching(/^\d{6}$/) });
+
+    const versionInserts = inserts.filter((entry) => entry.table === "bsm_content_review_versions");
+    expect(versionInserts).toHaveLength(3);
+    expect(versionInserts[0].payload).toHaveProperty("status", "current");
+    expect(versionInserts[1].payload).not.toHaveProperty("status");
+    expect(versionInserts[1].payload).toHaveProperty("processed_content_type", "text/html");
+    expect(versionInserts[2].payload).not.toHaveProperty("status");
+    expect(versionInserts[2].payload).not.toHaveProperty("processed_content_type");
+
+    const reviewerInserts = inserts.filter((entry) => entry.table === "bsm_content_review_reviewers");
+    expect(reviewerInserts).toHaveLength(3);
+    expect(reviewerInserts[0].payload).toHaveProperty("invitation_id", slice.invitationId);
+    expect(reviewerInserts[1].payload).not.toHaveProperty("invitation_id");
+    expect(reviewerInserts[1].payload).toHaveProperty("submission_status", "not_started");
+    expect(reviewerInserts[2].payload).not.toHaveProperty("invitation_id");
+    expect(reviewerInserts[2].payload).not.toHaveProperty("submission_status");
   });
 
   it("requires a live invitation-backed reviewer session for guest access", async () => {

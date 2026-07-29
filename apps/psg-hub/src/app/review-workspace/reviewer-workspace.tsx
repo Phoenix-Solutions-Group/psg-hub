@@ -130,12 +130,14 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
 
   if (!inviteToken) {
     return (
-      <Card className="mx-auto max-w-lg">
-        <CardHeader>
-          <CardTitle>Review link missing</CardTitle>
-          <CardDescription>The private invitation token is required to open this review.</CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="flex min-h-svh w-full items-start justify-center px-4 py-10 sm:px-6 sm:py-16">
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>Review link missing</CardTitle>
+            <CardDescription>The private invitation token is required to open this review.</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
     );
   }
 
