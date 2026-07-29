@@ -32,8 +32,27 @@ describe("demo user filter", () => {
     ).toBe(true);
     expect(
       isInternalDemoUser({
+        displayName: "Tess QA board demo check",
+        email: "tess.qa.board-demo@psgweb.me",
+      })
+    ).toBe(true);
+    expect(
+      isInternalDemoUser({
         displayName: "Seed test",
         email: "seed-test-1785254167845@example.com",
+      })
+    ).toBe(true);
+    expect(
+      isInternalDemoUser({
+        displayName: "Setup user",
+        email: "setup@psghub.me",
+      })
+    ).toBe(true);
+    expect(
+      isInternalDemoUser({
+        displayName: "Deleted setup account",
+        email: "owner@riversidecollision.example",
+        isDeleted: true,
       })
     ).toBe(true);
   });
