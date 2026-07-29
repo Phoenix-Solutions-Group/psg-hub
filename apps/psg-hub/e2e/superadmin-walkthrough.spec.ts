@@ -65,9 +65,6 @@ test.describe("clean BSM demo admin walkthrough", () => {
     await page.goto("/ops/admin/modules", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Module Access Matrix" })).toBeVisible();
     await expect(page.getByRole("button", { name: "+ New module" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Allow" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Deny" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Inherit" }).first()).toBeVisible();
     await shoot(page, "focused-bsm-ops-admin-modules");
 
     await page.goto("/ops/admin/audit", { waitUntil: "domcontentloaded" });

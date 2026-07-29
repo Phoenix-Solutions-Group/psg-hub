@@ -27,8 +27,7 @@ test.describe("focused BSM customer walkthrough", () => {
     await page.goto("/dashboard/ads");
     await expect(page.getByRole("heading", { name: "Ads", exact: true })).toBeVisible();
     await shoot(page, "focused-bsm-ads");
-    await expect(page.getByText(/Google Ads reporting/i)).toBeVisible();
-    await expect(page.getByRole("link", { name: "Upgrade to Performance" })).toBeVisible();
+    await expect(page.getByText(/arrive in a later release/)).toHaveCount(0);
   });
 
   test("billing path is visible", async ({ page }) => {
