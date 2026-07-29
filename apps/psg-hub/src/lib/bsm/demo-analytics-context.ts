@@ -74,6 +74,11 @@ export function shouldUseRiversidePreviewDemoFallback({
   const isConfiguredDemoLogin =
     configuredDemoEmail.length > 0 &&
     normalizeEmail(userEmail) === configuredDemoEmail;
+  const isLegacyDemoShop = isLegacyDemoAnalyticsShopName(activeShopName);
 
-  return isConfiguredDemoLogin || isLegacyDemoAnalyticsShopName(activeShopName);
+  if (configuredDemoEmail.length > 0) {
+    return isConfiguredDemoLogin && isLegacyDemoShop;
+  }
+
+  return isLegacyDemoShop;
 }

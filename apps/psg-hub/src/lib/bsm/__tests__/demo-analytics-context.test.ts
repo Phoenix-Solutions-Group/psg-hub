@@ -90,17 +90,6 @@ describe("Riverside demo analytics context", () => {
         },
       })
     ).toBe(true);
-    expect(
-      shouldUseRiversidePreviewDemoFallback({
-        userEmail: "test@psghub.me",
-        activeShopName: "PSG Pilot Body Shop",
-        hasRiversideMembership: false,
-        env: {
-          DEMO_SHOP_EMAIL: "someone-else@example.test",
-          VERCEL_ENV: "preview",
-        },
-      })
-    ).toBe(true);
   });
 
   it("does not activate the preview fallback for production, other users, or existing Riverside membership", () => {
@@ -122,6 +111,17 @@ describe("Riverside demo analytics context", () => {
         activeShopName: "Tedesco Auto Body",
         hasRiversideMembership: false,
         env,
+      })
+    ).toBe(false);
+    expect(
+      shouldUseRiversidePreviewDemoFallback({
+        userEmail: "test@psghub.me",
+        activeShopName: "PSG Pilot Body Shop",
+        hasRiversideMembership: false,
+        env: {
+          DEMO_SHOP_EMAIL: "someone-else@example.test",
+          VERCEL_ENV: "preview",
+        },
       })
     ).toBe(false);
     expect(
