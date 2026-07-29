@@ -390,7 +390,12 @@ describe("BSM review workspace foundation service", () => {
     });
     expect(inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload).toMatchObject({
       generated_page_path: "https://example.com",
-      snapshot_jsonb: { sourceKind: "internal_review_workspace", sourceUrl: "https://example.com" },
+      snapshot_jsonb: {
+        sourceKind: "internal_review_workspace",
+        sourceUrl: "https://example.com",
+        generatedPagePath: "https://example.com",
+        previewUrl: "https://example.com",
+      },
       scan_status: "clean",
       conversion_status: "not_needed",
       sanitization_status: "complete",
@@ -559,6 +564,8 @@ describe("BSM review workspace foundation service", () => {
     expect(MIGRATION).toContain("private.bsm_content_review_user_can_access_project");
     expect(MIGRATION).toContain("private.bsm_content_review_user_can_access_invitation");
     expect(MIGRATION).toContain("owner_invitation_id");
+    expect(MIGRATION).toContain("alter table if exists public.bsm_content_review_events");
+    expect(MIGRATION).toContain("alter column review_item_id drop not null");
     expect(MIGRATION).toContain("bsm_content_review_comments_submitted_no_mutate");
     expect(MIGRATION).toContain("bsm_content_review_decisions_no_mutate");
     expect(MIGRATION).toContain("on public.bsm_content_review_processing_jobs (idempotency_key)");

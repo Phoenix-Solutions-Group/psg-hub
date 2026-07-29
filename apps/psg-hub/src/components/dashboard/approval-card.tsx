@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -66,7 +67,7 @@ export function ApprovalCard({ row }: { row: ApprovalCardRow }) {
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState<"idle" | "preview" | "confirm">("idle");
+  const [step, setStep] = useState<"idle" | "confirm">("idle");
 
   async function decide(action: "approve" | "reject") {
     setError(null);
@@ -90,7 +91,9 @@ export function ApprovalCard({ row }: { row: ApprovalCardRow }) {
   const publishCopy =
     typeof row.payload.summary === "string" && row.payload.summary.trim()
       ? row.payload.summary.trim()
-      : row.summary;
+      : typeof row.payload.body === "string" && row.payload.body.trim()
+        ? row.payload.body.trim()
+        : row.summary;
   const callToAction =
     typeof row.payload.callToAction === "object" && row.payload.callToAction !== null
       ? (row.payload.callToAction as Record<string, unknown>)
@@ -100,6 +103,14 @@ export function ApprovalCard({ row }: { row: ApprovalCardRow }) {
       ? callToAction.actionType.replace(/_/g, " ").toLowerCase()
       : null;
   const ctaUrl = typeof callToAction?.url === "string" ? callToAction.url : null;
+  const proofUrl =
+    typeof row.payload.previewUrl === "string"
+      ? row.payload.previewUrl
+      : typeof row.payload.proofUrl === "string"
+        ? row.payload.proofUrl
+        : typeof row.payload.sourceUrl === "string"
+          ? row.payload.sourceUrl
+          : null;
 
   return (
     <section className="rounded-lg border border-border p-5">
@@ -136,35 +147,46 @@ export function ApprovalCard({ row }: { row: ApprovalCardRow }) {
         </div>
       )}
 
-      {step !== "idle" && (
-        <div className="mt-4 rounded-md border border-border bg-muted/40 p-4">
+      <div className="mt-4 rounded-md border border-border bg-muted/40 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs font-medium uppercase text-muted-foreground">
-            Google public post preview
+            Public post preview
           </p>
-          <div className="mt-2 rounded-md border border-border bg-background p-3">
-            <p className="font-medium">{row.title}</p>
-            {publishCopy && (
-              <p className="mt-2 whitespace-pre-wrap text-sm text-foreground/90">{publishCopy}</p>
-            )}
-            {ctaLabel && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Button: {ctaLabel}
-                {ctaUrl ? ` · ${ctaUrl}` : ""}
-              </p>
-            )}
-          </div>
-          {step === "confirm" ? (
-            <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-              Confirming will publish this publicly on Google now. Customers may see it
-              immediately.
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">
-              Check the exact post above before continuing.
+          {proofUrl ? (
+            <a
+              href={proofUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-ember hover:text-foreground"
+            >
+              <ExternalLink className="size-3" aria-hidden="true" />
+              Open proof
+            </a>
+          ) : null}
+        </div>
+        <div className="mt-2 rounded-md border border-border bg-background p-3">
+          <p className="font-medium">{row.title}</p>
+          {publishCopy && (
+            <p className="mt-2 whitespace-pre-wrap text-sm text-foreground/90">{publishCopy}</p>
+          )}
+          {ctaLabel && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Button: {ctaLabel}
+              {ctaUrl ? ` · ${ctaUrl}` : ""}
             </p>
           )}
         </div>
-      )}
+        {step === "confirm" ? (
+          <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            Confirming will publish this publicly on Google now. Customers may see it
+            immediately.
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Check the exact post above before continuing.
+          </p>
+        )}
+      </div>
 
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
@@ -188,24 +210,10 @@ export function ApprovalCard({ row }: { row: ApprovalCardRow }) {
             disabled={busy !== null}
             onClick={() => {
               setError(null);
-              setStep("preview");
-            }}
-          >
-            {isFailedPublish ? "Review before retry" : "Preview post"}
-          </Button>
-        )}
-
-        {step === "preview" && (
-          <Button
-            size="sm"
-            disabled={busy !== null}
-            onClick={() => {
-              setError(null);
               setStep("confirm");
             }}
-            className="bg-green-600 hover:bg-green-700"
           >
-            Continue to confirmation
+            {isFailedPublish ? "Retry publish" : "Continue to approval"}
           </Button>
         )}
 

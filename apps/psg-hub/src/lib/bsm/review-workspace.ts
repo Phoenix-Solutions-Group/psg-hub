@@ -450,6 +450,13 @@ export async function createInternalReviewWorkspaceSlice(
     const itemId = randomUUID();
     const versionId = randomUUID();
     const sourceUrl = cleanOptionalText("sourceUrl", documentInput.sourceUrl, 1200);
+    const generatedPagePath = sourceUrl ?? `internal-review-workspace://${project.id}/${itemId}`;
+    const sourceMetadata = {
+      sourceKind: "internal_review_workspace",
+      sourceUrl,
+      generatedPagePath,
+      previewUrl: sourceUrl,
+    };
     const { error: itemError } = await client.from("bsm_content_review_items").insert({
       id: itemId,
       shop_id: shopId,
@@ -481,13 +488,13 @@ export async function createInternalReviewWorkspaceSlice(
       content_type: "text/html",
       byte_size: 1,
       preview_type: "generated_page",
-      generated_page_path: sourceUrl ?? `internal-review-workspace://${project.id}/${itemId}`,
+      generated_page_path: generatedPagePath,
       processed_content_type: "text/html",
       scan_status: "clean",
       conversion_status: "not_needed",
       sanitization_status: "complete",
-      source_metadata_jsonb: { sourceKind: "internal_review_workspace", sourceUrl },
-      snapshot_jsonb: { sourceKind: "internal_review_workspace", sourceUrl },
+      source_metadata_jsonb: sourceMetadata,
+      snapshot_jsonb: sourceMetadata,
       created_by_profile_id: actorProfileId,
     });
     if (versionError) throw new Error(`Could not create review workspace version: ${versionError.message}`);

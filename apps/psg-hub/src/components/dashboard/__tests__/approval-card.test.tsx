@@ -19,10 +19,12 @@ const pendingRow: ApprovalCardRow = {
 };
 
 describe("ApprovalCard publish guardrail", () => {
-  it("starts with preview only, not a direct publish button", () => {
+  it("shows the post proof first, not a direct publish button", () => {
     const html = renderToStaticMarkup(<ApprovalCard row={pendingRow} />);
 
-    expect(html).toContain("Preview post");
+    expect(html).toContain("Public post preview");
+    expect(html).toContain("Free estimates this week.");
+    expect(html).toContain("Continue to approval");
     expect(html).not.toContain("Approve &amp; publish");
     expect(html).not.toContain("Confirm and publish publicly now");
   });
@@ -40,7 +42,7 @@ describe("ApprovalCard publish guardrail", () => {
 
     expect(html).toContain("Publish failed");
     expect(html).toContain("Google rejected the post");
-    expect(html).toContain("Review before retry");
+    expect(html).toContain("Retry publish");
     expect(html).not.toContain("Reject");
   });
 });
