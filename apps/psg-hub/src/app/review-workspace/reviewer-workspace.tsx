@@ -23,13 +23,32 @@ type Workspace = {
     previewUrl: string | null;
     generatedPagePath: string | null;
     proofUrl: string | null;
+    proofContent: {
+      eyebrow: string;
+      headline: string;
+      body: string;
+      bullets: string[];
+      cta: string;
+      sourceUrl: string | null;
+    } | null;
   }>;
   comments: Array<{ id: string; reviewItemId: string; versionId: string; body: string; pinNumber: number | null; draftStatus: string }>;
   decisions: Array<{ reviewItemId: string; versionId: string; decision: string; message: string | null; submittedAt: string | null }>;
 };
 
 function canFrameProof(url: string | null): url is string {
-  return Boolean(url && url.startsWith("/"));
+  if (!url) return false;
+  if (url.startsWith("/")) return true;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function isImageProof(contentType: string | null): boolean {
+  return Boolean(contentType?.startsWith("image/"));
 }
 
 export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
@@ -39,16 +58,20 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   const [comment, setComment] = useState("Please update the offer on this page.");
   const [message, setMessage] = useState("The offer needs one wording update before approval.");
   const [decision, setDecision] = useState<"approved" | "changes_requested">("changes_requested");
+  const [selectedDocumentKey, setSelectedDocumentKey] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const firstDocument = workspace?.documents[0] ?? null;
+  const activeDocument =
+    workspace?.documents.find((doc) => `${doc.itemId}:${doc.versionId}` === selectedDocumentKey) ??
+    workspace?.documents[0] ??
+    null;
   const isReadOnly = Boolean(workspace?.reviewer.readOnly);
-  const commentsForFirstDocument = useMemo(
-    () => firstDocument && workspace
-      ? workspace.comments.filter((item) => item.reviewItemId === firstDocument.itemId)
+  const commentsForActiveDocument = useMemo(
+    () => activeDocument && workspace
+      ? workspace.comments.filter((item) => item.reviewItemId === activeDocument.itemId)
       : [],
-    [firstDocument, workspace],
+    [activeDocument, workspace],
   );
 
   async function verifyInvite() {
@@ -84,7 +107,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   }
 
   async function saveComment() {
-    if (!sessionHash || !firstDocument) return;
+    if (!sessionHash || !activeDocument) return;
     setPending(true);
     setError(null);
     try {
@@ -93,10 +116,10 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionHash,
-          reviewItemId: firstDocument.itemId,
-          versionId: firstDocument.versionId,
+          reviewItemId: activeDocument.itemId,
+          versionId: activeDocument.versionId,
           body: comment,
-          pinNumber: commentsForFirstDocument.length + 1,
+          pinNumber: commentsForActiveDocument.length + 1,
           viewport: window.innerWidth < 700 ? "mobile" : "desktop",
           xRatio: 0.5,
           yRatio: 0.42,
@@ -117,7 +140,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
     setPending(true);
     setError(null);
     try {
-      if (decision === "changes_requested" && commentsForFirstDocument.length === 0) {
+      if (decision === "changes_requested" && workspace.comments.length === 0) {
         throw new Error("Add at least one private comment before requesting changes.");
       }
       const res = await fetch("/api/bsm/review-workspace/submit", {
@@ -244,11 +267,43 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                             </a>
                           ) : null}
                         </div>
-                        {canFrameProof(doc.proofUrl) ? (
+                        {doc.proofContent ? (
+                          <article className="bg-white p-5 text-foreground sm:p-8">
+                            <div className="text-xs font-semibold uppercase text-ember">
+                              {doc.proofContent.eyebrow}
+                            </div>
+                            <h3 className="mt-2 font-heading text-2xl font-semibold">
+                              {doc.proofContent.headline}
+                            </h3>
+                            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+                              {doc.proofContent.body}
+                            </p>
+                            {doc.proofContent.bullets.length ? (
+                              <ul className="mt-4 space-y-2 text-sm">
+                                {doc.proofContent.bullets.map((bullet) => (
+                                  <li key={bullet} className="flex gap-2">
+                                    <CheckCircle className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+                                    <span>{bullet}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                            <div className="mt-5 inline-flex rounded-md bg-ember px-3 py-2 text-sm font-medium text-white">
+                              {doc.proofContent.cta}
+                            </div>
+                          </article>
+                        ) : isImageProof(doc.contentType) && doc.proofUrl ? (
+                          <img
+                            src={doc.proofUrl}
+                            alt={`${doc.title} proof`}
+                            className="max-h-[680px] w-full object-contain bg-white"
+                          />
+                        ) : canFrameProof(doc.proofUrl) ? (
                           <iframe
                             src={doc.proofUrl}
                             title={`${doc.title} proof`}
-                            className="h-[560px] w-full bg-white"
+                            className="h-[680px] w-full bg-white"
+                            sandbox=""
                           />
                         ) : (
                           <div className="p-4 text-sm text-muted-foreground">
@@ -256,6 +311,17 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                           </div>
                         )}
                       </div>
+                      {!isReadOnly ? (
+                        <Button
+                          type="button"
+                          variant={`${doc.itemId}:${doc.versionId}` === `${activeDocument?.itemId}:${activeDocument?.versionId}` ? "default" : "outline"}
+                          className="mt-4"
+                          onClick={() => setSelectedDocumentKey(`${doc.itemId}:${doc.versionId}`)}
+                        >
+                          <MessageSquare className="size-4" aria-hidden="true" />
+                          Comment on this document
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>
@@ -295,6 +361,9 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                     </fieldset>
                     <div className="space-y-2">
                       <Label htmlFor="private-comment">Private comment</Label>
+                      <div className="text-xs text-muted-foreground">
+                        Applies to {activeDocument?.title ?? "the selected document"}
+                      </div>
                       <textarea
                         id="private-comment"
                         value={comment}
@@ -302,9 +371,9 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                         className="min-h-24 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                       />
                     </div>
-                    <Button type="button" variant="outline" onClick={saveComment} disabled={pending || !firstDocument}>
+                    <Button type="button" variant="outline" onClick={saveComment} disabled={pending || !activeDocument}>
                       <MessageSquare className="size-4" aria-hidden="true" />
-                      Add private comment
+                      Add suggestion
                     </Button>
                     <div className="space-y-2">
                       <Label htmlFor="submit-message">Decision note</Label>

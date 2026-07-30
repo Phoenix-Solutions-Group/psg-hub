@@ -2,21 +2,26 @@ import { redirect } from "next/navigation";
 import { ReviewWorkspaceConsole } from "@/app/ops/bsm-review-workspace/review-workspace-console";
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
 import { bsmReviewWorkspaceInternalEnabled } from "@/lib/bsm/review-workspace";
-import { getActiveShopContext } from "@/lib/shop/context";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function normalizeShops(rows: Array<{ id: unknown; name: unknown }>) {
-  return rows
-    .filter((row): row is { id: string; name: string } => typeof row.id === "string")
-    .map((row) => ({
-      id: row.id,
-      name: typeof row.name === "string" && row.name.trim() ? row.name.trim() : row.id,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+export function normalizeCompanyShops(rows: Array<{ shop_id: unknown; name: unknown }>) {
+  const shopsById = new Map<string, { id: string; name: string }>();
+
+  for (const row of rows) {
+    if (typeof row.shop_id !== "string" || !row.shop_id.trim()) continue;
+    const id = row.shop_id;
+    const name = typeof row.name === "string" && row.name.trim() ? row.name.trim() : id;
+    const existing = shopsById.get(id);
+    if (!existing || existing.name === id) {
+      shopsById.set(id, { id, name });
+    }
+  }
+
+  return [...shopsById.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export default async function BsmReviewWorkspacePage() {
@@ -50,15 +55,14 @@ export default async function BsmReviewWorkspacePage() {
   }
 
   const service = createServiceClient();
-  const [{ data: shopRows }, shopContext] = await Promise.all([
-    service.from("shops").select("id, name").order("name", { ascending: true }).limit(250),
-    getActiveShopContext(user.id).catch(() => ({ activeShopId: null, shops: [] })),
-  ]);
-  const shopsById = new Map(normalizeShops(shopRows ?? []).map((shop) => [shop.id, shop]));
-  for (const shop of shopContext.shops) {
-    shopsById.set(shop.id, shop);
-  }
-  const shops = [...shopsById.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const { data: shopRows } = await service
+    .from("companies")
+    .select("shop_id, name")
+    .eq("status", "active")
+    .not("shop_id", "is", null)
+    .order("name", { ascending: true })
+    .limit(500);
+  const shops = normalizeCompanyShops(shopRows ?? []);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -71,7 +75,7 @@ export default async function BsmReviewWorkspacePage() {
       </section>
 
       {shops.length ? (
-        <ReviewWorkspaceConsole shops={shops} defaultShopId={shopContext.activeShopId} />
+        <ReviewWorkspaceConsole shops={shops} defaultShopId={shops[0]?.id ?? null} />
       ) : (
         <div className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-warning-foreground">
           No QA shop is available in this environment.

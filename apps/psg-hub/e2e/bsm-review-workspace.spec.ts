@@ -49,14 +49,14 @@ test("BSM review workspace release gate: admin creates, reviewer comments and su
   await reviewer.getByLabel("One-time code").fill(code!);
   await reviewer.getByRole("button", { name: "Open review" }).click();
   await expect(reviewer.getByRole("heading", { name: /E2E review workspace/ })).toBeVisible();
-  await expect(reviewer.getByText("Homepage release proof")).toBeVisible();
+  await expect(reviewer.getByRole("heading", { name: "Homepage release proof" })).toBeVisible();
   await checkA11y(reviewer, "bsm-review-workspace-reviewer-open");
 
   await reviewer.getByRole("button", { name: "Submit review" }).click();
   await expect(reviewer.getByText("Add at least one private comment before requesting changes.")).toBeVisible();
 
   await reviewer.getByLabel("Private comment").fill("Please update the warranty offer wording before approval.");
-  await reviewer.getByRole("button", { name: "Add private comment" }).click();
+  await reviewer.getByRole("button", { name: "Add suggestion" }).click();
   await expect(reviewer.getByText("Please update the warranty offer wording before approval.")).toBeVisible();
   await reviewer.getByLabel("Decision note").fill("The page is close, but the warranty offer needs clearer wording.");
   await reviewer.getByRole("button", { name: "Submit review" }).click();
@@ -65,7 +65,7 @@ test("BSM review workspace release gate: admin creates, reviewer comments and su
   await expect(reviewer.getByRole("button", { name: "Submit review" })).toHaveCount(0);
   await screenshotEvidence(reviewer, "bsm-review-workspace-reviewer-submitted");
 
-  await page.getByRole("button", { name: "Load result" }).click();
+  await page.getByRole("button", { name: "Refresh submitted review" }).click();
   await expect(page.getByText("changes requested")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("Please update the warranty offer wording before approval.")).toBeVisible();
   await checkA11y(page, "bsm-review-workspace-admin-result");

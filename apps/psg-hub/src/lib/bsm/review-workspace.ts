@@ -7,6 +7,16 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const PGRST_SCHEMA_CACHE_COLUMN_RE = /'([^']+)' column/;
 
 export type ReviewWorkspaceDbClient = Pick<SupabaseClient, "from">;
+type ReviewWorkspaceStorageClient = ReviewWorkspaceDbClient & {
+  storage?: {
+    from(bucket: string): {
+      createSignedUrl(
+        path: string,
+        expiresIn: number,
+      ): Promise<{ data: { signedUrl: string } | null; error: { message: string } | null }>;
+    };
+  };
+};
 
 export class ReviewWorkspaceInputError extends Error {
   status: number;
@@ -74,6 +84,7 @@ export type ReviewWorkspaceDocumentInput = {
   sectionTitle: string;
   title: string;
   sourceUrl?: string | null;
+  body?: string | null;
   position: number;
 };
 
@@ -117,6 +128,7 @@ export type GuestReviewWorkspace = {
     previewUrl: string | null;
     generatedPagePath: string | null;
     proofUrl: string | null;
+    proofContent: ReviewWorkspaceProofContent | null;
   }>;
   comments: Array<{ id: string; reviewItemId: string; versionId: string; body: string; pinNumber: number | null; draftStatus: string }>;
   decisions: Array<{ reviewItemId: string; versionId: string; decision: string; message: string | null; submittedAt: string | null }>;
@@ -125,7 +137,15 @@ export type GuestReviewWorkspace = {
 export type StaffReviewWorkspaceResult = {
   project: { id: string; shopId: string; title: string; status: string; currentRoundId: string | null };
   round: { id: string; status: string; outcome: string | null; completedAt: string | null } | null;
-  documents: Array<{ itemId: string; versionId: string | null; title: string; processingStatus: string; status: string }>;
+  documents: Array<{
+    itemId: string;
+    versionId: string | null;
+    title: string;
+    processingStatus: string;
+    status: string;
+    proofUrl: string | null;
+    proofContent: ReviewWorkspaceProofContent | null;
+  }>;
   submittedComments: Array<{ id: string; invitationId: string | null; reviewItemId: string; body: string; pinNumber: number | null; draftStatus: string }>;
   decisions: Array<{ id: string; invitationId: string | null; reviewItemId: string; decision: string; message: string | null; submittedAt: string | null }>;
 };
@@ -133,6 +153,15 @@ export type StaffReviewWorkspaceResult = {
 export type SubmitGuestReviewRoundInput = {
   sessionHash: string;
   decisions: Array<{ reviewItemId: string; versionId: string; decision: "approved" | "changes_requested"; message?: string | null }>;
+};
+
+export type ReviewWorkspaceProofContent = {
+  eyebrow: string;
+  headline: string;
+  body: string;
+  bullets: string[];
+  cta: string;
+  sourceUrl: string | null;
 };
 
 function assertUuid(label: string, value: unknown): string {
@@ -212,6 +241,80 @@ function cleanEmail(value: unknown): string {
     throw new ReviewWorkspaceInputError(400, "reviewerEmail must be a valid email address");
   }
   return email;
+}
+
+function buildInternalProofContent(input: {
+  sectionTitle: string;
+  title: string;
+  description: string | null;
+  sourceUrl: string | null;
+  body: string | null;
+}): ReviewWorkspaceProofContent {
+  return {
+    eyebrow: input.sectionTitle,
+    headline: input.title,
+    body: input.body ?? input.description ?? "Review this customer-facing content proof before it is released.",
+    bullets: [
+      "Clear offer and next step for the shop's customer.",
+      "Plain-language copy suitable for customer review.",
+      "Demo-safe proof content stored inside this review workspace.",
+    ],
+    cta: "Schedule my repair review",
+    sourceUrl: input.sourceUrl,
+  };
+}
+
+function readProofContent(value: unknown): ReviewWorkspaceProofContent | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const headline = typeof record.headline === "string" ? record.headline.trim() : "";
+  const body = typeof record.body === "string" ? record.body.trim() : "";
+  if (!headline || !body) return null;
+  return {
+    eyebrow: typeof record.eyebrow === "string" && record.eyebrow.trim() ? record.eyebrow : "Review document",
+    headline,
+    body,
+    bullets: Array.isArray(record.bullets)
+      ? record.bullets.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+      : [],
+    cta: typeof record.cta === "string" && record.cta.trim() ? record.cta : "Review requested changes",
+    sourceUrl: typeof record.sourceUrl === "string" && record.sourceUrl.trim() ? record.sourceUrl : null,
+  };
+}
+
+function proofContentFromMetadata(metadata: Record<string, unknown> | null | undefined): ReviewWorkspaceProofContent | null {
+  return readProofContent(metadata?.proofContent);
+}
+
+function fileProofTarget(version: Record<string, unknown> | null | undefined): { bucket: string; path: string } | null {
+  const processedPath = typeof version?.processed_storage_path === "string" && version.processed_storage_path.trim()
+    ? version.processed_storage_path
+    : null;
+  const processedBucket = typeof version?.processed_storage_bucket === "string" && version.processed_storage_bucket.trim()
+    ? version.processed_storage_bucket
+    : null;
+  if (processedPath && processedBucket) return { bucket: processedBucket, path: processedPath };
+
+  const path = typeof version?.storage_path === "string" && version.storage_path.trim()
+    ? version.storage_path
+    : null;
+  const bucket = typeof version?.storage_bucket === "string" && version.storage_bucket.trim()
+    ? version.storage_bucket
+    : null;
+  return path && bucket ? { bucket, path } : null;
+}
+
+async function createSignedProofUrl(
+  client: ReviewWorkspaceDbClient,
+  version: Record<string, unknown> | null | undefined,
+): Promise<string | null> {
+  const target = fileProofTarget(version);
+  const storage = (client as ReviewWorkspaceStorageClient).storage;
+  if (!target || !storage) return null;
+
+  const { data, error } = await storage.from(target.bucket).createSignedUrl(target.path, 60 * 20);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
 }
 
 async function insertEvent(
@@ -361,7 +464,24 @@ export async function getStaffReviewWorkspaceResult(
       : Promise.resolve({ data: [] }),
     client
       .from("bsm_content_review_items")
-      .select("id, current_version_id, title, processing_status, status")
+      .select(`
+        id,
+        current_version_id,
+        title,
+        processing_status,
+        status,
+        version:bsm_content_review_versions (
+          id,
+          preview_url,
+          generated_page_path,
+          storage_bucket,
+          storage_path,
+          processed_storage_bucket,
+          processed_storage_path,
+          source_metadata_jsonb,
+          snapshot_jsonb
+        )
+      `)
       .eq("project_id", access.projectId)
       .is("deleted_at", null)
       .order("position", { ascending: true }),
@@ -399,12 +519,33 @@ export async function getStaffReviewWorkspaceResult(
           completedAt: (round.completed_at as string | null) ?? null,
         }
       : null,
-    documents: ((itemRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      itemId: row.id as string,
-      versionId: (row.current_version_id as string | null) ?? null,
-      title: row.title as string,
-      processingStatus: row.processing_status as string,
-      status: row.status as string,
+    documents: await Promise.all(((itemRows ?? []) as Array<Record<string, unknown>>).map(async (row) => {
+      const rawVersion = row.version;
+      const version = rawVersion && typeof rawVersion === "object"
+        ? (Array.isArray(rawVersion) ? rawVersion[0] : rawVersion) as Record<string, unknown> | undefined
+        : undefined;
+      const sourceMetadata = (version?.source_metadata_jsonb as Record<string, unknown> | null) ?? {};
+      const snapshot = (version?.snapshot_jsonb as Record<string, unknown> | null) ?? {};
+      const previewUrl = typeof sourceMetadata.previewUrl === "string" && sourceMetadata.previewUrl.trim()
+        ? sourceMetadata.previewUrl
+        : typeof version?.preview_url === "string" && version.preview_url.trim()
+          ? version.preview_url
+          : null;
+      const generatedPagePath = typeof sourceMetadata.generatedPagePath === "string" && sourceMetadata.generatedPagePath.trim()
+        ? sourceMetadata.generatedPagePath
+        : typeof version?.generated_page_path === "string" && version.generated_page_path.trim()
+          ? version.generated_page_path
+          : null;
+      const signedProofUrl = await createSignedProofUrl(client, version);
+      return {
+        itemId: row.id as string,
+        versionId: (row.current_version_id as string | null) ?? null,
+        title: row.title as string,
+        processingStatus: row.processing_status as string,
+        status: row.status as string,
+        proofUrl: previewUrl ?? generatedPagePath ?? signedProofUrl,
+        proofContent: proofContentFromMetadata(sourceMetadata) ?? proofContentFromMetadata(snapshot),
+      };
     })),
     submittedComments: ((commentRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
       id: row.id as string,
@@ -463,6 +604,7 @@ export async function createInternalReviewWorkspaceSlice(
   const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
   const reviewerEmail = cleanEmail(input.reviewerEmail);
   const reviewerName = cleanOptionalText("reviewerName", input.reviewerName, 160);
+  const description = cleanOptionalText("description", input.description, 4000);
   if (!Array.isArray(input.documents) || input.documents.length === 0) {
     throw new ReviewWorkspaceInputError(400, "At least one document is required");
   }
@@ -476,7 +618,7 @@ export async function createInternalReviewWorkspaceSlice(
     {
       shopId,
       title: input.title,
-      description: input.description,
+      description,
       actorProfileId,
       metadata: { featureGate: "bsm_review_workspace_internal" },
     },
@@ -510,12 +652,21 @@ export async function createInternalReviewWorkspaceSlice(
     const itemId = randomUUID();
     const versionId = randomUUID();
     const sourceUrl = cleanOptionalText("sourceUrl", documentInput.sourceUrl, 1200);
+    const body = cleanOptionalText("document body", documentInput.body, 4000);
     const generatedPagePath = sourceUrl ?? `internal-review-workspace://${project.id}/${itemId}`;
+    const proofContent = buildInternalProofContent({
+      sectionTitle,
+      title: docTitle,
+      description,
+      sourceUrl,
+      body,
+    });
     const sourceMetadata = {
       sourceKind: "internal_review_workspace",
       sourceUrl,
       generatedPagePath,
       previewUrl: sourceUrl,
+      proofContent,
     };
     const itemPayload = {
       id: itemId,
@@ -528,7 +679,7 @@ export async function createInternalReviewWorkspaceSlice(
       source_kind: "generated_page",
       content_type: "generated_page",
       status: "in_review",
-      admin_context_note: input.description ?? null,
+      admin_context_note: description,
       processing_status: "ready",
       created_by_profile_id: actorProfileId,
       metadata_jsonb: { sourceKind: "internal_review_workspace", sourceUrl },
@@ -554,7 +705,6 @@ export async function createInternalReviewWorkspaceSlice(
       content_type: "text/html",
       byte_size: 1,
       preview_type: "generated_page",
-      preview_url: sourceUrl,
       generated_page_path: generatedPagePath,
       processed_content_type: "text/html",
       scan_status: "clean",
@@ -571,7 +721,6 @@ export async function createInternalReviewWorkspaceSlice(
       "original_filename",
       "content_type",
       "preview_type",
-      "preview_url",
       "processed_content_type",
       "scan_status",
       "conversion_status",
@@ -936,7 +1085,7 @@ export async function getGuestReviewWorkspace(
   const { data: versions } = versionIds.length
     ? await client
         .from("bsm_content_review_versions")
-        .select("id, original_filename, content_type, preview_url, generated_page_path, source_metadata_jsonb")
+        .select("id, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, source_metadata_jsonb, snapshot_jsonb")
         .in("id", versionIds)
     : { data: [] };
   const versionsById = new Map(((versions ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
@@ -967,10 +1116,11 @@ export async function getGuestReviewWorkspace(
       submittedAt: access.submittedAt,
       readOnly: access.invitationStatus === "submitted" || Boolean(access.submittedAt),
     },
-    documents: ((docs ?? []) as Array<Record<string, unknown>>).map((row) => {
+    documents: await Promise.all(((docs ?? []) as Array<Record<string, unknown>>).map(async (row) => {
       const item = itemsById.get(row.review_item_id as string) ?? null;
       const version = versionsById.get(row.version_id as string) ?? null;
       const metadata = (version?.source_metadata_jsonb as Record<string, unknown> | null) ?? {};
+      const snapshot = (version?.snapshot_jsonb as Record<string, unknown> | null) ?? {};
       const previewUrl = typeof metadata.previewUrl === "string" && metadata.previewUrl.trim()
         ? metadata.previewUrl
         : typeof version?.preview_url === "string" && version.preview_url.trim()
@@ -981,6 +1131,7 @@ export async function getGuestReviewWorkspace(
         : typeof version?.generated_page_path === "string" && version.generated_page_path.trim()
           ? version.generated_page_path
           : null;
+      const signedProofUrl = await createSignedProofUrl(client, version);
       const sectionId = (item?.section_id as string | null) ?? null;
       return {
         itemId: row.review_item_id as string,
@@ -992,9 +1143,10 @@ export async function getGuestReviewWorkspace(
         contentType: (version?.content_type as string | null) ?? null,
         previewUrl,
         generatedPagePath,
-        proofUrl: previewUrl ?? generatedPagePath,
+        proofUrl: previewUrl ?? generatedPagePath ?? signedProofUrl,
+        proofContent: proofContentFromMetadata(metadata) ?? proofContentFromMetadata(snapshot),
       };
-    }),
+    })),
     comments: ((comments ?? []) as Array<Record<string, unknown>>).map((row) => ({
       id: row.id as string,
       reviewItemId: row.review_item_id as string,

@@ -8,6 +8,7 @@ import {
   createReviewWorkspaceProject,
   enqueueReviewWorkspaceProcessingJob,
   getGuestReviewWorkspace,
+  getStaffReviewWorkspaceResult,
   requireGuestReviewSession,
   requireReviewWorkspaceStaffAccess,
   submitGuestReviewRound,
@@ -55,6 +56,18 @@ function createFakeClient(options: FakeClientOptions = {}) {
     Object.entries(options.missingSchemaCacheColumns ?? {}).map(([table, columns]) => [table, [...columns]]),
   );
   const client = {
+    storage: {
+      from(bucket: string) {
+        return {
+          createSignedUrl(path: string) {
+            return Promise.resolve({
+              data: { signedUrl: `https://storage.example/${bucket}/${path}?token=review` },
+              error: null,
+            });
+          },
+        };
+      },
+    },
     from(table: string) {
       return {
         insert(payload: Record<string, unknown>) {
@@ -110,6 +123,7 @@ type FakeClientOptions = {
   collaborator?: boolean;
   expiredSession?: boolean;
   emptyVersionMetadata?: boolean;
+  uploadedFileProof?: boolean;
   submitted?: boolean;
   hasPin?: boolean;
   legacyEventsRequireReviewItem?: boolean;
@@ -173,16 +187,67 @@ class Query {
     }
     if (this.table === "bsm_content_review_items") {
       return {
-        data: [{ id: REVIEW_ITEM_ID, title: "Home page", processing_status: "ready", section_id: SECTION_ID }],
+        data: [{
+          id: REVIEW_ITEM_ID,
+          current_version_id: VERSION_ID,
+          title: "Home page",
+          processing_status: "ready",
+          status: "in_review",
+          section_id: SECTION_ID,
+          version: {
+            id: VERSION_ID,
+            preview_url: "/dashboard/content",
+            generated_page_path: "/dashboard/content",
+            source_metadata_jsonb: {
+              proofContent: {
+                eyebrow: "Website",
+                headline: "Home page",
+                body: "Demo-safe page copy is visible in the private review workspace.",
+                bullets: ["Confirm the offer", "Confirm the next step"],
+                cta: "Schedule my repair review",
+                sourceUrl: null,
+              },
+            },
+            snapshot_jsonb: {},
+          },
+        }],
         error: null,
       };
     }
     if (this.table === "bsm_content_review_versions") {
+      if (this.options.uploadedFileProof) {
+        return {
+          data: [
+            {
+              id: VERSION_ID,
+              original_filename: "homepage-proof.pdf",
+              content_type: "application/pdf",
+              preview_url: null,
+              generated_page_path: null,
+              storage_bucket: "bsm-content-approvals",
+              storage_path: `${SHOP_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/homepage-proof.pdf`,
+              processed_storage_bucket: null,
+              processed_storage_path: null,
+              source_metadata_jsonb: {},
+              snapshot_jsonb: {},
+            },
+          ],
+          error: null,
+        };
+      }
       const sourceMetadata = this.options.emptyVersionMetadata
         ? {}
         : {
             previewUrl: "/dashboard/content",
             generatedPagePath: "/dashboard/content",
+            proofContent: {
+              eyebrow: "Website",
+              headline: "Home page",
+              body: "Demo-safe page copy is visible in the private review workspace.",
+              bullets: ["Confirm the offer", "Confirm the next step"],
+              cta: "Schedule my repair review",
+              sourceUrl: null,
+            },
           };
       return {
         data: [
@@ -192,7 +257,12 @@ class Query {
             content_type: "text/html",
             preview_url: "/dashboard/content",
             generated_page_path: "/dashboard/content",
+            storage_bucket: null,
+            storage_path: null,
+            processed_storage_bucket: null,
+            processed_storage_path: null,
             source_metadata_jsonb: sourceMetadata,
+            snapshot_jsonb: sourceMetadata,
           },
         ],
         error: null,
@@ -216,6 +286,9 @@ class Query {
           : [],
         error: null,
       };
+    }
+    if (this.table === "bsm_content_review_rounds") {
+      return { data: [{ id: ROUND_ID, status: "submitted", outcome: "changes_requested", completed_at: "2026-07-28T19:00:00.000Z" }], error: null };
     }
     return { data: [], error: null };
   }
@@ -283,7 +356,7 @@ class Query {
 
   single() {
     if (this.table === "bsm_content_review_projects") {
-      return Promise.resolve({ data: { id: PROJECT_ID, title: "Website review", status: "active" }, error: null });
+      return Promise.resolve({ data: { id: PROJECT_ID, shop_id: SHOP_ID, title: "Website review", status: "active", current_round_id: ROUND_ID }, error: null });
     }
     if (this.table === "bsm_content_review_rounds") {
       return Promise.resolve({ data: { id: ROUND_ID, status: "active" }, error: null });
@@ -439,13 +512,19 @@ describe("BSM review workspace foundation service", () => {
       position: 1,
     });
     expect(inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload).toMatchObject({
-      preview_url: "https://example.com",
       generated_page_path: "https://example.com",
       snapshot_jsonb: {
         sourceKind: "internal_review_workspace",
         sourceUrl: "https://example.com",
         generatedPagePath: "https://example.com",
         previewUrl: "https://example.com",
+        proofContent: expect.objectContaining({
+          eyebrow: "Website",
+          headline: "Home page",
+          body: "Review the new home page.",
+          cta: "Schedule my repair review",
+          sourceUrl: "https://example.com",
+        }),
       },
       scan_status: "clean",
       conversion_status: "not_needed",
@@ -583,6 +662,14 @@ describe("BSM review workspace foundation service", () => {
         previewUrl: "/dashboard/content",
         generatedPagePath: "/dashboard/content",
         proofUrl: "/dashboard/content",
+        proofContent: {
+          eyebrow: "Website",
+          headline: "Home page",
+          body: "Demo-safe page copy is visible in the private review workspace.",
+          bullets: ["Confirm the offer", "Confirm the next step"],
+          cta: "Schedule my repair review",
+          sourceUrl: null,
+        },
       },
     ]);
     expect(workspace.comments).toEqual([
@@ -604,6 +691,47 @@ describe("BSM review workspace foundation service", () => {
       generatedPagePath: "/dashboard/content",
       proofUrl: "/dashboard/content",
     });
+  });
+
+  it("returns a signed proof URL for uploaded files in the guest workspace", async () => {
+    const { client } = createFakeClient({ uploadedFileProof: true });
+
+    const workspace = await getGuestReviewWorkspace("session-hash", { client: client as never });
+
+    expect(workspace.documents[0]).toMatchObject({
+      originalFilename: "homepage-proof.pdf",
+      contentType: "application/pdf",
+      previewUrl: null,
+      generatedPagePath: null,
+      proofUrl:
+        "https://storage.example/bsm-content-approvals/11111111-1111-4111-8111-111111111111/77777777-7777-4777-8777-777777777777/88888888-8888-4888-8888-888888888888/homepage-proof.pdf?token=review",
+      proofContent: null,
+    });
+  });
+
+  it("loads staff result proof content with submitted comments and decisions", async () => {
+    const { client } = createFakeClient({ submitted: true });
+
+    const result = await getStaffReviewWorkspaceResult(PROJECT_ID, ACTOR_ID, { client: client as never });
+
+    expect(result.documents[0]).toMatchObject({
+      title: "Home page",
+      proofContent: expect.objectContaining({
+        headline: "Home page",
+        body: "Demo-safe page copy is visible in the private review workspace.",
+      }),
+    });
+    expect(result.submittedComments).toEqual([
+      expect.objectContaining({
+        body: "Owner one private note",
+      }),
+    ]);
+    expect(result.decisions).toEqual([
+      expect.objectContaining({
+        decision: "changes_requested",
+        message: "Update the offer.",
+      }),
+    ]);
   });
 
   it("stores reviewer pin comments against the reviewer invitation only", async () => {
