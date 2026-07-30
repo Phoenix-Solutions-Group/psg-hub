@@ -1,12 +1,13 @@
 "use client";
 
-import { FileUp, Link, RefreshCw, Trash2 } from "lucide-react";
+import { FilePenLine, FileUp, Link, RefreshCw, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   BSM_CONTENT_APPROVALS_BUCKET,
   MAX_APPROVAL_FILE_BYTES,
   type BsmContentApprovalListItem,
+  type BsmContentApprovalWorkspaceOption,
   normalizeApprovalMimeType,
 } from "@/lib/bsm/content-approvals-shared";
 import { buttonVariants } from "@/components/ui/button";
@@ -37,20 +38,29 @@ export type BsmContentApprovalShopOption = { id: string; name: string };
 
 export function BsmContentApprovalManager({
   initialApprovals,
+  workspaces = [],
   shops,
   activeShopId,
+  activeWorkspaceProjectId,
 }: {
   initialApprovals: BsmContentApprovalListItem[];
+  workspaces?: BsmContentApprovalWorkspaceOption[];
   shops?: BsmContentApprovalShopOption[];
   activeShopId?: string | null;
+  activeWorkspaceProjectId?: string | null;
 }) {
   const [approvals, setApprovals] = useState(initialApprovals);
   const orderedShops = shops ?? [];
-  const initialShopId = orderedShops.some((shop) => shop.id === activeShopId)
-    ? activeShopId ?? ""
+  const initialWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceProjectId);
+  const requestedShopId = initialWorkspace?.shopId ?? activeShopId;
+  const initialShopId = orderedShops.some((shop) => shop.id === requestedShopId)
+    ? requestedShopId ?? ""
     : orderedShops[0]?.id ?? "";
   const [shopId, setShopId] = useState(initialShopId);
   const [customerProfileId, setCustomerProfileId] = useState("");
+  const [reviewWorkspaceProjectId, setReviewWorkspaceProjectId] = useState(
+    initialWorkspace && initialWorkspace.shopId === initialShopId ? initialWorkspace.id : "",
+  );
   const [title, setTitle] = useState("");
   const [contextNote, setContextNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -61,7 +71,18 @@ export function BsmContentApprovalManager({
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [archiveItemId, setArchiveItemId] = useState<string | null>(null);
   const [archivingItemId, setArchivingItemId] = useState<string | null>(null);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContextNote, setEditContextNote] = useState("");
+  const [editFile, setEditFile] = useState<File | null>(null);
+  const [savingEditItemId, setSavingEditItemId] = useState<string | null>(null);
+  const [attachingItemId, setAttachingItemId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const selectedShopWorkspaces = useMemo(
+    () => workspaces.filter((workspace) => workspace.shopId === shopId),
+    [workspaces, shopId],
+  );
 
   const validationError = useMemo(() => {
     if (!shopId.trim()) return "Shop ID is required.";
@@ -113,6 +134,7 @@ export function BsmContentApprovalManager({
         body: JSON.stringify({
           shopId: shopId.trim(),
           customerProfileId: customerProfileId.trim() || null,
+          reviewWorkspaceProjectId: reviewWorkspaceProjectId.trim() || null,
           title: title.trim(),
           contextNote: contextNote.trim(),
           sourceKind,
@@ -171,12 +193,141 @@ export function BsmContentApprovalManager({
     setTitle("");
     setContextNote("");
     setCustomerProfileId("");
+    setReviewWorkspaceProjectId("");
     setFile(null);
     setGeneratedPagePath("");
     setPreviewUrl("");
     setSourceContentItemId("");
     if (fileRef.current) fileRef.current.value = "";
-    setPhase({ kind: "success", message: "The item is in the customer review library." });
+    setEditingItemId(body.item.id);
+    setEditTitle(body.item.title);
+    setEditContextNote(body.item.contextNote ?? "");
+    setEditFile(null);
+    setPhase({
+      kind: "success",
+      message: body.item.reviewWorkspace
+        ? "The item is attached to the selected Review Workspace. You can edit it before reviewer submission."
+        : "The item is in the customer review library. You can edit it before reviewer submission.",
+    });
+  }
+
+  function beginEdit(item: BsmContentApprovalListItem) {
+    setEditingItemId(item.id);
+    setEditTitle(item.title);
+    setEditContextNote(item.contextNote ?? "");
+    setEditFile(null);
+    setArchiveItemId(null);
+    setPhase({ kind: "idle" });
+  }
+
+  async function saveReviewItemEdit(item: BsmContentApprovalListItem) {
+    if (!editTitle.trim()) {
+      setPhase({ kind: "error", message: "Title is required." });
+      return;
+    }
+    if (!editContextNote.trim()) {
+      setPhase({ kind: "error", message: "Context note is required." });
+      return;
+    }
+    if (editFile && !normalizeApprovalMimeType(editFile.name, editFile.type)) {
+      setPhase({
+        kind: "error",
+        message: "This file type is not supported. Upload a PDF, MD, HTML, image, Word document, or text file.",
+      });
+      return;
+    }
+    if (editFile && editFile.size > MAX_APPROVAL_FILE_BYTES) {
+      setPhase({ kind: "error", message: "The file is too large. Upload a file under 25 MB." });
+      return;
+    }
+
+    setSavingEditItemId(item.id);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch("/api/ops/bsm/content-approvals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemId: item.id,
+          title: editTitle.trim(),
+          contextNote: editContextNote.trim(),
+          ...(editFile
+            ? {
+                fileName: editFile.name,
+                contentType: normalizeApprovalMimeType(editFile.name, editFile.type),
+                byteSize: editFile.size,
+              }
+            : {}),
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as UploadResponse;
+      if (!response.ok || !("item" in body)) {
+        throw new Error("error" in body && body.error ? body.error : "The review item edits could not be saved.");
+      }
+
+      if ("upload" in body && editFile) {
+        const supabase = createClient();
+        const contentType = normalizeApprovalMimeType(editFile.name, editFile.type) ?? editFile.type;
+        const fileBody = await editFile.arrayBuffer();
+        const { error } = await supabase.storage
+          .from(BSM_CONTENT_APPROVALS_BUCKET)
+          .uploadToSignedUrl(body.upload.path, body.upload.token, fileBody, { contentType });
+        if (error) throw new Error(`Upload failed: ${error.message}`);
+      }
+
+      setApprovals((current) => current.map((entry) => (entry.id === item.id ? body.item : entry)));
+      setEditingItemId(null);
+      setEditFile(null);
+      setPhase({ kind: "success", message: "The review item edits were saved as the usable version." });
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The review item edits could not be saved.",
+      });
+    } finally {
+      setSavingEditItemId(null);
+    }
+  }
+
+  async function attachReviewItemToSelectedWorkspace(item: BsmContentApprovalListItem) {
+    const workspace = selectedShopWorkspaces.find((entry) => entry.id === reviewWorkspaceProjectId);
+    if (!workspace) {
+      setPhase({ kind: "error", message: "Choose a Review Workspace before attaching this item." });
+      return;
+    }
+    if (workspace.shopId !== item.shopId) {
+      setPhase({ kind: "error", message: "Choose a Review Workspace for the same shop as this item." });
+      return;
+    }
+
+    setAttachingItemId(item.id);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch("/api/ops/bsm/content-approvals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemId: item.id,
+          title: item.title,
+          contextNote: item.contextNote ?? "Review this content before customer release.",
+          reviewWorkspaceProjectId: workspace.id,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as UploadResponse;
+      if (!response.ok || !("item" in body)) {
+        throw new Error("error" in body && body.error ? body.error : "The review item could not be attached.");
+      }
+
+      setApprovals((current) => current.map((entry) => (entry.id === item.id ? body.item : entry)));
+      setPhase({ kind: "success", message: "The item is attached to the selected Review Workspace." });
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The review item could not be attached.",
+      });
+    } finally {
+      setAttachingItemId(null);
+    }
   }
 
   async function archiveReviewItem(item: BsmContentApprovalListItem) {
@@ -213,7 +364,10 @@ export function BsmContentApprovalManager({
               <select
                 id="bsm-approval-shop"
                 value={shopId}
-                onChange={(event) => setShopId(event.target.value)}
+                onChange={(event) => {
+                  setShopId(event.target.value);
+                  setReviewWorkspaceProjectId("");
+                }}
                 disabled={uploading}
                 className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -243,6 +397,27 @@ export function BsmContentApprovalManager({
               placeholder="Optional reviewer profile"
             />
           </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="bsm-approval-workspace">Review Workspace</Label>
+          <select
+            id="bsm-approval-workspace"
+            value={reviewWorkspaceProjectId}
+            onChange={(event) => setReviewWorkspaceProjectId(event.target.value)}
+            disabled={uploading || selectedShopWorkspaces.length === 0}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">
+              {selectedShopWorkspaces.length === 0
+                ? "No Review Workspaces for this shop"
+                : "Do not attach to a workspace"}
+            </option>
+            {selectedShopWorkspaces.map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>
+                {workspace.title} · {workspace.status.replaceAll("_", " ")} · {workspace.documentCount} documents
+              </option>
+            ))}
+          </select>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="bsm-approval-title">Review title</Label>
@@ -412,6 +587,11 @@ export function BsmContentApprovalManager({
                       <div className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">
                         {item.contextNote}
                       </div>
+                      {item.reviewWorkspace ? (
+                        <div className="mt-2 text-xs font-medium text-ember">
+                          {item.reviewWorkspace.projectTitle ?? "Review Workspace"}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 capitalize text-muted-foreground">
                       {item.status.replaceAll("_", " ")}
@@ -428,12 +608,84 @@ export function BsmContentApprovalManager({
                           ? `${item.latestDecision.decision.replaceAll("_", " ")}`
                           : "No decision yet"}
                       </div>
+                      {item.replyAttachments.length > 0 ? (
+                        <div className="mt-2 space-y-1">
+                          {item.replyAttachments.map((attachment) => (
+                            <a
+                              key={attachment.id}
+                              href={`/api/bsm/content-approvals/attachments/${attachment.id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block font-medium text-ember hover:text-foreground"
+                            >
+                              Open photo: {attachment.originalFilename}
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {formatDate(item.updatedAt)}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {archiveItemId === item.id ? (
+                      {editingItemId === item.id ? (
+                        <div className="min-w-80 space-y-3 text-left">
+                          <div className="space-y-1">
+                            <Label htmlFor={`edit-title-${item.id}`}>Title</Label>
+                            <Input
+                              id={`edit-title-${item.id}`}
+                              value={editTitle}
+                              onChange={(event) => setEditTitle(event.target.value)}
+                              disabled={savingEditItemId === item.id}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor={`edit-note-${item.id}`}>Context note</Label>
+                            <textarea
+                              id={`edit-note-${item.id}`}
+                              value={editContextNote}
+                              onChange={(event) => setEditContextNote(event.target.value)}
+                              disabled={savingEditItemId === item.id}
+                              className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+                          </div>
+                          {item.sourceKind === "uploaded_file" ? (
+                            <div className="space-y-1">
+                              <Label htmlFor={`edit-file-${item.id}`}>Replacement file</Label>
+                              <Input
+                                id={`edit-file-${item.id}`}
+                                type="file"
+                                accept={BSM_CONTENT_APPROVAL_FILE_ACCEPT}
+                                disabled={savingEditItemId === item.id}
+                                onChange={(event) => setEditFile(event.target.files?.[0] ?? null)}
+                              />
+                            </div>
+                          ) : null}
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => saveReviewItemEdit(item)}
+                              disabled={savingEditItemId === item.id}
+                              className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1")}
+                            >
+                              {savingEditItemId === item.id ? (
+                                <RefreshCw className="size-3.5 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <FilePenLine className="size-3.5" aria-hidden="true" />
+                              )}
+                              {savingEditItemId === item.id ? "Saving" : "Save edit"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingItemId(null)}
+                              disabled={savingEditItemId === item.id}
+                              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : archiveItemId === item.id ? (
                         <div className="flex flex-wrap items-center justify-end gap-2">
                           <span className="text-xs text-muted-foreground">Remove from library?</span>
                           <button
@@ -459,17 +711,47 @@ export function BsmContentApprovalManager({
                           </button>
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => setArchiveItemId(item.id)}
-                          disabled={Boolean(archivingItemId)}
-                          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
-                          aria-label={`Remove ${item.title} from the active review library`}
-                          title="Remove from active library"
-                        >
-                          <Trash2 className="size-4" aria-hidden="true" />
-                          Remove
-                        </button>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {!item.reviewWorkspace && reviewWorkspaceProjectId ? (
+                            <button
+                              type="button"
+                              onClick={() => attachReviewItemToSelectedWorkspace(item)}
+                              disabled={Boolean(archivingItemId) || attachingItemId === item.id}
+                              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
+                              aria-label={`Attach ${item.title} to the selected Review Workspace`}
+                              title="Attach to selected Review Workspace"
+                            >
+                              {attachingItemId === item.id ? (
+                                <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Link className="size-4" aria-hidden="true" />
+                              )}
+                              Attach
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => beginEdit(item)}
+                            disabled={Boolean(archivingItemId) || Boolean(attachingItemId)}
+                            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
+                            aria-label={`Edit ${item.title}`}
+                            title="Edit review item"
+                          >
+                            <FilePenLine className="size-4" aria-hidden="true" />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setArchiveItemId(item.id)}
+                            disabled={Boolean(archivingItemId) || Boolean(attachingItemId)}
+                            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
+                            aria-label={`Remove ${item.title} from the active review library`}
+                            title="Remove from active library"
+                          >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                            Remove
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
