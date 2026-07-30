@@ -9,7 +9,6 @@ import {
   type BsmContentApprovalWorkspaceOption,
   normalizeApprovalMimeType,
 } from "@/lib/bsm/content-approvals-shared";
-import { reviewWorkspaceStoragePath } from "@/lib/bsm/review-workspace-processing";
 
 export {
   BSM_CONTENT_APPROVALS_BUCKET,
@@ -204,26 +203,6 @@ export function approvalStoragePath(input: {
   fileName: string;
 }): string {
   return `${input.shopId}/${input.itemId}/${input.versionId}/${input.fileName}`;
-}
-
-function approvalUploadStoragePath(input: {
-  shopId: string;
-  itemId: string;
-  versionId: string;
-  fileName: string;
-  workspaceProjectId?: string | null;
-}): string {
-  if (input.workspaceProjectId) {
-    return reviewWorkspaceStoragePath({
-      shopId: input.shopId,
-      projectId: input.workspaceProjectId,
-      documentId: input.itemId,
-      versionId: input.versionId,
-      artifactKind: "original",
-      fileName: input.fileName,
-    });
-  }
-  return approvalStoragePath(input);
 }
 
 function resolveStorage(deps: { storage?: ContentApprovalStorage }) {
@@ -450,12 +429,11 @@ export async function createBsmContentApprovalUpload(
     shopId,
     actorProfileId,
   });
-  const path = approvalUploadStoragePath({
+  const path = approvalStoragePath({
     shopId,
     itemId,
     versionId,
     fileName,
-    workspaceProjectId: workspace?.projectId ?? null,
   });
   const position = workspace ? await nextWorkspaceDocumentPosition(client, workspace.projectId) : null;
 
@@ -493,8 +471,8 @@ export async function createBsmContentApprovalUpload(
       preview_type: file.contentType === "image" ? "image" : "file",
       project_id: workspace?.projectId ?? null,
       round_id: workspace?.roundId ?? null,
-      original_storage_bucket: workspace ? BSM_CONTENT_APPROVALS_BUCKET : null,
-      original_storage_path: workspace ? path : null,
+      original_storage_bucket: null,
+      original_storage_path: null,
       processed_storage_bucket: null,
       processed_storage_path: null,
       processed_content_type: null,
@@ -761,12 +739,11 @@ export async function updateBsmContentApproval(
     const fileName = normalizeApprovalFileName(input.fileName);
     const file = validateApprovalFile(input.contentType, input.byteSize, fileName);
     versionId = randomUUID();
-    const path = approvalUploadStoragePath({
+    const path = approvalStoragePath({
       shopId,
       itemId,
       versionId,
       fileName,
-      workspaceProjectId: workspace?.projectId ?? null,
     });
 
     const { data: existingVersions, error: versionReadError } = await client
@@ -795,8 +772,8 @@ export async function updateBsmContentApproval(
       content_type: file.mimeType,
       byte_size: input.byteSize,
       preview_type: file.contentType === "image" ? "image" : "file",
-      original_storage_bucket: workspace ? BSM_CONTENT_APPROVALS_BUCKET : null,
-      original_storage_path: workspace ? path : null,
+      original_storage_bucket: null,
+      original_storage_path: null,
       processed_storage_bucket: null,
       processed_storage_path: null,
       processed_content_type: null,
