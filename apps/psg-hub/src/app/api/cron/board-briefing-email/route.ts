@@ -53,8 +53,11 @@ async function handle(request: Request): Promise<NextResponse> {
   try {
     row = await claimBoardBriefingOutbox(service, { claimToken });
     if (!row) {
-      console.error("[board-briefing-email] no unsent briefing row available");
-      return NextResponse.json({ error: "no_board_briefing_ready" }, { status: 503 });
+      return NextResponse.json({
+        ok: true,
+        sent: false,
+        reason: "no_board_briefing_ready",
+      });
     }
   } catch (error) {
     console.error("[board-briefing-email] outbox claim failed:", error);

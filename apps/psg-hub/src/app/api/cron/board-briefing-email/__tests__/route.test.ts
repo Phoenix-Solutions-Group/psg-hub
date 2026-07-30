@@ -70,13 +70,17 @@ describe("GET /api/cron/board-briefing-email auth", () => {
 });
 
 describe("GET /api/cron/board-briefing-email delivery", () => {
-  it("returns 503 when no staged briefing is ready and never sends a blank email", async () => {
+  it("returns a successful no-op when no staged briefing is ready and never sends a blank email", async () => {
     claimBoardBriefingOutbox.mockResolvedValue(null);
 
     const res = await GET(req("Bearer cron-secret"));
 
-    expect(res.status).toBe(503);
-    expect(await res.json()).toEqual({ error: "no_board_briefing_ready" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      sent: false,
+      reason: "no_board_briefing_ready",
+    });
     expect(sendEmail).not.toHaveBeenCalled();
     expect(markBoardBriefingOutboxSent).not.toHaveBeenCalled();
   });
