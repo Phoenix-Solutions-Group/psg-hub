@@ -91,6 +91,16 @@ export type UpdateBsmContentApprovalResult = {
   };
 };
 
+export type AttachBsmContentApprovalToWorkspaceInput = {
+  itemId: string;
+  reviewWorkspaceProjectId: string;
+  actorProfileId: string;
+};
+
+export type AttachBsmContentApprovalToWorkspaceResult = {
+  item: BsmContentApprovalListItem;
+};
+
 export type ArchivedContentApprovalResult = {
   id: string;
   shopId: string;
@@ -324,6 +334,26 @@ async function addReviewersForItem(
   },
 ): Promise<void> {
   const reviewerRows: Array<Record<string, unknown>> = [];
+  let existingReviewerKeys = new Set<string>();
+
+  if (input.workspace) {
+    const { data: existingReviewers, error: existingReviewerError } = await client
+      .from("bsm_content_review_reviewers")
+      .select("profile_id, reviewer_email, invitation_id")
+      .eq("review_item_id", input.itemId)
+      .is("removed_at", null);
+    if (existingReviewerError) throw new Error(`Could not load existing reviewers: ${existingReviewerError.message}`);
+
+    existingReviewerKeys = new Set(
+      ((existingReviewers ?? []) as Array<Record<string, unknown>>).map((row) => {
+        const profileId = row.profile_id as string | null;
+        if (profileId) return `profile:${profileId}`;
+        const invitationId = row.invitation_id as string | null;
+        if (invitationId) return `invitation:${invitationId}`;
+        return `email:${((row.reviewer_email as string | null) ?? "").toLowerCase()}`;
+      }),
+    );
+  }
 
   if (input.workspace) {
     const { data: invitations, error: invitationError } = await client
@@ -363,9 +393,25 @@ async function addReviewersForItem(
   }
 
   const dedupedReviewerRows = reviewerRows.filter((row, index, rows) => {
-    if (!row.profile_id) return true;
-    return rows.findIndex((candidate) => candidate.profile_id === row.profile_id) === index;
+    const profileId = row.profile_id as string | null;
+    const invitationId = row.invitation_id as string | null;
+    const email = ((row.reviewer_email as string | null) ?? "").toLowerCase();
+    const key = profileId ? `profile:${profileId}` : invitationId ? `invitation:${invitationId}` : `email:${email}`;
+    if (existingReviewerKeys.has(key)) return false;
+    return rows.findIndex((candidate) => {
+      const candidateProfileId = candidate.profile_id as string | null;
+      const candidateInvitationId = candidate.invitation_id as string | null;
+      const candidateEmail = ((candidate.reviewer_email as string | null) ?? "").toLowerCase();
+      const candidateKey = candidateProfileId
+        ? `profile:${candidateProfileId}`
+        : candidateInvitationId
+          ? `invitation:${candidateInvitationId}`
+          : `email:${candidateEmail}`;
+      return candidateKey === key;
+    }) === index;
   });
+
+  if (dedupedReviewerRows.length === 0) return;
 
   const { error: reviewerError } = await client
     .from("bsm_content_review_reviewers")
@@ -892,6 +938,108 @@ export async function updateBsmContentApproval(
       workspace: workspace ? { projectId: workspace.projectId, title: workspace.title, roundId: workspace.roundId } : null,
     }),
     upload,
+  };
+}
+
+export async function attachBsmContentApprovalToWorkspace(
+  input: AttachBsmContentApprovalToWorkspaceInput,
+  deps: { client?: SupabaseClient } = {},
+): Promise<AttachBsmContentApprovalToWorkspaceResult> {
+  const itemId = assertUuid("itemId", input.itemId);
+  const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
+  const reviewWorkspaceProjectId = cleanOptionalUuid("reviewWorkspaceProjectId", input.reviewWorkspaceProjectId);
+  if (!reviewWorkspaceProjectId) {
+    throw new ApprovalUploadInputError("Choose a Review Workspace before attaching this item");
+  }
+
+  const client = deps.client ?? createServiceClient();
+  const { data: item, error: itemReadError } = await client
+    .from("bsm_content_review_items")
+    .select("id, shop_id, customer_profile_id, title, status, content_type, admin_context_note, project_id, current_version_id")
+    .eq("id", itemId)
+    .single();
+  if (itemReadError || !item) throw new ApprovalUploadInputError("Review item not found");
+
+  const row = item as Record<string, unknown>;
+  const shopId = assertUuid("shopId", row.shop_id);
+  const customerProfileId = (row.customer_profile_id as string | null) ?? null;
+  const versionId = assertUuid("currentVersionId", row.current_version_id);
+  const workspace = await loadReviewWorkspaceForAttachment(client, {
+    projectId: reviewWorkspaceProjectId,
+    shopId,
+    actorProfileId,
+  });
+  if (!workspace) throw new ApprovalUploadInputError("Choose a Review Workspace before attaching this item");
+
+  const { data: currentVersion, error: versionReadError } = await client
+    .from("bsm_content_review_versions")
+    .select("id, original_filename, content_type, byte_size, storage_path, preview_type, source_metadata_jsonb")
+    .eq("id", versionId)
+    .maybeSingle();
+  if (versionReadError || !currentVersion) throw new ApprovalUploadInputError("Review item version not found");
+  const version = currentVersion as Record<string, unknown>;
+  const position = await nextWorkspaceDocumentPosition(client, workspace.projectId);
+  const updatedAt = new Date().toISOString();
+
+  const { error: itemUpdateError } = await client
+    .from("bsm_content_review_items")
+    .update({
+      project_id: workspace.projectId,
+      position,
+      required: true,
+      status: "in_review",
+      processing_status: "ready",
+      metadata_jsonb: { reviewWorkspaceProjectId: workspace.projectId },
+      updated_at: updatedAt,
+    })
+    .eq("id", itemId);
+  if (itemUpdateError) throw new Error(`Could not attach review item to Review Workspace: ${itemUpdateError.message}`);
+
+  const { error: versionUpdateError } = await client
+    .from("bsm_content_review_versions")
+    .update({
+      project_id: workspace.projectId,
+      round_id: workspace.roundId,
+      introduced_by_round_id: workspace.roundId,
+    })
+    .eq("id", versionId);
+  if (versionUpdateError) throw new Error(`Could not attach review version to Review Workspace: ${versionUpdateError.message}`);
+
+  await addReviewersForItem(client, {
+    itemId,
+    shopId,
+    customerProfileId,
+    workspace: { projectId: workspace.projectId, roundId: workspace.roundId },
+  });
+
+  await attachItemToCurrentWorkspaceRound(client, {
+    workspace,
+    shopId,
+    itemId,
+    versionId,
+    actorProfileId,
+  });
+
+  return {
+    item: toListItem({
+      itemId,
+      shopId,
+      customerProfileId,
+      title: row.title as string,
+      status: "in_review",
+      contentType: row.content_type as string,
+      sourceKind: row.content_type === "generated_page" ? "generated_page" : "uploaded_file",
+      contextNote: (row.admin_context_note as string | null) ?? null,
+      updatedAt,
+      versionId,
+      fileName: (version.original_filename as string | null) ?? null,
+      mimeType: (version.content_type as string | null) ?? "text/plain",
+      byteSize: (version.byte_size as number | null) ?? 1,
+      storagePath: (version.storage_path as string | null) ?? null,
+      previewType: (version.preview_type as string | null) ?? "file",
+      sourceMetadata: (version.source_metadata_jsonb as Record<string, unknown> | null) ?? {},
+      workspace: { projectId: workspace.projectId, title: workspace.title, roundId: workspace.roundId },
+    }),
   };
 }
 

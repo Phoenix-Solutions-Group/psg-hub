@@ -3,6 +3,7 @@ import {
   ApprovalUploadInputError,
   BSM_CONTENT_APPROVALS_BUCKET,
   archiveBsmContentApproval,
+  attachBsmContentApprovalToWorkspace,
   approvalStoragePath,
   createBsmGeneratedPageApproval,
   createBsmContentApprovalUpload,
@@ -133,7 +134,10 @@ class ChainDelete {
 class ChainSelect {
   private filters: Record<string, unknown> = {};
 
-  constructor(private table: string) {}
+  constructor(
+    private table: string,
+    private options: { existingItemProjectId?: string | null; existingReviewers?: Array<Record<string, unknown>> } = {},
+  ) {}
 
   eq(column: string, value: unknown) {
     this.filters[column] = value;
@@ -189,6 +193,9 @@ class ChainSelect {
         error: null,
       });
     }
+    if (this.table === "bsm_content_review_reviewers") {
+      return Promise.resolve({ data: this.options.existingReviewers ?? [], error: null });
+    }
     return Promise.resolve({ data: null, error: null });
   }
 
@@ -202,7 +209,7 @@ class ChainSelect {
           title: "Old proof",
           status: "in_review",
           content_type: "pdf",
-          project_id: PROJECT_ID,
+          project_id: this.options.existingItemProjectId ?? PROJECT_ID,
           current_version_id: VERSION_ID,
         },
         error: null,
@@ -231,11 +238,18 @@ class ChainSelect {
         error: null,
       }).then(resolve);
     }
+    if (this.table === "bsm_content_review_reviewers") {
+      return Promise.resolve({ data: this.options.existingReviewers ?? [], error: null }).then(resolve);
+    }
     return Promise.resolve({ data: [], error: null }).then(resolve);
   }
 }
 
-function createWorkspaceFakeClient(options: { insertErrorsByTable?: Record<string, string> } = {}) {
+function createWorkspaceFakeClient(options: {
+  insertErrorsByTable?: Record<string, string>;
+  existingItemProjectId?: string | null;
+  existingReviewers?: Array<Record<string, unknown>>;
+} = {}) {
   const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const updates: Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }> = [];
   const deletes: Array<{ table: string; filters: Record<string, unknown> }> = [];
@@ -243,7 +257,7 @@ function createWorkspaceFakeClient(options: { insertErrorsByTable?: Record<strin
     from(table: string) {
       return {
         select() {
-          return new ChainSelect(table);
+          return new ChainSelect(table, options);
         },
         insert(payload: Record<string, unknown>) {
           inserts.push({ table, payload });
@@ -636,5 +650,56 @@ describe("BSM content approval upload helpers", () => {
       processing_status: "ready",
     });
     expect(inserts.map((entry) => entry.table)).not.toContain("bsm_content_review_invitations");
+  });
+
+  it("attaches an existing uploaded library item to the selected Review Workspace round", async () => {
+    const { client, inserts, updates } = createWorkspaceFakeClient({
+      existingItemProjectId: null,
+      existingReviewers: [
+        {
+          profile_id: PROFILE_ID,
+          reviewer_email: null,
+          invitation_id: null,
+        },
+      ],
+    });
+
+    const result = await attachBsmContentApprovalToWorkspace(
+      {
+        itemId: ITEM_ID,
+        reviewWorkspaceProjectId: PROJECT_ID,
+        actorProfileId: ACTOR_ID,
+      },
+      { client: client as never },
+    );
+
+    expect(result.item.reviewWorkspace).toMatchObject({
+      projectId: PROJECT_ID,
+      roundId: ROUND_ID,
+      projectTitle: "July customer review",
+    });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_items")?.payload).toMatchObject({
+      project_id: PROJECT_ID,
+      status: "in_review",
+      processing_status: "ready",
+      position: 3,
+    });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_versions")?.payload).toMatchObject({
+      project_id: PROJECT_ID,
+      round_id: ROUND_ID,
+      introduced_by_round_id: ROUND_ID,
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_round_documents")?.payload).toMatchObject({
+      project_id: PROJECT_ID,
+      round_id: ROUND_ID,
+      review_item_id: ITEM_ID,
+      version_id: VERSION_ID,
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_reviewers")).toBeUndefined();
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_events")?.payload).toMatchObject({
+      review_item_id: ITEM_ID,
+      version_id: VERSION_ID,
+      event_type: "review_workspace_document_attached",
+    });
   });
 });

@@ -41,20 +41,26 @@ export function BsmContentApprovalManager({
   workspaces = [],
   shops,
   activeShopId,
+  activeWorkspaceProjectId,
 }: {
   initialApprovals: BsmContentApprovalListItem[];
   workspaces?: BsmContentApprovalWorkspaceOption[];
   shops?: BsmContentApprovalShopOption[];
   activeShopId?: string | null;
+  activeWorkspaceProjectId?: string | null;
 }) {
   const [approvals, setApprovals] = useState(initialApprovals);
   const orderedShops = shops ?? [];
-  const initialShopId = orderedShops.some((shop) => shop.id === activeShopId)
-    ? activeShopId ?? ""
+  const initialWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceProjectId);
+  const requestedShopId = initialWorkspace?.shopId ?? activeShopId;
+  const initialShopId = orderedShops.some((shop) => shop.id === requestedShopId)
+    ? requestedShopId ?? ""
     : orderedShops[0]?.id ?? "";
   const [shopId, setShopId] = useState(initialShopId);
   const [customerProfileId, setCustomerProfileId] = useState("");
-  const [reviewWorkspaceProjectId, setReviewWorkspaceProjectId] = useState("");
+  const [reviewWorkspaceProjectId, setReviewWorkspaceProjectId] = useState(
+    initialWorkspace && initialWorkspace.shopId === initialShopId ? initialWorkspace.id : "",
+  );
   const [title, setTitle] = useState("");
   const [contextNote, setContextNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -70,6 +76,7 @@ export function BsmContentApprovalManager({
   const [editContextNote, setEditContextNote] = useState("");
   const [editFile, setEditFile] = useState<File | null>(null);
   const [savingEditItemId, setSavingEditItemId] = useState<string | null>(null);
+  const [attachingItemId, setAttachingItemId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const selectedShopWorkspaces = useMemo(
@@ -279,6 +286,47 @@ export function BsmContentApprovalManager({
       });
     } finally {
       setSavingEditItemId(null);
+    }
+  }
+
+  async function attachReviewItemToSelectedWorkspace(item: BsmContentApprovalListItem) {
+    const workspace = selectedShopWorkspaces.find((entry) => entry.id === reviewWorkspaceProjectId);
+    if (!workspace) {
+      setPhase({ kind: "error", message: "Choose a Review Workspace before attaching this item." });
+      return;
+    }
+    if (workspace.shopId !== item.shopId) {
+      setPhase({ kind: "error", message: "Choose a Review Workspace for the same shop as this item." });
+      return;
+    }
+
+    setAttachingItemId(item.id);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch("/api/ops/bsm/content-approvals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemId: item.id,
+          title: item.title,
+          contextNote: item.contextNote ?? "Review this content before customer release.",
+          reviewWorkspaceProjectId: workspace.id,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as UploadResponse;
+      if (!response.ok || !("item" in body)) {
+        throw new Error("error" in body && body.error ? body.error : "The review item could not be attached.");
+      }
+
+      setApprovals((current) => current.map((entry) => (entry.id === item.id ? body.item : entry)));
+      setPhase({ kind: "success", message: "The item is attached to the selected Review Workspace." });
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The review item could not be attached.",
+      });
+    } finally {
+      setAttachingItemId(null);
     }
   }
 
@@ -664,10 +712,27 @@ export function BsmContentApprovalManager({
                         </div>
                       ) : (
                         <div className="flex flex-wrap items-center justify-end gap-2">
+                          {!item.reviewWorkspace && reviewWorkspaceProjectId ? (
+                            <button
+                              type="button"
+                              onClick={() => attachReviewItemToSelectedWorkspace(item)}
+                              disabled={Boolean(archivingItemId) || attachingItemId === item.id}
+                              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
+                              aria-label={`Attach ${item.title} to the selected Review Workspace`}
+                              title="Attach to selected Review Workspace"
+                            >
+                              {attachingItemId === item.id ? (
+                                <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Link className="size-4" aria-hidden="true" />
+                              )}
+                              Attach
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => beginEdit(item)}
-                            disabled={Boolean(archivingItemId)}
+                            disabled={Boolean(archivingItemId) || Boolean(attachingItemId)}
                             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
                             aria-label={`Edit ${item.title}`}
                             title="Edit review item"
@@ -678,7 +743,7 @@ export function BsmContentApprovalManager({
                           <button
                             type="button"
                             onClick={() => setArchiveItemId(item.id)}
-                            disabled={Boolean(archivingItemId)}
+                            disabled={Boolean(archivingItemId) || Boolean(attachingItemId)}
                             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
                             aria-label={`Remove ${item.title} from the active review library`}
                             title="Remove from active library"

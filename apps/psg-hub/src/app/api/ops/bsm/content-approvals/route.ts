@@ -5,6 +5,7 @@ import { recordAuditEvent } from "@/lib/audit/access-audit";
 import { requireOpsFn } from "@/lib/auth/ops-access";
 import {
   ApprovalUploadInputError,
+  attachBsmContentApprovalToWorkspace,
   archiveBsmContentApproval,
   createBsmGeneratedPageApproval,
   createBsmContentApprovalUpload,
@@ -151,23 +152,33 @@ export async function PATCH(request: Request): Promise<Response> {
       byteSize: payload.byteSize as number | null | undefined,
       actorProfileId: gate.userId,
     });
+    const attachedResult = payload.reviewWorkspaceProjectId
+      ? await attachBsmContentApprovalToWorkspace({
+          itemId: result.item.id,
+          reviewWorkspaceProjectId: payload.reviewWorkspaceProjectId as string,
+          actorProfileId: gate.userId,
+        })
+      : null;
+    const responseResult = attachedResult
+      ? { item: attachedResult.item, ...(result.upload ? { upload: result.upload } : {}) }
+      : result;
 
     await recordAuditEvent({
       actorProfileId: gate.userId,
       action: "bsm_content_approval.update",
-      targetShopId: result.item.shopId,
-      targetProfileId: result.item.customerProfileId,
+      targetShopId: responseResult.item.shopId,
+      targetProfileId: responseResult.item.customerProfileId,
       payload: {
-        reviewItemId: result.item.id,
+        reviewItemId: responseResult.item.id,
         storagePath: result.upload?.path ?? null,
-        title: result.item.title,
-        status: result.item.status,
-        reviewWorkspaceProjectId: result.item.reviewWorkspace?.projectId ?? null,
-        reviewWorkspaceRoundId: result.item.reviewWorkspace?.roundId ?? null,
+        title: responseResult.item.title,
+        status: responseResult.item.status,
+        reviewWorkspaceProjectId: responseResult.item.reviewWorkspace?.projectId ?? null,
+        reviewWorkspaceRoundId: responseResult.item.reviewWorkspace?.roundId ?? null,
       },
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(responseResult);
   } catch (error) {
     if (error instanceof ApprovalUploadInputError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
