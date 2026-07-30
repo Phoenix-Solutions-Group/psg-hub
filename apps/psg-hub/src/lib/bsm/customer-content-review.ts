@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
+import { BSM_CONTENT_APPROVALS_BUCKET } from "@/lib/bsm/content-approvals-shared";
 
 const DECISION_STATUS: Record<"approve" | "decline" | "request_updates", string> = {
   approve: "approved",
@@ -21,6 +22,7 @@ export type BsmCustomerReviewItem = {
     id: string;
     versionNumber: number;
     originalFilename: string | null;
+    contentType: string | null;
     storagePath: string | null;
     previewType: string | null;
     sourceMetadata: Record<string, unknown>;
@@ -31,6 +33,15 @@ export type BsmCustomerReviewItem = {
   versions: Array<{ id: string; versionNumber: number; label: string | null; createdAt: string }>;
   restoreRequests: Array<{ id: string; requestedVersionId: string; reason: string; status: string; createdAt: string }>;
 };
+
+export type BsmReviewAttachmentDownload = {
+  data: Blob;
+  originalFilename: string;
+  contentType: string;
+  byteSize: number;
+};
+
+export type BsmReviewFileDownload = BsmReviewAttachmentDownload;
 
 export class BsmCustomerReviewError extends Error {
   status: number;
@@ -92,7 +103,7 @@ export async function getBsmCustomerReviewItem(
   const [{ data: versions }, { data: comments }, { data: decisions }, { data: restoreRequests }] = await Promise.all([
     service
       .from("bsm_content_review_versions")
-      .select("id, version_number, original_filename, storage_path, preview_type, source_metadata_jsonb, created_at")
+      .select("id, version_number, original_filename, content_type, storage_path, preview_type, source_metadata_jsonb, created_at")
       .eq("review_item_id", itemId)
       .order("version_number", { ascending: false }),
     service
@@ -131,6 +142,7 @@ export async function getBsmCustomerReviewItem(
           id: currentVersion.id as string,
           versionNumber: currentVersion.version_number as number,
           originalFilename: (currentVersion.original_filename as string | null) ?? null,
+          contentType: (currentVersion.content_type as string | null) ?? null,
           storagePath: (currentVersion.storage_path as string | null) ?? null,
           previewType: (currentVersion.preview_type as string | null) ?? null,
           sourceMetadata: (currentVersion.source_metadata_jsonb as Record<string, unknown> | null) ?? {},
@@ -188,6 +200,44 @@ export async function addBsmCustomerReviewComment(
     .single();
   if (error) throw new BsmCustomerReviewError(500, error.message);
   return data;
+}
+
+export async function getBsmReviewCurrentFileDownload(
+  client: SupabaseClient,
+  reviewItemId: string,
+  userId: string,
+): Promise<BsmReviewFileDownload> {
+  const { item } = await requireCustomerAccess(client, reviewItemId, userId);
+  const currentVersionId = item.current_version_id as string | null;
+  if (!currentVersionId) throw new BsmCustomerReviewError(404, "No current file");
+
+  const service = createServiceClient();
+  const { data: version, error } = await service
+    .from("bsm_content_review_versions")
+    .select("id, original_filename, content_type, byte_size, storage_bucket, storage_path")
+    .eq("id", currentVersionId)
+    .eq("review_item_id", item.id as string)
+    .maybeSingle();
+
+  if (error) throw new BsmCustomerReviewError(500, error.message);
+  if (!version) throw new BsmCustomerReviewError(404, "Current file not found");
+
+  const row = version as Record<string, unknown>;
+  if (row.storage_bucket !== BSM_CONTENT_APPROVALS_BUCKET || typeof row.storage_path !== "string") {
+    throw new BsmCustomerReviewError(404, "Current file not found");
+  }
+
+  const { data, error: downloadError } = await service.storage
+    .from(BSM_CONTENT_APPROVALS_BUCKET)
+    .download(row.storage_path);
+  if (downloadError || !data) throw new BsmCustomerReviewError(404, "Current file not found");
+
+  return {
+    data,
+    originalFilename: (row.original_filename as string | null) ?? "review-file",
+    contentType: (row.content_type as string | null) ?? "application/octet-stream",
+    byteSize: (row.byte_size as number | null) ?? data.size,
+  };
 }
 
 export async function recordBsmCustomerReviewDecision(
