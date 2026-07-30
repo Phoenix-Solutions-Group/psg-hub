@@ -230,6 +230,10 @@ function resolveStorage(deps: { storage?: ContentApprovalStorage }) {
   return deps.storage ?? (createServiceClient().storage as unknown as ContentApprovalStorage);
 }
 
+async function cleanupReviewItemAfterFailedUploadSetup(client: SupabaseClient, itemId: string) {
+  await client.from("bsm_content_review_items").delete().eq("id", itemId);
+}
+
 async function loadReviewWorkspaceForAttachment(
   client: SupabaseClient,
   input: { projectId: string | null; shopId: string; actorProfileId: string },
@@ -473,72 +477,79 @@ export async function createBsmContentApprovalUpload(
   });
   if (itemError) throw new Error(`Could not create review item: ${itemError.message}`);
 
-  const { error: versionError } = await client.from("bsm_content_review_versions").insert({
-    id: versionId,
-    review_item_id: itemId,
-    shop_id: shopId,
-    version_number: 1,
-    status: "current",
-    storage_bucket: BSM_CONTENT_APPROVALS_BUCKET,
-    storage_path: path,
-    original_filename: fileName,
-    content_type: file.mimeType,
-    byte_size: input.byteSize,
-    preview_type: file.contentType === "image" ? "image" : "file",
-    project_id: workspace?.projectId ?? null,
-    round_id: workspace?.roundId ?? null,
-    original_storage_bucket: workspace ? BSM_CONTENT_APPROVALS_BUCKET : null,
-    original_storage_path: workspace ? path : null,
-    processed_storage_bucket: null,
-    processed_storage_path: null,
-    processed_content_type: null,
-    scan_status: "clean",
-    conversion_status: "not_needed",
-    sanitization_status: "not_needed",
-    introduced_by_round_id: workspace?.roundId ?? null,
-    created_by_profile_id: actorProfileId,
-  });
-  if (versionError) throw new Error(`Could not create review version: ${versionError.message}`);
-
-  const { error: updateError } = await client
-    .from("bsm_content_review_items")
-    .update({ current_version_id: versionId, updated_at: new Date().toISOString() })
-    .eq("id", itemId);
-  if (updateError) throw new Error(`Could not link current version: ${updateError.message}`);
-
-  await addReviewersForItem(client, {
-    itemId,
-    shopId,
-    customerProfileId,
-    workspace: workspace ? { projectId: workspace.projectId, roundId: workspace.roundId } : null,
-  });
-
-  if (workspace) {
-    await attachItemToCurrentWorkspaceRound(client, {
-      workspace,
-      shopId,
-      itemId,
-      versionId,
-      actorProfileId,
+  let data: { signedUrl: string; token: string; path: string } | null = null;
+  try {
+    const { error: versionError } = await client.from("bsm_content_review_versions").insert({
+      id: versionId,
+      review_item_id: itemId,
+      shop_id: shopId,
+      version_number: 1,
+      status: "current",
+      storage_bucket: BSM_CONTENT_APPROVALS_BUCKET,
+      storage_path: path,
+      original_filename: fileName,
+      content_type: file.mimeType,
+      byte_size: input.byteSize,
+      preview_type: file.contentType === "image" ? "image" : "file",
+      project_id: workspace?.projectId ?? null,
+      round_id: workspace?.roundId ?? null,
+      original_storage_bucket: workspace ? BSM_CONTENT_APPROVALS_BUCKET : null,
+      original_storage_path: workspace ? path : null,
+      processed_storage_bucket: null,
+      processed_storage_path: null,
+      processed_content_type: null,
+      scan_status: "clean",
+      conversion_status: "not_needed",
+      sanitization_status: "not_needed",
+      introduced_by_round_id: workspace?.roundId ?? null,
+      created_by_profile_id: actorProfileId,
     });
-  }
+    if (versionError) throw new Error(`Could not create review version: ${versionError.message}`);
 
-  const { error: eventError } = await client.from("bsm_content_review_events").insert({
-    shop_id: shopId,
-    review_item_id: itemId,
-    version_id: versionId,
-    event_type: "review_item_created",
-    actor_profile_id: actorProfileId,
-    payload_jsonb: { title, storagePath: path, originalFilename: fileName },
-  });
-  if (eventError) throw new Error(`Could not record review event: ${eventError.message}`);
+    const { error: updateError } = await client
+      .from("bsm_content_review_items")
+      .update({ current_version_id: versionId, updated_at: new Date().toISOString() })
+      .eq("id", itemId);
+    if (updateError) throw new Error(`Could not link current version: ${updateError.message}`);
 
-  const storage = resolveStorage(deps);
-  const { data, error: uploadError } = await storage
-    .from(BSM_CONTENT_APPROVALS_BUCKET)
-    .createSignedUploadUrl(path);
-  if (uploadError || !data) {
-    throw new Error(`Could not start upload: ${uploadError?.message ?? "no upload URL returned"}`);
+    await addReviewersForItem(client, {
+      itemId,
+      shopId,
+      customerProfileId,
+      workspace: workspace ? { projectId: workspace.projectId, roundId: workspace.roundId } : null,
+    });
+
+    if (workspace) {
+      await attachItemToCurrentWorkspaceRound(client, {
+        workspace,
+        shopId,
+        itemId,
+        versionId,
+        actorProfileId,
+      });
+    }
+
+    const { error: eventError } = await client.from("bsm_content_review_events").insert({
+      shop_id: shopId,
+      review_item_id: itemId,
+      version_id: versionId,
+      event_type: "review_item_created",
+      actor_profile_id: actorProfileId,
+      payload_jsonb: { title, storagePath: path, originalFilename: fileName },
+    });
+    if (eventError) throw new Error(`Could not record review event: ${eventError.message}`);
+
+    const storage = resolveStorage(deps);
+    const uploadResult = await storage
+      .from(BSM_CONTENT_APPROVALS_BUCKET)
+      .createSignedUploadUrl(path);
+    data = uploadResult.data;
+    if (uploadResult.error || !data) {
+      throw new Error(`Could not start upload: ${uploadResult.error?.message ?? "no upload URL returned"}`);
+    }
+  } catch (error) {
+    await cleanupReviewItemAfterFailedUploadSetup(client, itemId);
+    throw error;
   }
 
   return {

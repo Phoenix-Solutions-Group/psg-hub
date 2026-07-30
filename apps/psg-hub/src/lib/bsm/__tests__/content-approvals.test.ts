@@ -22,6 +22,7 @@ const VERSION_ID = "77777777-7777-4777-8777-777777777777";
 function createFakeClient() {
   const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const updates: Array<{ table: string; payload: Record<string, unknown>; id: string }> = [];
+  const deletes: Array<{ table: string; filters: Record<string, unknown> }> = [];
   const client = {
     from(table: string) {
       return {
@@ -38,10 +39,18 @@ function createFakeClient() {
             },
           };
         },
+        delete() {
+          return {
+            eq(column: string, id: string) {
+              deletes.push({ table, filters: { [column]: id } });
+              return Promise.resolve({ error: null });
+            },
+          };
+        },
       };
     },
   };
-  return { client, inserts, updates };
+  return { client, inserts, updates, deletes };
 }
 
 function createArchiveFakeClient(item: Record<string, unknown>) {
@@ -98,6 +107,25 @@ class ChainUpdate {
 
   then(resolve: (value: { error: null }) => unknown) {
     this.updates.push({ table: this.table, payload: this.payload, filters: { ...this.filters } });
+    return Promise.resolve({ error: null }).then(resolve);
+  }
+}
+
+class ChainDelete {
+  private filters: Record<string, unknown> = {};
+
+  constructor(
+    private table: string,
+    private deletes: Array<{ table: string; filters: Record<string, unknown> }>,
+  ) {}
+
+  eq(column: string, value: unknown) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  then(resolve: (value: { error: null }) => unknown) {
+    this.deletes.push({ table: this.table, filters: { ...this.filters } });
     return Promise.resolve({ error: null }).then(resolve);
   }
 }
@@ -207,9 +235,10 @@ class ChainSelect {
   }
 }
 
-function createWorkspaceFakeClient() {
+function createWorkspaceFakeClient(options: { insertErrorsByTable?: Record<string, string> } = {}) {
   const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const updates: Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }> = [];
+  const deletes: Array<{ table: string; filters: Record<string, unknown> }> = [];
   const client = {
     from(table: string) {
       return {
@@ -218,15 +247,20 @@ function createWorkspaceFakeClient() {
         },
         insert(payload: Record<string, unknown>) {
           inserts.push({ table, payload });
+          const message = options.insertErrorsByTable?.[table];
+          if (message) return Promise.resolve({ error: { message } });
           return Promise.resolve({ error: null });
         },
         update(payload: Record<string, unknown>) {
           return new ChainUpdate(table, payload, updates);
         },
+        delete() {
+          return new ChainDelete(table, deletes);
+        },
       };
     },
   };
-  return { client, inserts, updates };
+  return { client, inserts, updates, deletes };
 }
 
 describe("BSM content approval upload helpers", () => {
@@ -384,6 +418,77 @@ describe("BSM content approval upload helpers", () => {
     expect(result.upload.path).toBe(expectedPath);
     expect(result.item.currentVersion?.storagePath).toBe(expectedPath);
     expect(createSignedUploadUrl).toHaveBeenCalledOnce();
+  });
+
+  it("removes the draft review item if browser upload setup fails", async () => {
+    const { client, inserts, deletes } = createWorkspaceFakeClient();
+    const createSignedUploadUrl = vi.fn(async () => ({
+      data: null,
+      error: { message: "storage check rejected path" },
+    }));
+    const storage = {
+      from: vi.fn(() => ({ createSignedUploadUrl })),
+    };
+
+    await expect(
+      createBsmContentApprovalUpload(
+        {
+          shopId: SHOP_ID,
+          customerProfileId: PROFILE_ID,
+          reviewWorkspaceProjectId: PROJECT_ID,
+          actorProfileId: ACTOR_ID,
+          title: "July homepage proof",
+          contextNote: "Please confirm the offer and phone number.",
+          fileName: "proof.pdf",
+          contentType: "application/pdf",
+          byteSize: 2048,
+        },
+        { client: client as never, storage },
+      ),
+    ).rejects.toThrow("Could not start upload");
+
+    const item = inserts.find((entry) => entry.table === "bsm_content_review_items")?.payload;
+    expect(item?.current_version_id).toBeUndefined();
+    expect(deletes).toContainEqual({
+      table: "bsm_content_review_items",
+      filters: { id: item?.id },
+    });
+  });
+
+  it("removes the draft review item if the version insert fails", async () => {
+    const { client, inserts, deletes } = createWorkspaceFakeClient({
+      insertErrorsByTable: {
+        bsm_content_review_versions: "storage path violates check constraint",
+      },
+    });
+    const createSignedUploadUrl = vi.fn();
+    const storage = {
+      from: vi.fn(() => ({ createSignedUploadUrl })),
+    };
+
+    await expect(
+      createBsmContentApprovalUpload(
+        {
+          shopId: SHOP_ID,
+          customerProfileId: PROFILE_ID,
+          reviewWorkspaceProjectId: PROJECT_ID,
+          actorProfileId: ACTOR_ID,
+          title: "July homepage proof",
+          contextNote: "Please confirm the offer and phone number.",
+          fileName: "proof.pdf",
+          contentType: "application/pdf",
+          byteSize: 2048,
+        },
+        { client: client as never, storage },
+      ),
+    ).rejects.toThrow("Could not create review version");
+
+    const item = inserts.find((entry) => entry.table === "bsm_content_review_items")?.payload;
+    expect(createSignedUploadUrl).not.toHaveBeenCalled();
+    expect(deletes).toContainEqual({
+      table: "bsm_content_review_items",
+      filters: { id: item?.id },
+    });
   });
 
   it("creates generated page review items without a storage upload", async () => {
