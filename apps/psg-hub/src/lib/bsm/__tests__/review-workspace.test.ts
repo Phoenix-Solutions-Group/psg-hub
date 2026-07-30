@@ -109,6 +109,7 @@ function createFakeClient(options: FakeClientOptions = {}) {
 type FakeClientOptions = {
   collaborator?: boolean;
   expiredSession?: boolean;
+  emptyVersionMetadata?: boolean;
   submitted?: boolean;
   hasPin?: boolean;
   legacyEventsRequireReviewItem?: boolean;
@@ -173,6 +174,27 @@ class Query {
     if (this.table === "bsm_content_review_items") {
       return {
         data: [{ id: REVIEW_ITEM_ID, title: "Home page", processing_status: "ready", section_id: SECTION_ID }],
+        error: null,
+      };
+    }
+    if (this.table === "bsm_content_review_versions") {
+      const sourceMetadata = this.options.emptyVersionMetadata
+        ? {}
+        : {
+            previewUrl: "/dashboard/content",
+            generatedPagePath: "/dashboard/content",
+          };
+      return {
+        data: [
+          {
+            id: VERSION_ID,
+            original_filename: null,
+            content_type: "text/html",
+            preview_url: "/dashboard/content",
+            generated_page_path: "/dashboard/content",
+            source_metadata_jsonb: sourceMetadata,
+          },
+        ],
         error: null,
       };
     }
@@ -417,6 +439,7 @@ describe("BSM review workspace foundation service", () => {
       position: 1,
     });
     expect(inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload).toMatchObject({
+      preview_url: "https://example.com",
       generated_page_path: "https://example.com",
       snapshot_jsonb: {
         sourceKind: "internal_review_workspace",
@@ -555,6 +578,11 @@ describe("BSM review workspace foundation service", () => {
         title: "Home page",
         processingStatus: "ready",
         sectionTitle: "Website",
+        originalFilename: null,
+        contentType: "text/html",
+        previewUrl: "/dashboard/content",
+        generatedPagePath: "/dashboard/content",
+        proofUrl: "/dashboard/content",
       },
     ]);
     expect(workspace.comments).toEqual([
@@ -564,6 +592,18 @@ describe("BSM review workspace foundation service", () => {
       }),
     ]);
     expect(workspace.reviewer.readOnly).toBe(false);
+  });
+
+  it("falls back to version proof columns when metadata is empty", async () => {
+    const { client } = createFakeClient({ emptyVersionMetadata: true });
+
+    const workspace = await getGuestReviewWorkspace("session-hash", { client: client as never });
+
+    expect(workspace.documents[0]).toMatchObject({
+      previewUrl: "/dashboard/content",
+      generatedPagePath: "/dashboard/content",
+      proofUrl: "/dashboard/content",
+    });
   });
 
   it("stores reviewer pin comments against the reviewer invitation only", async () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle, Lock, MessageSquare, Send } from "lucide-react";
+import { CheckCircle, ExternalLink, Lock, MessageSquare, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,10 +12,25 @@ type Workspace = {
   project: { id: string; title: string; status: string };
   round: { id: string; status: string };
   reviewer: { email: string; submittedAt: string | null; readOnly: boolean };
-  documents: Array<{ itemId: string; versionId: string; title: string; processingStatus: string; sectionTitle: string | null }>;
+  documents: Array<{
+    itemId: string;
+    versionId: string;
+    title: string;
+    processingStatus: string;
+    sectionTitle: string | null;
+    originalFilename: string | null;
+    contentType: string | null;
+    previewUrl: string | null;
+    generatedPagePath: string | null;
+    proofUrl: string | null;
+  }>;
   comments: Array<{ id: string; reviewItemId: string; versionId: string; body: string; pinNumber: number | null; draftStatus: string }>;
   decisions: Array<{ reviewItemId: string; versionId: string; decision: string; message: string | null; submittedAt: string | null }>;
 };
+
+function canFrameProof(url: string | null): url is string {
+  return Boolean(url && url.startsWith("/"));
+}
 
 export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   const [code, setCode] = useState("");
@@ -206,6 +221,40 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                           <div className="text-xs text-muted-foreground">Decision</div>
                           <div className="break-words font-medium">{workspace.decisions.find((item) => item.reviewItemId === doc.itemId)?.decision.replace("_", " ") ?? "Open"}</div>
                         </div>
+                      </div>
+                      <div className="overflow-hidden rounded-md border border-border bg-background">
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">
+                              {doc.originalFilename ?? doc.proofUrl ?? "Proof preview"}
+                            </div>
+                            {doc.contentType ? (
+                              <div className="text-xs text-muted-foreground">{doc.contentType}</div>
+                            ) : null}
+                          </div>
+                          {doc.proofUrl ? (
+                            <a
+                              href={doc.proofUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-sm font-medium text-ember hover:text-foreground"
+                            >
+                              <ExternalLink className="size-4" aria-hidden="true" />
+                              Open proof
+                            </a>
+                          ) : null}
+                        </div>
+                        {canFrameProof(doc.proofUrl) ? (
+                          <iframe
+                            src={doc.proofUrl}
+                            title={`${doc.title} proof`}
+                            className="h-[560px] w-full bg-white"
+                          />
+                        ) : (
+                          <div className="p-4 text-sm text-muted-foreground">
+                            The proof link is not available for this review item.
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
