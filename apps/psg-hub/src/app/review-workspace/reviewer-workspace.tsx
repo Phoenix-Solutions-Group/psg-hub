@@ -23,6 +23,14 @@ type Workspace = {
     previewUrl: string | null;
     generatedPagePath: string | null;
     proofUrl: string | null;
+    proofContent: {
+      eyebrow: string;
+      headline: string;
+      body: string;
+      bullets: string[];
+      cta: string;
+      sourceUrl: string | null;
+    } | null;
   }>;
   comments: Array<{ id: string; reviewItemId: string; versionId: string; body: string; pinNumber: number | null; draftStatus: string }>;
   decisions: Array<{ reviewItemId: string; versionId: string; decision: string; message: string | null; submittedAt: string | null }>;
@@ -244,7 +252,32 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                             </a>
                           ) : null}
                         </div>
-                        {canFrameProof(doc.proofUrl) ? (
+                        {doc.proofContent ? (
+                          <article className="bg-white p-5 text-foreground sm:p-8">
+                            <div className="text-xs font-semibold uppercase text-ember">
+                              {doc.proofContent.eyebrow}
+                            </div>
+                            <h3 className="mt-2 font-heading text-2xl font-semibold">
+                              {doc.proofContent.headline}
+                            </h3>
+                            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+                              {doc.proofContent.body}
+                            </p>
+                            {doc.proofContent.bullets.length ? (
+                              <ul className="mt-4 space-y-2 text-sm">
+                                {doc.proofContent.bullets.map((bullet) => (
+                                  <li key={bullet} className="flex gap-2">
+                                    <CheckCircle className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+                                    <span>{bullet}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                            <div className="mt-5 inline-flex rounded-md bg-ember px-3 py-2 text-sm font-medium text-white">
+                              {doc.proofContent.cta}
+                            </div>
+                          </article>
+                        ) : canFrameProof(doc.proofUrl) ? (
                           <iframe
                             src={doc.proofUrl}
                             title={`${doc.title} proof`}

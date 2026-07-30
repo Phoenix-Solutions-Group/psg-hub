@@ -12,7 +12,22 @@ type ShopOption = { id: string; name: string };
 type WorkspaceResult = {
   project: { id: string; title: string; status: string; currentRoundId: string | null };
   round: { id: string; status: string; outcome: string | null; completedAt: string | null } | null;
-  documents: Array<{ itemId: string; versionId: string | null; title: string; processingStatus: string; status: string }>;
+  documents: Array<{
+    itemId: string;
+    versionId: string | null;
+    title: string;
+    processingStatus: string;
+    status: string;
+    proofUrl: string | null;
+    proofContent: {
+      eyebrow: string;
+      headline: string;
+      body: string;
+      bullets: string[];
+      cta: string;
+      sourceUrl: string | null;
+    } | null;
+  }>;
   submittedComments: Array<{ id: string; body: string; pinNumber: number | null; draftStatus: string }>;
   decisions: Array<{ id: string; reviewItemId: string; decision: string; message: string | null; submittedAt: string | null }>;
 };
@@ -62,7 +77,7 @@ export function ReviewWorkspaceConsole({
             {
               sectionTitle: "Website",
               title: documentTitle,
-              sourceUrl: "/dashboard/content",
+              body: "This proof shows the public-facing page copy the reviewer should check. It is stored in the review workspace so the private invite works without a PSG staff login.",
               position: 1,
             },
           ],
@@ -208,6 +223,13 @@ export function ReviewWorkspaceConsole({
                         {doc.title}
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">{doc.processingStatus} · {doc.status}</div>
+                      {doc.proofContent ? (
+                        <div className="mt-3 rounded-md border border-border bg-background p-3">
+                          <div className="text-xs font-semibold uppercase text-ember">{doc.proofContent.eyebrow}</div>
+                          <div className="mt-1 font-heading text-base font-semibold">{doc.proofContent.headline}</div>
+                          <p className="mt-1 text-sm leading-6 text-muted-foreground">{doc.proofContent.body}</p>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
