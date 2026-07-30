@@ -1,3 +1,18 @@
+# PSG Advantage Portal
+
+> Reference-only legacy app. `apps/psg-hub` is the active Body Shop Marketer
+> product app. Do not add new production routes here or import this app into hub
+> production code. See
+> `apps/psg-hub/docs/ops/route-ownership/route-ownership-manifest.json`.
+
+This old portal remains in the repository only as historical market-intelligence
+reference until a separate approved archival task completes the final traffic,
+DNS, Vercel, cron, and customer-link checks.
+
+The original generated README content is preserved below for local reference.
+
+---
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

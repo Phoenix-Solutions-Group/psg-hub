@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "audit:pipedrive-won-billing": "node scripts/pipedrive-won-billing-audit.mjs",
+    "check:route-ownership": "node scripts/check-route-ownership.mjs",
     "check:pipedrive-won-billing-coverage": "node scripts/pipedrive-won-billing-coverage-check.mjs",
     "seed:bsm-demo": "node scripts/seed-bsm-governance-demo.mjs",
     "seed:superadmin-qa": "node scripts/seed-superadmin-qa-env.mjs",
