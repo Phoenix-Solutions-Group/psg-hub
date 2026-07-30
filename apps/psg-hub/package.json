@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "node scripts/check-import-reference-boundary.mjs && eslint",
     "audit:pipedrive-won-billing": "node scripts/pipedrive-won-billing-audit.mjs",
     "check:route-ownership": "node scripts/check-route-ownership.mjs",
     "check:pipedrive-won-billing-coverage": "node scripts/pipedrive-won-billing-coverage-check.mjs",
