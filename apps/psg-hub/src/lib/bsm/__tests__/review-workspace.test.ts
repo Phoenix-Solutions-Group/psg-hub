@@ -176,6 +176,22 @@ class Query {
         error: null,
       };
     }
+    if (this.table === "bsm_content_review_versions") {
+      return {
+        data: [
+          {
+            id: VERSION_ID,
+            original_filename: null,
+            content_type: "text/html",
+            source_metadata_jsonb: {
+              previewUrl: "/dashboard/content",
+              generatedPagePath: "/dashboard/content",
+            },
+          },
+        ],
+        error: null,
+      };
+    }
     if (this.table === "bsm_content_review_sections") {
       return { data: [{ id: SECTION_ID, title: "Website" }], error: null };
     }
@@ -555,6 +571,11 @@ describe("BSM review workspace foundation service", () => {
         title: "Home page",
         processingStatus: "ready",
         sectionTitle: "Website",
+        originalFilename: null,
+        contentType: "text/html",
+        previewUrl: "/dashboard/content",
+        generatedPagePath: "/dashboard/content",
+        proofUrl: "/dashboard/content",
       },
     ]);
     expect(workspace.comments).toEqual([

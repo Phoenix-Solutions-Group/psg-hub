@@ -106,7 +106,18 @@ export type GuestReviewWorkspace = {
   project: { id: string; title: string; status: string };
   round: { id: string; status: string };
   reviewer: { email: string; submittedAt: string | null; readOnly: boolean };
-  documents: Array<{ itemId: string; versionId: string; title: string; processingStatus: string; sectionTitle: string | null }>;
+  documents: Array<{
+    itemId: string;
+    versionId: string;
+    title: string;
+    processingStatus: string;
+    sectionTitle: string | null;
+    originalFilename: string | null;
+    contentType: string | null;
+    previewUrl: string | null;
+    generatedPagePath: string | null;
+    proofUrl: string | null;
+  }>;
   comments: Array<{ id: string; reviewItemId: string; versionId: string; body: string; pinNumber: number | null; draftStatus: string }>;
   decisions: Array<{ reviewItemId: string; versionId: string; decision: string; message: string | null; submittedAt: string | null }>;
 };
@@ -913,10 +924,20 @@ export async function getGuestReviewWorkspace(
   const itemIds = ((docs ?? []) as Array<Record<string, unknown>>)
     .map((row) => row.review_item_id)
     .filter((value): value is string => typeof value === "string");
+  const versionIds = ((docs ?? []) as Array<Record<string, unknown>>)
+    .map((row) => row.version_id)
+    .filter((value): value is string => typeof value === "string");
   const { data: items } = itemIds.length
     ? await client.from("bsm_content_review_items").select("id, title, processing_status, section_id").in("id", itemIds)
     : { data: [] };
   const itemsById = new Map(((items ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
+  const { data: versions } = versionIds.length
+    ? await client
+        .from("bsm_content_review_versions")
+        .select("id, original_filename, content_type, source_metadata_jsonb")
+        .in("id", versionIds)
+    : { data: [] };
+  const versionsById = new Map(((versions ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
   const sectionIds = Array.from(
     new Set(
       ((items ?? []) as Array<Record<string, unknown>>)
@@ -946,6 +967,14 @@ export async function getGuestReviewWorkspace(
     },
     documents: ((docs ?? []) as Array<Record<string, unknown>>).map((row) => {
       const item = itemsById.get(row.review_item_id as string) ?? null;
+      const version = versionsById.get(row.version_id as string) ?? null;
+      const metadata = (version?.source_metadata_jsonb as Record<string, unknown> | null) ?? {};
+      const previewUrl = typeof metadata.previewUrl === "string" && metadata.previewUrl.trim()
+        ? metadata.previewUrl
+        : null;
+      const generatedPagePath = typeof metadata.generatedPagePath === "string" && metadata.generatedPagePath.trim()
+        ? metadata.generatedPagePath
+        : null;
       const sectionId = (item?.section_id as string | null) ?? null;
       return {
         itemId: row.review_item_id as string,
@@ -953,6 +982,11 @@ export async function getGuestReviewWorkspace(
         title: (item?.title as string | null) ?? "Review document",
         processingStatus: (item?.processing_status as string | null) ?? "pending",
         sectionTitle: sectionId ? sectionTitles.get(sectionId) ?? null : null,
+        originalFilename: (version?.original_filename as string | null) ?? null,
+        contentType: (version?.content_type as string | null) ?? null,
+        previewUrl,
+        generatedPagePath,
+        proofUrl: previewUrl ?? generatedPagePath,
       };
     }),
     comments: ((comments ?? []) as Array<Record<string, unknown>>).map((row) => ({
