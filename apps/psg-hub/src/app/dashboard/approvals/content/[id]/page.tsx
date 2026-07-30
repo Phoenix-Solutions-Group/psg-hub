@@ -52,6 +52,17 @@ export default async function BsmContentApprovalReviewPage({
       : typeof item.currentVersion?.sourceMetadata.generatedPagePath === "string"
         ? item.currentVersion.sourceMetadata.generatedPagePath
         : null;
+  const fileUrl = item.currentVersion?.storagePath
+    ? `/api/bsm/content-approvals/${encodeURIComponent(item.id)}/file`
+    : null;
+  const fileContentType = item.currentVersion?.contentType;
+  const canInlineFile = Boolean(
+    fileUrl &&
+      (item.currentVersion?.previewType === "image" ||
+        fileContentType === "application/pdf" ||
+        fileContentType === "text/plain" ||
+        fileContentType === "text/markdown"),
+  );
 
   const restoreVersionId = item.versions.find((version) => version.id !== item.currentVersionId)?.id ?? item.currentVersionId;
 
@@ -81,6 +92,40 @@ export default async function BsmContentApprovalReviewPage({
           {previewUrl ? (
             <a className="mt-2 inline-flex font-medium text-ember hover:text-foreground" href={previewUrl}>
               Open preview
+            </a>
+          ) : canInlineFile ? (
+            <div className="mt-3 space-y-3">
+              {item.currentVersion?.previewType === "image" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={fileUrl ?? ""}
+                  alt={item.currentVersion?.originalFilename ?? item.title}
+                  className="max-h-[640px] w-full rounded-md border border-border object-contain bg-background"
+                />
+              ) : (
+                <iframe
+                  src={fileUrl ?? ""}
+                  title={item.currentVersion?.originalFilename ?? item.title}
+                  className="h-[640px] w-full rounded-md border border-border bg-background"
+                />
+              )}
+              <a
+                className="inline-flex font-medium text-ember hover:text-foreground"
+                href={fileUrl ?? ""}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open file in a new tab
+              </a>
+            </div>
+          ) : fileUrl ? (
+            <a
+              className="mt-2 inline-flex font-medium text-ember hover:text-foreground"
+              href={fileUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open file
             </a>
           ) : (
             <p className="mt-2 text-muted-foreground">

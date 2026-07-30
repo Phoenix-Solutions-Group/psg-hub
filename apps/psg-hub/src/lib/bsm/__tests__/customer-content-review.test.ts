@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   addBsmCustomerReviewComment,
+  getBsmReviewCurrentFileDownload,
   getBsmReviewCommentAttachmentDownload,
   recordBsmCustomerReviewDecision,
   requestBsmContentRestore,
@@ -119,7 +120,18 @@ class Query {
       return Promise.resolve({ data: { role: this.role }, error: null });
     }
     if (this.table === "bsm_content_review_versions") {
-      return Promise.resolve({ data: { id: VERSION_ID }, error: null });
+      return Promise.resolve({
+        data: {
+          id: VERSION_ID,
+          review_item_id: REVIEW_ITEM_ID,
+          original_filename: "review-proof.pdf",
+          content_type: "application/pdf",
+          byte_size: 3,
+          storage_bucket: "bsm-content-approvals",
+          storage_path: `${SHOP_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/review-proof.pdf`,
+        },
+        error: null,
+      });
     }
     if (this.table === "bsm_content_review_comment_attachments") {
       if (this.filters.id !== ATTACHMENT_ID) return Promise.resolve({ data: null, error: null });
@@ -347,6 +359,38 @@ describe("customer content review actions", () => {
 
     expect(attachment.originalFilename).toBe("reply-photo.png");
     expect(serviceState.downloads).toHaveLength(1);
+  });
+
+  it("downloads the current uploaded review file for a same-shop customer", async () => {
+    serviceState.downloads = [];
+    serviceState.opsRole = null;
+    serviceState.opsFunctions = new Set();
+
+    const file = await getBsmReviewCurrentFileDownload(createAccessClient() as never, REVIEW_ITEM_ID, USER_ID);
+
+    expect(file).toMatchObject({
+      originalFilename: "review-proof.pdf",
+      contentType: "application/pdf",
+      byteSize: 3,
+    });
+    expect(serviceState.downloads).toEqual([
+      {
+        bucket: "bsm-content-approvals",
+        path: `${SHOP_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/review-proof.pdf`,
+      },
+    ]);
+  });
+
+  it("denies current review file downloads for a different shop customer", async () => {
+    serviceState.downloads = [];
+    serviceState.opsRole = null;
+    serviceState.opsFunctions = new Set();
+
+    await expect(
+      getBsmReviewCurrentFileDownload(createAccessClient(null) as never, REVIEW_ITEM_ID, USER_ID),
+    ).rejects.toMatchObject({ status: 403 });
+
+    expect(serviceState.downloads).toEqual([]);
   });
 
   it("records an event when a customer decision changes approval status", async () => {
