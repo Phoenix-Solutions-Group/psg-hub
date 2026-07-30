@@ -75,6 +75,23 @@ function renderHtml(lead: DownloadLead): string {
   ].join("");
 }
 
+function requiresLeadEmailDelivery(): boolean {
+  return (
+    process.env.VERCEL_ENV === "production" ||
+    process.env.WHITEPAPER_REQUIRE_LEAD_EMAIL === "true"
+  );
+}
+
+function skipLeadEmail(reason: string, lead?: DownloadLead): NextResponse {
+  console.warn("[leads/whitepaper-download] unlocking without lead email:", {
+    reason,
+    email: lead?.email,
+    shopName: lead?.shopName,
+    environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+  });
+  return NextResponse.json({ ok: true, leadEmailSent: false });
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   let form: FormData;
   try {
@@ -101,20 +118,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const inbox =
     process.env.WHITEPAPER_DOWNLOAD_INBOX?.trim() ||
     process.env.PSG_LEAD_INBOX?.trim();
-  if (!inbox) {
-    console.error("[leads/whitepaper-download] WHITEPAPER_DOWNLOAD_INBOX or PSG_LEAD_INBOX is not set");
-    return NextResponse.json(
-      { error: "Could not unlock the PDF right now. Please email Phoenix Solutions Group directly." },
-      { status: 503 }
-    );
-  }
-
   const lead: DownloadLead = {
     email,
     name: cleanField(form.get("name")),
     shopName: cleanField(form.get("shopName")),
     referrer: cleanField(form.get("referrer")),
   };
+
+  if (!inbox) {
+    console.error("[leads/whitepaper-download] WHITEPAPER_DOWNLOAD_INBOX or PSG_LEAD_INBOX is not set");
+    if (!requiresLeadEmailDelivery()) {
+      return skipLeadEmail("missing lead inbox", lead);
+    }
+    return NextResponse.json(
+      { error: "Could not unlock the PDF right now. Please email Phoenix Solutions Group directly." },
+      { status: 503 }
+    );
+  }
 
   try {
     await sendEmail({
@@ -130,11 +150,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       "[leads/whitepaper-download] lead capture failed:",
       error instanceof Error ? error.message : error
     );
+    if (!requiresLeadEmailDelivery()) {
+      return skipLeadEmail(
+        error instanceof Error ? error.message : "lead capture failed",
+        lead
+      );
+    }
     return NextResponse.json(
       { error: "Could not unlock the PDF right now. Please email Phoenix Solutions Group directly." },
       { status: 502 }
     );
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, leadEmailSent: true });
 }

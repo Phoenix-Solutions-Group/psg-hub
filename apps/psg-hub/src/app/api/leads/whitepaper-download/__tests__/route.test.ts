@@ -22,6 +22,7 @@ function request(form: Record<string, string>, ip = "203.0.113.40") {
 describe("white paper download lead route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     process.env.WHITEPAPER_DOWNLOAD_INBOX = "growth@phoenixsolutionsgroup.net";
   });
 
@@ -49,6 +50,7 @@ describe("white paper download lead route", () => {
     const message = sendEmail.mock.calls[0][0];
     expect(message.text).toContain("owner@example.com");
     expect(message.text).toContain("Pat's Collision");
+    expect(await res.json()).toEqual({ ok: true, leadEmailSent: true });
   });
 
   it("requires a valid email", async () => {
@@ -68,5 +70,36 @@ describe("white paper download lead route", () => {
 
     expect(res.status).toBe(200);
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("unlocks in preview or local QA when SendGrid is not configured", async () => {
+    sendEmail.mockRejectedValue(new Error("Missing SENDGRID_API_KEY"));
+    vi.stubEnv("VERCEL_ENV", "preview");
+
+    const res = await POST(request({ email: "owner@example.com" }) as never);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, leadEmailSent: false });
+  });
+
+  it("unlocks in preview or local QA when the lead inbox is not configured", async () => {
+    delete process.env.WHITEPAPER_DOWNLOAD_INBOX;
+    delete process.env.PSG_LEAD_INBOX;
+    vi.stubEnv("VERCEL_ENV", "preview");
+
+    const res = await POST(request({ email: "owner@example.com" }) as never);
+
+    expect(res.status).toBe(200);
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(await res.json()).toEqual({ ok: true, leadEmailSent: false });
+  });
+
+  it("requires lead email delivery in production", async () => {
+    sendEmail.mockRejectedValue(new Error("Missing SENDGRID_API_KEY"));
+    vi.stubEnv("VERCEL_ENV", "production");
+
+    const res = await POST(request({ email: "owner@example.com" }) as never);
+
+    expect(res.status).toBe(502);
   });
 });
