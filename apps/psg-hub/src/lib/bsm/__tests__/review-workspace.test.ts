@@ -56,6 +56,18 @@ function createFakeClient(options: FakeClientOptions = {}) {
     Object.entries(options.missingSchemaCacheColumns ?? {}).map(([table, columns]) => [table, [...columns]]),
   );
   const client = {
+    storage: {
+      from(bucket: string) {
+        return {
+          createSignedUrl(path: string) {
+            return Promise.resolve({
+              data: { signedUrl: `https://storage.example/${bucket}/${path}?token=review` },
+              error: null,
+            });
+          },
+        };
+      },
+    },
     from(table: string) {
       return {
         insert(payload: Record<string, unknown>) {
@@ -111,6 +123,7 @@ type FakeClientOptions = {
   collaborator?: boolean;
   expiredSession?: boolean;
   emptyVersionMetadata?: boolean;
+  uploadedFileProof?: boolean;
   submitted?: boolean;
   hasPin?: boolean;
   legacyEventsRequireReviewItem?: boolean;
@@ -202,6 +215,26 @@ class Query {
       };
     }
     if (this.table === "bsm_content_review_versions") {
+      if (this.options.uploadedFileProof) {
+        return {
+          data: [
+            {
+              id: VERSION_ID,
+              original_filename: "homepage-proof.pdf",
+              content_type: "application/pdf",
+              preview_url: null,
+              generated_page_path: null,
+              storage_bucket: "bsm-content-approvals",
+              storage_path: `${SHOP_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/homepage-proof.pdf`,
+              processed_storage_bucket: null,
+              processed_storage_path: null,
+              source_metadata_jsonb: {},
+              snapshot_jsonb: {},
+            },
+          ],
+          error: null,
+        };
+      }
       const sourceMetadata = this.options.emptyVersionMetadata
         ? {}
         : {
@@ -224,6 +257,10 @@ class Query {
             content_type: "text/html",
             preview_url: "/dashboard/content",
             generated_page_path: "/dashboard/content",
+            storage_bucket: null,
+            storage_path: null,
+            processed_storage_bucket: null,
+            processed_storage_path: null,
             source_metadata_jsonb: sourceMetadata,
             snapshot_jsonb: sourceMetadata,
           },
@@ -653,6 +690,22 @@ describe("BSM review workspace foundation service", () => {
       previewUrl: "/dashboard/content",
       generatedPagePath: "/dashboard/content",
       proofUrl: "/dashboard/content",
+    });
+  });
+
+  it("returns a signed proof URL for uploaded files in the guest workspace", async () => {
+    const { client } = createFakeClient({ uploadedFileProof: true });
+
+    const workspace = await getGuestReviewWorkspace("session-hash", { client: client as never });
+
+    expect(workspace.documents[0]).toMatchObject({
+      originalFilename: "homepage-proof.pdf",
+      contentType: "application/pdf",
+      previewUrl: null,
+      generatedPagePath: null,
+      proofUrl:
+        "https://storage.example/bsm-content-approvals/11111111-1111-4111-8111-111111111111/77777777-7777-4777-8777-777777777777/88888888-8888-4888-8888-888888888888/homepage-proof.pdf?token=review",
+      proofContent: null,
     });
   });
 

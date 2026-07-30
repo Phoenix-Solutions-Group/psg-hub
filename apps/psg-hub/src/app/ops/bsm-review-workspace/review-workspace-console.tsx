@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle, ClipboardList, Eye, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,18 @@ export function ReviewWorkspaceConsole({
   shops: ShopOption[];
   defaultShopId: string | null;
 }) {
-  const [shopId, setShopId] = useState(defaultShopId ?? shops[0]?.id ?? "");
+  const shopOptions = useMemo(() => {
+    const optionsById = new Map<string, ShopOption>();
+    for (const shop of shops) {
+      if (!shop.id.trim()) continue;
+      const existing = optionsById.get(shop.id);
+      if (!existing || existing.name === shop.id) {
+        optionsById.set(shop.id, shop);
+      }
+    }
+    return [...optionsById.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [shops]);
+  const [shopId, setShopId] = useState(defaultShopId ?? shopOptions[0]?.id ?? "");
   const [title, setTitle] = useState("E2E website review workspace");
   const [reviewerEmail, setReviewerEmail] = useState("reviewer@e2e.test");
   const [reviewerName, setReviewerName] = useState("E2E Reviewer");
@@ -58,6 +69,18 @@ export function ReviewWorkspaceConsole({
     () => slice ? `/review-workspace?invite=${encodeURIComponent(slice.inviteToken)}` : "",
     [slice],
   );
+
+  useEffect(() => {
+    if (shopOptions.length === 0) {
+      setShopId("");
+      return;
+    }
+    if (!shopOptions.some((shop) => shop.id === shopId)) {
+      setShopId(defaultShopId && shopOptions.some((shop) => shop.id === defaultShopId)
+        ? defaultShopId
+        : shopOptions[0].id);
+    }
+  }, [defaultShopId, shopId, shopOptions]);
 
   async function createWorkspace() {
     setPending(true);
@@ -130,7 +153,7 @@ export function ReviewWorkspaceConsole({
                 onChange={(event) => setShopId(event.target.value)}
                 className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
               >
-                {shops.map((shop) => (
+                {shopOptions.map((shop) => (
                   <option key={shop.id} value={shop.id}>{shop.name}</option>
                 ))}
               </select>
@@ -169,7 +192,7 @@ export function ReviewWorkspaceConsole({
             </Button>
             <Button type="button" variant="outline" onClick={() => loadResult()} disabled={pending || !slice}>
               <Eye className="size-4" aria-hidden="true" />
-              Load result
+              Refresh submitted review
             </Button>
           </div>
         </CardContent>
@@ -203,7 +226,7 @@ export function ReviewWorkspaceConsole({
         <Card>
           <CardHeader>
             <CardTitle>Review result</CardTitle>
-            <CardDescription>Staff can inspect submitted comments and decisions after the reviewer submits.</CardDescription>
+            <CardDescription>Staff can inspect reviewer comments and decisions after submission.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {result ? (
@@ -250,7 +273,7 @@ export function ReviewWorkspaceConsole({
                 ))}
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">No submitted result loaded.</p>
+              <p className="text-sm text-muted-foreground">No submitted review has been refreshed yet.</p>
             )}
           </CardContent>
         </Card>
