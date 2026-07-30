@@ -109,6 +109,7 @@ function createFakeClient(options: FakeClientOptions = {}) {
 type FakeClientOptions = {
   collaborator?: boolean;
   expiredSession?: boolean;
+  emptyVersionMetadata?: boolean;
   submitted?: boolean;
   hasPin?: boolean;
   legacyEventsRequireReviewItem?: boolean;
@@ -177,16 +178,21 @@ class Query {
       };
     }
     if (this.table === "bsm_content_review_versions") {
+      const sourceMetadata = this.options.emptyVersionMetadata
+        ? {}
+        : {
+            previewUrl: "/dashboard/content",
+            generatedPagePath: "/dashboard/content",
+          };
       return {
         data: [
           {
             id: VERSION_ID,
             original_filename: null,
             content_type: "text/html",
-            source_metadata_jsonb: {
-              previewUrl: "/dashboard/content",
-              generatedPagePath: "/dashboard/content",
-            },
+            preview_url: "/dashboard/content",
+            generated_page_path: "/dashboard/content",
+            source_metadata_jsonb: sourceMetadata,
           },
         ],
         error: null,
@@ -585,6 +591,18 @@ describe("BSM review workspace foundation service", () => {
       }),
     ]);
     expect(workspace.reviewer.readOnly).toBe(false);
+  });
+
+  it("falls back to version proof columns when metadata is empty", async () => {
+    const { client } = createFakeClient({ emptyVersionMetadata: true });
+
+    const workspace = await getGuestReviewWorkspace("session-hash", { client: client as never });
+
+    expect(workspace.documents[0]).toMatchObject({
+      previewUrl: "/dashboard/content",
+      generatedPagePath: "/dashboard/content",
+      proofUrl: "/dashboard/content",
+    });
   });
 
   it("stores reviewer pin comments against the reviewer invitation only", async () => {

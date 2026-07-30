@@ -934,7 +934,7 @@ export async function getGuestReviewWorkspace(
   const { data: versions } = versionIds.length
     ? await client
         .from("bsm_content_review_versions")
-        .select("id, original_filename, content_type, source_metadata_jsonb")
+        .select("id, original_filename, content_type, preview_url, generated_page_path, source_metadata_jsonb")
         .in("id", versionIds)
     : { data: [] };
   const versionsById = new Map(((versions ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
@@ -971,10 +971,14 @@ export async function getGuestReviewWorkspace(
       const metadata = (version?.source_metadata_jsonb as Record<string, unknown> | null) ?? {};
       const previewUrl = typeof metadata.previewUrl === "string" && metadata.previewUrl.trim()
         ? metadata.previewUrl
-        : null;
+        : typeof version?.preview_url === "string" && version.preview_url.trim()
+          ? version.preview_url
+          : null;
       const generatedPagePath = typeof metadata.generatedPagePath === "string" && metadata.generatedPagePath.trim()
         ? metadata.generatedPagePath
-        : null;
+        : typeof version?.generated_page_path === "string" && version.generated_page_path.trim()
+          ? version.generated_page_path
+          : null;
       const sectionId = (item?.section_id as string | null) ?? null;
       return {
         itemId: row.review_item_id as string,
