@@ -122,6 +122,7 @@ export async function POST(request: Request): Promise<Response> {
     if (error instanceof ApprovalUploadInputError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
+    console.error("bsm_content_approval_upload_failed", error);
     return NextResponse.json(
       { error: "Could not start the upload. The file was not saved; please try again." },
       { status: 500 },

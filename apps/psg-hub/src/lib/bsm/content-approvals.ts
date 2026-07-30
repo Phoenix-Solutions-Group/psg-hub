@@ -9,6 +9,7 @@ import {
   type BsmContentApprovalWorkspaceOption,
   normalizeApprovalMimeType,
 } from "@/lib/bsm/content-approvals-shared";
+import { reviewWorkspaceStoragePath } from "@/lib/bsm/review-workspace-processing";
 
 export {
   BSM_CONTENT_APPROVALS_BUCKET,
@@ -205,6 +206,23 @@ export function approvalStoragePath(input: {
   return `${input.shopId}/${input.itemId}/${input.versionId}/${input.fileName}`;
 }
 
+function approvalWorkspaceOriginalStoragePath(input: {
+  shopId: string;
+  projectId: string;
+  itemId: string;
+  versionId: string;
+  fileName: string;
+}): string {
+  return reviewWorkspaceStoragePath({
+    shopId: input.shopId,
+    projectId: input.projectId,
+    documentId: input.itemId,
+    versionId: input.versionId,
+    artifactKind: "original",
+    fileName: input.fileName,
+  });
+}
+
 function resolveStorage(deps: { storage?: ContentApprovalStorage }) {
   return deps.storage ?? (createServiceClient().storage as unknown as ContentApprovalStorage);
 }
@@ -287,8 +305,6 @@ async function attachItemToCurrentWorkspaceRound(
 
   const { error: eventError } = await client.from("bsm_content_review_events").insert({
     shop_id: input.shopId,
-    project_id: input.workspace.projectId,
-    round_id: input.workspace.roundId,
     review_item_id: input.itemId,
     version_id: input.versionId,
     event_type: "review_workspace_document_attached",
@@ -435,6 +451,15 @@ export async function createBsmContentApprovalUpload(
     versionId,
     fileName,
   });
+  const originalStoragePath = workspace
+    ? approvalWorkspaceOriginalStoragePath({
+        shopId,
+        projectId: workspace.projectId,
+        itemId,
+        versionId,
+        fileName,
+      })
+    : null;
   const position = workspace ? await nextWorkspaceDocumentPosition(client, workspace.projectId) : null;
 
   const { error: itemError } = await client.from("bsm_content_review_items").insert({
@@ -465,14 +490,14 @@ export async function createBsmContentApprovalUpload(
       status: "current",
       storage_bucket: BSM_CONTENT_APPROVALS_BUCKET,
       storage_path: path,
+      original_storage_bucket: workspace ? BSM_CONTENT_APPROVALS_BUCKET : null,
+      original_storage_path: originalStoragePath,
       original_filename: fileName,
       content_type: file.mimeType,
       byte_size: input.byteSize,
       preview_type: file.contentType === "image" ? "image" : "file",
       project_id: workspace?.projectId ?? null,
       round_id: workspace?.roundId ?? null,
-      original_storage_bucket: null,
-      original_storage_path: null,
       processed_storage_bucket: null,
       processed_storage_path: null,
       processed_content_type: null,
@@ -745,6 +770,15 @@ export async function updateBsmContentApproval(
       versionId,
       fileName,
     });
+    const originalStoragePath = workspace
+      ? approvalWorkspaceOriginalStoragePath({
+          shopId,
+          projectId: workspace.projectId,
+          itemId,
+          versionId,
+          fileName,
+        })
+      : null;
 
     const { data: existingVersions, error: versionReadError } = await client
       .from("bsm_content_review_versions")
@@ -768,12 +802,12 @@ export async function updateBsmContentApproval(
       status: "current",
       storage_bucket: BSM_CONTENT_APPROVALS_BUCKET,
       storage_path: path,
+      original_storage_bucket: workspace ? BSM_CONTENT_APPROVALS_BUCKET : null,
+      original_storage_path: originalStoragePath,
       original_filename: fileName,
       content_type: file.mimeType,
       byte_size: input.byteSize,
       preview_type: file.contentType === "image" ? "image" : "file",
-      original_storage_bucket: null,
-      original_storage_path: null,
       processed_storage_bucket: null,
       processed_storage_path: null,
       processed_content_type: null,
@@ -830,8 +864,6 @@ export async function updateBsmContentApproval(
 
   const { error: eventError } = await client.from("bsm_content_review_events").insert({
     shop_id: shopId,
-    project_id: workspace?.projectId ?? null,
-    round_id: workspace?.roundId ?? null,
     review_item_id: itemId,
     version_id: versionId,
     event_type: hasReplacementFile ? "review_item_version_replaced" : "review_item_updated",

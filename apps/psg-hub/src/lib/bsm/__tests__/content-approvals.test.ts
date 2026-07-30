@@ -414,10 +414,11 @@ describe("BSM content approval upload helpers", () => {
       versionId: result.item.currentVersion?.id ?? "",
       fileName: "proof.pdf",
     });
+    const expectedOriginalPath = `${SHOP_ID}/${PROJECT_ID}/${result.item.id}/${result.item.currentVersion?.id}/original/proof.pdf`;
     expect(version).toMatchObject({
       storage_path: expectedPath,
-      original_storage_bucket: null,
-      original_storage_path: null,
+      original_storage_bucket: BSM_CONTENT_APPROVALS_BUCKET,
+      original_storage_path: expectedOriginalPath,
       processed_storage_path: null,
       processed_storage_bucket: null,
     });
@@ -616,10 +617,11 @@ describe("BSM content approval upload helpers", () => {
       versionId: result.item.currentVersion?.id ?? "",
       fileName: "proof-v2.pdf",
     });
+    const expectedOriginalPath = `${SHOP_ID}/${PROJECT_ID}/${ITEM_ID}/${result.item.currentVersion?.id}/original/proof-v2.pdf`;
     expect(version).toMatchObject({
       storage_path: expectedPath,
-      original_storage_bucket: null,
-      original_storage_path: null,
+      original_storage_bucket: BSM_CONTENT_APPROVALS_BUCKET,
+      original_storage_path: expectedOriginalPath,
       processed_storage_path: null,
       processed_storage_bucket: null,
     });
