@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { ReviewWorkspaceConsole } from "@/app/ops/bsm-review-workspace/review-workspace-console";
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
-import { bsmReviewWorkspaceInternalEnabled } from "@/lib/bsm/review-workspace";
+import {
+  bsmReviewWorkspaceInternalEnabled,
+  listStaffReviewWorkspaces,
+} from "@/lib/bsm/review-workspace";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -63,6 +66,9 @@ export default async function BsmReviewWorkspacePage() {
     .order("name", { ascending: true })
     .limit(500);
   const shops = normalizeCompanyShops(shopRows ?? []);
+  const shopNames = new Map(shops.map((shop) => [shop.id, shop.name]));
+  const workspaces = (await listStaffReviewWorkspaces(user.id, access.role, { client: service }))
+    .map((workspace) => ({ ...workspace, shopName: workspace.shopName ?? shopNames.get(workspace.shopId) ?? null }));
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -75,7 +81,12 @@ export default async function BsmReviewWorkspacePage() {
       </section>
 
       {shops.length ? (
-        <ReviewWorkspaceConsole shops={shops} defaultShopId={shops[0]?.id ?? null} />
+        <ReviewWorkspaceConsole
+          shops={shops}
+          defaultShopId={shops[0]?.id ?? null}
+          initialWorkspaces={workspaces}
+          canRemoveWorkspaces={access.role === "psg_superadmin"}
+        />
       ) : (
         <div className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-warning-foreground">
           No QA shop is available in this environment.

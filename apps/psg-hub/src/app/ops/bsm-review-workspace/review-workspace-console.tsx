@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle, ClipboardList, Eye, FileUp, Plus } from "lucide-react";
+import { CheckCircle, ClipboardList, Eye, FileUp, Plus, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 
 type ShopOption = { id: string; name: string };
+type WorkspaceListItem = {
+  id: string;
+  shopId: string;
+  shopName: string | null;
+  title: string;
+  status: string;
+  currentRoundId: string | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+  role: string;
+};
 type WorkspaceResult = {
   project: { id: string; title: string; status: string; currentRoundId: string | null };
   round: { id: string; status: string; outcome: string | null; completedAt: string | null } | null;
@@ -35,9 +46,13 @@ type WorkspaceResult = {
 export function ReviewWorkspaceConsole({
   shops,
   defaultShopId,
+  initialWorkspaces = [],
+  canRemoveWorkspaces = false,
 }: {
   shops: ShopOption[];
   defaultShopId: string | null;
+  initialWorkspaces?: WorkspaceListItem[];
+  canRemoveWorkspaces?: boolean;
 }) {
   const shopOptions = useMemo(() => {
     const optionsById = new Map<string, ShopOption>();
@@ -68,7 +83,10 @@ export function ReviewWorkspaceConsole({
     inviteToken: string;
     inviteCode: string;
   } | null>(null);
+  const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>(initialWorkspaces);
+  const [activeProjectId, setActiveProjectId] = useState(initialWorkspaces[0]?.id ?? "");
   const [result, setResult] = useState<WorkspaceResult | null>(null);
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeProjectId) ?? null;
 
   const inviteUrl = useMemo(
     () => slice ? `/review-workspace?invite=${encodeURIComponent(slice.inviteToken)}` : "",
@@ -109,11 +127,27 @@ export function ReviewWorkspaceConsole({
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(body?.error ?? "Could not create the review workspace.");
       setSlice(body.slice);
+      await refreshWorkspaces(body.slice?.projectId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the review workspace.");
     } finally {
       setPending(false);
     }
+  }
+
+  async function refreshWorkspaces(nextActiveProjectId = activeProjectId) {
+    const res = await fetch("/api/ops/bsm/review-workspace/projects", {
+      headers: { "Cache-Control": "no-store" },
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(body?.error ?? "Could not load review workspaces.");
+    const nextWorkspaces = Array.isArray(body.workspaces) ? body.workspaces as WorkspaceListItem[] : [];
+    setWorkspaces(nextWorkspaces);
+    const nextActive = nextWorkspaces.some((workspace) => workspace.id === nextActiveProjectId)
+      ? nextActiveProjectId
+      : nextWorkspaces[0]?.id ?? "";
+    setActiveProjectId(nextActive);
+    return nextActive;
   }
 
   async function loadResult(projectId = slice?.projectId) {
@@ -129,6 +163,33 @@ export function ReviewWorkspaceConsole({
       setResult(body.result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the review result.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function removeWorkspace(projectId = activeProjectId) {
+    if (!projectId) return;
+    const workspace = workspaces.find((item) => item.id === projectId);
+    if (!confirm(`Remove review workspace "${workspace?.title ?? projectId}"? It will be hidden now and kept recoverable for 30 days.`)) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/ops/bsm/review-workspace/projects/${projectId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Removed from the superadmin review workspace console." }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.error ?? "Could not remove the review workspace.");
+      const nextActive = await refreshWorkspaces("");
+      setResult(null);
+      if (slice?.projectId === projectId) setSlice(null);
+      if (nextActive) await loadResult(nextActive);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove the review workspace.");
     } finally {
       setPending(false);
     }
@@ -208,6 +269,66 @@ export function ReviewWorkspaceConsole({
       </Card>
 
       <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Existing workspaces</CardTitle>
+            <CardDescription>Open any workspace you can manage and inspect its documents, comments, and decisions.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {workspaces.length ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="existing-workspace">Workspace</Label>
+                  <select
+                    id="existing-workspace"
+                    value={activeProjectId}
+                    onChange={(event) => {
+                      setActiveProjectId(event.target.value);
+                      setResult(null);
+                    }}
+                    className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
+                  >
+                    {workspaces.map((workspace) => (
+                      <option key={workspace.id} value={workspace.id}>
+                        {workspace.title} · {workspace.shopName ?? workspace.shopId} · {workspace.status.replaceAll("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => loadResult(activeProjectId)}
+                    disabled={pending || !activeProjectId}
+                  >
+                    <Eye className="size-4" aria-hidden="true" />
+                    Open workspace
+                  </Button>
+                  {canRemoveWorkspaces ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => removeWorkspace(activeProjectId)}
+                      disabled={pending || !activeProjectId}
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                      Remove workspace
+                    </Button>
+                  ) : null}
+                </div>
+                {activeWorkspace ? (
+                  <p className="text-xs text-muted-foreground">
+                    Last updated {activeWorkspace.updatedAt ? new Date(activeWorkspace.updatedAt).toLocaleString() : "unknown"}.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">No review workspaces are available yet.</p>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Invite gate</CardTitle>

@@ -36,6 +36,20 @@ export type ReviewWorkspaceProject = {
   ownerProfileId: string;
 };
 
+type ReviewWorkspaceActorRole = "psg_superadmin" | "psg_internal" | "customer" | null | string;
+
+export type StaffReviewWorkspaceListItem = {
+  id: string;
+  shopId: string;
+  shopName: string | null;
+  title: string;
+  status: string;
+  currentRoundId: string | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+  role: string;
+};
+
 export type CreateReviewWorkspaceProjectInput = {
   shopId: string;
   title: string;
@@ -211,6 +225,10 @@ function assertRatio(label: string, value: unknown): number {
 
 function resolveClient(client?: ReviewWorkspaceDbClient): ReviewWorkspaceDbClient {
   return client ?? createServiceClient();
+}
+
+function isSuperadminRole(role: ReviewWorkspaceActorRole): boolean {
+  return role === "psg_superadmin";
 }
 
 export function bsmReviewWorkspaceInternalEnabled(env: Record<string, string | undefined> = process.env): boolean {
@@ -408,6 +426,7 @@ export async function requireReviewWorkspaceStaffAccess(
   client: ReviewWorkspaceDbClient,
   projectId: string,
   actorProfileId: string,
+  actorRole: ReviewWorkspaceActorRole = null,
 ): Promise<{ projectId: string; shopId: string; status: string; role: string }> {
   const cleanProjectId = assertUuid("projectId", projectId);
   const cleanActorProfileId = assertUuid("actorProfileId", actorProfileId);
@@ -419,6 +438,15 @@ export async function requireReviewWorkspaceStaffAccess(
     .maybeSingle();
   if (projectError) throw new Error(`Could not load review workspace project: ${projectError.message}`);
   if (!project || project.deleted_at) throw new ReviewWorkspaceInputError(404, "Review workspace project not found");
+
+  if (isSuperadminRole(actorRole)) {
+    return {
+      projectId: project.id as string,
+      shopId: project.shop_id as string,
+      status: project.status as string,
+      role: "superadmin",
+    };
+  }
 
   const { data: collaborator, error: collaboratorError } = await client
     .from("bsm_content_review_project_collaborators")
@@ -438,13 +466,73 @@ export async function requireReviewWorkspaceStaffAccess(
   };
 }
 
+function readProjectListRow(row: Record<string, unknown>, role: string): StaffReviewWorkspaceListItem {
+  const company = row.company;
+  const companyRow = company && typeof company === "object"
+    ? Array.isArray(company) ? company[0] : company
+    : null;
+  return {
+    id: row.id as string,
+    shopId: row.shop_id as string,
+    shopName: typeof (companyRow as Record<string, unknown> | null)?.name === "string"
+      ? (companyRow as Record<string, unknown>).name as string
+      : null,
+    title: row.title as string,
+    status: row.status as string,
+    currentRoundId: (row.current_round_id as string | null) ?? null,
+    updatedAt: (row.updated_at as string | null) ?? null,
+    createdAt: (row.created_at as string | null) ?? null,
+    role,
+  };
+}
+
+export async function listStaffReviewWorkspaces(
+  actorProfileId: string,
+  actorRole: ReviewWorkspaceActorRole,
+  deps: { client?: ReviewWorkspaceDbClient; limit?: number } = {},
+): Promise<StaffReviewWorkspaceListItem[]> {
+  const client = resolveClient(deps.client);
+  const cleanActorProfileId = assertUuid("actorProfileId", actorProfileId);
+  const limit = Math.min(Math.max(Math.trunc(deps.limit ?? 100), 1), 250);
+  const projectSelect = "id, shop_id, title, status, current_round_id, updated_at, created_at";
+
+  if (isSuperadminRole(actorRole)) {
+    const { data, error } = await client
+      .from("bsm_content_review_projects")
+      .select(projectSelect)
+      .is("deleted_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(`Could not list review workspaces: ${error.message}`);
+    return ((data ?? []) as Array<Record<string, unknown>>).map((row) => readProjectListRow(row, "superadmin"));
+  }
+
+  const { data, error } = await client
+    .from("bsm_content_review_project_collaborators")
+    .select(`role, project:bsm_content_review_projects!inner(${projectSelect}, deleted_at)`)
+    .eq("profile_id", cleanActorProfileId)
+    .is("removed_at", null)
+    .is("project.deleted_at", null)
+    .order("added_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`Could not list review workspaces: ${error.message}`);
+
+  return ((data ?? []) as Array<Record<string, unknown>>).flatMap((row) => {
+    const rawProject = row.project;
+    const project = rawProject && typeof rawProject === "object"
+      ? Array.isArray(rawProject) ? rawProject[0] : rawProject
+      : null;
+    return project ? [readProjectListRow(project as Record<string, unknown>, row.role as string)] : [];
+  });
+}
+
 export async function getStaffReviewWorkspaceResult(
   projectId: string,
   actorProfileId: string,
-  deps: { client?: ReviewWorkspaceDbClient } = {},
+  deps: { client?: ReviewWorkspaceDbClient; actorRole?: ReviewWorkspaceActorRole } = {},
 ): Promise<StaffReviewWorkspaceResult> {
   const client = resolveClient(deps.client);
-  const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId);
+  const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, deps.actorRole);
 
   const { data: projectRow, error: projectError } = await client
     .from("bsm_content_review_projects")
@@ -1311,4 +1399,78 @@ export async function createReviewWorkspaceDeletionTombstone(
     .single();
   if (error) throw new Error(`Could not write review workspace deletion tombstone: ${error.message}`);
   return data;
+}
+
+export async function removeReviewWorkspaceProject(
+  input: {
+    projectId: string;
+    actorProfileId: string;
+    actorRole: ReviewWorkspaceActorRole;
+    reason?: string | null;
+  },
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+) {
+  if (!isSuperadminRole(input.actorRole)) {
+    throw new ReviewWorkspaceInputError(403, "Only a superadmin can remove review workspaces");
+  }
+
+  const client = resolveClient(deps.client);
+  const now = deps.now ?? new Date();
+  const access = await requireReviewWorkspaceStaffAccess(client, input.projectId, input.actorProfileId, input.actorRole);
+  const { data: projectRow, error: projectError } = await client
+    .from("bsm_content_review_projects")
+    .select("id, shop_id, title, status")
+    .eq("id", access.projectId)
+    .single();
+  if (projectError || !projectRow) throw new Error(`Could not load review workspace project: ${projectError?.message ?? "not found"}`);
+
+  const project = projectRow as Record<string, unknown>;
+  const deletedAt = now.toISOString();
+  const purgedAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { error: updateError } = await client
+    .from("bsm_content_review_projects")
+    .update({
+      status: "deleted",
+      deleted_at: deletedAt,
+      recover_until: purgedAt,
+      updated_at: deletedAt,
+    })
+    .eq("id", access.projectId);
+  if (updateError) throw new Error(`Could not remove review workspace project: ${updateError.message}`);
+
+  await createReviewWorkspaceDeletionTombstone(
+    {
+      projectId: access.projectId,
+      shopId: access.shopId,
+      projectTitle: project.title as string,
+      deletedByProfileId: input.actorProfileId,
+      deletedAt,
+      purgedAt,
+      reason: input.reason ?? "Removed from the superadmin review workspace console.",
+    },
+    { client },
+  );
+
+  await enqueueReviewWorkspaceProcessingJob(
+    {
+      projectId: access.projectId,
+      shopId: access.shopId,
+      kind: "purge",
+      idempotencyKey: `purge:${access.projectId}:${deletedAt}`,
+      actorProfileId: input.actorProfileId,
+      input: { recoverUntil: purgedAt },
+    },
+    { client },
+  );
+
+  await insertEvent(client, {
+    shop_id: access.shopId,
+    review_item_id: null,
+    event_type: "review_workspace_project_removed",
+    actor_profile_id: input.actorProfileId,
+    payload_jsonb: { projectId: access.projectId, title: project.title, deletedAt, purgedAt },
+  });
+
+  return { projectId: access.projectId, status: "deleted", deletedAt, recoverUntil: purgedAt };
 }

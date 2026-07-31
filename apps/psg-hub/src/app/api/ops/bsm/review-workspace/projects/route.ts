@@ -6,7 +6,28 @@ import {
   ReviewWorkspaceInputError,
   bsmReviewWorkspaceInternalEnabled,
   createInternalReviewWorkspaceSlice,
+  listStaffReviewWorkspaces,
 } from "@/lib/bsm/review-workspace";
+
+export async function GET(): Promise<Response> {
+  if (!bsmReviewWorkspaceInternalEnabled()) {
+    return NextResponse.json({ error: "Review workspace internal slice is not enabled." }, { status: 404 });
+  }
+
+  const gate = await requireOpsFn("manage_bsm_content_approvals");
+  if (!gate.ok) return gate.response;
+
+  try {
+    const workspaces = await listStaffReviewWorkspaces(gate.userId, gate.access.role);
+    return NextResponse.json({ workspaces }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    console.error(
+      "[ops/bsm/review-workspace/projects] list failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return NextResponse.json({ error: "Could not list review workspaces." }, { status: 500 });
+  }
+}
 
 export async function POST(request: Request): Promise<Response> {
   if (!bsmReviewWorkspaceInternalEnabled()) {

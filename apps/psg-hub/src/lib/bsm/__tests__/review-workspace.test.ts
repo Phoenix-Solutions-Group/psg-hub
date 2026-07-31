@@ -9,8 +9,10 @@ import {
   enqueueReviewWorkspaceProcessingJob,
   getGuestReviewWorkspace,
   getStaffReviewWorkspaceResult,
+  listStaffReviewWorkspaces,
   requireGuestReviewSession,
   requireReviewWorkspaceStaffAccess,
+  removeReviewWorkspaceProject,
   submitGuestReviewRound,
 } from "@/lib/bsm/review-workspace";
 
@@ -290,6 +292,39 @@ class Query {
     if (this.table === "bsm_content_review_rounds") {
       return { data: [{ id: ROUND_ID, status: "submitted", outcome: "changes_requested", completed_at: "2026-07-28T19:00:00.000Z" }], error: null };
     }
+    if (this.table === "bsm_content_review_projects") {
+      return {
+        data: [{
+          id: PROJECT_ID,
+          shop_id: SHOP_ID,
+          title: "Website review",
+          status: "active",
+          current_round_id: ROUND_ID,
+          updated_at: "2026-07-28T19:00:00.000Z",
+          created_at: "2026-07-28T18:00:00.000Z",
+          company: { name: "Alpha Auto Body" },
+        }],
+        error: null,
+      };
+    }
+    if (this.table === "bsm_content_review_project_collaborators") {
+      return {
+        data: [{
+          role: "collaborator",
+          project: {
+            id: PROJECT_ID,
+            shop_id: SHOP_ID,
+            title: "Website review",
+            status: "active",
+            current_round_id: ROUND_ID,
+            updated_at: "2026-07-28T19:00:00.000Z",
+            created_at: "2026-07-28T18:00:00.000Z",
+            company: { name: "Alpha Auto Body" },
+          },
+        }],
+        error: null,
+      };
+    }
     return { data: [], error: null };
   }
 
@@ -423,6 +458,73 @@ describe("BSM review workspace foundation service", () => {
     await expect(
       requireReviewWorkspaceStaffAccess(denied.client as never, PROJECT_ID, ACTOR_ID),
     ).rejects.toThrow("You do not have access");
+  });
+
+  it("lets a superadmin list and open review workspaces without collaborator rows", async () => {
+    const { client } = createFakeClient({ collaborator: false });
+
+    await expect(
+      listStaffReviewWorkspaces(ACTOR_ID, "psg_superadmin", { client: client as never }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: PROJECT_ID,
+        shopId: SHOP_ID,
+        shopName: "Alpha Auto Body",
+        role: "superadmin",
+      }),
+    ]);
+    await expect(
+      requireReviewWorkspaceStaffAccess(client as never, PROJECT_ID, ACTOR_ID, "psg_superadmin"),
+    ).resolves.toMatchObject({ projectId: PROJECT_ID, shopId: SHOP_ID, role: "superadmin" });
+  });
+
+  it("soft-removes a review workspace for superadmins and queues purge cleanup", async () => {
+    const { client, updates, upserts, inserts } = createFakeClient({ collaborator: false });
+
+    await expect(
+      removeReviewWorkspaceProject(
+        {
+          projectId: PROJECT_ID,
+          actorProfileId: ACTOR_ID,
+          actorRole: "psg_superadmin",
+          reason: "Duplicate QA workspace.",
+        },
+        { client: client as never, now: new Date("2026-07-28T20:00:00.000Z") },
+      ),
+    ).resolves.toMatchObject({ projectId: PROJECT_ID, status: "deleted" });
+
+    expect(updates).toContainEqual(expect.objectContaining({
+      table: "bsm_content_review_projects",
+      payload: expect.objectContaining({
+        status: "deleted",
+        deleted_at: "2026-07-28T20:00:00.000Z",
+        recover_until: "2026-08-27T20:00:00.000Z",
+      }),
+      filters: { id: PROJECT_ID },
+    }));
+    expect(upserts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        table: "bsm_content_review_deletion_tombstones",
+        payload: expect.objectContaining({
+          project_id: PROJECT_ID,
+          reason: "Duplicate QA workspace.",
+          retention_policy: "30_day_recoverable_delete",
+        }),
+      }),
+      expect.objectContaining({
+        table: "bsm_content_review_processing_jobs",
+        payload: expect.objectContaining({
+          kind: "purge",
+          idempotency_key: "purge:22222222-2222-4222-8222-222222222222:2026-07-28T20:00:00.000Z",
+        }),
+      }),
+    ]));
+    expect(inserts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        table: "bsm_content_review_events",
+        payload: expect.objectContaining({ event_type: "review_workspace_project_removed" }),
+      }),
+    ]));
   });
 
   it("uses idempotency keys for processing jobs and deletion tombstones", async () => {
