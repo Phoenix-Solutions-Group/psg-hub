@@ -19,6 +19,15 @@ export type BsmApprovalContentType =
   (typeof SUPPORTED_APPROVAL_FILE_TYPES)[keyof typeof SUPPORTED_APPROVAL_FILE_TYPES]["contentType"];
 export type BsmApprovalUploadMimeType = keyof typeof SUPPORTED_APPROVAL_FILE_TYPES;
 
+export type BsmContentApprovalWorkspaceOption = {
+  id: string;
+  shopId: string;
+  title: string;
+  status: string;
+  currentRoundId: string | null;
+  documentCount: number;
+};
+
 const APPROVAL_FILE_EXTENSION_MIME_TYPES: Record<string, BsmApprovalUploadMimeType> = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   htm: "text/html",
@@ -74,6 +83,18 @@ export type BsmContentApprovalListItem = {
     decision: string;
     message: string | null;
     createdAt: string;
+  } | null;
+  replyAttachments: Array<{
+    id: string;
+    originalFilename: string;
+    byteSize: number;
+    screeningStatus: string;
+    createdAt: string;
+  }>;
+  reviewWorkspace: {
+    projectId: string;
+    projectTitle: string | null;
+    roundId: string | null;
   } | null;
   commentCount: number;
 };

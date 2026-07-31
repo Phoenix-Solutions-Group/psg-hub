@@ -111,6 +111,7 @@ export const AUDIT_ACTIONS = [
   // review item, add the context note, mint a private upload path, and create
   // the initial immutable version.
   "bsm_content_approval.create",
+  "bsm_content_approval.update",
   "bsm_content_approval.archive",
 ] as const;
 
