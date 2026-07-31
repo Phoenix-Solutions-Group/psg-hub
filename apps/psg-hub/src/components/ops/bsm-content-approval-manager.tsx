@@ -48,6 +48,14 @@ export function getBsmContentApprovalFileValidationError(selectedFile: File | nu
   return null;
 }
 
+export function getBsmContentApprovalStorageContentType(selectedFile: File) {
+  const normalizedContentType = normalizeApprovalMimeType(selectedFile.name, selectedFile.type);
+  if (normalizedContentType === "text/html" || normalizedContentType === "text/markdown") {
+    return "text/plain";
+  }
+  return normalizedContentType ?? selectedFile.type;
+}
+
 export function BsmContentApprovalManager({
   initialApprovals,
   workspaces = [],
@@ -184,7 +192,7 @@ export function BsmContentApprovalManager({
         return;
       }
       const supabase = createClient();
-      const contentType = normalizeApprovalMimeType(selectedFile.name, selectedFile.type) ?? selectedFile.type;
+      const contentType = getBsmContentApprovalStorageContentType(selectedFile);
       const fileBody = await selectedFile.arrayBuffer();
       const { error } = await supabase.storage
         .from(BSM_CONTENT_APPROVALS_BUCKET)
@@ -273,7 +281,7 @@ export function BsmContentApprovalManager({
 
       if ("upload" in body && editFile) {
         const supabase = createClient();
-        const contentType = normalizeApprovalMimeType(editFile.name, editFile.type) ?? editFile.type;
+        const contentType = getBsmContentApprovalStorageContentType(editFile);
         const fileBody = await editFile.arrayBuffer();
         const { error } = await supabase.storage
           .from(BSM_CONTENT_APPROVALS_BUCKET)

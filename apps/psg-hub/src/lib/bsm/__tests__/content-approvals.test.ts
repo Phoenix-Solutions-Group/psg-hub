@@ -377,6 +377,11 @@ describe("BSM content approval upload helpers", () => {
       contentType: "document",
       mimeType: "text/html",
     });
+    expect(validateApprovalFile("text/html", 1024, "landing-page.html")).toEqual({
+      extension: "html",
+      contentType: "document",
+      mimeType: "text/html",
+    });
 
     expect(() => validateApprovalFile("application/zip", 1024)).toThrow(
       ApprovalUploadInputError,
