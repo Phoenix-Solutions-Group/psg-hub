@@ -22,6 +22,7 @@ export {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SAFE_SEGMENT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/;
+type BsmContentApprovalActorRole = "customer" | "psg_internal" | "psg_superadmin";
 
 export type ContentApprovalStorage = {
   from(bucket: string): {
@@ -42,6 +43,7 @@ export type ApprovalUploadInput = {
   contentType: string;
   byteSize: number;
   actorProfileId: string;
+  actorRole?: BsmContentApprovalActorRole | null;
 };
 
 export type GeneratedPageApprovalInput = {
@@ -55,6 +57,7 @@ export type GeneratedPageApprovalInput = {
   sourceContentItemId?: string | null;
   snapshot?: Record<string, unknown> | null;
   actorProfileId: string;
+  actorRole?: BsmContentApprovalActorRole | null;
 };
 
 export type ApprovalUploadResult = {
@@ -79,6 +82,7 @@ export type UpdateBsmContentApprovalInput = {
   contentType?: string | null;
   byteSize?: number | null;
   actorProfileId: string;
+  actorRole?: BsmContentApprovalActorRole | null;
 };
 
 export type UpdateBsmContentApprovalResult = {
@@ -95,6 +99,7 @@ export type AttachBsmContentApprovalToWorkspaceInput = {
   itemId: string;
   reviewWorkspaceProjectId: string;
   actorProfileId: string;
+  actorRole?: BsmContentApprovalActorRole | null;
 };
 
 export type AttachBsmContentApprovalToWorkspaceResult = {
@@ -243,7 +248,12 @@ async function cleanupReviewItemAfterFailedUploadSetup(client: SupabaseClient, i
 
 async function loadReviewWorkspaceForAttachment(
   client: SupabaseClient,
-  input: { projectId: string | null; shopId: string; actorProfileId: string },
+  input: {
+    projectId: string | null;
+    shopId: string;
+    actorProfileId: string;
+    actorRole?: BsmContentApprovalActorRole | null;
+  },
 ): Promise<{ projectId: string; title: string; roundId: string } | null> {
   if (!input.projectId) return null;
 
@@ -261,16 +271,18 @@ async function loadReviewWorkspaceForAttachment(
     throw new ApprovalUploadInputError("The selected Review Workspace does not have a current review round");
   }
 
-  const { data: collaborator, error: collaboratorError } = await client
-    .from("bsm_content_review_project_collaborators")
-    .select("role")
-    .eq("project_id", input.projectId)
-    .eq("profile_id", input.actorProfileId)
-    .is("removed_at", null)
-    .maybeSingle();
-  if (collaboratorError) throw new Error(`Could not check Review Workspace access: ${collaboratorError.message}`);
-  if (!collaborator) {
-    throw new ApprovalUploadInputError("You do not have access to the selected Review Workspace");
+  if (input.actorRole !== "psg_superadmin") {
+    const { data: collaborator, error: collaboratorError } = await client
+      .from("bsm_content_review_project_collaborators")
+      .select("role")
+      .eq("project_id", input.projectId)
+      .eq("profile_id", input.actorProfileId)
+      .is("removed_at", null)
+      .maybeSingle();
+    if (collaboratorError) throw new Error(`Could not check Review Workspace access: ${collaboratorError.message}`);
+    if (!collaborator) {
+      throw new ApprovalUploadInputError("You do not have access to the selected Review Workspace");
+    }
   }
 
   return {
@@ -490,6 +502,7 @@ export async function createBsmContentApprovalUpload(
     projectId: reviewWorkspaceProjectId,
     shopId,
     actorProfileId,
+    actorRole: input.actorRole,
   });
   const path = approvalStoragePath({
     shopId,
@@ -649,6 +662,7 @@ export async function createBsmGeneratedPageApproval(
     projectId: reviewWorkspaceProjectId,
     shopId,
     actorProfileId,
+    actorRole: input.actorRole,
   });
   const position = workspace ? await nextWorkspaceDocumentPosition(client, workspace.projectId) : null;
   const sourceMetadata = {
@@ -778,7 +792,12 @@ export async function updateBsmContentApproval(
 
   let workspace: { projectId: string; title: string; roundId: string } | null = null;
   if (projectId) {
-    workspace = await loadReviewWorkspaceForAttachment(client, { projectId, shopId, actorProfileId });
+    workspace = await loadReviewWorkspaceForAttachment(client, {
+      projectId,
+      shopId,
+      actorProfileId,
+      actorRole: input.actorRole,
+    });
   }
 
   let versionId = (row.current_version_id as string | null) ?? null;
@@ -968,6 +987,7 @@ export async function attachBsmContentApprovalToWorkspace(
     projectId: reviewWorkspaceProjectId,
     shopId,
     actorProfileId,
+    actorRole: input.actorRole,
   });
   if (!workspace) throw new ApprovalUploadInputError("Choose a Review Workspace before attaching this item");
 

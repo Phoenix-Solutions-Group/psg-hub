@@ -83,6 +83,7 @@ export async function POST(request: Request): Promise<Response> {
             ? (payload.snapshot as Record<string, unknown>)
             : null,
           actorProfileId: gate.userId,
+          actorRole: gate.access.role,
         })
       : await createBsmContentApprovalUpload({
           shopId: payload.shopId as string,
@@ -94,6 +95,7 @@ export async function POST(request: Request): Promise<Response> {
           contentType: payload.contentType as string,
           byteSize: payload.byteSize as number,
           actorProfileId: gate.userId,
+          actorRole: gate.access.role,
         });
 
     const uploadPath =
@@ -151,12 +153,14 @@ export async function PATCH(request: Request): Promise<Response> {
       contentType: payload.contentType as string | null | undefined,
       byteSize: payload.byteSize as number | null | undefined,
       actorProfileId: gate.userId,
+      actorRole: gate.access.role,
     });
     const attachedResult = payload.reviewWorkspaceProjectId
       ? await attachBsmContentApprovalToWorkspace({
           itemId: result.item.id,
           reviewWorkspaceProjectId: payload.reviewWorkspaceProjectId as string,
           actorProfileId: gate.userId,
+          actorRole: gate.access.role,
         })
       : null;
     const responseResult = attachedResult

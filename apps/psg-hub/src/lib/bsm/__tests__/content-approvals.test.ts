@@ -137,7 +137,11 @@ class ChainSelect {
 
   constructor(
     private table: string,
-    private options: { existingItemProjectId?: string | null; existingReviewers?: Array<Record<string, unknown>> } = {},
+    private options: {
+      collaborator?: Record<string, unknown> | null;
+      existingItemProjectId?: string | null;
+      existingReviewers?: Array<Record<string, unknown>>;
+    } = {},
   ) {}
 
   eq(column: string, value: unknown) {
@@ -178,7 +182,10 @@ class ChainSelect {
       });
     }
     if (this.table === "bsm_content_review_project_collaborators") {
-      return Promise.resolve({ data: { role: "owner" }, error: null });
+      return Promise.resolve({
+        data: this.options.collaborator === undefined ? { role: "owner" } : this.options.collaborator,
+        error: null,
+      });
     }
     if (this.table === "bsm_content_review_versions") {
       return Promise.resolve({
@@ -247,6 +254,7 @@ class ChainSelect {
 }
 
 function createWorkspaceFakeClient(options: {
+  collaborator?: Record<string, unknown> | null;
   insertErrorsByTable?: Record<string, string>;
   existingItemProjectId?: string | null;
   existingReviewers?: Array<Record<string, unknown>>;
@@ -533,6 +541,69 @@ describe("BSM content approval upload helpers", () => {
     expect(result.upload.path).toBe(expectedPath);
     expect(result.item.currentVersion?.storagePath).toBe(expectedPath);
     expect(createSignedUploadUrl).toHaveBeenCalledOnce();
+  });
+
+  it("allows a super admin to upload into a Review Workspace without being a collaborator", async () => {
+    const { client, inserts } = createWorkspaceFakeClient({ collaborator: null });
+    const createSignedUploadUrl = vi.fn(async (path: string) => ({
+      data: { path, signedUrl: "https://upload.example", token: "token-1" },
+      error: null,
+    }));
+    const storage = {
+      from: vi.fn(() => ({ createSignedUploadUrl })),
+    };
+
+    const result = await createBsmContentApprovalUpload(
+      {
+        shopId: SHOP_ID,
+        customerProfileId: PROFILE_ID,
+        reviewWorkspaceProjectId: PROJECT_ID,
+        actorProfileId: ACTOR_ID,
+        actorRole: "psg_superadmin",
+        title: "July homepage proof",
+        contextNote: "Please confirm the offer and phone number.",
+        fileName: "proof.pdf",
+        contentType: "application/pdf",
+        byteSize: 2048,
+      },
+      { client: client as never, storage },
+    );
+
+    expect(result.item.reviewWorkspace?.projectId).toBe(PROJECT_ID);
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_round_documents")?.payload).toMatchObject({
+      project_id: PROJECT_ID,
+      round_id: ROUND_ID,
+      review_item_id: result.item.id,
+    });
+    expect(createSignedUploadUrl).toHaveBeenCalledOnce();
+  });
+
+  it("still requires non-superadmin staff to be Review Workspace collaborators", async () => {
+    const { client } = createWorkspaceFakeClient({ collaborator: null });
+    const createSignedUploadUrl = vi.fn();
+    const storage = {
+      from: vi.fn(() => ({ createSignedUploadUrl })),
+    };
+
+    await expect(
+      createBsmContentApprovalUpload(
+        {
+          shopId: SHOP_ID,
+          customerProfileId: PROFILE_ID,
+          reviewWorkspaceProjectId: PROJECT_ID,
+          actorProfileId: ACTOR_ID,
+          actorRole: "psg_internal",
+          title: "July homepage proof",
+          contextNote: "Please confirm the offer and phone number.",
+          fileName: "proof.pdf",
+          contentType: "application/pdf",
+          byteSize: 2048,
+        },
+        { client: client as never, storage },
+      ),
+    ).rejects.toThrow("You do not have access to the selected Review Workspace");
+
+    expect(createSignedUploadUrl).not.toHaveBeenCalled();
   });
 
   it("removes the draft review item if browser upload setup fails", async () => {
