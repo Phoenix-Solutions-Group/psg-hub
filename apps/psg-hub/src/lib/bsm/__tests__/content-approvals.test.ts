@@ -501,6 +501,7 @@ describe("BSM content approval upload helpers", () => {
       "bsm_content_review_versions",
       "bsm_content_review_events",
     ]);
+    expect(inserts[0].payload.required).toBe(false);
     expect(inserts.find((entry) => entry.table === "bsm_content_review_reviewers")).toBeUndefined();
     expect(result.upload.token).toBe("token-html");
     expect(result.item.customerProfileId).toBeNull();
@@ -755,6 +756,7 @@ describe("BSM content approval upload helpers", () => {
     const item = inserts[0].payload;
     const version = inserts[1].payload;
     expect(item.content_type).toBe("generated_page");
+    expect(item.required).toBe(false);
     expect(item.source_content_item_id).toBe("44444444-4444-4444-8444-444444444444");
     expect(version.storage_path).toBeNull();
     expect(version.source_metadata_jsonb).toMatchObject({
