@@ -63,4 +63,29 @@ describe("ReviewWorkspaceConsole upload entry", () => {
     expect(html).toContain("Open workspace");
     expect(html).toContain("Remove workspace");
   });
+
+  it("hides the remove action for non-superadmin ops users", () => {
+    const html = renderToStaticMarkup(
+      createElement(ReviewWorkspaceConsole, {
+        shops: [{ id: "shop-a", name: "Alpha Auto Body" }],
+        defaultShopId: "shop-a",
+        canRemoveWorkspaces: false,
+        initialWorkspaces: [{
+          id: "workspace-a",
+          shopId: "shop-a",
+          shopName: "Alpha Auto Body",
+          title: "July homepage proof",
+          status: "active",
+          currentRoundId: "round-a",
+          updatedAt: "2026-07-28T19:00:00.000Z",
+          createdAt: "2026-07-28T18:00:00.000Z",
+          role: "collaborator",
+        }],
+      }),
+    );
+
+    expect(html).toContain("July homepage proof");
+    expect(html).toContain("Open workspace");
+    expect(html).not.toContain("Remove workspace");
+  });
 });
