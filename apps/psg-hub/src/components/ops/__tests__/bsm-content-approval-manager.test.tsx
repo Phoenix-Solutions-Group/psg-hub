@@ -5,6 +5,7 @@ import {
   BSM_CONTENT_APPROVAL_UNSUPPORTED_FILE_MESSAGE,
   BsmContentApprovalManager,
   getBsmContentApprovalFileValidationError,
+  getBsmContentApprovalStorageContentType,
 } from "@/components/ops/bsm-content-approval-manager";
 
 describe("BsmContentApprovalManager", () => {
@@ -57,6 +58,30 @@ describe("BsmContentApprovalManager", () => {
         }),
       ),
     ).toBe(BSM_CONTENT_APPROVAL_UNSUPPORTED_FILE_MESSAGE);
+  });
+
+  it("uses storage-safe content types for HTML and Markdown uploads", () => {
+    expect(
+      getBsmContentApprovalStorageContentType(
+        new File(["<html></html>"], "landing.html", {
+          type: "text/html",
+        }),
+      ),
+    ).toBe("text/plain");
+    expect(
+      getBsmContentApprovalStorageContentType(
+        new File(["# Proof"], "proof.md", {
+          type: "text/markdown",
+        }),
+      ),
+    ).toBe("text/plain");
+    expect(
+      getBsmContentApprovalStorageContentType(
+        new File(["%PDF"], "proof.pdf", {
+          type: "application/pdf",
+        }),
+      ),
+    ).toBe("application/pdf");
   });
 
   it("renders a Review Workspace picker scoped to the selected shop", () => {
