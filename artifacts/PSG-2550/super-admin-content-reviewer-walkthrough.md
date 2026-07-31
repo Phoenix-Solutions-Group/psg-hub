@@ -18,9 +18,35 @@ Use this walkthrough to show how PSG prepares marketing content for customer rev
 - Confirm the account has PSG operations access with the `manage_bsm_content_approvals` permission.
 - Pick one demo shop and keep the whole walkthrough inside that shop.
 - Use demo-safe content only. Do not upload customer private files, live credentials, or real production records.
-- Prepare one small sample file under 25 MB, such as a PDF flyer or generated-page preview.
+- Use the demo-safe sample files in `artifacts/PSG-2550/sample-files/`. They cover every currently supported upload type.
 - Prepare one short customer-facing context note, for example: "Please review this July offer before PSG schedules it for publication."
 - If showing planned v2 behavior, say clearly that it is the review workspace roadmap and not a live customer promise until Tess QA and Nick approval are complete.
+
+## Sample Files For Nick's Human Test
+
+Use these files to validate that each supported document type can be uploaded, viewed or downloaded correctly, commented on, and reviewed. Each file is intentionally demo-only and contains no real customer data.
+
+| File | What it validates | Expected viewer behavior |
+| --- | --- | --- |
+| `artifacts/PSG-2550/sample-files/bsm-review-sample-proof.pdf` | PDF upload and review | Opens inline in the browser review view. |
+| `artifacts/PSG-2550/sample-files/bsm-review-sample-before-after.png` | PNG image upload and review | Opens inline as an image. |
+| `artifacts/PSG-2550/sample-files/bsm-review-sample-before-after.jpg` | JPG image upload and review | Opens inline as an image. |
+| `artifacts/PSG-2550/sample-files/bsm-review-sample-before-after.webp` | WebP image upload and review | Opens inline as an image. |
+| `artifacts/PSG-2550/sample-files/bsm-review-sample-copy.md` | Markdown upload and review | Opens inline in the browser review view. |
+| `artifacts/PSG-2550/sample-files/bsm-review-sample-copy.txt` | Plain text upload and review | Opens inline in the browser review view. |
+| `artifacts/PSG-2550/sample-files/bsm-review-sample-landing.html` | HTML upload and review routing | Downloads as an attachment for safety. Upload and decision tracking should still work. |
+| `artifacts/PSG-2550/sample-files/bsm-review-sample-mailer.docx` | Word document upload and review routing | Downloads as an attachment for safety. Upload and decision tracking should still work. |
+
+Validation pattern for each file:
+
+1. Upload the file as a super admin.
+2. Confirm the new item appears in the content review library for the demo shop.
+3. Open the file from the customer review view.
+4. Confirm the expected inline or download behavior from the table.
+5. Add one reviewer comment.
+6. Submit one decision: approve, decline, or request updates.
+7. Replace the file once from the admin edit flow to confirm version handling.
+8. Archive the demo review item when the test is complete.
 
 ## Current Super Admin Flow
 
@@ -192,10 +218,13 @@ No. It is the planned direction, but large-file processing, document conversion,
 - `Reference.md`
 - `docs/runbooks/graphify-codebase-graph.md`
 - Graphify query: `where are content reviewer features, review queue, content approval, or super admin docs/routes in psg-hub`
+- Graphify query: `what file types does the BSM content reviewer/content approvals upload and preview flow support? include relevant files`
 - `docs/specs/004-bsm-content-approvals-architecture.md`
 - `docs/specs/005-bsm-content-approver-v2-plan.md`
 - `apps/psg-hub/src/components/ops/bsm-content-approval-manager.tsx`
+- `apps/psg-hub/src/lib/bsm/content-approvals-shared.ts`
 - `apps/psg-hub/src/app/api/ops/bsm/content-approvals/route.ts`
+- `apps/psg-hub/src/app/api/bsm/content-approvals/[id]/file/route.ts`
 - `apps/psg-hub/src/lib/bsm/content-approvals.ts`
 
 ## Notes For PSG-2550
