@@ -3,38 +3,15 @@ import { BsmContentApprovalManager } from "@/components/ops/bsm-content-approval
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
 import { listBsmContentApprovals, listBsmContentApprovalWorkspaces } from "@/lib/bsm/content-approvals";
 import type { BsmContentApprovalListItem, BsmContentApprovalWorkspaceOption } from "@/lib/bsm/content-approvals-shared";
-import { getActiveShopContext } from "@/lib/shop/context";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function mergeShopOptions(
-  shopRows: Array<{ id: unknown; name: unknown }>,
-  fallbackShops: Array<{ id: string; name: string }>
-): Array<{ id: string; name: string }> {
-  const shopsById = new Map<string, { id: string; name: string }>();
-
-  for (const shop of fallbackShops) {
-    shopsById.set(shop.id, { id: shop.id, name: shop.name || shop.id });
-  }
-
-  for (const row of shopRows) {
-    if (typeof row.id !== "string") continue;
-    shopsById.set(row.id, {
-      id: row.id,
-      name:
-        typeof row.name === "string" && row.name.trim()
-          ? row.name
-          : shopsById.get(row.id)?.name ?? row.id,
-    });
-  }
-
-  return [...shopsById.values()].sort((a, b) =>
-    (a.name || a.id).localeCompare(b.name || b.id)
-  );
-}
+type BsmContentApprovalsPageProps = {
+  searchParams: Promise<{ shopId?: string; workspaceId?: string }>;
+};
 
 function companyBackedShopOptions(
   companyRows: Array<{ shop_id: unknown; name: unknown }>
@@ -52,7 +29,16 @@ function companyBackedShopOptions(
   return [...shopsById.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export default async function BsmContentApprovalsPage() {
+function ensureShopOption(
+  shops: Array<{ id: string; name: string }>,
+  shopId: string | null | undefined,
+): Array<{ id: string; name: string }> {
+  if (!shopId || shops.some((shop) => shop.id === shopId)) return shops;
+  return [...shops, { id: shopId, name: shopId }].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export default async function BsmContentApprovalsPage({ searchParams }: BsmContentApprovalsPageProps) {
+  const { shopId: requestedShopId, workspaceId: requestedWorkspaceId } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -85,15 +71,6 @@ export default async function BsmContentApprovalsPage() {
     loadError = true;
   }
 
-  let contextShops: Array<{ id: string; name: string }> = [];
-  try {
-    const shopContext = await getActiveShopContext(user.id);
-    activeShopId = shopContext.activeShopId;
-    contextShops = shopContext.shops;
-  } catch {
-    loadError = true;
-  }
-
   try {
     const { data, error } = await service
       .from("companies")
@@ -103,10 +80,18 @@ export default async function BsmContentApprovalsPage() {
       .order("name", { ascending: true })
       .limit(500);
     if (error) throw error;
-    shops = mergeShopOptions(companyBackedShopOptions(data ?? []), contextShops);
+    shops = companyBackedShopOptions(data ?? []);
+    const requestedWorkspace = workspaces.find((workspace) => workspace.id === requestedWorkspaceId);
+    const requestedWorkspaceShopId = requestedWorkspace?.shopId ?? null;
+    shops = ensureShopOption(shops, requestedWorkspaceShopId ?? requestedShopId);
+    activeShopId =
+      shops.find((shop) => shop.id === requestedWorkspaceShopId)?.id ??
+      shops.find((shop) => shop.id === requestedShopId)?.id ??
+      shops[0]?.id ??
+      null;
   } catch {
     loadError = true;
-    shops = mergeShopOptions([], contextShops);
+    shops = [];
   }
 
   return (
@@ -133,6 +118,7 @@ export default async function BsmContentApprovalsPage() {
         workspaces={workspaces}
         shops={shops}
         activeShopId={activeShopId}
+        activeWorkspaceProjectId={requestedWorkspaceId ?? null}
       />
     </div>
   );

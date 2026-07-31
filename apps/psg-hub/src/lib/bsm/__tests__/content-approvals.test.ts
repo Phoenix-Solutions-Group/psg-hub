@@ -7,6 +7,7 @@ import {
   approvalStoragePath,
   createBsmGeneratedPageApproval,
   createBsmContentApprovalUpload,
+  listBsmContentApprovalWorkspaces,
   normalizeApprovalFileName,
   updateBsmContentApproval,
   validateApprovalFile,
@@ -277,6 +278,75 @@ function createWorkspaceFakeClient(options: {
   return { client, inserts, updates, deletes };
 }
 
+class WorkspaceListSelect {
+  private filters: Record<string, unknown> = {};
+
+  constructor(private table: string) {}
+
+  eq(column: string, value: unknown) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  in(column: string, value: unknown) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  is(column: string, value: unknown) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  order() {
+    return this;
+  }
+
+  limit() {
+    return this;
+  }
+
+  then(resolve: (value: { data: Array<Record<string, unknown>>; error: null }) => unknown) {
+    if (this.table === "bsm_content_review_projects") {
+      return Promise.resolve({
+        data: [
+          {
+            id: PROJECT_ID,
+            shop_id: SHOP_ID,
+            title: "Production upload retest",
+            status: "active",
+            current_round_id: ROUND_ID,
+          },
+        ],
+        error: null,
+      }).then(resolve);
+    }
+    if (this.table === "bsm_content_review_items") {
+      expect(this.filters.project_id).toEqual([PROJECT_ID]);
+      return Promise.resolve({
+        data: [{ project_id: PROJECT_ID }, { project_id: PROJECT_ID }],
+        error: null,
+      }).then(resolve);
+    }
+    throw new Error(`Unexpected table ${this.table}`);
+  }
+}
+
+function createWorkspaceListFakeClient() {
+  const selectedTables: string[] = [];
+  const client = {
+    from(table: string) {
+      selectedTables.push(table);
+      return {
+        select() {
+          return new WorkspaceListSelect(table);
+        },
+      };
+    },
+  };
+  return { client, selectedTables };
+}
+
 describe("BSM content approval upload helpers", () => {
   it("accepts only supported file types and size limits", () => {
     expect(validateApprovalFile("application/pdf", 1024)).toEqual({
@@ -313,6 +383,30 @@ describe("BSM content approval upload helpers", () => {
     expect(() => normalizeApprovalFileName("../secret.pdf")).toThrow(
       "Rename the file",
     );
+  });
+
+  it("lists active shop workspaces for authorized staff without requiring collaborator rows", async () => {
+    const { client, selectedTables } = createWorkspaceListFakeClient();
+
+    const result = await listBsmContentApprovalWorkspaces(client as never, {
+      shopId: SHOP_ID,
+      actorProfileId: ACTOR_ID,
+    });
+
+    expect(result).toEqual([
+      {
+        id: PROJECT_ID,
+        shopId: SHOP_ID,
+        title: "Production upload retest",
+        status: "active",
+        currentRoundId: ROUND_ID,
+        documentCount: 2,
+      },
+    ]);
+    expect(selectedTables).toEqual([
+      "bsm_content_review_projects",
+      "bsm_content_review_items",
+    ]);
   });
 
   it("creates the review item, version, reviewer, event, and signed upload token", async () => {

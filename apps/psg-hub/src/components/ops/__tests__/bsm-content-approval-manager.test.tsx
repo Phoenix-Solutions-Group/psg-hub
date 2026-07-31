@@ -82,6 +82,56 @@ describe("BsmContentApprovalManager", () => {
     expect(html).not.toContain("Wallace review");
   });
 
+  it("preselects the linked Review Workspace from the Review Workspace upload entry point", () => {
+    const html = renderToStaticMarkup(
+      <BsmContentApprovalManager
+        initialApprovals={[]}
+        activeShopId="shop-a"
+        activeWorkspaceProjectId="workspace-a"
+        shops={[
+          { id: "shop-a", name: "Tracy's Collision" },
+          { id: "shop-b", name: "Wallace Auto Body" },
+        ]}
+        workspaces={[
+          {
+            id: "workspace-a",
+            shopId: "shop-a",
+            title: "July proof review",
+            status: "active",
+            currentRoundId: "round-a",
+            documentCount: 2,
+          },
+        ]}
+      />,
+    );
+
+    expect(html).toContain('<option value="workspace-a" selected="">July proof review');
+  });
+
+  it("keeps a requested workspace selectable when the shop only comes from the workspace", () => {
+    const html = renderToStaticMarkup(
+      <BsmContentApprovalManager
+        initialApprovals={[]}
+        activeShopId="workspace-shop"
+        activeWorkspaceProjectId="workspace-a"
+        shops={[{ id: "workspace-shop", name: "workspace-shop" }]}
+        workspaces={[
+          {
+            id: "workspace-a",
+            shopId: "workspace-shop",
+            title: "Production upload retest",
+            status: "active",
+            currentRoundId: "round-a",
+            documentCount: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(html).toContain('<option value="workspace-a" selected="">Production upload retest');
+    expect(html).not.toContain("No Review Workspaces for this shop");
+  });
+
   it("renders an edit action for uploaded review items", () => {
     const html = renderToStaticMarkup(
       <BsmContentApprovalManager
