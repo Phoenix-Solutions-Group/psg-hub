@@ -473,6 +473,42 @@ describe("BSM content approval upload helpers", () => {
     );
   });
 
+  it("starts an HTML upload without requiring a customer reviewer", async () => {
+    const { client, inserts } = createFakeClient();
+    const createSignedUploadUrl = vi.fn(async (path: string) => ({
+      data: { path, signedUrl: "https://upload.example", token: "token-html" },
+      error: null,
+    }));
+    const storage = {
+      from: vi.fn(() => ({ createSignedUploadUrl })),
+    };
+
+    const result = await createBsmContentApprovalUpload(
+      {
+        shopId: SHOP_ID,
+        actorProfileId: ACTOR_ID,
+        title: "HTML upload proof",
+        contextNote: "Confirm the uploaded HTML document.",
+        fileName: "landing-page.html",
+        contentType: "text/html",
+        byteSize: 2048,
+      },
+      { client: client as never, storage },
+    );
+
+    expect(inserts.map((entry) => entry.table)).toEqual([
+      "bsm_content_review_items",
+      "bsm_content_review_versions",
+      "bsm_content_review_events",
+    ]);
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_reviewers")).toBeUndefined();
+    expect(result.upload.token).toBe("token-html");
+    expect(result.item.customerProfileId).toBeNull();
+    expect(result.item.contentType).toBe("document");
+    expect(result.item.currentVersion?.contentType).toBe("text/html");
+    expect(createSignedUploadUrl).toHaveBeenCalledOnce();
+  });
+
   it("attaches an uploaded document to the selected Review Workspace current round without sending customer email", async () => {
     const { client, inserts } = createWorkspaceFakeClient();
     const createSignedUploadUrl = vi.fn(async (path: string) => ({
