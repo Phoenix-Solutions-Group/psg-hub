@@ -21,6 +21,13 @@ const ROUND_ID = "55555555-5555-4555-8555-555555555555";
 const ITEM_ID = "66666666-6666-4666-8666-666666666666";
 const VERSION_ID = "77777777-7777-4777-8777-777777777777";
 
+function schemaCacheColumnError(table: string, column: string) {
+  return {
+    code: "PGRST204",
+    message: `Could not find the '${column}' column of '${table}' in the schema cache`,
+  };
+}
+
 function createFakeClient() {
   const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const updates: Array<{ table: string; payload: Record<string, unknown>; id: string }> = [];
@@ -141,7 +148,9 @@ class ChainSelect {
       collaborator?: Record<string, unknown> | null;
       existingItemProjectId?: string | null;
       existingReviewers?: Array<Record<string, unknown>>;
+      missingSchemaCacheColumns?: Map<string, string[]>;
     } = {},
+    private selectedColumns = "",
   ) {}
 
   eq(column: string, value: unknown) {
@@ -227,6 +236,16 @@ class ChainSelect {
   }
 
   then(resolve: (value: { data: Array<Record<string, unknown>>; error: null }) => unknown) {
+    const missingColumn = this.options.missingSchemaCacheColumns
+      ?.get(this.table)
+      ?.find((column) => this.selectedColumns.includes(column) || column in this.filters);
+    if (missingColumn) {
+      return Promise.resolve({
+        data: [],
+        error: schemaCacheColumnError(this.table, missingColumn),
+      }).then(resolve as never);
+    }
+
     if (this.table === "bsm_content_review_items") {
       return Promise.resolve({ data: [{ position: 2 }], error: null }).then(resolve);
     }
@@ -258,18 +277,27 @@ function createWorkspaceFakeClient(options: {
   insertErrorsByTable?: Record<string, string>;
   existingItemProjectId?: string | null;
   existingReviewers?: Array<Record<string, unknown>>;
+  missingSchemaCacheColumnsByTable?: Record<string, string[]>;
 } = {}) {
-  const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const inserts: Array<{ table: string; payload: Record<string, unknown> | Array<Record<string, unknown>> }> = [];
   const updates: Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }> = [];
   const deletes: Array<{ table: string; filters: Record<string, unknown> }> = [];
+  const missingSchemaCacheColumns = new Map(
+    Object.entries(options.missingSchemaCacheColumnsByTable ?? {}).map(([table, columns]) => [table, [...columns]]),
+  );
   const client = {
     from(table: string) {
       return {
-        select() {
-          return new ChainSelect(table, options);
+        select(columns?: string) {
+          return new ChainSelect(table, { ...options, missingSchemaCacheColumns }, columns ?? "");
         },
-        insert(payload: Record<string, unknown>) {
+        insert(payload: Record<string, unknown> | Array<Record<string, unknown>>) {
           inserts.push({ table, payload });
+          const missingColumn = missingSchemaCacheColumns.get(table)?.find((column) => {
+            const rows = Array.isArray(payload) ? payload : [payload];
+            return rows.some((row) => column in row);
+          });
+          if (missingColumn) return Promise.resolve({ error: schemaCacheColumnError(table, missingColumn) });
           const message = options.insertErrorsByTable?.[table];
           if (message) return Promise.resolve({ error: { message } });
           return Promise.resolve({ error: null });
@@ -620,6 +648,55 @@ describe("BSM content approval upload helpers", () => {
     expect(createSignedUploadUrl).toHaveBeenCalledOnce();
   });
 
+  it("starts a Review Workspace upload with no customer reviewer when reviewer columns are stale in the schema cache", async () => {
+    const { client, inserts } = createWorkspaceFakeClient({
+      collaborator: null,
+      missingSchemaCacheColumnsByTable: {
+        bsm_content_review_reviewers: ["removed_at", "invitation_id", "round_id", "reviewer_email", "reviewer_name", "submission_status"],
+      },
+    });
+    const createSignedUploadUrl = vi.fn(async (path: string) => ({
+      data: { path, signedUrl: "https://upload.example", token: "token-1" },
+      error: null,
+    }));
+    const storage = {
+      from: vi.fn(() => ({ createSignedUploadUrl })),
+    };
+
+    const result = await createBsmContentApprovalUpload(
+      {
+        shopId: SHOP_ID,
+        reviewWorkspaceProjectId: PROJECT_ID,
+        actorProfileId: ACTOR_ID,
+        actorRole: "psg_superadmin",
+        title: "Production upload retest",
+        contextNote: "Confirm this uploaded document.",
+        fileName: "landing-page.html",
+        contentType: "text/html",
+        byteSize: 2048,
+      },
+      { client: client as never, storage },
+    );
+
+    expect(result.item.customerProfileId).toBeNull();
+    expect(result.item.reviewWorkspace?.projectId).toBe(PROJECT_ID);
+    expect(createSignedUploadUrl).toHaveBeenCalledOnce();
+
+    const reviewerAttempts = inserts.filter((entry) => entry.table === "bsm_content_review_reviewers");
+    expect(reviewerAttempts.length).toBeGreaterThan(1);
+    const finalReviewerPayload = reviewerAttempts.at(-1)?.payload as Array<Record<string, unknown>>;
+    expect(finalReviewerPayload).toEqual([
+      expect.objectContaining({
+        review_item_id: result.item.id,
+        shop_id: SHOP_ID,
+        profile_id: PROFILE_ID,
+        reviewer_role: "reviewer",
+        notification_preference: "email",
+      }),
+    ]);
+    expect(finalReviewerPayload[0]).not.toHaveProperty("invitation_id");
+  });
+
   it("still requires non-superadmin staff to be Review Workspace collaborators", async () => {
     const { client } = createWorkspaceFakeClient({ collaborator: null });
     const createSignedUploadUrl = vi.fn();
@@ -675,7 +752,9 @@ describe("BSM content approval upload helpers", () => {
       ),
     ).rejects.toThrow("Could not start upload");
 
-    const item = inserts.find((entry) => entry.table === "bsm_content_review_items")?.payload;
+    const item = inserts.find((entry) => entry.table === "bsm_content_review_items")?.payload as
+      | Record<string, unknown>
+      | undefined;
     expect(item?.current_version_id).toBeUndefined();
     expect(deletes).toContainEqual({
       table: "bsm_content_review_items",
@@ -711,7 +790,9 @@ describe("BSM content approval upload helpers", () => {
       ),
     ).rejects.toThrow("Could not create review version");
 
-    const item = inserts.find((entry) => entry.table === "bsm_content_review_items")?.payload;
+    const item = inserts.find((entry) => entry.table === "bsm_content_review_items")?.payload as
+      | Record<string, unknown>
+      | undefined;
     expect(createSignedUploadUrl).not.toHaveBeenCalled();
     expect(deletes).toContainEqual({
       table: "bsm_content_review_items",

@@ -22,6 +22,7 @@ export {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SAFE_SEGMENT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/;
+const PGRST_SCHEMA_CACHE_COLUMN_RE = /'([^']+)' column/;
 type BsmContentApprovalActorRole = "customer" | "psg_internal" | "psg_superadmin";
 
 export type ContentApprovalStorage = {
@@ -336,6 +337,90 @@ async function attachItemToCurrentWorkspaceRound(
   if (eventError) throw new Error(`Could not record Review Workspace attachment: ${eventError.message}`);
 }
 
+function missingSchemaCacheColumn(error: { code?: string | null; message?: string | null } | null): string | null {
+  if (error?.code !== "PGRST204") return null;
+  const match = error.message?.match(PGRST_SCHEMA_CACHE_COLUMN_RE);
+  return match?.[1] ?? null;
+}
+
+async function insertWithSchemaCacheFallback(
+  client: SupabaseClient,
+  table: string,
+  payload: Record<string, unknown> | Array<Record<string, unknown>>,
+  fallbackColumns: ReadonlySet<string>,
+  errorPrefix: string,
+): Promise<void> {
+  const attemptedColumns = new Set<string>();
+  let nextPayload = Array.isArray(payload)
+    ? payload.map((row) => ({ ...row }))
+    : { ...payload };
+
+  while (true) {
+    const { error } = await client.from(table).insert(nextPayload);
+    if (!error) return;
+
+    const missingColumn = missingSchemaCacheColumn(error);
+    if (!missingColumn || !fallbackColumns.has(missingColumn) || attemptedColumns.has(missingColumn)) {
+      throw new Error(`${errorPrefix}: ${error.message}`);
+    }
+
+    attemptedColumns.add(missingColumn);
+    if (Array.isArray(nextPayload)) {
+      nextPayload = nextPayload.map((row) => {
+        const retryRow = { ...row };
+        delete retryRow[missingColumn];
+        return retryRow;
+      });
+    } else {
+      const retryPayload = { ...nextPayload };
+      delete retryPayload[missingColumn];
+      nextPayload = retryPayload;
+    }
+  }
+}
+
+async function loadExistingReviewerKeys(client: SupabaseClient, itemId: string): Promise<Set<string>> {
+  const fallbackColumns = new Set(["invitation_id", "reviewer_email", "removed_at"]);
+  const attemptedColumns = new Set<string>();
+  const selectColumns = new Set(["profile_id", "reviewer_email", "invitation_id"]);
+  let filterRemovedAt = true;
+
+  while (true) {
+    let query = client
+      .from("bsm_content_review_reviewers")
+      .select(Array.from(selectColumns).join(", "))
+      .eq("review_item_id", itemId);
+    if (filterRemovedAt) {
+      query = query.is("removed_at", null);
+    }
+
+    const { data, error } = await query;
+    if (!error) {
+      return new Set(
+        ((data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => {
+          const profileId = row.profile_id as string | null;
+          if (profileId) return `profile:${profileId}`;
+          const invitationId = row.invitation_id as string | null;
+          if (invitationId) return `invitation:${invitationId}`;
+          return `email:${((row.reviewer_email as string | null) ?? "").toLowerCase()}`;
+        }),
+      );
+    }
+
+    const missingColumn = missingSchemaCacheColumn(error);
+    if (!missingColumn || !fallbackColumns.has(missingColumn) || attemptedColumns.has(missingColumn)) {
+      throw new Error(`Could not load existing reviewers: ${error.message}`);
+    }
+
+    attemptedColumns.add(missingColumn);
+    if (missingColumn === "removed_at") {
+      filterRemovedAt = false;
+    } else {
+      selectColumns.delete(missingColumn);
+    }
+  }
+}
+
 async function addReviewersForItem(
   client: SupabaseClient,
   input: {
@@ -349,22 +434,7 @@ async function addReviewersForItem(
   let existingReviewerKeys = new Set<string>();
 
   if (input.workspace) {
-    const { data: existingReviewers, error: existingReviewerError } = await client
-      .from("bsm_content_review_reviewers")
-      .select("profile_id, reviewer_email, invitation_id")
-      .eq("review_item_id", input.itemId)
-      .is("removed_at", null);
-    if (existingReviewerError) throw new Error(`Could not load existing reviewers: ${existingReviewerError.message}`);
-
-    existingReviewerKeys = new Set(
-      ((existingReviewers ?? []) as Array<Record<string, unknown>>).map((row) => {
-        const profileId = row.profile_id as string | null;
-        if (profileId) return `profile:${profileId}`;
-        const invitationId = row.invitation_id as string | null;
-        if (invitationId) return `invitation:${invitationId}`;
-        return `email:${((row.reviewer_email as string | null) ?? "").toLowerCase()}`;
-      }),
-    );
+    existingReviewerKeys = await loadExistingReviewerKeys(client, input.itemId);
   }
 
   if (input.workspace) {
@@ -428,10 +498,13 @@ async function addReviewersForItem(
 
   if (dedupedReviewerRows.length === 0) return;
 
-  const { error: reviewerError } = await client
-    .from("bsm_content_review_reviewers")
-    .insert(dedupedReviewerRows);
-  if (reviewerError) throw new Error(`Could not add reviewer: ${reviewerError.message}`);
+  await insertWithSchemaCacheFallback(
+    client,
+    "bsm_content_review_reviewers",
+    dedupedReviewerRows,
+    new Set(["invitation_id", "round_id", "reviewer_email", "reviewer_name", "submission_status"]),
+    "Could not add reviewer",
+  );
 }
 
 function toListItem(input: {
