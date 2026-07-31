@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { BsmContentApprovalManager } from "@/components/ops/bsm-content-approval-manager";
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
-import { listBsmContentApprovals } from "@/lib/bsm/content-approvals";
-import type { BsmContentApprovalListItem } from "@/lib/bsm/content-approvals-shared";
+import { listBsmContentApprovals, listBsmContentApprovalWorkspaces } from "@/lib/bsm/content-approvals";
+import type { BsmContentApprovalListItem, BsmContentApprovalWorkspaceOption } from "@/lib/bsm/content-approvals-shared";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -10,9 +10,13 @@ import { createServiceClient } from "@/lib/supabase/service";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type BsmContentApprovalsPageProps = {
+  searchParams: Promise<{ shopId?: string; workspaceId?: string }>;
+};
+
 function mergeShopOptions(
   shopRows: Array<{ id: unknown; name: unknown }>,
-  fallbackShops: Array<{ id: string; name: string }>
+  fallbackShops: Array<{ id: string; name: string }>,
 ): Array<{ id: string; name: string }> {
   const shopsById = new Map<string, { id: string; name: string }>();
 
@@ -32,12 +36,12 @@ function mergeShopOptions(
   }
 
   return [...shopsById.values()].sort((a, b) =>
-    (a.name || a.id).localeCompare(b.name || b.id)
+    (a.name || a.id).localeCompare(b.name || b.id),
   );
 }
 
 function companyBackedShopOptions(
-  companyRows: Array<{ shop_id: unknown; name: unknown }>
+  companyRows: Array<{ shop_id: unknown; name: unknown }>,
 ): Array<{ id: string; name: string }> {
   const shopsById = new Map<string, { id: string; name: string }>();
 
@@ -52,7 +56,18 @@ function companyBackedShopOptions(
   return [...shopsById.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export default async function BsmContentApprovalsPage() {
+function ensureShopOption(
+  shops: Array<{ id: string; name: string }>,
+  shopId: string | null | undefined,
+): Array<{ id: string; name: string }> {
+  if (!shopId || shops.some((shop) => shop.id === shopId)) return shops;
+  return [...shops, { id: shopId, name: shopId }].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+}
+
+export default async function BsmContentApprovalsPage({ searchParams }: BsmContentApprovalsPageProps) {
+  const { shopId: requestedShopId, workspaceId: requestedWorkspaceId } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -72,6 +87,7 @@ export default async function BsmContentApprovalsPage() {
   }
 
   let approvals: BsmContentApprovalListItem[] = [];
+  let workspaces: BsmContentApprovalWorkspaceOption[] = [];
   let shops: Array<{ id: string; name: string }> = [];
   let activeShopId: string | null = null;
   let loadError = false;
@@ -79,9 +95,13 @@ export default async function BsmContentApprovalsPage() {
 
   try {
     approvals = await listBsmContentApprovals(service);
+    workspaces = await listBsmContentApprovalWorkspaces(service, { actorProfileId: user.id });
   } catch {
     loadError = true;
   }
+
+  const requestedWorkspace = workspaces.find((workspace) => workspace.id === requestedWorkspaceId);
+  const requestedWorkspaceShopId = requestedWorkspace?.shopId ?? null;
 
   let contextShops: Array<{ id: string; name: string }> = [];
   try {
@@ -101,11 +121,21 @@ export default async function BsmContentApprovalsPage() {
       .order("name", { ascending: true })
       .limit(500);
     if (error) throw error;
-    shops = mergeShopOptions(companyBackedShopOptions(data ?? []), contextShops);
+    shops = ensureShopOption(
+      mergeShopOptions(companyBackedShopOptions(data ?? []), contextShops),
+      requestedWorkspaceShopId ?? requestedShopId,
+    );
   } catch {
     loadError = true;
-    shops = mergeShopOptions([], contextShops);
+    shops = ensureShopOption(mergeShopOptions([], contextShops), requestedWorkspaceShopId ?? requestedShopId);
   }
+
+  activeShopId =
+    shops.find((shop) => shop.id === requestedWorkspaceShopId)?.id ??
+    shops.find((shop) => shop.id === requestedShopId)?.id ??
+    shops.find((shop) => shop.id === activeShopId)?.id ??
+    shops[0]?.id ??
+    null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -128,8 +158,10 @@ export default async function BsmContentApprovalsPage() {
 
       <BsmContentApprovalManager
         initialApprovals={approvals}
+        workspaces={workspaces}
         shops={shops}
         activeShopId={activeShopId}
+        activeWorkspaceProjectId={requestedWorkspaceId ?? null}
       />
     </div>
   );

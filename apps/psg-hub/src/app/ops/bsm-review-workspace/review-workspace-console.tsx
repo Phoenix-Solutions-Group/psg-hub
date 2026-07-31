@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { CheckCircle, ClipboardList, Eye, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useMemo, useState } from "react";
+import { CheckCircle, ClipboardList, Eye, FileUp, Plus } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +36,11 @@ export function ReviewWorkspaceConsole({
     return [...optionsById.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [shops]);
   const [shopId, setShopId] = useState(defaultShopId ?? shopOptions[0]?.id ?? "");
+  const selectedShopId = shopOptions.some((shop) => shop.id === shopId)
+    ? shopId
+    : defaultShopId && shopOptions.some((shop) => shop.id === defaultShopId)
+      ? defaultShopId
+      : shopOptions[0]?.id ?? "";
   const [title, setTitle] = useState("E2E website review workspace");
   const [reviewerEmail, setReviewerEmail] = useState("reviewer@e2e.test");
   const [reviewerName, setReviewerName] = useState("E2E Reviewer");
@@ -54,18 +59,13 @@ export function ReviewWorkspaceConsole({
     () => slice ? `/review-workspace?invite=${encodeURIComponent(slice.inviteToken)}` : "",
     [slice],
   );
-
-  useEffect(() => {
-    if (shopOptions.length === 0) {
-      setShopId("");
-      return;
-    }
-    if (!shopOptions.some((shop) => shop.id === shopId)) {
-      setShopId(defaultShopId && shopOptions.some((shop) => shop.id === defaultShopId)
-        ? defaultShopId
-        : shopOptions[0].id);
-    }
-  }, [defaultShopId, shopId, shopOptions]);
+  const uploadUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (selectedShopId) params.set("shopId", selectedShopId);
+    if (slice?.projectId) params.set("workspaceId", slice.projectId);
+    const query = params.toString();
+    return `/ops/bsm-content-approvals${query ? `?${query}` : ""}`;
+  }, [selectedShopId, slice]);
 
   async function createWorkspace() {
     setPending(true);
@@ -76,7 +76,7 @@ export function ReviewWorkspaceConsole({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          shopId,
+          shopId: selectedShopId,
           title,
           description,
           reviewerEmail,
@@ -134,7 +134,7 @@ export function ReviewWorkspaceConsole({
               <Label htmlFor="shop">Shop</Label>
               <select
                 id="shop"
-                value={shopId}
+                value={selectedShopId}
                 onChange={(event) => setShopId(event.target.value)}
                 className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
               >
@@ -171,15 +171,24 @@ export function ReviewWorkspaceConsole({
           </div>
           {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
           <div className="flex flex-wrap gap-3">
-            <Button type="button" onClick={createWorkspace} disabled={pending || !shopId}>
+            <Button type="button" onClick={createWorkspace} disabled={pending || !selectedShopId}>
               <Plus className="size-4" aria-hidden="true" />
               Create workspace
             </Button>
+            <a className={buttonVariants({ variant: "outline" })} href={uploadUrl}>
+              <FileUp className="size-4" aria-hidden="true" />
+              Upload file
+            </a>
             <Button type="button" variant="outline" onClick={() => loadResult()} disabled={pending || !slice}>
               <Eye className="size-4" aria-hidden="true" />
               Refresh submitted review
             </Button>
           </div>
+          <p className="text-sm text-muted-foreground">
+            {slice
+              ? "Use Upload file to add a PDF, image, text, Word, or HTML file to this Review Workspace."
+              : "Use Upload file to start an upload for the selected shop, then choose the Review Workspace."}
+          </p>
         </CardContent>
       </Card>
 

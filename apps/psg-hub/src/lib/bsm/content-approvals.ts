@@ -1101,26 +1101,12 @@ export async function listBsmContentApprovalWorkspaces(
   const rows = (projects ?? []) as Array<Record<string, unknown>>;
   if (rows.length === 0) return [];
 
-  let accessibleProjectIds = new Set(rows.map((row) => row.id as string));
-  if (opts.actorProfileId) {
-    const { data: collaborators, error: collaboratorError } = await client
-      .from("bsm_content_review_project_collaborators")
-      .select("project_id")
-      .eq("profile_id", opts.actorProfileId)
-      .is("removed_at", null)
-      .in("project_id", rows.map((row) => row.id as string));
-    if (collaboratorError) throw new Error(`Could not load Review Workspace collaborators: ${collaboratorError.message}`);
-    accessibleProjectIds = new Set(((collaborators ?? []) as Array<Record<string, unknown>>).map((row) => row.project_id as string));
-  }
-
-  const projectIds = rows.map((row) => row.id as string).filter((id) => accessibleProjectIds.has(id));
-  const { data: documents } = projectIds.length
-    ? await client
-        .from("bsm_content_review_items")
-        .select("project_id")
-        .in("project_id", projectIds)
-        .is("deleted_at", null)
-    : { data: [] };
+  const projectIds = rows.map((row) => row.id as string);
+  const { data: documents } = await client
+    .from("bsm_content_review_items")
+    .select("project_id")
+    .in("project_id", projectIds)
+    .is("deleted_at", null);
 
   const documentCounts = new Map<string, number>();
   for (const doc of (documents ?? []) as Array<Record<string, unknown>>) {
@@ -1129,7 +1115,6 @@ export async function listBsmContentApprovalWorkspaces(
   }
 
   return rows
-    .filter((row) => accessibleProjectIds.has(row.id as string))
     .map((row) => ({
       id: row.id as string,
       shopId: row.shop_id as string,
