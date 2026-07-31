@@ -33,8 +33,20 @@ type Phase =
 
 export const BSM_CONTENT_APPROVAL_FILE_ACCEPT =
   ".pdf,.md,.markdown,.html,.htm,.png,.jpg,.jpeg,.webp,.docx,.txt,application/pdf,text/markdown,text/html,image/png,image/jpeg,image/webp,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
+export const BSM_CONTENT_APPROVAL_UNSUPPORTED_FILE_MESSAGE =
+  "This file type is not supported. Upload a PDF, MD, HTML, image, Word document, or text file.";
 
 export type BsmContentApprovalShopOption = { id: string; name: string };
+
+export function getBsmContentApprovalFileValidationError(selectedFile: File | null) {
+  if (!selectedFile) return null;
+  if (!normalizeApprovalMimeType(selectedFile.name, selectedFile.type)) {
+    return BSM_CONTENT_APPROVAL_UNSUPPORTED_FILE_MESSAGE;
+  }
+  if (selectedFile.size <= 0) return "The selected file is empty.";
+  if (selectedFile.size > MAX_APPROVAL_FILE_BYTES) return "The file is too large. Upload a file under 25 MB.";
+  return null;
+}
 
 export function BsmContentApprovalManager({
   initialApprovals,
@@ -84,30 +96,24 @@ export function BsmContentApprovalManager({
     [workspaces, shopId],
   );
 
-  const validationError = useMemo(() => {
+  const fileValidationError = useMemo(() => getBsmContentApprovalFileValidationError(file), [file]);
+  const formValidationError = useMemo(() => {
     if (!shopId.trim()) return "Shop ID is required.";
     if (!title.trim()) return "Title is required.";
     if (!contextNote.trim()) return "Context note is required.";
-    if (sourceKind === "generated_page") {
-      if (!generatedPagePath.trim()) return "Generated page path is required.";
-      if (previewUrl.trim()) {
-        try {
-          const url = new URL(previewUrl.trim());
-          if (url.protocol !== "https:" && url.protocol !== "http:") return "Preview URL must be a web URL.";
-        } catch {
-          return "Preview URL must be a valid URL.";
-        }
+    if (sourceKind !== "generated_page") return null;
+    if (!generatedPagePath.trim()) return "Generated page path is required.";
+    if (previewUrl.trim()) {
+      try {
+        const url = new URL(previewUrl.trim());
+        if (url.protocol !== "https:" && url.protocol !== "http:") return "Preview URL must be a web URL.";
+      } catch {
+        return "Preview URL must be a valid URL.";
       }
-      return null;
     }
-    if (!file) return null;
-    if (!normalizeApprovalMimeType(file.name, file.type)) {
-      return "This file type is not supported. Upload a PDF, MD, HTML, image, Word document, or text file.";
-    }
-    if (file.size <= 0) return "The selected file is empty.";
-    if (file.size > MAX_APPROVAL_FILE_BYTES) return "The file is too large. Upload a file under 25 MB.";
     return null;
-  }, [shopId, title, contextNote, sourceKind, generatedPagePath, previewUrl, file]);
+  }, [shopId, title, contextNote, sourceKind, generatedPagePath, previewUrl]);
+  const validationError = fileValidationError ?? formValidationError;
 
   const uploading = phase.kind === "uploading";
   const canSubmit =
@@ -536,8 +542,10 @@ export function BsmContentApprovalManager({
             {uploading ? "Saving" : sourceKind === "generated_page" ? "Attach" : "Upload"}
           </button>
         </div>
-        {validationError && (file || sourceKind === "generated_page") ? (
-          <p className="text-sm text-destructive">{validationError}</p>
+        {fileValidationError ? (
+          <p className="text-sm text-destructive">{fileValidationError}</p>
+        ) : formValidationError && sourceKind === "generated_page" ? (
+          <p className="text-sm text-destructive">{formValidationError}</p>
         ) : null}
         {phase.kind === "success" ? (
           <p className="rounded-md border border-success/40 bg-success/10 px-3 py-2 text-sm text-success-foreground">

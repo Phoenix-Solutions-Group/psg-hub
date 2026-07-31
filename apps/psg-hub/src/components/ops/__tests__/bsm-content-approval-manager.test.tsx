@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   BSM_CONTENT_APPROVAL_FILE_ACCEPT,
+  BSM_CONTENT_APPROVAL_UNSUPPORTED_FILE_MESSAGE,
   BsmContentApprovalManager,
+  getBsmContentApprovalFileValidationError,
 } from "@/components/ops/bsm-content-approval-manager";
 
 describe("BsmContentApprovalManager", () => {
@@ -45,6 +47,16 @@ describe("BsmContentApprovalManager", () => {
     expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".markdown");
     expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".html");
     expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".htm");
+  });
+
+  it("returns the promised unsupported-file message for blocked uploads", () => {
+    expect(
+      getBsmContentApprovalFileValidationError(
+        new File(["not a supported review document"], "installer.exe", {
+          type: "application/x-msdownload",
+        }),
+      ),
+    ).toBe(BSM_CONTENT_APPROVAL_UNSUPPORTED_FILE_MESSAGE);
   });
 
   it("renders a Review Workspace picker scoped to the selected shop", () => {
