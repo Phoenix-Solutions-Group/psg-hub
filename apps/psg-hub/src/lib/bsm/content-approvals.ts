@@ -393,7 +393,10 @@ async function addReviewersForItem(
     }
   }
 
-  if (!reviewerRows.some((row) => row.profile_id === input.customerProfileId)) {
+  if (
+    input.customerProfileId &&
+    !reviewerRows.some((row) => row.profile_id === input.customerProfileId)
+  ) {
     reviewerRows.push({
       review_item_id: input.itemId,
       shop_id: input.shopId,
