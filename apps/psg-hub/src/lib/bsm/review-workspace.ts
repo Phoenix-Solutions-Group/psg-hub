@@ -1045,6 +1045,25 @@ export async function requireGuestReviewSession(
   };
 }
 
+async function requireRoundDocumentAccess(
+  client: ReviewWorkspaceDbClient,
+  access: GuestSessionAccess,
+  reviewItemId: string,
+  versionId: string,
+) {
+  const { data, error } = await client
+    .from("bsm_content_review_round_documents")
+    .select("review_item_id")
+    .eq("round_id", access.roundId)
+    .eq("review_item_id", reviewItemId)
+    .eq("version_id", versionId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not verify review document assignment: ${error.message}`);
+  if (!data) {
+    throw new ReviewWorkspaceInputError(404, "This review document is not part of the active round");
+  }
+}
+
 export async function addGuestReviewPinComment(
   input: AddGuestPinCommentInput,
   deps: { client?: ReviewWorkspaceDbClient } = {},
@@ -1059,6 +1078,7 @@ export async function addGuestReviewPinComment(
   const body = cleanText("body", input.body, 2000);
   const xRatio = assertRatio("xRatio", input.xRatio);
   const yRatio = assertRatio("yRatio", input.yRatio);
+  await requireRoundDocumentAccess(client, access, reviewItemId, versionId);
   if (!Number.isInteger(input.pinNumber) || input.pinNumber <= 0) {
     throw new ReviewWorkspaceInputError(400, "pinNumber is required");
   }
@@ -1277,6 +1297,7 @@ export async function submitGuestReviewRound(
   for (const decision of input.decisions) {
     const reviewItemId = assertUuid("reviewItemId", decision.reviewItemId);
     const versionId = assertUuid("versionId", decision.versionId);
+    await requireRoundDocumentAccess(client, access, reviewItemId, versionId);
     if (decision.decision === "changes_requested") {
       const { data: draftComments, error: draftError } = await client
         .from("bsm_content_review_comments")

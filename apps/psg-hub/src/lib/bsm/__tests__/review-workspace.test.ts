@@ -130,6 +130,7 @@ type FakeClientOptions = {
   hasPin?: boolean;
   legacyEventsRequireReviewItem?: boolean;
   missingSchemaCacheColumns?: Record<string, string[]>;
+  roundDocumentInScope?: boolean;
 };
 
 class Query {
@@ -167,6 +168,8 @@ class Query {
 
   private rows() {
     if (this.table === "bsm_content_review_round_documents") {
+      const isInScope = this.options.roundDocumentInScope ?? true;
+      if (!isInScope) return { data: [], error: null };
       return { data: [{ review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID }], error: null };
     }
     if (this.table === "bsm_content_review_comments") {
@@ -329,6 +332,16 @@ class Query {
   }
 
   maybeSingle() {
+    if (this.table === "bsm_content_review_round_documents") {
+      const isInScope = this.options.roundDocumentInScope ?? true;
+      const reviewItemId = String(this.filters.review_item_id ?? "");
+      const versionId = String(this.filters.version_id ?? "");
+      const requestedInScope = reviewItemId === REVIEW_ITEM_ID && versionId === VERSION_ID;
+      return Promise.resolve({
+        data: isInScope && requestedInScope ? { review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID } : null,
+        error: null,
+      });
+    }
     if (this.table === "bsm_content_review_projects") {
       return Promise.resolve({
         data: { id: PROJECT_ID, shop_id: SHOP_ID, status: "draft", deleted_at: null },
@@ -923,6 +936,54 @@ describe("BSM review workspace foundation service", () => {
       draft_status: "locked",
       locked_at: "2026-07-28T19:30:00.000Z",
     });
+  });
+
+  it("rejects pin comments for documents outside the active review round", async () => {
+    const { client } = createFakeClient({ roundDocumentInScope: false });
+
+    await expect(
+      addGuestReviewPinComment(
+        {
+          sessionHash: "session-hash",
+          reviewItemId: "99999999-9999-4999-8999-999999999998",
+          versionId: VERSION_ID,
+          body: "Please update this offer.",
+          pinNumber: 1,
+          viewport: "desktop",
+          xRatio: 0.4,
+          yRatio: 0.6,
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("This review document is not part of the active round");
+  });
+
+  it("rejects review round submission for documents outside the active review round", async () => {
+    const { client } = createFakeClient({ roundDocumentInScope: false });
+
+    await expect(
+      submitGuestReviewRound(
+        {
+          sessionHash: "session-hash",
+          decisions: [{ reviewItemId: "99999999-9999-4999-8999-999999999998", versionId: VERSION_ID, decision: "approved" }],
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("This review document is not part of the active round");
+  });
+
+  it("rejects review round submission for documents outside scope even when requesting pin comments", async () => {
+    const { client } = createFakeClient({ roundDocumentInScope: false, hasPin: true });
+
+    await expect(
+      submitGuestReviewRound(
+        {
+          sessionHash: "session-hash",
+          decisions: [{ reviewItemId: "99999999-9999-4999-8999-999999999998", versionId: VERSION_ID, decision: "changes_requested", message: "Please add more details." }],
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("This review document is not part of the active round");
   });
 
   it("rejects duplicate submit and changes-requested decisions without a pin", async () => {
