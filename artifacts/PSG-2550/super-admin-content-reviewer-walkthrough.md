@@ -1,232 +1,311 @@
-# Super Admin Walkthrough: Content Reviewer Features
+# Super Admin Walkthrough: Content Approvals Review Workspace
 
 **Issue:** PSG-2550  
-**Audience:** PSG super admin or internal operator leading a walkthrough  
-**Last updated:** 2026-07-31  
-**Status:** Internal walkthrough for the current BSM content review foundation plus planned reviewer workspace behavior.
+**Audience:** PSG super admin or internal operator leading the human test  
+**Last updated:** 2026-08-03  
+**Status:** Ready for Nick review after the workspace-first Content Approvals rework.
 
 ## Bottom Line
 
-Use this walkthrough to show how PSG prepares marketing content for customer review, keeps the content tied to the correct body shop, collects approval decisions, and preserves an audit trail. The current live foundation is the BSM content approval library. The larger document review workspace is planned on the same foundation and should be described as the next step until QA and launch approval are complete.
+Use this walkthrough to test the corrected Content Approvals experience as a PSG super admin. The current flow is workspace-first: create or choose one Review Workspace for one body shop, add one or more documents, add reviewers, preview the reviewer experience, start the review, then confirm the invited reviewer can comment and submit a decision.
+
+## Direct Links
+
+- Super admin Content Approvals screen: https://home.psgweb.me/ops/bsm-content-approvals
+- Reviewer link format after starting a review: `https://home.psgweb.me/review-workspace?invite=<invite-token>`
+- Sample files in the repo: `artifacts/PSG-2550/sample-files/`
 
 ## What To Say First
 
-"This feature gives PSG a controlled way to send shop-specific marketing content for review before it goes live. A super admin can create a review item, attach a file or generated page, assign it to the right shop, and track customer decisions. The business value is fewer email-thread approvals, clearer accountability, and less risk that the wrong customer sees or approves the wrong content."
+"Content Approvals gives PSG one controlled place to send customer marketing work for approval. A super admin creates a private Review Workspace for one shop, adds the files or generated pages the customer needs to review, chooses the reviewers, and starts a secure review. The customer uses a private link and one-time code to add comments and approve or request changes."
+
+Business value:
+
+- PSG can review full content packages instead of chasing approvals through email.
+- Each workspace is tied to one shop, which reduces the risk of showing the wrong content to the wrong customer.
+- Decisions, comments, files, and versions stay auditable.
 
 ## Pre-Walkthrough Checklist
 
-- Confirm the account has PSG operations access with the `manage_bsm_content_approvals` permission.
-- Pick one demo shop and keep the whole walkthrough inside that shop.
-- Use demo-safe content only. Do not upload customer private files, live credentials, or real production records.
-- Use the demo-safe sample files in `artifacts/PSG-2550/sample-files/`. They cover every currently supported upload type.
-- Prepare one short customer-facing context note, for example: "Please review this July offer before PSG schedules it for publication."
-- If showing planned v2 behavior, say clearly that it is the review workspace roadmap and not a live customer promise until Tess QA and Nick approval are complete.
+- Sign in with a PSG operations account that has the `manage_bsm_content_approvals` permission.
+- Use one demo shop for the entire walkthrough.
+- Use demo-safe files only. Do not upload customer lists, insurance documents, credentials, invoices, or production records.
+- Keep one reviewer email available for the test. Use a safe internal or test inbox unless Nick approves a real customer invite.
+- Open the sample folder: `artifacts/PSG-2550/sample-files/`.
 
-## Sample Files For Nick's Human Test
+## Current Upload Types To Test
 
-Use these files to validate that each supported document type can be uploaded, viewed or downloaded correctly, commented on, and reviewed. Each file is intentionally demo-only and contains no real customer data.
+These are the file types currently accepted by the super-admin Content Approvals upload control. Each file must be under 25 MB.
 
-| File | What it validates | Expected viewer behavior |
+| Sample file | Type tested | Expected behavior |
 | --- | --- | --- |
-| `artifacts/PSG-2550/sample-files/bsm-review-sample-proof.pdf` | PDF upload and review | Opens inline in the browser review view. |
-| `artifacts/PSG-2550/sample-files/bsm-review-sample-before-after.png` | PNG image upload and review | Opens inline as an image. |
-| `artifacts/PSG-2550/sample-files/bsm-review-sample-before-after.jpg` | JPG image upload and review | Opens inline as an image. |
-| `artifacts/PSG-2550/sample-files/bsm-review-sample-before-after.webp` | WebP image upload and review | Opens inline as an image. |
-| `artifacts/PSG-2550/sample-files/bsm-review-sample-copy.md` | Markdown upload and review | Opens inline in the browser review view. |
-| `artifacts/PSG-2550/sample-files/bsm-review-sample-copy.txt` | Plain text upload and review | Opens inline in the browser review view. |
-| `artifacts/PSG-2550/sample-files/bsm-review-sample-landing.html` | HTML upload and review routing | Downloads as an attachment for safety. Upload and decision tracking should still work. |
-| `artifacts/PSG-2550/sample-files/bsm-review-sample-mailer.docx` | Word document upload and review routing | Downloads as an attachment for safety. Upload and decision tracking should still work. |
+| `bsm-review-sample-proof.pdf` | PDF | Uploads as a review document and opens from the proof link. |
+| `bsm-review-sample-mailer.docx` | Word document, DOCX | Uploads as a review document and opens from the proof link or attachment behavior provided by the browser. |
+| `bsm-review-sample-landing.html` | HTML | Uploads as a review document. The app stores HTML safely and opens the proof through the review link. |
+| `bsm-review-sample-copy.md` | Markdown | Uploads as a document-type review file. |
+| `bsm-review-sample-copy.txt` | Plain text | Uploads as a document-type review file. |
+| `bsm-review-sample-before-after.png` | PNG image | Uploads and previews as an image. |
+| `bsm-review-sample-before-after.jpg` | JPG image | Uploads and previews as an image. |
+| `bsm-review-sample-before-after.webp` | WebP image | Uploads and previews as an image. |
 
-Validation pattern for each file:
+Important note for Nick: the underlying review-workspace processing code has a contract for DOC files and HTML ZIP packages, but the current super-admin upload control does not expose DOC or ZIP upload as a testable path on this screen. Do not mark DOC or HTML ZIP as passed from this walkthrough until a visible upload path exists.
 
-1. Upload the file as a super admin.
-2. Confirm the new item appears in the content review library for the demo shop.
-3. Open the file from the customer review view.
-4. Confirm the expected inline or download behavior from the table.
-5. Add one reviewer comment.
-6. Submit one decision: approve, decline, or request updates.
-7. Replace the file once from the admin edit flow to confirm version handling.
-8. Archive the demo review item when the test is complete.
+## Human Test Walkthrough
 
-## Current Super Admin Flow
+### 1. Open Content Approvals
 
-### 1. Open The Content Approval Area
+1. Go to https://home.psgweb.me/ops/bsm-content-approvals.
+2. Confirm the page title says **Content Approvals**.
+3. Confirm the page explains that each approval is managed as a **Review Workspace**.
+4. In **Shop**, choose the demo shop.
 
-Explain that this area is for PSG staff, not general shop users. Access is gated before the system loads review records or allows uploads.
+Expected result: the page shows workspace controls, reviewer controls, document controls, and a table named **Workspace documents**.
 
-What to show:
+### 2. Create A Review Workspace
 
-- Shop selector.
-- Optional customer profile field.
-- Review Workspace selector when a workspace exists for the shop.
-- Review title and customer context note.
-- File versus generated-page source switch.
-- Existing review library list.
+1. In **Workspace title**, enter a clear title, for example `Nick QA - August content review`.
+2. In **Reviewer instructions**, enter a short instruction, for example `Please check the offer, phone number, and requested changes before approval.`
+3. Select **Create workspace**.
 
-Plain-language point:
+Expected result: the new workspace is selected in **Review Workspace**, and the page shows a success message that the workspace is ready for documents and reviewers.
 
-"The first control is shop selection because every review must belong to one shop. That is what prevents one customer from seeing another customer's marketing content."
+What to say: "A one-document approval and a multi-document approval now use the same workspace model. That keeps reviewer progress and decisions in one place."
 
-### 2. Create A Review Item
+### 3. Add Reviewers
 
-Choose the demo shop, enter a clear title, and add a customer context note. Then choose either:
+1. In **Reviewer email**, enter the test reviewer email.
+2. In **Reviewer name**, enter the reviewer name if available.
+3. Select **Add reviewer**.
+4. If saved reviewer contacts appear, also test selecting one saved contact.
 
-- **File:** upload a PDF, Markdown file, HTML file, image, Word document, or text file under 25 MB.
-- **Generated page:** enter the generated page path and, optionally, a web preview link and source content ID.
+Expected result: the selected reviewer appears as a small selected reviewer row or chip. Removing the reviewer should also work.
 
-What to say:
+What to say: "The reviewer is selected before starting the round. That prevents the review from being sent with no responsible customer contact."
 
-"This creates a review record before any customer decision happens. PSG can use it for uploaded marketing files or for a generated page that needs customer approval."
+### 4. Add The First Uploaded File
 
-Expected result:
-
-- The item appears at the top of the review library.
-- If the item is attached to a Review Workspace, the system states it is attached to that workspace.
-- If it is not attached, the system states it is in the customer review library.
-
-### 3. Edit Before Customer Submission
-
-Open the new item for editing. Update the title or context note, or replace the file if needed.
-
-What to say:
-
-"Before the customer submits a decision, PSG can correct the item and save the usable version. The system keeps version history rather than treating files as informal email attachments."
+1. In **Review title**, enter `PDF proof review`.
+2. In **Context note for the customer**, enter `Please confirm this proof is ready for customer-facing use.`
+3. Leave the source switch on **File**.
+4. Choose `artifacts/PSG-2550/sample-files/bsm-review-sample-proof.pdf`.
+5. Select **Add document**.
 
 Expected result:
 
-- The edited title and note save successfully.
-- If a replacement file is uploaded, the new version becomes the usable version.
+- The document appears in **Workspace documents**.
+- The document is attached to the selected Review Workspace.
+- The item enters edit mode so a super admin can adjust the title, note, or replacement file before reviewer submission.
 
-### 4. Attach To A Review Workspace
+### 5. Add A Generated Page
 
-If a Review Workspace exists for the selected shop, choose it and attach the review item.
+1. Select **Generated page**.
+2. In **Review title**, enter `Generated landing page review`.
+3. In **Context note for the customer**, enter `Please review this generated page before PSG schedules it.`
+4. In **Generated page path**, enter `/generated/demo-shop/august-offer`.
+5. In **Preview URL**, enter a safe demo URL if one exists. Otherwise leave it blank.
+6. In **Source content ID**, enter a demo ID if one exists. Otherwise leave it blank.
+7. Select **Attach**.
 
-What to say:
+Expected result: the generated page appears in **Workspace documents** as a generated-page item.
 
-"The Review Workspace is the project-style experience we are building toward. The current content approval item can be linked to that workspace, so we are extending the existing system instead of creating a separate review product."
+### 6. Add The Remaining Sample Files
 
-Expected result:
+Repeat the file upload step for each sample file listed in "Current Upload Types To Test."
 
-- The item shows the selected workspace relationship.
-- The system rejects attaching an item to a workspace for a different shop.
+For each file:
 
-### 5. Explain Customer Reviewer Access
+1. Give the document a simple title that names the file type.
+2. Add a customer context note.
+3. Select the sample file.
+4. Select **Add document**.
+5. Confirm it appears in **Workspace documents**.
 
-Explain the customer side without over-promising planned v2 details.
+Expected result: each accepted file appears in the workspace document list. If any current sample file is rejected, record the exact file name and error message.
 
-Current rules:
+### 7. Edit A Document Before Submission
 
-- A customer must belong to the shop connected to the review item.
-- A customer must be an assigned reviewer for that item unless the item is intentionally available to all eligible shop users.
-- Only shop owners and shop managers can approve, decline, request updates, or ask PSG to restore an older version.
-- PSG-only notes stay hidden from customer users.
+1. Find one uploaded document in **Workspace documents**.
+2. Select **Edit**.
+3. Change the title or context note.
+4. For an uploaded file, choose a replacement file from the sample folder.
+5. Select **Save edit**.
 
-What to say:
+Expected result: the document updates and the page shows that the edit was saved as the usable version.
 
-"The customer reviewer does not get broad access to PSG's system. They only see review records for their shop and only the items they are allowed to review."
+What to say: "A super admin can correct the item before the customer submits a decision. That makes the workspace usable for real production review instead of treating the first upload as final forever."
 
-### 6. Explain Decisions And Follow-Up
+### 8. Preview The Workspace
 
-Walk through the decision outcomes at a business level:
-
-- Approved content can move forward.
-- Changes requested tells PSG the customer needs updates before release.
-- Restore requests let a customer ask PSG to bring back an older version, but a PSG admin must approve and apply that restore.
-
-What to say:
-
-"The decision is not just a message in a thread. It becomes a tracked business record with who acted, what version they reviewed, and when they acted."
-
-### 7. Archive A Review Item
-
-Use archive only for a demo item or no-longer-active item.
-
-What to say:
-
-"Archiving removes the item from the active library without making it look like it was never part of the process. That matters for auditability."
+1. Confirm the Review Workspace is selected.
+2. Select **Preview read-only**.
+3. Review the document list shown in preview mode.
+4. For at least one document with an **Open proof** link, open the proof.
 
 Expected result:
 
-- The item leaves the active library.
-- The archive action is recorded as an admin action.
+- Preview mode says comments and decisions are not saved there.
+- Documents show their processing status and review status.
+- Proof links open in a new tab when available.
 
-## Planned Review Workspace Walkthrough
+### 9. Start The Review
 
-Use this section only when explaining the next version. Introduce it as planned behavior that extends the current system.
+1. Confirm the page does not show a blocker message.
+2. Confirm at least one document is attached.
+3. Confirm at least one reviewer is selected.
+4. Select **Start review**.
 
-Recommended script:
+Expected result:
 
-"The next version turns content approvals into a project workspace. PSG creates one private project for one shop, adds documents, invites reviewers, collects decisions and pinned comments, then generates a summary. It is designed for website pages, campaigns, flyers, and larger marketing packages that need structured review."
+- The page shows **Review started**.
+- It lists how many documents were sent and how many reviewers were invited.
+- Each reviewer has a private `/review-workspace?invite=...` link and a one-time code.
 
-Planned workspace flow:
+If **Start review** is disabled, check the blocker message. The expected blockers are:
 
-1. PSG creates a private review project for one shop.
-2. PSG adds sections and uploads documents.
-3. The system processes each file into a safe review copy.
-4. PSG starts a review round and invites reviewers.
-5. Reviewers verify access with an emailed one-time code.
-6. Reviewers see the project checklist and review required documents.
-7. Reviewers approve as-is or request changes.
-8. Changes requested require specific comments or pins.
-9. PSG triages comments as open, accepted, declined, or needs clarification.
-10. Replacement uploads create new versions and, when needed, a new review round.
-11. The round closes after reviewers submit or PSG closes it early with a reason.
-12. PSG generates a summary PDF for the project and round.
+- Create or select a Review Workspace first.
+- Add at least one document before starting review.
+- Start review is available after every document finishes processing successfully.
+- Choose at least one reviewer before starting review.
 
-Planned limits to state clearly:
+### 10. Open The Reviewer Experience
 
-- Phones are for reading, decisions, summaries, and clarification replies. Desktop or tablet is the expected place for pin-based commenting unless UX testing proves phone pins are reliable.
-- Reviewers should never see other reviewers' private comments.
-- Review links, one-time codes, and reviewer sessions must expire, be revocable, and avoid storing raw secrets.
-- Public launch requires Tess QA and Nick approval before customers use it.
+1. Copy one reviewer link from **Review started**.
+2. Open the full link using the production base URL: `https://home.psgweb.me/review-workspace?invite=<invite-token>`.
+3. Enter the one-time code shown for that reviewer.
+4. Select **Open review**.
 
-## Common Questions
+Expected result: the reviewer sees the private Body Shop Marketer Review workspace with the documents listed.
 
-**Can a shop see another shop's review content?**  
-No. Review records are shop-scoped, and customer access requires shop membership plus reviewer eligibility.
+What to say: "The reviewer does not need broad PSG Hub access. They use a private invite and code for this review."
 
-**Can PSG send a generated landing page for approval?**  
-Yes. The current flow supports a generated-page review item with a path and optional preview link.
+### 11. Review The Actual File
 
-**Can PSG replace a file after upload?**  
-Yes, before customer submission the admin can save an edited item and upload a replacement file as the usable version.
+1. In the reviewer workspace, open at least one proof.
+2. Confirm the proof content matches the file or generated page added by the super admin.
+3. For image files, confirm the image renders in the review area.
+4. For non-image files, confirm the proof link or embedded proof opens without showing private storage paths or internal error details.
 
-**Can customers restore an older version themselves?**  
-No. Customers can request a restore, but PSG must approve and apply it.
+Expected result: the reviewer can inspect the actual proof content or proof link before making a decision.
 
-**Is the v2 project workspace ready to promise publicly?**  
-No. It is the planned direction, but large-file processing, document conversion, malware scanning, safe HTML handling, summary generation, QA, and public approval gates must be completed before launch.
+### 12. Add A Private Comment
 
-## Demo Data Safety Rules
+1. Select **Comment on this document** for the document being tested.
+2. In **Private comment**, enter `Please update the offer wording before approval.`
+3. Select **Add suggestion**.
 
-- Do not upload real customer lists, claims, invoices, credentials, or private documents.
-- Do not use live customer emails for a demo invitation unless the walkthrough has explicit approval.
-- Do not show raw storage paths, tokens, internal error details, or private customer records.
-- Keep the walkthrough inside one demo shop from start to finish.
+Expected result: the comment appears in **Private comments** with a pin number. The comment remains part of the reviewer workspace.
 
-## Acceptance Check For This Walkthrough
+### 13. Request Changes
 
-- A super admin can explain the business purpose in plain English.
-- A super admin can show how to create, edit, attach, and archive a content review item.
-- A super admin can explain who can see the item and why shop isolation matters.
-- A super admin can explain decision outcomes and restore-request handling.
-- A super admin can distinguish current content approval functionality from planned v2 Review Workspace functionality.
-- A super admin can state the launch guardrails: Tess QA and Nick approval before customer-facing release.
+1. Choose **Request changes**.
+2. In **Decision note**, enter `The offer needs one wording update before approval.`
+3. Select **Submit review**.
+
+Expected result:
+
+- The review becomes read-only after submit.
+- The reviewer sees the submitted state.
+- If the review round is still active, the reviewer can use **Reopen response**.
+
+### 14. Reopen And Approve
+
+1. Select **Reopen response**.
+2. Choose **Approve**.
+3. Update the decision note if needed.
+4. Select **Submit review** again.
+
+Expected result: the revised submission is saved. This confirms that a reviewer can revise while the round remains open.
+
+### 15. Confirm Super Admin Tracking
+
+1. Return to https://home.psgweb.me/ops/bsm-content-approvals.
+2. Confirm the workspace document table shows comment counts and the latest decision.
+3. Confirm the workspace row reflects the active review state.
+
+Expected result: PSG staff can see customer feedback and decision status without relying on an email thread.
+
+### 16. Remove Demo Documents
+
+Use this only for demo records.
+
+1. In **Workspace documents**, choose a demo item.
+2. Select **Remove**.
+3. Confirm the remove action.
+
+Expected result: the item leaves the active workspace document list.
+
+## Features Covered
+
+- Super-admin access gate for Content Approvals.
+- Shop-scoped workspace selection.
+- Review Workspace creation.
+- Reviewer instructions.
+- Saved reviewer contact selection.
+- New reviewer entry.
+- File upload review documents.
+- Generated-page review documents.
+- Required title and customer context note.
+- Required Review Workspace before attaching documents.
+- File size and file type validation.
+- Edit title, note, and replacement file before submission.
+- Attach existing unattached items to the selected workspace.
+- Read-only workspace preview.
+- Start review.
+- Reviewer invite link and one-time code.
+- Reviewer secure access screen.
+- Reviewer document list.
+- Proof opening from the reviewer workspace.
+- Private reviewer comments.
+- Change-request requirement that at least one comment exists before requesting changes.
+- Approve decision.
+- Changes-requested decision.
+- Submitted review read-only state.
+- Reopen response while the round remains active.
+- Admin tracking of comments and latest decision.
+- Remove from active library for demo cleanup.
+
+## Pass Or Fail Checklist
+
+Mark the walkthrough as passed only if all of these are true:
+
+- The Content Approvals link opens for a PSG super admin.
+- A Review Workspace can be created for one demo shop.
+- At least one reviewer can be added.
+- PDF, DOCX, HTML, Markdown, text, PNG, JPG, and WebP sample files can each be tested through the current upload control.
+- A generated-page review item can be attached.
+- Preview read-only works and does not save comments or decisions.
+- Start review produces a reviewer link and one-time code.
+- The reviewer can open the review with the link and code.
+- The reviewer can inspect the actual proof or proof link.
+- The reviewer can add a private comment.
+- The reviewer can request changes after adding a comment.
+- The reviewer can reopen and resubmit while the round remains active.
+- The super admin can see the resulting comments and latest decision.
+- Demo records can be removed from the active list after testing.
+
+## Known Gap To Confirm Before Public Customer Rollout
+
+The current super-admin screen does not expose DOC upload or HTML ZIP upload, even though the lower-level processing contract includes those file kinds. Nick should not sign off that DOC and HTML ZIP are customer-ready from this walkthrough alone. They need either a visible upload path or a separate release note saying those formats are deferred.
+
+## Safety Rules
+
+- Do not upload real customer private documents.
+- Do not use a real customer email unless Nick approves that customer-facing test.
+- Do not share invite links or one-time codes outside the test group.
+- Do not publish this as a customer-facing guide until Nick approves it.
 
 ## Sources Checked
 
 - `Reference.md`
 - `docs/runbooks/graphify-codebase-graph.md`
-- Graphify query: `where are content reviewer features, review queue, content approval, or super admin docs/routes in psg-hub`
-- Graphify query: `what file types does the BSM content reviewer/content approvals upload and preview flow support? include relevant files`
-- `docs/specs/004-bsm-content-approvals-architecture.md`
-- `docs/specs/005-bsm-content-approver-v2-plan.md`
+- Graphify query: `where are the content reviewer, content approvals, workspaces, file upload, and review routes in psg-hub`
+- PSG-2605 completed requirements summary
+- `apps/psg-hub/src/app/ops/bsm-content-approvals/page.tsx`
 - `apps/psg-hub/src/components/ops/bsm-content-approval-manager.tsx`
 - `apps/psg-hub/src/lib/bsm/content-approvals-shared.ts`
-- `apps/psg-hub/src/app/api/ops/bsm/content-approvals/route.ts`
-- `apps/psg-hub/src/app/api/bsm/content-approvals/[id]/file/route.ts`
-- `apps/psg-hub/src/lib/bsm/content-approvals.ts`
+- `apps/psg-hub/src/lib/bsm/review-workspace-processing.ts`
+- `apps/psg-hub/src/app/review-workspace/reviewer-workspace.tsx`
 
 ## Notes For PSG-2550
 
-This is an internal walkthrough artifact. It does not publish a customer-facing page, start a production launch, or bypass the required QA/review gates for the planned Review Workspace.
+This is an internal operator walkthrough and human test guide. It does not publish customer-facing documentation or promote a public launch.
