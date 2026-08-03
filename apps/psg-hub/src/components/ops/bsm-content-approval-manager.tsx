@@ -162,6 +162,7 @@ export function BsmContentApprovalManager({
     () => approvals.filter((item) => item.reviewWorkspace?.projectId === reviewWorkspaceProjectId),
     [approvals, reviewWorkspaceProjectId],
   );
+  const visibleWorkspaceDocuments = reviewWorkspaceProjectId ? workspaceDocuments : [];
   const selectedWorkspace = useMemo(
     () => workspaceOptions.find((workspace) => workspace.id === reviewWorkspaceProjectId) ?? null,
     [workspaceOptions, reviewWorkspaceProjectId],
@@ -787,31 +788,6 @@ export function BsmContentApprovalManager({
             {creatingWorkspace ? "Creating" : "Create workspace"}
           </button>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="bsm-approval-workspace">Review Workspace</Label>
-          <select
-            id="bsm-approval-workspace"
-            value={reviewWorkspaceProjectId}
-            onChange={(event) => {
-              setReviewWorkspaceProjectId(event.target.value);
-              setWorkspacePreview(null);
-              setStartedReview(null);
-            }}
-            disabled={uploading || selectedShopWorkspaces.length === 0}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">
-              {selectedShopWorkspaces.length === 0
-                ? "No Review Workspaces for this shop"
-                : "Choose a Review Workspace"}
-            </option>
-            {selectedShopWorkspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.title} · {workspace.status.replaceAll("_", " ")} · {workspace.documentCount} documents
-              </option>
-            ))}
-          </select>
-        </div>
         {canManageWorkspaces && selectedWorkspace ? (
           <div className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -906,6 +882,31 @@ export function BsmContentApprovalManager({
           <p className="mt-1 text-sm text-muted-foreground">
             Add one or more files or generated pages. A one-document approval is still tracked inside the Review Workspace.
           </p>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="bsm-approval-workspace">Review Workspace for these documents</Label>
+          <select
+            id="bsm-approval-workspace"
+            value={reviewWorkspaceProjectId}
+            onChange={(event) => {
+              setReviewWorkspaceProjectId(event.target.value);
+              setWorkspacePreview(null);
+              setStartedReview(null);
+            }}
+            disabled={uploading || selectedShopWorkspaces.length === 0}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">
+              {selectedShopWorkspaces.length === 0
+                ? "No Review Workspaces for this shop"
+                : "Choose a Review Workspace"}
+            </option>
+            {selectedShopWorkspaces.map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>
+                {workspace.title} · {workspace.status.replaceAll("_", " ")} · {workspace.documentCount} documents
+              </option>
+            ))}
+          </select>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="bsm-approval-title">Review title</Label>
@@ -1039,6 +1040,218 @@ export function BsmContentApprovalManager({
             {phase.message}
           </p>
         ) : null}
+        <div className="space-y-3 pt-2">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h3 className="font-heading text-base font-semibold">Workspace documents</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {visibleWorkspaceDocuments.length} review {visibleWorkspaceDocuments.length === 1 ? "item" : "items"}
+              </p>
+            </div>
+          </div>
+          <div className="overflow-hidden rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-left font-heading text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3">Title</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">File</th>
+                  <th className="px-4 py-3">Feedback</th>
+                  <th className="px-4 py-3">Updated</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleWorkspaceDocuments.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                      {reviewWorkspaceProjectId
+                        ? "No workspace documents yet."
+                        : "Choose a Review Workspace to see its documents."}
+                    </td>
+                  </tr>
+                ) : (
+                  visibleWorkspaceDocuments.map((item) => (
+                    <tr key={item.id} className="border-t border-border align-top">
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{item.title}</div>
+                        <div className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+                          {item.contextNote}
+                        </div>
+                        {item.reviewWorkspace ? (
+                          <div className="mt-2 text-xs font-medium text-ember">
+                            {item.reviewWorkspace.projectTitle ?? "Review Workspace"}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 capitalize text-muted-foreground">
+                        {item.status.replaceAll("_", " ")}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {item.sourceKind === "generated_page"
+                          ? "Generated page"
+                          : item.currentVersion?.originalFilename ?? "No file"}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        <div>{item.commentCount} comments</div>
+                        <div className="mt-1">
+                          {item.latestDecision
+                            ? `${item.latestDecision.decision.replaceAll("_", " ")}`
+                            : "No decision yet"}
+                        </div>
+                        {item.replyAttachments.length > 0 ? (
+                          <div className="mt-2 space-y-1">
+                            {item.replyAttachments.map((attachment) => (
+                              <a
+                                key={attachment.id}
+                                href={`/api/bsm/content-approvals/attachments/${attachment.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block font-medium text-ember hover:text-foreground"
+                              >
+                                Open photo: {attachment.originalFilename}
+                              </a>
+                            ))}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {formatDate(item.updatedAt)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {editingItemId === item.id ? (
+                          <div className="min-w-80 space-y-3 text-left">
+                            <div className="space-y-1">
+                              <Label htmlFor={`edit-title-${item.id}`}>Title</Label>
+                              <Input
+                                id={`edit-title-${item.id}`}
+                                value={editTitle}
+                                onChange={(event) => setEditTitle(event.target.value)}
+                                disabled={savingEditItemId === item.id}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor={`edit-note-${item.id}`}>Context note</Label>
+                              <textarea
+                                id={`edit-note-${item.id}`}
+                                value={editContextNote}
+                                onChange={(event) => setEditContextNote(event.target.value)}
+                                disabled={savingEditItemId === item.id}
+                                className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                            </div>
+                            {item.sourceKind === "uploaded_file" ? (
+                              <div className="space-y-1">
+                                <Label htmlFor={`edit-file-${item.id}`}>Replacement file</Label>
+                                <Input
+                                  id={`edit-file-${item.id}`}
+                                  type="file"
+                                  accept={BSM_CONTENT_APPROVAL_FILE_ACCEPT}
+                                  disabled={savingEditItemId === item.id}
+                                  onChange={(event) => setEditFile(event.target.files?.[0] ?? null)}
+                                />
+                              </div>
+                            ) : null}
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => saveReviewItemEdit(item)}
+                                disabled={savingEditItemId === item.id}
+                                className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1")}
+                              >
+                                {savingEditItemId === item.id ? (
+                                  <RefreshCw className="size-3.5 animate-spin" aria-hidden="true" />
+                                ) : (
+                                  <FilePenLine className="size-3.5" aria-hidden="true" />
+                                )}
+                                {savingEditItemId === item.id ? "Saving" : "Save edit"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingItemId(null)}
+                                disabled={savingEditItemId === item.id}
+                                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : archiveItemId === item.id ? (
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <span className="text-xs text-muted-foreground">Remove from library?</span>
+                            <button
+                              type="button"
+                              onClick={() => archiveReviewItem(item)}
+                              disabled={archivingItemId === item.id}
+                              className={cn(buttonVariants({ variant: "destructive", size: "sm" }), "gap-1")}
+                            >
+                              {archivingItemId === item.id ? (
+                                <RefreshCw className="size-3.5 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Trash2 className="size-3.5" aria-hidden="true" />
+                              )}
+                              {archivingItemId === item.id ? "Removing" : "Remove"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setArchiveItemId(null)}
+                              disabled={archivingItemId === item.id}
+                              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {!item.reviewWorkspace && reviewWorkspaceProjectId ? (
+                              <button
+                                type="button"
+                                onClick={() => attachReviewItemToSelectedWorkspace(item)}
+                                disabled={Boolean(archivingItemId) || attachingItemId === item.id}
+                                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
+                                aria-label={`Attach ${item.title} to the selected Review Workspace`}
+                                title="Attach to selected Review Workspace"
+                              >
+                                {attachingItemId === item.id ? (
+                                  <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
+                                ) : (
+                                  <Link className="size-4" aria-hidden="true" />
+                                )}
+                                Attach
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => beginEdit(item)}
+                              disabled={Boolean(archivingItemId) || Boolean(attachingItemId)}
+                              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
+                              aria-label={`Edit ${item.title}`}
+                              title="Edit review item"
+                            >
+                              <FilePenLine className="size-4" aria-hidden="true" />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setArchiveItemId(item.id)}
+                              disabled={Boolean(archivingItemId) || Boolean(attachingItemId)}
+                              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
+                              aria-label={`Remove ${item.title} from the active review library`}
+                              title="Remove from active library"
+                            >
+                              <Trash2 className="size-4" aria-hidden="true" />
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <section className="space-y-4 border-b border-border pb-8">
@@ -1206,216 +1419,6 @@ export function BsmContentApprovalManager({
         ) : null}
       </section>
 
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h2 className="font-heading text-lg font-semibold">Workspace documents</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {approvals.length} review {approvals.length === 1 ? "item" : "items"}
-            </p>
-          </div>
-        </div>
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left font-heading text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">File</th>
-                <th className="px-4 py-3">Feedback</th>
-                <th className="px-4 py-3">Updated</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {approvals.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                    No workspace documents yet.
-                  </td>
-                </tr>
-              ) : (
-                approvals.map((item) => (
-                  <tr key={item.id} className="border-t border-border align-top">
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{item.title}</div>
-                      <div className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">
-                        {item.contextNote}
-                      </div>
-                      {item.reviewWorkspace ? (
-                        <div className="mt-2 text-xs font-medium text-ember">
-                          {item.reviewWorkspace.projectTitle ?? "Review Workspace"}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 capitalize text-muted-foreground">
-                      {item.status.replaceAll("_", " ")}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {item.sourceKind === "generated_page"
-                        ? "Generated page"
-                        : item.currentVersion?.originalFilename ?? "No file"}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      <div>{item.commentCount} comments</div>
-                      <div className="mt-1">
-                        {item.latestDecision
-                          ? `${item.latestDecision.decision.replaceAll("_", " ")}`
-                          : "No decision yet"}
-                      </div>
-                      {item.replyAttachments.length > 0 ? (
-                        <div className="mt-2 space-y-1">
-                          {item.replyAttachments.map((attachment) => (
-                            <a
-                              key={attachment.id}
-                              href={`/api/bsm/content-approvals/attachments/${attachment.id}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block font-medium text-ember hover:text-foreground"
-                            >
-                              Open photo: {attachment.originalFilename}
-                            </a>
-                          ))}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {formatDate(item.updatedAt)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {editingItemId === item.id ? (
-                        <div className="min-w-80 space-y-3 text-left">
-                          <div className="space-y-1">
-                            <Label htmlFor={`edit-title-${item.id}`}>Title</Label>
-                            <Input
-                              id={`edit-title-${item.id}`}
-                              value={editTitle}
-                              onChange={(event) => setEditTitle(event.target.value)}
-                              disabled={savingEditItemId === item.id}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label htmlFor={`edit-note-${item.id}`}>Context note</Label>
-                            <textarea
-                              id={`edit-note-${item.id}`}
-                              value={editContextNote}
-                              onChange={(event) => setEditContextNote(event.target.value)}
-                              disabled={savingEditItemId === item.id}
-                              className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-                            />
-                          </div>
-                          {item.sourceKind === "uploaded_file" ? (
-                            <div className="space-y-1">
-                              <Label htmlFor={`edit-file-${item.id}`}>Replacement file</Label>
-                              <Input
-                                id={`edit-file-${item.id}`}
-                                type="file"
-                                accept={BSM_CONTENT_APPROVAL_FILE_ACCEPT}
-                                disabled={savingEditItemId === item.id}
-                                onChange={(event) => setEditFile(event.target.files?.[0] ?? null)}
-                              />
-                            </div>
-                          ) : null}
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => saveReviewItemEdit(item)}
-                              disabled={savingEditItemId === item.id}
-                              className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1")}
-                            >
-                              {savingEditItemId === item.id ? (
-                                <RefreshCw className="size-3.5 animate-spin" aria-hidden="true" />
-                              ) : (
-                                <FilePenLine className="size-3.5" aria-hidden="true" />
-                              )}
-                              {savingEditItemId === item.id ? "Saving" : "Save edit"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingItemId(null)}
-                              disabled={savingEditItemId === item.id}
-                              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : archiveItemId === item.id ? (
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                          <span className="text-xs text-muted-foreground">Remove from library?</span>
-                          <button
-                            type="button"
-                            onClick={() => archiveReviewItem(item)}
-                            disabled={archivingItemId === item.id}
-                            className={cn(buttonVariants({ variant: "destructive", size: "sm" }), "gap-1")}
-                          >
-                            {archivingItemId === item.id ? (
-                              <RefreshCw className="size-3.5 animate-spin" aria-hidden="true" />
-                            ) : (
-                              <Trash2 className="size-3.5" aria-hidden="true" />
-                            )}
-                            {archivingItemId === item.id ? "Removing" : "Remove"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setArchiveItemId(null)}
-                            disabled={archivingItemId === item.id}
-                            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                          {!item.reviewWorkspace && reviewWorkspaceProjectId ? (
-                            <button
-                              type="button"
-                              onClick={() => attachReviewItemToSelectedWorkspace(item)}
-                              disabled={Boolean(archivingItemId) || attachingItemId === item.id}
-                              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
-                              aria-label={`Attach ${item.title} to the selected Review Workspace`}
-                              title="Attach to selected Review Workspace"
-                            >
-                              {attachingItemId === item.id ? (
-                                <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
-                              ) : (
-                                <Link className="size-4" aria-hidden="true" />
-                              )}
-                              Attach
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => beginEdit(item)}
-                            disabled={Boolean(archivingItemId) || Boolean(attachingItemId)}
-                            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
-                            aria-label={`Edit ${item.title}`}
-                            title="Edit review item"
-                          >
-                            <FilePenLine className="size-4" aria-hidden="true" />
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setArchiveItemId(item.id)}
-                            disabled={Boolean(archivingItemId) || Boolean(attachingItemId)}
-                            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
-                            aria-label={`Remove ${item.title} from the active review library`}
-                            title="Remove from active library"
-                          >
-                            <Trash2 className="size-4" aria-hidden="true" />
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
     </div>
   );
 }

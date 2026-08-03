@@ -258,7 +258,18 @@ describe("BsmContentApprovalManager", () => {
           },
         ]}
         activeShopId="shop-a"
+        activeWorkspaceProjectId="workspace-a"
         shops={[{ id: "shop-a", name: "Tracy's Collision" }]}
+        workspaces={[
+          {
+            id: "workspace-a",
+            shopId: "shop-a",
+            title: "July proof review",
+            status: "active",
+            currentRoundId: "round-a",
+            documentCount: 1,
+          },
+        ]}
       />,
     );
 
@@ -278,19 +289,129 @@ describe("BsmContentApprovalManager", () => {
 
     expect(html).toContain("Workspace title");
     expect(html).toContain("Reviewer instructions");
+    expect(html).toContain("Review Workspace for these documents");
+    expect(html).toContain("Workspace documents");
     expect(html).toContain("Shop Owner · owner@example.com");
     expect(html).toContain("Preview read-only");
     expect(html).toContain("Start review");
 
     const workspaceIndex = html.indexOf(">Workspace<");
     const documentsIndex = html.indexOf(">Documents<");
+    const documentWorkspacePickerIndex = html.indexOf("Review Workspace for these documents");
+    const workspaceDocumentsIndex = html.indexOf(">Workspace documents<");
     const reviewersIndex = html.indexOf(">Reviewers<");
     const previewIndex = html.indexOf(">Preview or start review<");
 
     expect(workspaceIndex).toBeGreaterThanOrEqual(0);
     expect(documentsIndex).toBeGreaterThan(workspaceIndex);
+    expect(documentWorkspacePickerIndex).toBeGreaterThan(documentsIndex);
+    expect(workspaceDocumentsIndex).toBeGreaterThan(documentsIndex);
+    expect(workspaceDocumentsIndex).toBeLessThan(reviewersIndex);
     expect(reviewersIndex).toBeGreaterThan(documentsIndex);
     expect(previewIndex).toBeGreaterThan(reviewersIndex);
+  });
+
+  it("shows only the selected Review Workspace documents in the workspace document section", () => {
+    const html = renderToStaticMarkup(
+      <BsmContentApprovalManager
+        initialApprovals={[
+          {
+            id: "item-a",
+            shopId: "shop-a",
+            customerProfileId: null,
+            title: "Selected workspace proof",
+            status: "draft",
+            processingStatus: "ready",
+            contentType: "pdf",
+            sourceKind: "uploaded_file",
+            contextNote: "Confirm this selected proof.",
+            updatedAt: "2026-07-29T20:00:00.000Z",
+            currentVersion: {
+              id: "version-a",
+              originalFilename: "selected.pdf",
+              contentType: "application/pdf",
+              byteSize: 2048,
+              storagePath: "shop-a/item-a/version-a/selected.pdf",
+              previewType: "file",
+              sourceMetadata: {},
+              createdAt: "2026-07-29T20:00:00.000Z",
+            },
+            latestDecision: null,
+            replyAttachments: [],
+            commentCount: 0,
+            reviewWorkspace: {
+              projectId: "workspace-a",
+              projectTitle: "July proof review",
+              roundId: null,
+            },
+          },
+          {
+            id: "item-b",
+            shopId: "shop-a",
+            customerProfileId: null,
+            title: "Other workspace proof",
+            status: "draft",
+            processingStatus: "ready",
+            contentType: "pdf",
+            sourceKind: "uploaded_file",
+            contextNote: "Do not show in the selected workspace.",
+            updatedAt: "2026-07-29T20:00:00.000Z",
+            currentVersion: null,
+            latestDecision: null,
+            replyAttachments: [],
+            commentCount: 0,
+            reviewWorkspace: {
+              projectId: "workspace-b",
+              projectTitle: "August proof review",
+              roundId: null,
+            },
+          },
+          {
+            id: "item-c",
+            shopId: "shop-a",
+            customerProfileId: null,
+            title: "Unassigned library proof",
+            status: "draft",
+            processingStatus: "ready",
+            contentType: "pdf",
+            sourceKind: "uploaded_file",
+            contextNote: "Do not show in workspace documents.",
+            updatedAt: "2026-07-29T20:00:00.000Z",
+            currentVersion: null,
+            latestDecision: null,
+            replyAttachments: [],
+            commentCount: 0,
+            reviewWorkspace: null,
+          },
+        ]}
+        activeShopId="shop-a"
+        activeWorkspaceProjectId="workspace-a"
+        shops={[{ id: "shop-a", name: "Tracy's Collision" }]}
+        workspaces={[
+          {
+            id: "workspace-a",
+            shopId: "shop-a",
+            title: "July proof review",
+            status: "draft",
+            currentRoundId: null,
+            documentCount: 1,
+          },
+          {
+            id: "workspace-b",
+            shopId: "shop-a",
+            title: "August proof review",
+            status: "draft",
+            currentRoundId: null,
+            documentCount: 1,
+          },
+        ]}
+      />,
+    );
+
+    expect(html).toContain("Selected workspace proof");
+    expect(html).not.toContain("Other workspace proof");
+    expect(html).not.toContain("Unassigned library proof");
+    expect(html).toContain("1 review item");
   });
 
   it("blocks review start until documents are ready and a reviewer is selected", () => {
