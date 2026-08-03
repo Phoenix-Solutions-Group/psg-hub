@@ -4,16 +4,13 @@ import { NextResponse } from "next/server";
 import { requireOpsFn } from "@/lib/auth/ops-access";
 import {
   ReviewWorkspaceInputError,
-  bsmReviewWorkspaceInternalEnabled,
+  createReviewWorkspaceProject,
   createInternalReviewWorkspaceSlice,
   listStaffReviewWorkspaces,
+  startReviewWorkspaceRound,
 } from "@/lib/bsm/review-workspace";
 
 export async function GET(): Promise<Response> {
-  if (!bsmReviewWorkspaceInternalEnabled()) {
-    return NextResponse.json({ error: "Review workspace internal slice is not enabled." }, { status: 404 });
-  }
-
   const gate = await requireOpsFn("manage_bsm_content_approvals");
   if (!gate.ok) return gate.response;
 
@@ -30,10 +27,6 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  if (!bsmReviewWorkspaceInternalEnabled()) {
-    return NextResponse.json({ error: "Review workspace internal slice is not enabled." }, { status: 404 });
-  }
-
   const gate = await requireOpsFn("manage_bsm_content_approvals");
   if (!gate.ok) return gate.response;
 
@@ -41,6 +34,29 @@ export async function POST(request: Request): Promise<Response> {
   if (!payload) return NextResponse.json({ error: "The request body was not readable." }, { status: 400 });
 
   try {
+    if (payload.action === "create_workspace") {
+      const workspace = await createReviewWorkspaceProject({
+        shopId: payload.shopId as string,
+        title: payload.title as string,
+        description: payload.description as string | null | undefined,
+        actorProfileId: gate.userId,
+        metadata: { feature: "content_approvals_workspace_first" },
+      });
+      return NextResponse.json({ workspace }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
+    }
+
+    if (payload.action === "start_review") {
+      const review = await startReviewWorkspaceRound({
+        projectId: payload.projectId as string,
+        actorProfileId: gate.userId,
+        actorRole: gate.access.role,
+        reviewers: Array.isArray(payload.reviewers)
+          ? payload.reviewers.map((reviewer) => reviewer as { email: string; name?: string | null })
+          : [],
+      });
+      return NextResponse.json({ review }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
+    }
+
     const slice = await createInternalReviewWorkspaceSlice({
       shopId: payload.shopId as string,
       title: payload.title as string,

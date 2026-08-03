@@ -199,9 +199,9 @@ export function ReviewWorkspaceConsole({
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
       <Card>
         <CardHeader>
-          <CardTitle>Create review workspace</CardTitle>
+          <CardTitle>Create approval workspace</CardTitle>
           <CardDescription>
-            Internal QA surface for creating a private reviewer flow without sending customer email.
+            Start a customer review workspace for one shop, one reviewer, and the first document.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -237,7 +237,7 @@ export function ReviewWorkspaceConsole({
             <Input id="workspace-title" value={title} onChange={(event) => setTitle(event.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="description">Review note</Label>
+            <Label htmlFor="description">Reviewer instructions</Label>
             <textarea
               id="description"
               value={description}
@@ -253,7 +253,7 @@ export function ReviewWorkspaceConsole({
             </Button>
             <a className={buttonVariants({ variant: "outline" })} href={uploadUrl}>
               <FileUp className="size-4" aria-hidden="true" />
-              Upload file
+              Add document
             </a>
             <Button type="button" variant="outline" onClick={() => loadResult()} disabled={pending || !slice}>
               <Eye className="size-4" aria-hidden="true" />
@@ -262,8 +262,8 @@ export function ReviewWorkspaceConsole({
           </div>
           <p className="text-sm text-muted-foreground">
             {slice
-              ? "Use Upload file to add a PDF, image, text, Word, or HTML file to this Review Workspace."
-              : "Use Upload file to start an upload for the selected shop, then choose the Review Workspace."}
+              ? "Use Add document to attach another PDF, image, text, Word, or HTML file to this Review Workspace."
+              : "Create a workspace first, then add more documents from the document form below."}
           </p>
         </CardContent>
       </Card>
@@ -331,8 +331,8 @@ export function ReviewWorkspaceConsole({
 
         <Card>
           <CardHeader>
-            <CardTitle>Invite gate</CardTitle>
-            <CardDescription>Use this private code in non-production testing only.</CardDescription>
+            <CardTitle>Reviewer access</CardTitle>
+            <CardDescription>Use the reviewer URL and one-time code for the selected workspace.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {slice ? (

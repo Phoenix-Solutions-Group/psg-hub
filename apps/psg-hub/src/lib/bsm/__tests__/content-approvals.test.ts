@@ -149,6 +149,7 @@ class ChainSelect {
       existingItemProjectId?: string | null;
       existingReviewers?: Array<Record<string, unknown>>;
       missingSchemaCacheColumns?: Map<string, string[]>;
+      roundStatus?: string;
     } = {},
     private selectedColumns = "",
   ) {}
@@ -206,6 +207,15 @@ class ChainSelect {
           storage_path: `${SHOP_ID}/${ITEM_ID}/${VERSION_ID}/proof-v1.pdf`,
           preview_type: "file",
           source_metadata_jsonb: {},
+        },
+        error: null,
+      });
+    }
+    if (this.table === "bsm_content_review_rounds") {
+      return Promise.resolve({
+        data: {
+          id: ROUND_ID,
+          status: this.options.roundStatus ?? "draft",
         },
         error: null,
       });
@@ -278,6 +288,7 @@ function createWorkspaceFakeClient(options: {
   existingItemProjectId?: string | null;
   existingReviewers?: Array<Record<string, unknown>>;
   missingSchemaCacheColumnsByTable?: Record<string, string[]>;
+  roundStatus?: string;
 } = {}) {
   const inserts: Array<{ table: string; payload: Record<string, unknown> | Array<Record<string, unknown>> }> = [];
   const updates: Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }> = [];
@@ -611,6 +622,41 @@ describe("BSM content approval upload helpers", () => {
     expect(result.upload.path).toBe(expectedPath);
     expect(result.item.currentVersion?.storagePath).toBe(expectedPath);
     expect(createSignedUploadUrl).toHaveBeenCalledOnce();
+  });
+
+  it("queues uploaded workspace documents for the next round once the current round is active", async () => {
+    const { client, inserts } = createWorkspaceFakeClient({ roundStatus: "active" });
+    const createSignedUploadUrl = vi.fn(async (path: string) => ({
+      data: { path, signedUrl: "https://upload.example", token: "token-queued" },
+      error: null,
+    }));
+    const storage = {
+      from: vi.fn(() => ({ createSignedUploadUrl })),
+    };
+
+    const result = await createBsmContentApprovalUpload(
+      {
+        shopId: SHOP_ID,
+        customerProfileId: PROFILE_ID,
+        reviewWorkspaceProjectId: PROJECT_ID,
+        actorProfileId: ACTOR_ID,
+        title: "Late homepage proof",
+        contextNote: "This should wait for the next round.",
+        fileName: "late-proof.pdf",
+        contentType: "application/pdf",
+        byteSize: 2048,
+      },
+      { client: client as never, storage },
+    );
+
+    expect(result.item.status).toBe("draft");
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_round_documents")).toBeUndefined();
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_reviewers")).toBeUndefined();
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload).toMatchObject({
+      project_id: PROJECT_ID,
+      round_id: null,
+      introduced_by_round_id: null,
+    });
   });
 
   it("allows a super admin to upload into a Review Workspace without being a collaborator", async () => {

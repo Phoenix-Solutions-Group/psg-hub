@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle, ExternalLink, Lock, MessageSquare, Send } from "lucide-react";
+import { CheckCircle, ExternalLink, Lock, MessageSquare, RotateCcw, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -161,6 +161,26 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
       await loadWorkspace(sessionHash);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit this review.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function reopenReview() {
+    if (!sessionHash) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/bsm/review-workspace/reopen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionHash }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.error ?? "Could not reopen this review.");
+      await loadWorkspace(sessionHash);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reopen this review.");
     } finally {
       setPending(false);
     }
@@ -345,6 +365,12 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                       Read-only after submit
                     </div>
                     <p className="mt-1 text-muted-foreground">Submitted by {workspace.reviewer.email}</p>
+                    {workspace.round.status === "active" || workspace.round.status === "inviting" ? (
+                      <Button type="button" variant="outline" className="mt-3" onClick={reopenReview} disabled={pending}>
+                        <RotateCcw className="size-4" aria-hidden="true" />
+                        Reopen response
+                      </Button>
+                    ) : null}
                   </div>
                 ) : (
                   <>

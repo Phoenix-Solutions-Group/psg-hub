@@ -1,6 +1,6 @@
 "use client";
 
-import { FilePenLine, FileUp, Link, RefreshCw, Trash2 } from "lucide-react";
+import { Eye, FilePenLine, FileUp, Link, Play, RefreshCw, Trash2, UserPlus } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -37,6 +37,52 @@ export const BSM_CONTENT_APPROVAL_UNSUPPORTED_FILE_MESSAGE =
   "This file type is not supported. Upload a PDF, MD, HTML, image, Word document, or text file.";
 
 export type BsmContentApprovalShopOption = { id: string; name: string };
+export type BsmContentApprovalReviewerContact = { email: string; name: string | null };
+
+type ReviewStartResponse =
+  | {
+      review: {
+        roundId: string;
+        documentCount: number;
+        invitations: Array<{
+          invitationId: string;
+          reviewerEmail: string;
+          reviewerName: string | null;
+          inviteToken: string;
+          inviteCode: string;
+        }>;
+      };
+    }
+  | { error?: string };
+
+type WorkspaceCreateResponse =
+  | { workspace: { id: string; shopId: string; title: string; status: string } }
+  | { error?: string };
+
+type WorkspacePreviewResponse =
+  | {
+      result: {
+        project: { id: string; title: string; status: string };
+        documents: Array<{ itemId: string; title: string; processingStatus: string; status: string; proofUrl: string | null }>;
+      };
+    }
+  | { error?: string };
+
+export function getBsmReviewWorkspaceStartBlocker(input: {
+  workspaceId: string;
+  documents: Array<{ processingStatus: string }>;
+  reviewers: Array<{ email: string }>;
+}) {
+  if (!input.workspaceId) return "Create or select a Review Workspace first.";
+  if (input.documents.length === 0) return "Add at least one document before starting review.";
+  if (input.documents.some((document) => document.processingStatus !== "ready")) {
+    return "Start review is available after every document finishes processing successfully.";
+  }
+  if (input.reviewers.filter((reviewer) => reviewer.email.trim()).length === 0) {
+    return "Choose at least one reviewer before starting review.";
+  }
+  return null;
+}
 
 export function getBsmContentApprovalFileValidationError(selectedFile: File | null) {
   if (!selectedFile) return null;
@@ -60,18 +106,21 @@ export function BsmContentApprovalManager({
   initialApprovals,
   workspaces = [],
   shops,
+  reviewerContacts = [],
   activeShopId,
   activeWorkspaceProjectId,
 }: {
   initialApprovals: BsmContentApprovalListItem[];
   workspaces?: BsmContentApprovalWorkspaceOption[];
   shops?: BsmContentApprovalShopOption[];
+  reviewerContacts?: BsmContentApprovalReviewerContact[];
   activeShopId?: string | null;
   activeWorkspaceProjectId?: string | null;
 }) {
   const [approvals, setApprovals] = useState(initialApprovals);
+  const [workspaceOptions, setWorkspaceOptions] = useState(workspaces);
   const orderedShops = shops ?? [];
-  const initialWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceProjectId);
+  const initialWorkspace = workspaceOptions.find((workspace) => workspace.id === activeWorkspaceProjectId);
   const requestedShopId = initialWorkspace?.shopId ?? activeShopId;
   const initialShopId = orderedShops.some((shop) => shop.id === requestedShopId)
     ? requestedShopId ?? ""
@@ -100,13 +149,18 @@ export function BsmContentApprovalManager({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const selectedShopWorkspaces = useMemo(
-    () => workspaces.filter((workspace) => workspace.shopId === shopId),
-    [workspaces, shopId],
+    () => workspaceOptions.filter((workspace) => workspace.shopId === shopId),
+    [workspaceOptions, shopId],
+  );
+  const workspaceDocuments = useMemo(
+    () => approvals.filter((item) => item.reviewWorkspace?.projectId === reviewWorkspaceProjectId),
+    [approvals, reviewWorkspaceProjectId],
   );
 
   const fileValidationError = useMemo(() => getBsmContentApprovalFileValidationError(file), [file]);
   const formValidationError = useMemo(() => {
     if (!shopId.trim()) return "Shop ID is required.";
+    if (!reviewWorkspaceProjectId.trim()) return "Review Workspace is required.";
     if (!title.trim()) return "Title is required.";
     if (!contextNote.trim()) return "Context note is required.";
     if (sourceKind !== "generated_page") return null;
@@ -120,14 +174,158 @@ export function BsmContentApprovalManager({
       }
     }
     return null;
-  }, [shopId, title, contextNote, sourceKind, generatedPagePath, previewUrl]);
+  }, [shopId, reviewWorkspaceProjectId, title, contextNote, sourceKind, generatedPagePath, previewUrl]);
   const validationError = fileValidationError ?? formValidationError;
 
   const uploading = phase.kind === "uploading";
+  const [workspaceTitle, setWorkspaceTitle] = useState("");
+  const [workspaceInstructions, setWorkspaceInstructions] = useState("");
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [reviewerEmail, setReviewerEmail] = useState("");
+  const [reviewerName, setReviewerName] = useState("");
+  const [selectedReviewers, setSelectedReviewers] = useState<BsmContentApprovalReviewerContact[]>([]);
+  const [startingReview, setStartingReview] = useState(false);
+  const [startedReview, setStartedReview] = useState<Extract<ReviewStartResponse, { review: unknown }>["review"] | null>(null);
+  const [previewingWorkspace, setPreviewingWorkspace] = useState(false);
+  const [workspacePreview, setWorkspacePreview] = useState<Extract<WorkspacePreviewResponse, { result: unknown }>["result"] | null>(null);
+  const startBlocker = getBsmReviewWorkspaceStartBlocker({
+    workspaceId: reviewWorkspaceProjectId,
+    documents: workspaceDocuments,
+    reviewers: selectedReviewers,
+  });
   const canSubmit =
     !uploading &&
     !validationError &&
     (sourceKind === "generated_page" ? Boolean(generatedPagePath.trim()) : Boolean(file));
+
+  async function createWorkspace() {
+    if (!shopId.trim() || !workspaceTitle.trim()) {
+      setPhase({ kind: "error", message: "Choose a shop and enter a workspace title." });
+      return;
+    }
+    setCreatingWorkspace(true);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch("/api/ops/bsm/review-workspace/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_workspace",
+          shopId,
+          title: workspaceTitle.trim(),
+          description: workspaceInstructions.trim() || null,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as WorkspaceCreateResponse;
+      if (!response.ok || !("workspace" in body)) {
+        throw new Error("error" in body && body.error ? body.error : "The Review Workspace could not be created.");
+      }
+      const workspace = {
+        id: body.workspace.id,
+        shopId: body.workspace.shopId,
+        title: body.workspace.title,
+        status: body.workspace.status,
+        currentRoundId: null,
+        documentCount: 0,
+      };
+      setWorkspaceOptions((current) => [workspace, ...current.filter((entry) => entry.id !== workspace.id)]);
+      setReviewWorkspaceProjectId(workspace.id);
+      setWorkspaceTitle("");
+      setWorkspaceInstructions("");
+      setWorkspacePreview(null);
+      setStartedReview(null);
+      setPhase({ kind: "success", message: "The Review Workspace is ready for documents and reviewers." });
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The Review Workspace could not be created.",
+      });
+    } finally {
+      setCreatingWorkspace(false);
+    }
+  }
+
+  function addReviewer(contact: BsmContentApprovalReviewerContact) {
+    if (!contact.email.trim()) return;
+    setSelectedReviewers((current) => {
+      const email = contact.email.trim().toLowerCase();
+      if (current.some((reviewer) => reviewer.email.toLowerCase() === email)) return current;
+      return [...current, { email, name: contact.name?.trim() || null }];
+    });
+    setReviewerEmail("");
+    setReviewerName("");
+    setStartedReview(null);
+  }
+
+  async function loadWorkspacePreview() {
+    if (!reviewWorkspaceProjectId) return;
+    setPreviewingWorkspace(true);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch(`/api/ops/bsm/review-workspace/projects/${reviewWorkspaceProjectId}`, {
+        headers: { "Cache-Control": "no-store" },
+      });
+      const body = (await response.json().catch(() => ({}))) as WorkspacePreviewResponse;
+      if (!response.ok || !("result" in body)) {
+        throw new Error("error" in body && body.error ? body.error : "The Review Workspace preview could not be loaded.");
+      }
+      setWorkspacePreview(body.result);
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The Review Workspace preview could not be loaded.",
+      });
+    } finally {
+      setPreviewingWorkspace(false);
+    }
+  }
+
+  async function startWorkspaceReview() {
+    if (startBlocker) {
+      setPhase({ kind: "error", message: startBlocker });
+      return;
+    }
+    setStartingReview(true);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch("/api/ops/bsm/review-workspace/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "start_review",
+          projectId: reviewWorkspaceProjectId,
+          reviewers: selectedReviewers,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as ReviewStartResponse;
+      if (!response.ok || !("review" in body)) {
+        throw new Error("error" in body && body.error ? body.error : "The review could not be started.");
+      }
+      setStartedReview(body.review);
+      setWorkspaceOptions((current) =>
+        current.map((workspace) =>
+          workspace.id === reviewWorkspaceProjectId
+            ? { ...workspace, status: "active", currentRoundId: body.review.roundId }
+            : workspace,
+        ),
+      );
+      setApprovals((current) =>
+        current.map((item) =>
+          item.reviewWorkspace?.projectId === reviewWorkspaceProjectId
+            ? { ...item, status: "in_review", reviewWorkspace: { ...item.reviewWorkspace, roundId: body.review.roundId } }
+            : item,
+        ),
+      );
+      setPhase({ kind: "success", message: "The review has started. Share the reviewer URL and code with each reviewer." });
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The review could not be started.",
+      });
+    } finally {
+      setStartingReview(false);
+    }
+  }
 
   async function startReviewItem() {
     const selectedFile = sourceKind === "uploaded_file" ? file : null;
@@ -204,10 +402,18 @@ export function BsmContentApprovalManager({
     }
 
     setApprovals((current) => [body.item, ...current]);
+    if (body.item.reviewWorkspace?.projectId) {
+      setWorkspaceOptions((current) =>
+        current.map((workspace) =>
+          workspace.id === body.item.reviewWorkspace?.projectId
+            ? { ...workspace, documentCount: workspace.documentCount + 1 }
+            : workspace,
+        ),
+      );
+    }
     setTitle("");
     setContextNote("");
     setCustomerProfileId("");
-    setReviewWorkspaceProjectId("");
     setFile(null);
     setGeneratedPagePath("");
     setPreviewUrl("");
@@ -371,6 +577,12 @@ export function BsmContentApprovalManager({
   return (
     <div className="space-y-8">
       <section className="space-y-4 border-b border-border pb-8">
+        <div>
+          <h2 className="font-heading text-lg font-semibold">Workspace</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Create the customer review workspace first, then attach one or more documents to it.
+          </p>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="bsm-approval-shop">Shop</Label>
@@ -381,8 +593,10 @@ export function BsmContentApprovalManager({
                 onChange={(event) => {
                   setShopId(event.target.value);
                   setReviewWorkspaceProjectId("");
+                  setWorkspacePreview(null);
+                  setStartedReview(null);
                 }}
-                disabled={uploading}
+                disabled={uploading || creatingWorkspace || startingReview}
                 className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {orderedShops.map((shop) => (
@@ -396,7 +610,7 @@ export function BsmContentApprovalManager({
                 id="bsm-approval-shop"
                 value={shopId}
                 onChange={(event) => setShopId(event.target.value)}
-                disabled={uploading}
+                disabled={uploading || creatingWorkspace || startingReview}
                 placeholder="No shops available"
               />
             )}
@@ -412,19 +626,58 @@ export function BsmContentApprovalManager({
             />
           </div>
         </div>
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+          <div className="space-y-1.5">
+            <Label htmlFor="bsm-workspace-title">Workspace title</Label>
+            <Input
+              id="bsm-workspace-title"
+              value={workspaceTitle}
+              onChange={(event) => setWorkspaceTitle(event.target.value)}
+              disabled={creatingWorkspace}
+              maxLength={180}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="bsm-workspace-instructions">Reviewer instructions</Label>
+            <Input
+              id="bsm-workspace-instructions"
+              value={workspaceInstructions}
+              onChange={(event) => setWorkspaceInstructions(event.target.value)}
+              disabled={creatingWorkspace}
+              maxLength={4000}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={createWorkspace}
+            disabled={creatingWorkspace || !shopId || !workspaceTitle.trim()}
+            className={cn(buttonVariants({ variant: "default" }), "gap-2")}
+          >
+            {creatingWorkspace ? (
+              <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <FilePenLine className="size-4" aria-hidden="true" />
+            )}
+            {creatingWorkspace ? "Creating" : "Create workspace"}
+          </button>
+        </div>
         <div className="space-y-1.5">
           <Label htmlFor="bsm-approval-workspace">Review Workspace</Label>
           <select
             id="bsm-approval-workspace"
             value={reviewWorkspaceProjectId}
-            onChange={(event) => setReviewWorkspaceProjectId(event.target.value)}
+            onChange={(event) => {
+              setReviewWorkspaceProjectId(event.target.value);
+              setWorkspacePreview(null);
+              setStartedReview(null);
+            }}
             disabled={uploading || selectedShopWorkspaces.length === 0}
             className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="">
               {selectedShopWorkspaces.length === 0
                 ? "No Review Workspaces for this shop"
-                : "Do not attach to a workspace"}
+                : "Choose a Review Workspace"}
             </option>
             {selectedShopWorkspaces.map((workspace) => (
               <option key={workspace.id} value={workspace.id}>
@@ -432,6 +685,168 @@ export function BsmContentApprovalManager({
               </option>
             ))}
           </select>
+        </div>
+        <div className="space-y-4 rounded-md border border-border bg-muted/20 p-4">
+          <div>
+            <h3 className="font-heading text-sm font-semibold">Reviewers</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Choose saved reviewer contacts or add a new contact before starting review.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+            <div className="space-y-1.5">
+              <Label htmlFor="bsm-reviewer-email">Reviewer email</Label>
+              <Input
+                id="bsm-reviewer-email"
+                value={reviewerEmail}
+                onChange={(event) => setReviewerEmail(event.target.value)}
+                disabled={startingReview}
+                placeholder="reviewer@example.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bsm-reviewer-name">Reviewer name</Label>
+              <Input
+                id="bsm-reviewer-name"
+                value={reviewerName}
+                onChange={(event) => setReviewerName(event.target.value)}
+                disabled={startingReview}
+                placeholder="Optional"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => addReviewer({ email: reviewerEmail, name: reviewerName || null })}
+              disabled={startingReview || !reviewerEmail.trim()}
+              className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
+            >
+              <UserPlus className="size-4" aria-hidden="true" />
+              Add reviewer
+            </button>
+          </div>
+          {reviewerContacts.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {reviewerContacts.slice(0, 8).map((contact) => (
+                <button
+                  key={contact.email}
+                  type="button"
+                  onClick={() => addReviewer(contact)}
+                  disabled={startingReview}
+                  className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                >
+                  {contact.name ? `${contact.name} · ${contact.email}` : contact.email}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {selectedReviewers.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {selectedReviewers.map((reviewer) => (
+                <span
+                  key={reviewer.email}
+                  className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1 text-xs"
+                >
+                  {reviewer.name ? `${reviewer.name} · ${reviewer.email}` : reviewer.email}
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() =>
+                      setSelectedReviewers((current) => current.filter((entry) => entry.email !== reviewer.email))
+                    }
+                    aria-label={`Remove reviewer ${reviewer.email}`}
+                  >
+                    Remove
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-border p-3">
+          <div className="min-w-56 flex-1 text-sm text-muted-foreground">
+            {startBlocker ?? `${workspaceDocuments.length} ready document${workspaceDocuments.length === 1 ? "" : "s"} can be sent.`}
+          </div>
+          <button
+            type="button"
+            onClick={loadWorkspacePreview}
+            disabled={previewingWorkspace || !reviewWorkspaceProjectId}
+            className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
+          >
+            {previewingWorkspace ? (
+              <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Eye className="size-4" aria-hidden="true" />
+            )}
+            Preview read-only
+          </button>
+          <button
+            type="button"
+            onClick={startWorkspaceReview}
+            disabled={startingReview || Boolean(startBlocker)}
+            className={cn(buttonVariants({ variant: "default" }), "gap-2")}
+          >
+            {startingReview ? (
+              <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Play className="size-4" aria-hidden="true" />
+            )}
+            Start review
+          </button>
+        </div>
+        {workspacePreview ? (
+          <div className="rounded-md border border-border bg-muted/30 p-4 text-sm">
+            <div className="font-heading font-semibold">Preview mode · no comments or decisions are saved here</div>
+            <div className="mt-1 text-muted-foreground">
+              {workspacePreview.project.title} · {workspacePreview.project.status.replaceAll("_", " ")}
+            </div>
+            <div className="mt-3 space-y-2">
+              {workspacePreview.documents.length === 0 ? (
+                <div className="text-muted-foreground">No documents are attached yet.</div>
+              ) : (
+                workspacePreview.documents.map((document) => (
+                  <div key={document.itemId} className="rounded-md border border-border bg-background p-3">
+                    <div className="font-medium">{document.title}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {document.processingStatus.replaceAll("_", " ")} · {document.status.replaceAll("_", " ")}
+                    </div>
+                    {document.proofUrl ? (
+                      <a className="mt-2 inline-block font-medium text-ember" href={document.proofUrl} target="_blank" rel="noreferrer">
+                        Open proof
+                      </a>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        ) : null}
+        {startedReview ? (
+          <div className="rounded-md border border-success/40 bg-success/10 p-4 text-sm">
+            <div className="font-heading font-semibold">Review started</div>
+            <div className="mt-1 text-muted-foreground">
+              {startedReview.documentCount} document{startedReview.documentCount === 1 ? "" : "s"} sent to {startedReview.invitations.length} reviewer{startedReview.invitations.length === 1 ? "" : "s"}.
+            </div>
+            <div className="mt-3 space-y-2">
+              {startedReview.invitations.map((invitation) => (
+                <div key={invitation.invitationId} className="rounded-md border border-border bg-background p-3">
+                  <div className="font-medium">{invitation.reviewerName ?? invitation.reviewerEmail}</div>
+                  <a className="break-all text-ember" href={`/review-workspace?invite=${encodeURIComponent(invitation.inviteToken)}`}>
+                    /review-workspace?invite={invitation.inviteToken}
+                  </a>
+                  <div className="mt-1 font-mono text-lg tracking-widest">{invitation.inviteCode}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="space-y-4 border-b border-border pb-8">
+        <div>
+          <h2 className="font-heading text-lg font-semibold">Documents</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Add one or more files or generated pages. A one-document approval is still tracked inside the Review Workspace.
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="bsm-approval-title">Review title</Label>
@@ -547,12 +962,12 @@ export function BsmContentApprovalManager({
             ) : (
               <FileUp className="size-4" aria-hidden="true" />
             )}
-            {uploading ? "Saving" : sourceKind === "generated_page" ? "Attach" : "Upload"}
+            {uploading ? "Saving" : sourceKind === "generated_page" ? "Attach" : "Add document"}
           </button>
         </div>
         {fileValidationError ? (
           <p className="text-sm text-destructive">{fileValidationError}</p>
-        ) : formValidationError && sourceKind === "generated_page" ? (
+        ) : formValidationError ? (
           <p className="text-sm text-destructive">{formValidationError}</p>
         ) : null}
         {phase.kind === "success" ? (
@@ -570,7 +985,7 @@ export function BsmContentApprovalManager({
       <section className="space-y-3">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <h2 className="font-heading text-lg font-semibold">Review library</h2>
+            <h2 className="font-heading text-lg font-semibold">Workspace documents</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {approvals.length} review {approvals.length === 1 ? "item" : "items"}
             </p>
@@ -592,7 +1007,7 @@ export function BsmContentApprovalManager({
               {approvals.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                    No review files yet.
+                    No workspace documents yet.
                   </td>
                 </tr>
               ) : (

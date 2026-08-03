@@ -24,6 +24,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const SAFE_SEGMENT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/;
 const PGRST_SCHEMA_CACHE_COLUMN_RE = /'([^']+)' column/;
 type BsmContentApprovalActorRole = "customer" | "psg_internal" | "psg_superadmin";
+type ReviewWorkspaceAttachmentTarget = {
+  projectId: string;
+  title: string;
+  roundId: string | null;
+  includeInCurrentRound: boolean;
+};
 
 export type ContentApprovalStorage = {
   from(bucket: string): {
@@ -255,7 +261,7 @@ async function loadReviewWorkspaceForAttachment(
     actorProfileId: string;
     actorRole?: BsmContentApprovalActorRole | null;
   },
-): Promise<{ projectId: string; title: string; roundId: string } | null> {
+): Promise<ReviewWorkspaceAttachmentTarget | null> {
   if (!input.projectId) return null;
 
   const { data: project, error: projectError } = await client
@@ -268,9 +274,15 @@ async function loadReviewWorkspaceForAttachment(
   if (!project || project.deleted_at) {
     throw new ApprovalUploadInputError("Choose an active Review Workspace for this shop");
   }
-  if (!project.current_round_id) {
-    throw new ApprovalUploadInputError("The selected Review Workspace does not have a current review round");
-  }
+  const currentRoundId = (project.current_round_id as string | null) ?? null;
+  const { data: round, error: roundError } = currentRoundId
+    ? await client
+        .from("bsm_content_review_rounds")
+        .select("id, status")
+        .eq("id", currentRoundId)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (roundError) throw new Error(`Could not load Review Workspace round: ${roundError.message}`);
 
   if (input.actorRole !== "psg_superadmin") {
     const { data: collaborator, error: collaboratorError } = await client
@@ -289,7 +301,8 @@ async function loadReviewWorkspaceForAttachment(
   return {
     projectId: project.id as string,
     title: project.title as string,
-    roundId: project.current_round_id as string,
+    roundId: currentRoundId,
+    includeInCurrentRound: Boolean(currentRoundId && (!round || !["inviting", "active"].includes(round.status as string))),
   };
 }
 
@@ -513,6 +526,7 @@ function toListItem(input: {
   customerProfileId: string | null;
   title: string;
   status: string;
+  processingStatus?: string;
   contentType: string;
   sourceKind: "uploaded_file" | "generated_page";
   contextNote: string | null;
@@ -532,6 +546,7 @@ function toListItem(input: {
     customerProfileId: input.customerProfileId,
     title: input.title,
     status: input.status,
+    processingStatus: input.processingStatus ?? "pending",
     contentType: input.contentType,
     sourceKind: input.sourceKind,
     contextNote: input.contextNote,
@@ -607,7 +622,7 @@ export async function createBsmContentApprovalUpload(
     title,
     content_type: file.contentType,
     source_kind: "uploaded_file",
-    status: workspace ? "in_review" : "draft",
+    status: workspace?.includeInCurrentRound ? "in_review" : "draft",
     processing_status: workspace ? "ready" : "pending",
     admin_context_note: contextNote,
     created_by_profile_id: actorProfileId,
@@ -632,14 +647,14 @@ export async function createBsmContentApprovalUpload(
       byte_size: input.byteSize,
       preview_type: file.contentType === "image" ? "image" : "file",
       project_id: workspace?.projectId ?? null,
-      round_id: workspace?.roundId ?? null,
+      round_id: workspace?.includeInCurrentRound ? workspace.roundId : null,
       processed_storage_bucket: null,
       processed_storage_path: null,
       processed_content_type: null,
       scan_status: "clean",
       conversion_status: "not_needed",
       sanitization_status: "not_needed",
-      introduced_by_round_id: workspace?.roundId ?? null,
+      introduced_by_round_id: workspace?.includeInCurrentRound ? workspace.roundId : null,
       created_by_profile_id: actorProfileId,
     });
     if (versionError) throw new Error(`Could not create review version: ${versionError.message}`);
@@ -650,16 +665,20 @@ export async function createBsmContentApprovalUpload(
       .eq("id", itemId);
     if (updateError) throw new Error(`Could not link current version: ${updateError.message}`);
 
-    await addReviewersForItem(client, {
-      itemId,
-      shopId,
-      customerProfileId,
-      workspace: workspace ? { projectId: workspace.projectId, roundId: workspace.roundId } : null,
-    });
+    if (!workspace || (workspace.includeInCurrentRound && workspace.roundId)) {
+      await addReviewersForItem(client, {
+        itemId,
+        shopId,
+        customerProfileId,
+        workspace: workspace?.includeInCurrentRound && workspace.roundId
+          ? { projectId: workspace.projectId, roundId: workspace.roundId }
+          : null,
+      });
+    }
 
-    if (workspace) {
+    if (workspace?.includeInCurrentRound && workspace.roundId) {
       await attachItemToCurrentWorkspaceRound(client, {
-        workspace,
+        workspace: { projectId: workspace.projectId, roundId: workspace.roundId },
         shopId,
         itemId,
         versionId,
@@ -696,7 +715,8 @@ export async function createBsmContentApprovalUpload(
       shopId,
       customerProfileId,
       title,
-      status: workspace ? "in_review" : "draft",
+      status: workspace?.includeInCurrentRound ? "in_review" : "draft",
+      processingStatus: workspace ? "ready" : "pending",
       contentType: file.contentType,
       sourceKind: "uploaded_file",
       contextNote,
@@ -760,7 +780,7 @@ export async function createBsmGeneratedPageApproval(
     title,
     content_type: "generated_page",
     source_kind: "generated_page",
-    status: workspace ? "in_review" : "draft",
+    status: workspace?.includeInCurrentRound ? "in_review" : "draft",
     processing_status: workspace ? "ready" : "pending",
     admin_context_note: contextNote,
     created_by_profile_id: actorProfileId,
@@ -773,7 +793,7 @@ export async function createBsmGeneratedPageApproval(
     review_item_id: itemId,
     shop_id: shopId,
     project_id: workspace?.projectId ?? null,
-    round_id: workspace?.roundId ?? null,
+    round_id: workspace?.includeInCurrentRound ? workspace.roundId : null,
     version_number: 1,
     status: "current",
     storage_bucket: null,
@@ -793,16 +813,20 @@ export async function createBsmGeneratedPageApproval(
     .eq("id", itemId);
   if (updateError) throw new Error(`Could not link current generated page version: ${updateError.message}`);
 
-  await addReviewersForItem(client, {
-    itemId,
-    shopId,
-    customerProfileId,
-    workspace: workspace ? { projectId: workspace.projectId, roundId: workspace.roundId } : null,
-  });
+  if (!workspace || (workspace.includeInCurrentRound && workspace.roundId)) {
+    await addReviewersForItem(client, {
+      itemId,
+      shopId,
+      customerProfileId,
+      workspace: workspace?.includeInCurrentRound && workspace.roundId
+        ? { projectId: workspace.projectId, roundId: workspace.roundId }
+        : null,
+    });
+  }
 
-  if (workspace) {
+  if (workspace?.includeInCurrentRound && workspace.roundId) {
     await attachItemToCurrentWorkspaceRound(client, {
-      workspace,
+      workspace: { projectId: workspace.projectId, roundId: workspace.roundId },
       shopId,
       itemId,
       versionId,
@@ -826,7 +850,8 @@ export async function createBsmGeneratedPageApproval(
       shopId,
       customerProfileId,
       title,
-      status: workspace ? "in_review" : "draft",
+      status: workspace?.includeInCurrentRound ? "in_review" : "draft",
+      processingStatus: workspace ? "ready" : "pending",
       contentType: "generated_page",
       sourceKind: "generated_page",
       contextNote,
@@ -866,7 +891,7 @@ export async function updateBsmContentApproval(
   const customerProfileId = (row.customer_profile_id as string | null) ?? null;
   const projectId = (row.project_id as string | null) ?? null;
 
-  let workspace: { projectId: string; title: string; roundId: string } | null = null;
+  let workspace: ReviewWorkspaceAttachmentTarget | null = null;
   if (projectId) {
     workspace = await loadReviewWorkspaceForAttachment(client, {
       projectId,
@@ -938,7 +963,7 @@ export async function updateBsmContentApproval(
       review_item_id: itemId,
       shop_id: shopId,
       project_id: workspace?.projectId ?? null,
-      round_id: workspace?.roundId ?? null,
+      round_id: workspace?.includeInCurrentRound ? workspace.roundId : null,
       version_number: versionNumber,
       status: "current",
       storage_bucket: BSM_CONTENT_APPROVALS_BUCKET,
@@ -955,12 +980,12 @@ export async function updateBsmContentApproval(
       scan_status: "clean",
       conversion_status: "not_needed",
       sanitization_status: "not_needed",
-      introduced_by_round_id: workspace?.roundId ?? null,
+      introduced_by_round_id: workspace?.includeInCurrentRound ? workspace.roundId : null,
       created_by_profile_id: actorProfileId,
     });
     if (versionError) throw new Error(`Could not create replacement review version: ${versionError.message}`);
 
-    if (workspace) {
+    if (workspace?.includeInCurrentRound && workspace.roundId) {
       const { error: roundDocUpdateError } = await client
         .from("bsm_content_review_round_documents")
         .update({ version_id: versionId })
@@ -1020,6 +1045,7 @@ export async function updateBsmContentApproval(
       customerProfileId,
       title,
       status: row.status as string,
+      processingStatus: workspace ? "ready" : "pending",
       contentType,
       sourceKind: "uploaded_file",
       contextNote,
@@ -1083,7 +1109,7 @@ export async function attachBsmContentApprovalToWorkspace(
       project_id: workspace.projectId,
       position,
       required: true,
-      status: "in_review",
+      status: workspace.includeInCurrentRound ? "in_review" : "draft",
       processing_status: "ready",
       metadata_jsonb: { reviewWorkspaceProjectId: workspace.projectId },
       updated_at: updatedAt,
@@ -1095,26 +1121,28 @@ export async function attachBsmContentApprovalToWorkspace(
     .from("bsm_content_review_versions")
     .update({
       project_id: workspace.projectId,
-      round_id: workspace.roundId,
-      introduced_by_round_id: workspace.roundId,
+      round_id: workspace.includeInCurrentRound ? workspace.roundId : null,
+      introduced_by_round_id: workspace.includeInCurrentRound ? workspace.roundId : null,
     })
     .eq("id", versionId);
   if (versionUpdateError) throw new Error(`Could not attach review version to Review Workspace: ${versionUpdateError.message}`);
 
-  await addReviewersForItem(client, {
-    itemId,
-    shopId,
-    customerProfileId,
-    workspace: { projectId: workspace.projectId, roundId: workspace.roundId },
-  });
+  if (workspace.includeInCurrentRound && workspace.roundId) {
+    await addReviewersForItem(client, {
+      itemId,
+      shopId,
+      customerProfileId,
+      workspace: { projectId: workspace.projectId, roundId: workspace.roundId },
+    });
 
-  await attachItemToCurrentWorkspaceRound(client, {
-    workspace,
-    shopId,
-    itemId,
-    versionId,
-    actorProfileId,
-  });
+    await attachItemToCurrentWorkspaceRound(client, {
+      workspace: { projectId: workspace.projectId, roundId: workspace.roundId },
+      shopId,
+      itemId,
+      versionId,
+      actorProfileId,
+    });
+  }
 
   return {
     item: toListItem({
@@ -1122,7 +1150,8 @@ export async function attachBsmContentApprovalToWorkspace(
       shopId,
       customerProfileId,
       title: row.title as string,
-      status: "in_review",
+      status: workspace.includeInCurrentRound ? "in_review" : "draft",
+      processingStatus: "ready",
       contentType: row.content_type as string,
       sourceKind: row.content_type === "generated_page" ? "generated_page" : "uploaded_file",
       contextNote: (row.admin_context_note as string | null) ?? null,
@@ -1221,13 +1250,40 @@ export async function listBsmContentApprovalWorkspaces(
     }));
 }
 
+export async function listBsmContentApprovalReviewerContacts(
+  client: SupabaseClient,
+  opts: { shopId?: string | null } = {},
+): Promise<Array<{ email: string; name: string | null }>> {
+  let query = client
+    .from("bsm_content_review_invitations")
+    .select("reviewer_email, reviewer_name, created_at")
+    .not("reviewer_email", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (opts.shopId) query = query.eq("shop_id", opts.shopId);
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Could not load reviewer contacts: ${error.message}`);
+
+  const contacts = new Map<string, { email: string; name: string | null }>();
+  for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+    const email = typeof row.reviewer_email === "string" ? row.reviewer_email.trim().toLowerCase() : "";
+    if (!email || contacts.has(email)) continue;
+    contacts.set(email, {
+      email,
+      name: typeof row.reviewer_name === "string" && row.reviewer_name.trim() ? row.reviewer_name.trim() : null,
+    });
+  }
+  return [...contacts.values()];
+}
+
 export async function listBsmContentApprovals(
   client: SupabaseClient,
   opts: { shopId?: string | null } = {},
 ): Promise<BsmContentApprovalListItem[]> {
   let query = client
     .from("bsm_content_review_items")
-    .select("id, shop_id, customer_profile_id, title, status, content_type, admin_context_note, project_id, current_version_id, updated_at, metadata_jsonb")
+    .select("id, shop_id, customer_profile_id, title, status, processing_status, content_type, admin_context_note, project_id, current_version_id, updated_at, metadata_jsonb")
     .is("archived_at", null)
     .neq("status", "archived")
     .order("updated_at", { ascending: false })
@@ -1302,6 +1358,7 @@ export async function listBsmContentApprovals(
       customerProfileId: (row.customer_profile_id as string | null) ?? null,
       title: row.title as string,
       status: row.status as string,
+      processingStatus: (row.processing_status as string | null) ?? "pending",
       contentType: row.content_type as string,
       sourceKind: row.content_type === "generated_page" ? "generated_page" : "uploaded_file",
       contextNote: (row.admin_context_note as string | null) ?? null,
