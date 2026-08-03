@@ -5,8 +5,13 @@ type DemoUserCandidate = {
 };
 
 type DemoShopCandidate = {
+  id?: string;
   name: string;
   slug?: string | null;
+};
+
+type DemoShopMembershipCandidate = {
+  shopId: string;
 };
 
 type DemoCompanyCandidate = {
@@ -16,10 +21,13 @@ type DemoCompanyCandidate = {
 type CleanDemoEnv = {
   DEMO_OPERATOR_EMAIL?: string;
   DEMO_SHOP_EMAIL?: string;
+  NEXT_PUBLIC_SUPABASE_URL?: string;
 };
 
 const CLEAN_DEMO_OPERATOR_EMAILS = ["admin@psghub.me"] as const;
 const CLEAN_DEMO_USER_EMAILS = ["admin@psghub.me", "test@psghub.me"] as const;
+const LOCAL_CLEAN_DEMO_OPERATOR_EMAIL = "ops-staff@e2e.test";
+const LOCAL_CLEAN_DEMO_SHOP_EMAIL = "owner@e2e.test";
 const CLEAN_DEMO_SHOP_NAME = "Riverside Collision";
 const CLEAN_DEMO_SHOP_SLUG = "riverside-collision";
 
@@ -67,21 +75,37 @@ function defaultCleanDemoEnv(): CleanDemoEnv {
   return {
     DEMO_OPERATOR_EMAIL: process.env.DEMO_OPERATOR_EMAIL,
     DEMO_SHOP_EMAIL: process.env.DEMO_SHOP_EMAIL,
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  };
+}
+
+function isLocalSupabaseUrl(url?: string): boolean {
+  return /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::|\/|$)/i.test((url ?? "").trim());
+}
+
+function withLocalCleanDemoDefaults(env: CleanDemoEnv): CleanDemoEnv {
+  if (!isLocalSupabaseUrl(env.NEXT_PUBLIC_SUPABASE_URL)) return env;
+  return {
+    ...env,
+    DEMO_OPERATOR_EMAIL: LOCAL_CLEAN_DEMO_OPERATOR_EMAIL,
+    DEMO_SHOP_EMAIL: LOCAL_CLEAN_DEMO_SHOP_EMAIL,
   };
 }
 
 function cleanDemoOperatorEmails(env: CleanDemoEnv = defaultCleanDemoEnv()): Set<string> {
+  const cleanEnv = withLocalCleanDemoDefaults(env);
   return new Set([
     ...CLEAN_DEMO_OPERATOR_EMAILS,
-    normalizeEmail(env.DEMO_OPERATOR_EMAIL),
+    normalizeEmail(cleanEnv.DEMO_OPERATOR_EMAIL),
   ]);
 }
 
 function cleanDemoUserEmails(env: CleanDemoEnv = defaultCleanDemoEnv()): Set<string> {
+  const cleanEnv = withLocalCleanDemoDefaults(env);
   return new Set([
     ...CLEAN_DEMO_USER_EMAILS,
-    normalizeEmail(env.DEMO_OPERATOR_EMAIL),
-    normalizeEmail(env.DEMO_SHOP_EMAIL),
+    normalizeEmail(cleanEnv.DEMO_OPERATOR_EMAIL),
+    normalizeEmail(cleanEnv.DEMO_SHOP_EMAIL),
   ]);
 }
 
@@ -101,11 +125,21 @@ export function filterCleanDemoUsers<T extends DemoUserCandidate>(
   currentUserEmail?: string | null,
   env: CleanDemoEnv = defaultCleanDemoEnv()
 ): T[] {
-  const visible = filterInternalDemoUsers(users);
-  if (!shouldUseCleanDemoVisibility(currentUserEmail, env)) return visible;
+  if (!shouldUseCleanDemoVisibility(currentUserEmail, env)) {
+    return filterInternalDemoUsers(users);
+  }
 
   const demoEmails = cleanDemoUserEmails(env);
-  return visible.filter((user) => demoEmails.has(normalizeEmail(user.email)));
+  return users.filter((user) => demoEmails.has(normalizeEmail(user.email)));
+}
+
+function isCleanDemoShop(shop: DemoShopCandidate) {
+  const name = shop.name.trim().toLowerCase();
+  const slug = (shop.slug ?? "").trim().toLowerCase();
+  return (
+    name === CLEAN_DEMO_SHOP_NAME.toLowerCase() ||
+    slug === CLEAN_DEMO_SHOP_SLUG
+  );
 }
 
 export function filterCleanDemoShops<T extends DemoShopCandidate>(
@@ -114,14 +148,23 @@ export function filterCleanDemoShops<T extends DemoShopCandidate>(
   env: CleanDemoEnv = defaultCleanDemoEnv()
 ): T[] {
   if (!shouldUseCleanDemoVisibility(currentUserEmail, env)) return shops;
-  return shops.filter((shop) => {
-    const name = shop.name.trim().toLowerCase();
-    const slug = (shop.slug ?? "").trim().toLowerCase();
-    return (
-      name === CLEAN_DEMO_SHOP_NAME.toLowerCase() ||
-      slug === CLEAN_DEMO_SHOP_SLUG
-    );
-  });
+  return shops.filter(isCleanDemoShop);
+}
+
+export function filterCleanDemoShopMemberships<T extends DemoShopMembershipCandidate>(
+  memberships: T[],
+  visibleShops: DemoShopCandidate[],
+  currentUserEmail?: string | null,
+  env: CleanDemoEnv = defaultCleanDemoEnv()
+): T[] {
+  if (!shouldUseCleanDemoVisibility(currentUserEmail, env)) return memberships;
+  const visibleShopIds = new Set(
+    visibleShops
+      .filter(isCleanDemoShop)
+      .map((shop) => "id" in shop && typeof shop.id === "string" ? shop.id : null)
+      .filter((shopId): shopId is string => shopId !== null)
+  );
+  return memberships.filter((membership) => visibleShopIds.has(membership.shopId));
 }
 
 export function filterCleanDemoCompanies<T extends DemoCompanyCandidate>(

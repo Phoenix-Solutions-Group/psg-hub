@@ -17,7 +17,11 @@ import {
   type AdminTier,
   type ShopMemberRole,
 } from "@/lib/ops/user-management";
-import { filterCleanDemoShops, filterCleanDemoUsers } from "@/lib/ops/demo-user-filter";
+import {
+  filterCleanDemoShopMemberships,
+  filterCleanDemoShops,
+  filterCleanDemoUsers,
+} from "@/lib/ops/demo-user-filter";
 
 function cleanRole(role: unknown): AdminAppRole | null {
   return (ADMIN_APP_ROLES as readonly string[]).includes(role as string)
@@ -121,12 +125,21 @@ export default async function UsersAdminPage() {
 
   const shopNameById = new Map(shops.map((s) => [s.id, s.name]));
   const membershipsByUserId = new Map<string, ManagedUser["memberships"]>();
-  for (const m of memberships ?? []) {
-    const userId = m.user_id as string;
+  const visibleMemberships = filterCleanDemoShopMemberships(
+    (memberships ?? []).map((m) => ({
+      userId: m.user_id as string,
+      shopId: m.shop_id as string,
+      role: m.role,
+    })),
+    shops,
+    user.email
+  );
+  for (const m of visibleMemberships) {
+    const userId = m.userId;
     const rows = membershipsByUserId.get(userId) ?? [];
     rows.push({
-      shopId: m.shop_id as string,
-      shopName: shopNameById.get(m.shop_id as string) ?? (m.shop_id as string),
+      shopId: m.shopId,
+      shopName: shopNameById.get(m.shopId) ?? m.shopId,
       role: cleanShopRole(m.role),
     });
     membershipsByUserId.set(userId, rows);

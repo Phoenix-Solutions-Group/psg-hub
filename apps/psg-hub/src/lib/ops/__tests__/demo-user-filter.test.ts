@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   filterCleanDemoCompanies,
+  filterCleanDemoShopMemberships,
   filterCleanDemoShops,
   filterCleanDemoUsers,
   filterInternalDemoUsers,
@@ -91,6 +92,16 @@ describe("demo user filter", () => {
     expect(shouldUseCleanDemoVisibility("nick@phoenixsolutionsgroup.net", env)).toBe(false);
   });
 
+  it("uses seeded local demo users when the app points at the local test database", () => {
+    const env = {
+      DEMO_OPERATOR_EMAIL: "admin@psghub.me",
+      DEMO_SHOP_EMAIL: "test@psghub.me",
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+    };
+
+    expect(shouldUseCleanDemoVisibility("ops-staff@e2e.test", env)).toBe(true);
+  });
+
   it("keeps only the two demo users for the demo operator", () => {
     const users = [
       {
@@ -115,6 +126,33 @@ describe("demo user filter", () => {
     expect(filterCleanDemoUsers(users, "nick@phoenixsolutionsgroup.net")).toEqual(users);
   });
 
+  it("keeps explicitly allowed local demo users even when their emails look like test fixtures", () => {
+    const env = {
+      DEMO_OPERATOR_EMAIL: "ops-staff@e2e.test",
+      DEMO_SHOP_EMAIL: "owner@e2e.test",
+    };
+    const users = [
+      {
+        displayName: "BSM Demo Admin",
+        email: "ops-staff@e2e.test",
+      },
+      {
+        displayName: "BSM Demo User",
+        email: "owner@e2e.test",
+      },
+      {
+        displayName: "E2E Multi User",
+        email: "multi@e2e.test",
+      },
+      {
+        displayName: "Nick Schoolcraft",
+        email: "nick@phoenixsolutionsgroup.net",
+      },
+    ];
+
+    expect(filterCleanDemoUsers(users, "ops-staff@e2e.test", env)).toEqual(users.slice(0, 2));
+  });
+
   it("keeps only Riverside shop and company options for the demo operator", () => {
     const shops = [
       { id: "shop-1", name: "Riverside Collision", slug: "riverside-collision" },
@@ -131,5 +169,23 @@ describe("demo user filter", () => {
     expect(filterCleanDemoCompanies(companies, "admin@psghub.me")).toEqual([companies[0]]);
     expect(filterCleanDemoShops(shops, "nick@phoenixsolutionsgroup.net")).toEqual(shops);
     expect(filterCleanDemoCompanies(companies, "nick@phoenixsolutionsgroup.net")).toEqual(companies);
+  });
+
+  it("keeps only Riverside shop memberships for the demo operator", () => {
+    const shops = [
+      { id: "shop-1", name: "Riverside Collision", slug: "riverside-collision" },
+      { id: "shop-2", name: "Collision Leaders of Derby", slug: "collision-leaders" },
+    ];
+    const memberships = [
+      { userId: "demo-user", shopId: "shop-1", role: "owner" },
+      { userId: "demo-user", shopId: "shop-2", role: "manager" },
+    ];
+
+    expect(filterCleanDemoShopMemberships(memberships, shops, "admin@psghub.me")).toEqual([
+      memberships[0],
+    ]);
+    expect(
+      filterCleanDemoShopMemberships(memberships, shops, "nick@phoenixsolutionsgroup.net")
+    ).toEqual(memberships);
   });
 });
