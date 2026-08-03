@@ -3,14 +3,18 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   addGuestReviewPinComment,
+  closeReviewWorkspaceRoundEarly,
   createInternalReviewWorkspaceSlice,
   createReviewWorkspaceDeletionTombstone,
   createReviewWorkspaceProject,
   enqueueReviewWorkspaceProcessingJob,
   getGuestReviewWorkspace,
   getStaffReviewWorkspaceResult,
+  listStaffReviewWorkspaces,
   requireGuestReviewSession,
   requireReviewWorkspaceStaffAccess,
+  removeReviewWorkspaceProject,
+  reopenGuestReviewRound,
   submitGuestReviewRound,
 } from "@/lib/bsm/review-workspace";
 
@@ -128,6 +132,10 @@ type FakeClientOptions = {
   hasPin?: boolean;
   legacyEventsRequireReviewItem?: boolean;
   missingSchemaCacheColumns?: Record<string, string[]>;
+  roundInvitations?: Array<Record<string, unknown>>;
+  roundDecisionRows?: Array<Record<string, unknown>>;
+  roundDocumentInScope?: boolean;
+  roundDocumentTenantMismatch?: boolean;
 };
 
 class Query {
@@ -165,6 +173,15 @@ class Query {
 
   private rows() {
     if (this.table === "bsm_content_review_round_documents") {
+      const isInScope = this.options.roundDocumentInScope ?? true;
+      if (!isInScope) return { data: [], error: null };
+      if (
+        this.options.roundDocumentTenantMismatch &&
+        this.filters.project_id === PROJECT_ID &&
+        this.filters.shop_id === SHOP_ID
+      ) {
+        return { data: [], error: null };
+      }
       return { data: [{ review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID }], error: null };
     }
     if (this.table === "bsm_content_review_comments") {
@@ -272,6 +289,25 @@ class Query {
       return { data: [{ id: SECTION_ID, title: "Website" }], error: null };
     }
     if (this.table === "bsm_content_review_decisions") {
+      if (this.filters.round_id === ROUND_ID && this.filters.invitation_id === INVITATION_ID && this.options.roundDecisionRows) {
+        return {
+          data: this.options.roundDecisionRows?.filter((row) => row.invitation_id === INVITATION_ID) ?? [],
+          error: null,
+        };
+      }
+      if (this.filters.round_id === ROUND_ID && Array.isArray(this.filters.invitation_id)) {
+        return {
+          data: this.options.roundDecisionRows ?? [
+            {
+              invitation_id: INVITATION_ID,
+              review_item_id: REVIEW_ITEM_ID,
+              decision: "changes_requested",
+              submitted_at: "2026-07-28T19:30:00.000Z",
+            },
+          ],
+          error: null,
+        };
+      }
       return {
         data: this.options.submitted
           ? [
@@ -288,12 +324,73 @@ class Query {
       };
     }
     if (this.table === "bsm_content_review_rounds") {
-      return { data: [{ id: ROUND_ID, status: "submitted", outcome: "changes_requested", completed_at: "2026-07-28T19:00:00.000Z" }], error: null };
+      return { data: [{ id: ROUND_ID, status: "active", outcome: "changes_requested", completed_at: "2026-07-28T19:00:00.000Z" }], error: null };
+    }
+    if (this.table === "bsm_content_review_invitations") {
+      return {
+        data: this.options.roundInvitations ?? [
+          {
+            id: INVITATION_ID,
+            status: "submitted",
+            revoked_at: null,
+            submitted_at: "2026-07-28T19:30:00.000Z",
+          },
+        ],
+        error: null,
+      };
+    }
+    if (this.table === "bsm_content_review_projects") {
+      return {
+        data: [{
+          id: PROJECT_ID,
+          shop_id: SHOP_ID,
+          title: "Website review",
+          status: "active",
+          current_round_id: ROUND_ID,
+          updated_at: "2026-07-28T19:00:00.000Z",
+          created_at: "2026-07-28T18:00:00.000Z",
+          company: { name: "Alpha Auto Body" },
+        }],
+        error: null,
+      };
+    }
+    if (this.table === "bsm_content_review_project_collaborators") {
+      return {
+        data: [{
+          role: "collaborator",
+          project: {
+            id: PROJECT_ID,
+            shop_id: SHOP_ID,
+            title: "Website review",
+            status: "active",
+            current_round_id: ROUND_ID,
+            updated_at: "2026-07-28T19:00:00.000Z",
+            created_at: "2026-07-28T18:00:00.000Z",
+            company: { name: "Alpha Auto Body" },
+          },
+        }],
+        error: null,
+      };
     }
     return { data: [], error: null };
   }
 
   maybeSingle() {
+    if (this.table === "bsm_content_review_round_documents") {
+      const isInScope = this.options.roundDocumentInScope ?? true;
+      const reviewItemId = String(this.filters.review_item_id ?? "");
+      const versionId = String(this.filters.version_id ?? "");
+      const requestedInScope = reviewItemId === REVIEW_ITEM_ID && versionId === VERSION_ID;
+      const tenantMatched = !this.options.roundDocumentTenantMismatch ||
+        this.filters.project_id !== PROJECT_ID ||
+        this.filters.shop_id !== SHOP_ID;
+      return Promise.resolve({
+        data: isInScope && requestedInScope && tenantMatched
+          ? { review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID }
+          : null,
+        error: null,
+      });
+    }
     if (this.table === "bsm_content_review_projects") {
       return Promise.resolve({
         data: { id: PROJECT_ID, shop_id: SHOP_ID, status: "draft", deleted_at: null },
@@ -423,6 +520,73 @@ describe("BSM review workspace foundation service", () => {
     await expect(
       requireReviewWorkspaceStaffAccess(denied.client as never, PROJECT_ID, ACTOR_ID),
     ).rejects.toThrow("You do not have access");
+  });
+
+  it("lets a superadmin list and open review workspaces without collaborator rows", async () => {
+    const { client } = createFakeClient({ collaborator: false });
+
+    await expect(
+      listStaffReviewWorkspaces(ACTOR_ID, "psg_superadmin", { client: client as never }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: PROJECT_ID,
+        shopId: SHOP_ID,
+        shopName: "Alpha Auto Body",
+        role: "superadmin",
+      }),
+    ]);
+    await expect(
+      requireReviewWorkspaceStaffAccess(client as never, PROJECT_ID, ACTOR_ID, "psg_superadmin"),
+    ).resolves.toMatchObject({ projectId: PROJECT_ID, shopId: SHOP_ID, role: "superadmin" });
+  });
+
+  it("soft-removes a review workspace for superadmins and queues purge cleanup", async () => {
+    const { client, updates, upserts, inserts } = createFakeClient({ collaborator: false });
+
+    await expect(
+      removeReviewWorkspaceProject(
+        {
+          projectId: PROJECT_ID,
+          actorProfileId: ACTOR_ID,
+          actorRole: "psg_superadmin",
+          reason: "Duplicate QA workspace.",
+        },
+        { client: client as never, now: new Date("2026-07-28T20:00:00.000Z") },
+      ),
+    ).resolves.toMatchObject({ projectId: PROJECT_ID, status: "deleted" });
+
+    expect(updates).toContainEqual(expect.objectContaining({
+      table: "bsm_content_review_projects",
+      payload: expect.objectContaining({
+        status: "deleted",
+        deleted_at: "2026-07-28T20:00:00.000Z",
+        recover_until: "2026-08-27T20:00:00.000Z",
+      }),
+      filters: { id: PROJECT_ID },
+    }));
+    expect(upserts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        table: "bsm_content_review_deletion_tombstones",
+        payload: expect.objectContaining({
+          project_id: PROJECT_ID,
+          reason: "Duplicate QA workspace.",
+          retention_policy: "30_day_recoverable_delete",
+        }),
+      }),
+      expect.objectContaining({
+        table: "bsm_content_review_processing_jobs",
+        payload: expect.objectContaining({
+          kind: "purge",
+          idempotency_key: "purge:22222222-2222-4222-8222-222222222222:2026-07-28T20:00:00.000Z",
+        }),
+      }),
+    ]));
+    expect(inserts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        table: "bsm_content_review_events",
+        payload: expect.objectContaining({ event_type: "review_workspace_project_removed" }),
+      }),
+    ]));
   });
 
   it("uses idempotency keys for processing jobs and deletion tombstones", async () => {
@@ -709,6 +873,14 @@ describe("BSM review workspace foundation service", () => {
     });
   });
 
+  it("does not expose guest workspace documents from another project or shop", async () => {
+    const { client } = createFakeClient({ uploadedFileProof: true, roundDocumentTenantMismatch: true });
+
+    const workspace = await getGuestReviewWorkspace("session-hash", { client: client as never });
+
+    expect(workspace.documents).toEqual([]);
+  });
+
   it("loads staff result proof content with submitted comments and decisions", async () => {
     const { client } = createFakeClient({ submitted: true });
 
@@ -821,6 +993,194 @@ describe("BSM review workspace foundation service", () => {
       draft_status: "locked",
       locked_at: "2026-07-28T19:30:00.000Z",
     });
+  });
+
+  it("does not complete a round until every active reviewer has submitted", async () => {
+    const { client, updates } = createFakeClient({
+      roundInvitations: [
+        { id: INVITATION_ID, status: "submitted", revoked_at: null, submitted_at: "2026-07-28T19:30:00.000Z" },
+        { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "sent", revoked_at: null, submitted_at: null },
+      ],
+    });
+
+    const result = await submitGuestReviewRound(
+      {
+        sessionHash: "session-hash",
+        decisions: [{ reviewItemId: REVIEW_ITEM_ID, versionId: VERSION_ID, decision: "approved" }],
+      },
+      { client: client as never, now: new Date("2026-07-28T19:30:00.000Z") },
+    );
+
+    expect(result).toMatchObject({ roundCompleted: false, outcome: null });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_rounds")).toBeUndefined();
+    expect(updates.find((entry) => entry.table === "bsm_content_review_projects")).toBeUndefined();
+  });
+
+  it("ignores revoked reviewers when completing a round and requires unanimous active approval", async () => {
+    const { client, updates } = createFakeClient({
+      roundInvitations: [
+        { id: INVITATION_ID, status: "submitted", revoked_at: null, submitted_at: "2026-07-28T19:30:00.000Z" },
+        { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "revoked", revoked_at: "2026-07-28T19:00:00.000Z", submitted_at: null },
+      ],
+      roundDecisionRows: [
+        {
+          invitation_id: INVITATION_ID,
+          review_item_id: REVIEW_ITEM_ID,
+          decision: "approved",
+          submitted_at: "2026-07-28T19:30:00.000Z",
+        },
+      ],
+    });
+
+    const result = await submitGuestReviewRound(
+      {
+        sessionHash: "session-hash",
+        decisions: [{ reviewItemId: REVIEW_ITEM_ID, versionId: VERSION_ID, decision: "approved" }],
+      },
+      { client: client as never, now: new Date("2026-07-28T19:30:00.000Z") },
+    );
+
+    expect(result).toMatchObject({ roundCompleted: true, outcome: "approved" });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_rounds")?.payload).toMatchObject({
+      status: "completed",
+      outcome: "approved",
+    });
+  });
+
+  it("reopens a submitted review while the round is open and resubmits as a new auditable revision", async () => {
+    const reopened = createFakeClient({ submitted: true });
+
+    await expect(
+      reopenGuestReviewRound(
+        { sessionHash: "session-hash" },
+        { client: reopened.client as never, now: new Date("2026-07-28T19:40:00.000Z") },
+      ),
+    ).resolves.toMatchObject({ status: "reopened", invitationId: INVITATION_ID });
+    expect(reopened.updates).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        table: "bsm_content_review_invitations",
+        payload: expect.objectContaining({ status: "viewed", submitted_at: null }),
+      }),
+      expect.objectContaining({
+        table: "bsm_content_review_reviewers",
+        payload: expect.objectContaining({ submission_status: "draft", submitted_at: null }),
+      }),
+    ]));
+
+    const resubmitted = createFakeClient({
+      roundDecisionRows: [
+        {
+          invitation_id: INVITATION_ID,
+          review_item_id: REVIEW_ITEM_ID,
+          decision: "changes_requested",
+          submitted_at: "2026-07-28T19:30:00.000Z",
+        },
+      ],
+    });
+    await submitGuestReviewRound(
+      {
+        sessionHash: "session-hash",
+        decisions: [{ reviewItemId: REVIEW_ITEM_ID, versionId: VERSION_ID, decision: "approved" }],
+      },
+      { client: resubmitted.client as never, now: new Date("2026-07-28T19:45:00.000Z") },
+    );
+
+    expect(resubmitted.inserts.find((entry) => entry.table === "bsm_content_review_decisions")?.payload).toMatchObject({
+      submission_revision: 2,
+      decision: "approved",
+    });
+  });
+
+  it("records manual early close as closed early instead of approved", async () => {
+    const { client, updates, inserts } = createFakeClient();
+
+    const result = await closeReviewWorkspaceRoundEarly(
+      {
+        projectId: PROJECT_ID,
+        actorProfileId: ACTOR_ID,
+        actorRole: "psg_superadmin",
+        reason: "Customer asked PSG to stop this round before the last reviewer submitted.",
+      },
+      { client: client as never, now: new Date("2026-07-28T20:00:00.000Z") },
+    );
+
+    expect(result).toMatchObject({ status: "closed_early", outcome: "closed_early" });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_rounds")?.payload).toMatchObject({
+      status: "closed_early",
+      outcome: "closed_early",
+      closed_reason: "Customer asked PSG to stop this round before the last reviewer submitted.",
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_events")?.payload).toMatchObject({
+      event_type: "review_workspace_round_closed_early",
+    });
+  });
+
+  it("rejects pin comments for documents outside the active review round", async () => {
+    const { client } = createFakeClient({ roundDocumentInScope: false });
+
+    await expect(
+      addGuestReviewPinComment(
+        {
+          sessionHash: "session-hash",
+          reviewItemId: "99999999-9999-4999-8999-999999999998",
+          versionId: VERSION_ID,
+          body: "Please update this offer.",
+          pinNumber: 1,
+          viewport: "desktop",
+          xRatio: 0.4,
+          yRatio: 0.6,
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("This review document is not part of the active round");
+  });
+
+  it("rejects pin comments for documents assigned to another project or shop", async () => {
+    const { client } = createFakeClient({ roundDocumentTenantMismatch: true });
+
+    await expect(
+      addGuestReviewPinComment(
+        {
+          sessionHash: "session-hash",
+          reviewItemId: REVIEW_ITEM_ID,
+          versionId: VERSION_ID,
+          body: "Please update this offer.",
+          pinNumber: 1,
+          viewport: "desktop",
+          xRatio: 0.4,
+          yRatio: 0.6,
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("This review document is not part of the active round");
+  });
+
+  it("rejects review round submission for documents outside the active review round", async () => {
+    const { client } = createFakeClient({ roundDocumentInScope: false });
+
+    await expect(
+      submitGuestReviewRound(
+        {
+          sessionHash: "session-hash",
+          decisions: [{ reviewItemId: "99999999-9999-4999-8999-999999999998", versionId: VERSION_ID, decision: "approved" }],
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("This review document is not part of the active round");
+  });
+
+  it("rejects review round submission for documents outside scope even when requesting pin comments", async () => {
+    const { client } = createFakeClient({ roundDocumentInScope: false, hasPin: true });
+
+    await expect(
+      submitGuestReviewRound(
+        {
+          sessionHash: "session-hash",
+          decisions: [{ reviewItemId: "99999999-9999-4999-8999-999999999998", versionId: VERSION_ID, decision: "changes_requested", message: "Please add more details." }],
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("This review document is not part of the active round");
   });
 
   it("rejects duplicate submit and changes-requested decisions without a pin", async () => {

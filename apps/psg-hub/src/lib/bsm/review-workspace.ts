@@ -36,12 +36,51 @@ export type ReviewWorkspaceProject = {
   ownerProfileId: string;
 };
 
+type ReviewWorkspaceActorRole = "psg_superadmin" | "psg_internal" | "customer" | null | string;
+
+export type StaffReviewWorkspaceListItem = {
+  id: string;
+  shopId: string;
+  shopName: string | null;
+  title: string;
+  status: string;
+  currentRoundId: string | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+  role: string;
+};
+
 export type CreateReviewWorkspaceProjectInput = {
   shopId: string;
   title: string;
   description?: string | null;
   actorProfileId: string;
   metadata?: Record<string, unknown> | null;
+};
+
+export type ReviewWorkspaceReviewerContactInput = {
+  email: string;
+  name?: string | null;
+};
+
+export type StartReviewWorkspaceInput = {
+  projectId: string;
+  actorProfileId: string;
+  actorRole?: ReviewWorkspaceActorRole;
+  reviewers: ReviewWorkspaceReviewerContactInput[];
+};
+
+export type ReviewWorkspaceStartResult = {
+  projectId: string;
+  roundId: string;
+  invitations: Array<{
+    invitationId: string;
+    reviewerEmail: string;
+    reviewerName: string | null;
+    inviteToken: string;
+    inviteCode: string;
+  }>;
+  documentCount: number;
 };
 
 export type EnqueueReviewWorkspaceJobInput = {
@@ -155,6 +194,17 @@ export type SubmitGuestReviewRoundInput = {
   decisions: Array<{ reviewItemId: string; versionId: string; decision: "approved" | "changes_requested"; message?: string | null }>;
 };
 
+export type ReopenGuestReviewRoundInput = {
+  sessionHash: string;
+};
+
+export type CloseReviewWorkspaceRoundEarlyInput = {
+  projectId: string;
+  actorProfileId: string;
+  actorRole?: ReviewWorkspaceActorRole;
+  reason: string;
+};
+
 export type ReviewWorkspaceProofContent = {
   eyebrow: string;
   headline: string;
@@ -211,6 +261,10 @@ function assertRatio(label: string, value: unknown): number {
 
 function resolveClient(client?: ReviewWorkspaceDbClient): ReviewWorkspaceDbClient {
   return client ?? createServiceClient();
+}
+
+function isSuperadminRole(role: ReviewWorkspaceActorRole): boolean {
+  return role === "psg_superadmin";
 }
 
 export function bsmReviewWorkspaceInternalEnabled(env: Record<string, string | undefined> = process.env): boolean {
@@ -404,10 +458,178 @@ export async function createReviewWorkspaceProject(
   return { id: projectId, shopId, title, status: "draft", ownerProfileId: actorProfileId };
 }
 
+export async function startReviewWorkspaceRound(
+  input: StartReviewWorkspaceInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+): Promise<ReviewWorkspaceStartResult> {
+  const projectId = assertUuid("projectId", input.projectId);
+  const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
+  if (!Array.isArray(input.reviewers) || input.reviewers.length === 0) {
+    throw new ReviewWorkspaceInputError(400, "At least one reviewer is required");
+  }
+  if (input.reviewers.length > 20) {
+    throw new ReviewWorkspaceInputError(400, "A review can include up to 20 reviewers");
+  }
+
+  const reviewers = input.reviewers.map((reviewer) => ({
+    email: cleanEmail(reviewer.email),
+    name: cleanOptionalText("reviewerName", reviewer.name, 160),
+  }));
+  const dedupedReviewers = reviewers.filter(
+    (reviewer, index, rows) => rows.findIndex((candidate) => candidate.email === reviewer.email) === index,
+  );
+
+  const client = resolveClient(deps.client);
+  const now = deps.now ?? new Date();
+  const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, input.actorRole);
+  if (["active", "completed", "closed_early", "archived", "deleting", "deleted"].includes(access.status)) {
+    throw new ReviewWorkspaceInputError(400, "This Review Workspace has already been started or closed");
+  }
+
+  const { data: projectRow, error: projectError } = await client
+    .from("bsm_content_review_projects")
+    .select("id, shop_id, current_round_id")
+    .eq("id", access.projectId)
+    .single();
+  if (projectError || !projectRow) {
+    throw new Error(`Could not load review workspace project: ${projectError?.message ?? "not found"}`);
+  }
+  if ((projectRow as Record<string, unknown>).current_round_id) {
+    throw new ReviewWorkspaceInputError(400, "This Review Workspace already has an active review round");
+  }
+
+  const { data: itemRows, error: itemError } = await client
+    .from("bsm_content_review_items")
+    .select("id, current_version_id, processing_status, title")
+    .eq("project_id", access.projectId)
+    .is("deleted_at", null)
+    .order("position", { ascending: true });
+  if (itemError) throw new Error(`Could not load Review Workspace documents: ${itemError.message}`);
+
+  const documents = ((itemRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    itemId: row.id as string,
+    versionId: (row.current_version_id as string | null) ?? null,
+    processingStatus: (row.processing_status as string | null) ?? "pending",
+    title: row.title as string,
+  }));
+  if (documents.length === 0) {
+    throw new ReviewWorkspaceInputError(400, "Add at least one document before starting review");
+  }
+  const notReady = documents.find((document) => document.processingStatus !== "ready" || !document.versionId);
+  if (notReady) {
+    throw new ReviewWorkspaceInputError(
+      400,
+      `Document "${notReady.title}" must finish processing successfully before review can start`,
+    );
+  }
+
+  const roundId = randomUUID();
+  const expiresAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
+  const reminderDueAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { error: roundError } = await client.from("bsm_content_review_rounds").insert({
+    id: roundId,
+    project_id: access.projectId,
+    shop_id: access.shopId,
+    round_number: 1,
+    status: "active",
+    started_by_profile_id: actorProfileId,
+    started_at: now.toISOString(),
+  });
+  if (roundError) throw new Error(`Could not start review round: ${roundError.message}`);
+
+  for (const document of documents) {
+    const { error } = await client.from("bsm_content_review_round_documents").insert({
+      round_id: roundId,
+      project_id: access.projectId,
+      shop_id: access.shopId,
+      review_item_id: document.itemId,
+      version_id: document.versionId,
+      decision_required: true,
+    });
+    if (error) throw new Error(`Could not add document to review round: ${error.message}`);
+  }
+
+  const invitations: ReviewWorkspaceStartResult["invitations"] = [];
+  for (const reviewer of dedupedReviewers) {
+    const invitationId = randomUUID();
+    const inviteToken = makeInviteToken();
+    const inviteCode = makeInviteCode();
+    const { error: inviteError } = await client.from("bsm_content_review_invitations").insert({
+      id: invitationId,
+      project_id: access.projectId,
+      round_id: roundId,
+      shop_id: access.shopId,
+      reviewer_email: reviewer.email,
+      reviewer_name: reviewer.name,
+      status: "sent",
+      token_hash: hashSecret(inviteToken),
+      code_hash: hashSecret(inviteCode),
+      last_code_sent_at: now.toISOString(),
+      expires_at: expiresAt,
+      reminder_due_at: reminderDueAt,
+      created_by_profile_id: actorProfileId,
+    });
+    if (inviteError) throw new Error(`Could not create review invitation: ${inviteError.message}`);
+
+    for (const document of documents) {
+      await insertWithSchemaCacheFallback(client, "bsm_content_review_reviewers", {
+        review_item_id: document.itemId,
+        shop_id: access.shopId,
+        invitation_id: invitationId,
+        round_id: roundId,
+        reviewer_email: reviewer.email,
+        reviewer_name: reviewer.name,
+        reviewer_role: "reviewer",
+        notification_preference: "email",
+        submission_status: "not_started",
+      }, new Set(["invitation_id", "round_id", "reviewer_email", "reviewer_name", "submission_status"]), "Could not add review workspace reviewer");
+    }
+
+    invitations.push({
+      invitationId,
+      reviewerEmail: reviewer.email,
+      reviewerName: reviewer.name,
+      inviteToken,
+      inviteCode,
+    });
+  }
+
+  const { error: itemUpdateError } = await client
+    .from("bsm_content_review_items")
+    .update({ status: "in_review", updated_at: now.toISOString() })
+    .eq("project_id", access.projectId)
+    .is("deleted_at", null);
+  if (itemUpdateError) throw new Error(`Could not mark documents in review: ${itemUpdateError.message}`);
+
+  const { error: projectUpdateError } = await client
+    .from("bsm_content_review_projects")
+    .update({ status: "active", current_round_id: roundId, updated_at: now.toISOString() })
+    .eq("id", access.projectId);
+  if (projectUpdateError) throw new Error(`Could not activate review workspace project: ${projectUpdateError.message}`);
+
+  await insertEvent(client, {
+    shop_id: access.shopId,
+    review_item_id: documents[0]?.itemId ?? null,
+    version_id: documents[0]?.versionId ?? null,
+    event_type: "review_workspace_round_started",
+    actor_profile_id: actorProfileId,
+    payload_jsonb: {
+      projectId: access.projectId,
+      roundId,
+      invitationCount: invitations.length,
+      documentCount: documents.length,
+    },
+  });
+
+  return { projectId: access.projectId, roundId, invitations, documentCount: documents.length };
+}
+
 export async function requireReviewWorkspaceStaffAccess(
   client: ReviewWorkspaceDbClient,
   projectId: string,
   actorProfileId: string,
+  actorRole: ReviewWorkspaceActorRole = null,
 ): Promise<{ projectId: string; shopId: string; status: string; role: string }> {
   const cleanProjectId = assertUuid("projectId", projectId);
   const cleanActorProfileId = assertUuid("actorProfileId", actorProfileId);
@@ -419,6 +641,15 @@ export async function requireReviewWorkspaceStaffAccess(
     .maybeSingle();
   if (projectError) throw new Error(`Could not load review workspace project: ${projectError.message}`);
   if (!project || project.deleted_at) throw new ReviewWorkspaceInputError(404, "Review workspace project not found");
+
+  if (isSuperadminRole(actorRole)) {
+    return {
+      projectId: project.id as string,
+      shopId: project.shop_id as string,
+      status: project.status as string,
+      role: "superadmin",
+    };
+  }
 
   const { data: collaborator, error: collaboratorError } = await client
     .from("bsm_content_review_project_collaborators")
@@ -438,13 +669,73 @@ export async function requireReviewWorkspaceStaffAccess(
   };
 }
 
+function readProjectListRow(row: Record<string, unknown>, role: string): StaffReviewWorkspaceListItem {
+  const company = row.company;
+  const companyRow = company && typeof company === "object"
+    ? Array.isArray(company) ? company[0] : company
+    : null;
+  return {
+    id: row.id as string,
+    shopId: row.shop_id as string,
+    shopName: typeof (companyRow as Record<string, unknown> | null)?.name === "string"
+      ? (companyRow as Record<string, unknown>).name as string
+      : null,
+    title: row.title as string,
+    status: row.status as string,
+    currentRoundId: (row.current_round_id as string | null) ?? null,
+    updatedAt: (row.updated_at as string | null) ?? null,
+    createdAt: (row.created_at as string | null) ?? null,
+    role,
+  };
+}
+
+export async function listStaffReviewWorkspaces(
+  actorProfileId: string,
+  actorRole: ReviewWorkspaceActorRole,
+  deps: { client?: ReviewWorkspaceDbClient; limit?: number } = {},
+): Promise<StaffReviewWorkspaceListItem[]> {
+  const client = resolveClient(deps.client);
+  const cleanActorProfileId = assertUuid("actorProfileId", actorProfileId);
+  const limit = Math.min(Math.max(Math.trunc(deps.limit ?? 100), 1), 250);
+  const projectSelect = "id, shop_id, title, status, current_round_id, updated_at, created_at";
+
+  if (isSuperadminRole(actorRole)) {
+    const { data, error } = await client
+      .from("bsm_content_review_projects")
+      .select(projectSelect)
+      .is("deleted_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(`Could not list review workspaces: ${error.message}`);
+    return ((data ?? []) as Array<Record<string, unknown>>).map((row) => readProjectListRow(row, "superadmin"));
+  }
+
+  const { data, error } = await client
+    .from("bsm_content_review_project_collaborators")
+    .select(`role, project:bsm_content_review_projects!inner(${projectSelect}, deleted_at)`)
+    .eq("profile_id", cleanActorProfileId)
+    .is("removed_at", null)
+    .is("project.deleted_at", null)
+    .order("added_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`Could not list review workspaces: ${error.message}`);
+
+  return ((data ?? []) as Array<Record<string, unknown>>).flatMap((row) => {
+    const rawProject = row.project;
+    const project = rawProject && typeof rawProject === "object"
+      ? Array.isArray(rawProject) ? rawProject[0] : rawProject
+      : null;
+    return project ? [readProjectListRow(project as Record<string, unknown>, row.role as string)] : [];
+  });
+}
+
 export async function getStaffReviewWorkspaceResult(
   projectId: string,
   actorProfileId: string,
-  deps: { client?: ReviewWorkspaceDbClient } = {},
+  deps: { client?: ReviewWorkspaceDbClient; actorRole?: ReviewWorkspaceActorRole } = {},
 ): Promise<StaffReviewWorkspaceResult> {
   const client = resolveClient(deps.client);
-  const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId);
+  const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, deps.actorRole);
 
   const { data: projectRow, error: projectError } = await client
     .from("bsm_content_review_projects")
@@ -957,6 +1248,102 @@ export async function requireGuestReviewSession(
   };
 }
 
+async function requireRoundDocumentAccess(
+  client: ReviewWorkspaceDbClient,
+  access: GuestSessionAccess,
+  reviewItemId: string,
+  versionId: string,
+) {
+  const { data, error } = await client
+    .from("bsm_content_review_round_documents")
+    .select("review_item_id")
+    .eq("round_id", access.roundId)
+    .eq("project_id", access.projectId)
+    .eq("shop_id", access.shopId)
+    .eq("review_item_id", reviewItemId)
+    .eq("version_id", versionId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not verify review document assignment: ${error.message}`);
+  if (!data) {
+    throw new ReviewWorkspaceInputError(404, "This review document is not part of the active round");
+  }
+}
+
+function isActiveInvitation(row: Record<string, unknown>): boolean {
+  if (row.revoked_at) return false;
+  return ["sent", "viewed", "submitted"].includes(row.status as string);
+}
+
+async function nextSubmissionRevision(
+  client: ReviewWorkspaceDbClient,
+  roundId: string,
+  invitationId: string,
+): Promise<number> {
+  const { data, error } = await client
+    .from("bsm_content_review_decisions")
+    .select("id")
+    .eq("round_id", roundId)
+    .eq("invitation_id", invitationId);
+  if (error) throw new Error(`Could not load prior review submissions: ${error.message}`);
+  const priorDecisionCount = Array.isArray(data) ? data.length : 0;
+  return priorDecisionCount + 1;
+}
+
+async function updateRoundCompletionAfterSubmission(
+  client: ReviewWorkspaceDbClient,
+  input: {
+    projectId: string;
+    roundId: string;
+    shopId: string;
+    nowIso: string;
+  },
+): Promise<{ completed: boolean; outcome: "approved" | "changes_requested" | null }> {
+  const { data: invitations, error: invitationsError } = await client
+    .from("bsm_content_review_invitations")
+    .select("id, status, revoked_at, submitted_at")
+    .eq("round_id", input.roundId)
+    .eq("project_id", input.projectId)
+    .eq("shop_id", input.shopId);
+  if (invitationsError) throw new Error(`Could not load review round invitations: ${invitationsError.message}`);
+
+  const activeInvitations = ((invitations ?? []) as Array<Record<string, unknown>>).filter(isActiveInvitation);
+  if (activeInvitations.length === 0 || activeInvitations.some((row) => !row.submitted_at && row.status !== "submitted")) {
+    return { completed: false, outcome: null };
+  }
+
+  const activeInvitationIds = activeInvitations.map((row) => row.id as string);
+  const { data: decisions, error: decisionsError } = await client
+    .from("bsm_content_review_decisions")
+    .select("invitation_id, review_item_id, decision, submitted_at")
+    .eq("round_id", input.roundId)
+    .in("invitation_id", activeInvitationIds)
+    .order("submitted_at", { ascending: false });
+  if (decisionsError) throw new Error(`Could not load review round decisions: ${decisionsError.message}`);
+
+  const latestDecisionByReviewerDocument = new Map<string, Record<string, unknown>>();
+  for (const decision of (decisions ?? []) as Array<Record<string, unknown>>) {
+    const key = `${decision.invitation_id}:${decision.review_item_id}`;
+    if (!latestDecisionByReviewerDocument.has(key)) latestDecisionByReviewerDocument.set(key, decision);
+  }
+  const outcome = [...latestDecisionByReviewerDocument.values()].some((decision) => decision.decision === "changes_requested")
+    ? "changes_requested"
+    : "approved";
+
+  const { error: roundUpdateError } = await client
+    .from("bsm_content_review_rounds")
+    .update({ status: "completed", completed_at: input.nowIso, outcome, updated_at: input.nowIso })
+    .eq("id", input.roundId);
+  if (roundUpdateError) throw new Error(`Could not complete review round: ${roundUpdateError.message}`);
+
+  const { error: projectUpdateError } = await client
+    .from("bsm_content_review_projects")
+    .update({ status: "completed", updated_at: input.nowIso })
+    .eq("id", input.projectId);
+  if (projectUpdateError) throw new Error(`Could not complete review project: ${projectUpdateError.message}`);
+
+  return { completed: true, outcome };
+}
+
 export async function addGuestReviewPinComment(
   input: AddGuestPinCommentInput,
   deps: { client?: ReviewWorkspaceDbClient } = {},
@@ -971,6 +1358,7 @@ export async function addGuestReviewPinComment(
   const body = cleanText("body", input.body, 2000);
   const xRatio = assertRatio("xRatio", input.xRatio);
   const yRatio = assertRatio("yRatio", input.yRatio);
+  await requireRoundDocumentAccess(client, access, reviewItemId, versionId);
   if (!Number.isInteger(input.pinNumber) || input.pinNumber <= 0) {
     throw new ReviewWorkspaceInputError(400, "pinNumber is required");
   }
@@ -1058,7 +1446,9 @@ export async function getGuestReviewWorkspace(
     client
       .from("bsm_content_review_round_documents")
       .select("review_item_id, version_id")
-      .eq("round_id", access.roundId),
+      .eq("round_id", access.roundId)
+      .eq("project_id", access.projectId)
+      .eq("shop_id", access.shopId),
     client
       .from("bsm_content_review_comments")
       .select("id, review_item_id, version_id, body, pin_number, draft_status")
@@ -1176,19 +1566,29 @@ export async function submitGuestReviewRound(
     throw new ReviewWorkspaceInputError(400, "At least one decision is required");
   }
 
-  const { data: existingSubmission, error: existingError } = await client
-    .from("bsm_content_review_invitations")
-    .select("submitted_at, status")
-    .eq("id", access.invitationId)
-    .maybeSingle();
+  const [{ data: existingSubmission, error: existingError }, { data: round, error: roundError }] = await Promise.all([
+    client
+      .from("bsm_content_review_invitations")
+      .select("submitted_at, status")
+      .eq("id", access.invitationId)
+      .maybeSingle(),
+    client.from("bsm_content_review_rounds").select("id, status").eq("id", access.roundId).single(),
+  ]);
+  if (roundError) throw new Error(`Could not load review round: ${roundError.message}`);
+  if (!round || (round.status !== "active" && round.status !== "inviting")) {
+    throw new ReviewWorkspaceInputError(409, "This review round is no longer open");
+  }
   if (existingError) throw new Error(`Could not load review submission state: ${existingError.message}`);
   if (existingSubmission?.submitted_at || existingSubmission?.status === "submitted") {
-    throw new ReviewWorkspaceInputError(409, "This review round was already submitted");
+    throw new ReviewWorkspaceInputError(409, "This review round was already submitted. Reopen it before sending a revised response.");
   }
+
+  const submissionRevision = await nextSubmissionRevision(client, access.roundId, access.invitationId);
 
   for (const decision of input.decisions) {
     const reviewItemId = assertUuid("reviewItemId", decision.reviewItemId);
     const versionId = assertUuid("versionId", decision.versionId);
+    await requireRoundDocumentAccess(client, access, reviewItemId, versionId);
     if (decision.decision === "changes_requested") {
       const { data: draftComments, error: draftError } = await client
         .from("bsm_content_review_comments")
@@ -1204,7 +1604,7 @@ export async function submitGuestReviewRound(
       }
     }
 
-    const { error } = await client.from("bsm_content_review_decisions").insert({
+    await insertWithSchemaCacheFallback(client, "bsm_content_review_decisions", {
       id: randomUUID(),
       shop_id: access.shopId,
       project_id: access.projectId,
@@ -1212,14 +1612,14 @@ export async function submitGuestReviewRound(
       invitation_id: access.invitationId,
       review_item_id: reviewItemId,
       version_id: versionId,
+      submission_revision: submissionRevision,
       decision: decision.decision,
       message: cleanOptionalText("message", decision.message, 2000),
       actor_profile_id: null,
       actor_role: "customer",
       submitted_at: now.toISOString(),
       locked_at: now.toISOString(),
-    });
-    if (error) throw new Error(`Could not record review decision: ${error.message}`);
+    }, new Set(["submission_revision"]), "Could not record review decision");
   }
 
   const { error: commentLockError } = await client
@@ -1242,17 +1642,12 @@ export async function submitGuestReviewRound(
     .eq("id", access.invitationId);
   if (invitationUpdateError) throw new Error(`Could not mark review invitation submitted: ${invitationUpdateError.message}`);
 
-  const { error: roundUpdateError } = await client
-    .from("bsm_content_review_rounds")
-    .update({ status: "completed", completed_at: now.toISOString(), outcome: input.decisions.some((d) => d.decision === "changes_requested") ? "changes_requested" : "approved" })
-    .eq("id", access.roundId);
-  if (roundUpdateError) throw new Error(`Could not complete review round: ${roundUpdateError.message}`);
-
-  const { error: projectUpdateError } = await client
-    .from("bsm_content_review_projects")
-    .update({ status: "completed", updated_at: now.toISOString() })
-    .eq("id", access.projectId);
-  if (projectUpdateError) throw new Error(`Could not complete review project: ${projectUpdateError.message}`);
+  const completion = await updateRoundCompletionAfterSubmission(client, {
+    projectId: access.projectId,
+    roundId: access.roundId,
+    shopId: access.shopId,
+    nowIso: now.toISOString(),
+  });
 
   await insertEvent(client, {
     shop_id: access.shopId,
@@ -1264,6 +1659,9 @@ export async function submitGuestReviewRound(
       roundId: access.roundId,
       invitationId: access.invitationId,
       decisionCount: input.decisions.length,
+      submissionRevision,
+      roundCompleted: completion.completed,
+      outcome: completion.outcome,
     },
   });
 
@@ -1272,6 +1670,118 @@ export async function submitGuestReviewRound(
     roundId: access.roundId,
     invitationId: access.invitationId,
     status: "submitted",
+    submissionRevision,
+    roundCompleted: completion.completed,
+    outcome: completion.outcome,
+  };
+}
+
+export async function reopenGuestReviewRound(
+  input: ReopenGuestReviewRoundInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+) {
+  const client = resolveClient(deps.client);
+  const access = await requireGuestReviewSession(client, input.sessionHash);
+  const now = deps.now ?? new Date();
+
+  const { data: round, error: roundError } = await client
+    .from("bsm_content_review_rounds")
+    .select("id, status")
+    .eq("id", access.roundId)
+    .single();
+  if (roundError) throw new Error(`Could not load review round: ${roundError.message}`);
+  if (!round || (round.status !== "active" && round.status !== "inviting")) {
+    throw new ReviewWorkspaceInputError(409, "This review round is no longer open");
+  }
+  if (access.invitationStatus !== "submitted" && !access.submittedAt) {
+    throw new ReviewWorkspaceInputError(409, "This review response is already open");
+  }
+
+  const { error: invitationUpdateError } = await client
+    .from("bsm_content_review_invitations")
+    .update({ status: "viewed", submitted_at: null, updated_at: now.toISOString() })
+    .eq("id", access.invitationId);
+  if (invitationUpdateError) throw new Error(`Could not reopen review invitation: ${invitationUpdateError.message}`);
+
+  const { error: reviewerUpdateError } = await client
+    .from("bsm_content_review_reviewers")
+    .update({ submission_status: "draft", submitted_at: null })
+    .eq("round_id", access.roundId)
+    .eq("invitation_id", access.invitationId);
+  if (reviewerUpdateError) throw new Error(`Could not reopen reviewer submission: ${reviewerUpdateError.message}`);
+
+  await insertEvent(client, {
+    shop_id: access.shopId,
+    review_item_id: null,
+    event_type: "review_workspace_round_reopened",
+    actor_profile_id: null,
+    payload_jsonb: {
+      projectId: access.projectId,
+      roundId: access.roundId,
+      invitationId: access.invitationId,
+    },
+  });
+
+  return {
+    projectId: access.projectId,
+    roundId: access.roundId,
+    invitationId: access.invitationId,
+    status: "reopened",
+  };
+}
+
+export async function closeReviewWorkspaceRoundEarly(
+  input: CloseReviewWorkspaceRoundEarlyInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+) {
+  const projectId = assertUuid("projectId", input.projectId);
+  const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
+  const reason = cleanText("reason", input.reason, 1000);
+  const client = resolveClient(deps.client);
+  const now = deps.now ?? new Date();
+  const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, input.actorRole);
+
+  const { data: project, error: projectError } = await client
+    .from("bsm_content_review_projects")
+    .select("id, shop_id, current_round_id")
+    .eq("id", projectId)
+    .single();
+  if (projectError) throw new Error(`Could not load review workspace project: ${projectError.message}`);
+  const roundId = (project as Record<string, unknown>).current_round_id as string | null;
+  if (!roundId) throw new ReviewWorkspaceInputError(409, "This review workspace does not have an open round");
+
+  const { error: roundUpdateError } = await client
+    .from("bsm_content_review_rounds")
+    .update({
+      status: "closed_early",
+      outcome: "closed_early",
+      closed_by_profile_id: actorProfileId,
+      closed_at: now.toISOString(),
+      closed_reason: reason,
+      updated_at: now.toISOString(),
+    })
+    .eq("id", roundId);
+  if (roundUpdateError) throw new Error(`Could not close review round early: ${roundUpdateError.message}`);
+
+  const { error: projectUpdateError } = await client
+    .from("bsm_content_review_projects")
+    .update({ status: "closed_early", updated_at: now.toISOString() })
+    .eq("id", projectId);
+  if (projectUpdateError) throw new Error(`Could not close review workspace project: ${projectUpdateError.message}`);
+
+  await insertEvent(client, {
+    shop_id: access.shopId,
+    review_item_id: null,
+    event_type: "review_workspace_round_closed_early",
+    actor_profile_id: actorProfileId,
+    payload_jsonb: { projectId, roundId, reason },
+  });
+
+  return {
+    projectId,
+    roundId,
+    status: "closed_early",
+    outcome: "closed_early",
   };
 }
 
@@ -1311,4 +1821,78 @@ export async function createReviewWorkspaceDeletionTombstone(
     .single();
   if (error) throw new Error(`Could not write review workspace deletion tombstone: ${error.message}`);
   return data;
+}
+
+export async function removeReviewWorkspaceProject(
+  input: {
+    projectId: string;
+    actorProfileId: string;
+    actorRole: ReviewWorkspaceActorRole;
+    reason?: string | null;
+  },
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+) {
+  if (!isSuperadminRole(input.actorRole)) {
+    throw new ReviewWorkspaceInputError(403, "Only a superadmin can remove review workspaces");
+  }
+
+  const client = resolveClient(deps.client);
+  const now = deps.now ?? new Date();
+  const access = await requireReviewWorkspaceStaffAccess(client, input.projectId, input.actorProfileId, input.actorRole);
+  const { data: projectRow, error: projectError } = await client
+    .from("bsm_content_review_projects")
+    .select("id, shop_id, title, status")
+    .eq("id", access.projectId)
+    .single();
+  if (projectError || !projectRow) throw new Error(`Could not load review workspace project: ${projectError?.message ?? "not found"}`);
+
+  const project = projectRow as Record<string, unknown>;
+  const deletedAt = now.toISOString();
+  const purgedAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { error: updateError } = await client
+    .from("bsm_content_review_projects")
+    .update({
+      status: "deleted",
+      deleted_at: deletedAt,
+      recover_until: purgedAt,
+      updated_at: deletedAt,
+    })
+    .eq("id", access.projectId);
+  if (updateError) throw new Error(`Could not remove review workspace project: ${updateError.message}`);
+
+  await createReviewWorkspaceDeletionTombstone(
+    {
+      projectId: access.projectId,
+      shopId: access.shopId,
+      projectTitle: project.title as string,
+      deletedByProfileId: input.actorProfileId,
+      deletedAt,
+      purgedAt,
+      reason: input.reason ?? "Removed from the superadmin review workspace console.",
+    },
+    { client },
+  );
+
+  await enqueueReviewWorkspaceProcessingJob(
+    {
+      projectId: access.projectId,
+      shopId: access.shopId,
+      kind: "purge",
+      idempotencyKey: `purge:${access.projectId}:${deletedAt}`,
+      actorProfileId: input.actorProfileId,
+      input: { recoverUntil: purgedAt },
+    },
+    { client },
+  );
+
+  await insertEvent(client, {
+    shop_id: access.shopId,
+    review_item_id: null,
+    event_type: "review_workspace_project_removed",
+    actor_profile_id: input.actorProfileId,
+    payload_jsonb: { projectId: access.projectId, title: project.title, deletedAt, purgedAt },
+  });
+
+  return { projectId: access.projectId, status: "deleted", deletedAt, recoverUntil: purgedAt };
 }

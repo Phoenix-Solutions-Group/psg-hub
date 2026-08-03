@@ -2,11 +2,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mocks must be declared before importing the handlers under test.
 
+const { notifyBsmApprovalAdmins } = vi.hoisted(() => ({
+  notifyBsmApprovalAdmins: vi.fn(),
+}));
+
 const anthropicCreate = vi.fn();
 vi.mock("@anthropic-ai/sdk", () => ({
   default: class MockAnthropic {
     messages = { create: anthropicCreate };
   },
+}));
+
+vi.mock("@/lib/bsm/approval-notifications", () => ({
+  notifyBsmApprovalAdmins,
 }));
 
 // Supabase mocks
@@ -29,6 +37,13 @@ let mockExistingResponse: {
   safety_overridden: boolean;
   approved_by: string | null;
   approved_at: string | null;
+} | null = null;
+let mockInsertedComment: {
+  id: string;
+  review_id: string;
+  response_id: string | null;
+  body: string;
+  created_at: string;
 } | null = null;
 let mockRateLimitCount = 0;
 let serviceUpdateReturnsRow = true;
@@ -53,6 +68,19 @@ function serverClient() {
       if (table === "review_items") return builder(mockReview);
       if (table === "shop_users") return builder(mockMembership);
       if (table === "shops") return builder(mockShop);
+      if (table === "review_responses") return builder(mockExistingResponse);
+      if (table === "review_response_comments") {
+        return {
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: mockInsertedComment,
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
       return builder(null);
     }),
   };
@@ -124,6 +152,9 @@ const { POST: draftPOST } = await import(
 const { POST: approvePOST } = await import(
   "@/app/api/reviews/[id]/approve-response/route"
 );
+const { POST: commentPOST } = await import(
+  "@/app/api/reviews/[id]/comments/route"
+);
 
 function req(body: unknown) {
   return new Request("http://localhost/x", {
@@ -135,16 +166,160 @@ function req(body: unknown) {
 
 beforeEach(() => {
   anthropicCreate.mockReset();
+  notifyBsmApprovalAdmins.mockReset();
+  notifyBsmApprovalAdmins.mockResolvedValue({
+    inAppCreated: 1,
+    inAppSkipped: 0,
+    emailSent: 1,
+    emailSkipped: 0,
+    emailFailed: 0,
+  });
   mockUser = null;
   mockReview = null;
   mockMembership = null;
   mockShop = null;
   mockExistingResponse = null;
+  mockInsertedComment = {
+    id: "comment-1",
+    review_id: "r1",
+    response_id: "resp-1",
+    body: "Looks ready.",
+    created_at: "2026-07-17T16:00:00.000Z",
+  };
   mockRateLimitCount = 0;
   serviceUpdateReturnsRow = true;
   process.env.ANTHROPIC_API_KEY = "test-key";
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "svc-key";
+});
+
+describe("POST /api/reviews/[id]/comments", () => {
+  const baseReview = {
+    id: "r1",
+    shop_id: "shopA",
+    platform: "google",
+    rating: 4,
+    body: "good",
+    author: "X",
+  };
+
+  it("401 when unauthed", async () => {
+    mockUser = null;
+    const res = await commentPOST(req({ body: "Looks ready." }), {
+      params: Promise.resolve({ id: "r1" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("403 cross-tenant comment attempt", async () => {
+    mockUser = { id: "u1" };
+    mockReview = baseReview;
+    mockMembership = null;
+    const res = await commentPOST(req({ body: "Looks ready." }), {
+      params: Promise.resolve({ id: "r1" }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("400 when comment is blank", async () => {
+    mockUser = { id: "u1" };
+    const res = await commentPOST(req({ body: "   " }), {
+      params: Promise.resolve({ id: "r1" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("400 when response id belongs to another review", async () => {
+    mockUser = { id: "u1" };
+    mockReview = baseReview;
+    mockMembership = { role: "owner" };
+    mockExistingResponse = {
+      id: "resp-1",
+      review_id: "other-review",
+      shop_id: "shopA",
+      body: "draft body",
+      status: "draft",
+      tone_preset: "default",
+      model_id: "m",
+      prompt_version: "v1",
+      version: 1,
+      safety_flags: [],
+      safety_overridden: false,
+      approved_by: null,
+      approved_at: null,
+    };
+    const res = await commentPOST(
+      req({ body: "Looks ready.", responseId: "resp-1" }),
+      { params: Promise.resolve({ id: "r1" }) }
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("200 adds a scoped comment", async () => {
+    mockUser = { id: "u1" };
+    mockReview = baseReview;
+    mockMembership = { role: "manager" };
+    mockShop = { id: "shopA", name: "Acme Collision" };
+    mockExistingResponse = {
+      id: "resp-1",
+      review_id: "r1",
+      shop_id: "shopA",
+      body: "draft body",
+      status: "draft",
+      tone_preset: "default",
+      model_id: "m",
+      prompt_version: "v1",
+      version: 1,
+      safety_flags: [],
+      safety_overridden: false,
+      approved_by: null,
+      approved_at: null,
+    };
+    const res = await commentPOST(
+      req({ body: "Looks ready.", responseId: "resp-1" }),
+      { params: Promise.resolve({ id: "r1" }) }
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.comment.body).toBe("Looks ready.");
+    expect(notifyBsmApprovalAdmins).toHaveBeenCalledOnce();
+    expect(notifyBsmApprovalAdmins).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        shopId: "shopA",
+        shopName: "Acme Collision",
+        reviewItemId: "r1",
+        reviewItemTitle: "google review from X",
+        eventKey: "review:r1:comment:comment-1",
+        eventType: "comment_created",
+        messagePreview: "Looks ready.",
+      }),
+    );
+  });
+
+  it("uses a stable comment event key when a saved action is replayed", async () => {
+    mockUser = { id: "u1" };
+    mockReview = baseReview;
+    mockMembership = { role: "manager" };
+    mockShop = { id: "shopA", name: "Acme Collision" };
+
+    const first = await commentPOST(req({ body: "Looks ready." }), {
+      params: Promise.resolve({ id: "r1" }),
+    });
+    const second = await commentPOST(req({ body: "Looks ready." }), {
+      params: Promise.resolve({ id: "r1" }),
+    });
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(notifyBsmApprovalAdmins).toHaveBeenCalledTimes(2);
+    expect(notifyBsmApprovalAdmins.mock.calls[0][1]).toMatchObject({
+      eventKey: "review:r1:comment:comment-1",
+    });
+    expect(notifyBsmApprovalAdmins.mock.calls[1][1]).toMatchObject({
+      eventKey: "review:r1:comment:comment-1",
+    });
+  });
 });
 
 describe("POST /api/reviews/[id]/draft-response", () => {
@@ -325,6 +500,7 @@ describe("POST /api/reviews/[id]/approve-response", () => {
     mockUser = { id: "u1" };
     mockReview = baseReview;
     mockMembership = { role: "owner" };
+    mockShop = { id: "shopA", name: "Acme Collision" };
     mockExistingResponse = baseDraft; // status draft, no flags, version 1
     serviceUpdateReturnsRow = true;
     const res = await approvePOST(
@@ -334,6 +510,16 @@ describe("POST /api/reviews/[id]/approve-response", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.response.id).toBe("resp-1");
+    expect(notifyBsmApprovalAdmins).toHaveBeenCalledOnce();
+    expect(notifyBsmApprovalAdmins).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventKey: "review:r1:response:resp-1:decision:approve:version:2",
+        eventType: "decision_approved",
+        reviewItemTitle: "google review from X",
+        shopName: "Acme Collision",
+      }),
+    );
   });
 
   it("400 when action is missing/invalid", async () => {
@@ -368,24 +554,43 @@ describe("POST /api/reviews/[id]/approve-response", () => {
     mockUser = { id: "u1" };
     mockReview = baseReview;
     mockMembership = { role: "manager" };
+    mockShop = { id: "shopA", name: "Acme Collision" };
     mockExistingResponse = baseDraft;
     const res = await approvePOST(
       req({ action: "reject", expectedVersion: 1 }),
       { params: Promise.resolve({ id: "r1" }) }
     );
     expect(res.status).toBe(200);
+    expect(notifyBsmApprovalAdmins).toHaveBeenCalledOnce();
+    expect(notifyBsmApprovalAdmins).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventKey: "review:r1:response:resp-1:decision:reject:version:2",
+        eventType: "decision_declined",
+      }),
+    );
   });
 
   it("200 updates draft body (recomputes safety, bumps version)", async () => {
     mockUser = { id: "u1" };
     mockReview = baseReview;
     mockMembership = { role: "owner" };
+    mockShop = { id: "shopA", name: "Acme Collision" };
     mockExistingResponse = baseDraft;
     const res = await approvePOST(
       req({ action: "update", body: "Edited reply.", expectedVersion: 1 }),
       { params: Promise.resolve({ id: "r1" }) }
     );
     expect(res.status).toBe(200);
+    expect(notifyBsmApprovalAdmins).toHaveBeenCalledOnce();
+    expect(notifyBsmApprovalAdmins).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventKey: "review:r1:response:resp-1:decision:update:version:2",
+        eventType: "decision_updates_requested",
+        messagePreview: "Edited reply.",
+      }),
+    );
   });
 
   it("400 update without a body", async () => {

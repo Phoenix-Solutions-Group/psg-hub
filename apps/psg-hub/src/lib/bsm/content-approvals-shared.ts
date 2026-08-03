@@ -65,6 +65,7 @@ export type BsmContentApprovalListItem = {
   customerProfileId: string | null;
   title: string;
   status: string;
+  processingStatus: string;
   contentType: string;
   sourceKind: "uploaded_file" | "generated_page";
   contextNote: string | null;

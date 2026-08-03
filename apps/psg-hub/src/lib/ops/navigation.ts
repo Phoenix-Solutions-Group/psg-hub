@@ -6,8 +6,7 @@ export const OPS_NAV: OpsNavItem[] = [
   { href: "/ops", label: "Ops Home" },
   { href: "/ops/production", label: "Production" },
   { href: "/ops/production/artwork", label: "Mail Editor" },
-  { href: "/ops/bsm-content-approvals", label: "BSM Content Approvals" },
-  { href: "/ops/bsm-review-workspace", label: "BSM Review Workspace" },
+  { href: "/ops/bsm-content-approvals", label: "Content Approvals" },
   { href: "/ops/companies", label: "Companies" },
   { href: "/ops/admin/users", label: "User Access", superadminOnly: true },
   { href: "/ops/repair-customers", label: "Repair Customers" },
@@ -33,8 +32,6 @@ export function visibleOpsNavItems(access: OpsAccess): OpsNavItem[] {
       (!item.superadminOnly || access.role === "psg_superadmin") &&
       (item.href !== "/ops/production/artwork" || hasOpsFn(access, "design_mail_artwork")) &&
       (item.href !== "/ops/bsm-content-approvals" ||
-        hasOpsFn(access, "manage_bsm_content_approvals")) &&
-      (item.href !== "/ops/bsm-review-workspace" ||
         hasOpsFn(access, "manage_bsm_content_approvals"))
   );
 }

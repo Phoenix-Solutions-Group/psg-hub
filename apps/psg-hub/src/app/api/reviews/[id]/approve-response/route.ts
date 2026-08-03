@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkResponseSafety } from "@/lib/reviews/safety";
+import {
+  notifyBsmApprovalAdmins,
+  type BsmApprovalNotificationEvent,
+} from "@/lib/bsm/approval-notifications";
 
 type ApproveAction =
   | "approve"
@@ -61,7 +65,7 @@ export async function POST(
   // Load review for tenancy check
   const { data: review, error: revErr } = await supabase
     .from("review_items")
-    .select("id, shop_id")
+    .select("id, shop_id, platform, author")
     .eq("id", reviewId)
     .maybeSingle();
 
@@ -239,5 +243,64 @@ export async function POST(
     );
   }
 
+  const eventType = notificationEventType(action);
+  if (eventType) {
+    const { data: shop, error: shopErr } = await supabase
+      .from("shops")
+      .select("id, name")
+      .eq("id", review.shop_id)
+      .maybeSingle();
+
+    if (shopErr) {
+      console.error("[reviews/approve-response] shop lookup failed:", shopErr.message);
+    }
+
+    try {
+      await notifyBsmApprovalAdmins(service, {
+        shopId: review.shop_id,
+        shopName: shop?.name ?? "Customer shop",
+        reviewItemId: reviewId,
+        reviewItemTitle: reviewNotificationTitle(review),
+        eventKey: `review:${reviewId}:response:${updated.id}:decision:${action}:version:${updated.version}`,
+        eventType,
+        actorName: "Team member",
+        messagePreview: action === "update" ? body.body : null,
+        appBaseUrl: appBaseUrlFromRequest(request),
+      });
+    } catch (error) {
+      console.error(
+        "[reviews/approve-response] BSM approval notification failed:",
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+
   return NextResponse.json({ response: updated });
+}
+
+function notificationEventType(
+  action: ApproveAction,
+): BsmApprovalNotificationEvent | null {
+  if (action === "approve") return "decision_approved";
+  if (action === "reject") return "decision_declined";
+  if (action === "update") return "decision_updates_requested";
+  return null;
+}
+
+function appBaseUrlFromRequest(request: Request): string {
+  return process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+}
+
+function reviewNotificationTitle(review: {
+  platform?: string | null;
+  author?: string | null;
+}): string {
+  const platform = cleanLabel(review.platform) ?? "review";
+  const author = cleanLabel(review.author);
+  return author ? `${platform} review from ${author}` : `${platform} review`;
+}
+
+function cleanLabel(value: string | null | undefined): string | null {
+  const trimmed = value?.replace(/\s+/g, " ").trim();
+  return trimmed ? trimmed : null;
 }

@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
-import { BsmContentApprovalManager } from "@/components/ops/bsm-content-approval-manager";
+import { BsmContentApprovalManager, type BsmContentApprovalReviewerContact } from "@/components/ops/bsm-content-approval-manager";
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
-import { listBsmContentApprovals, listBsmContentApprovalWorkspaces } from "@/lib/bsm/content-approvals";
+import {
+  listBsmContentApprovals,
+  listBsmContentApprovalReviewerContacts,
+  listBsmContentApprovalWorkspaces,
+} from "@/lib/bsm/content-approvals";
 import type { BsmContentApprovalListItem, BsmContentApprovalWorkspaceOption } from "@/lib/bsm/content-approvals-shared";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { createClient } from "@/lib/supabase/server";
@@ -88,6 +92,7 @@ export default async function BsmContentApprovalsPage({ searchParams }: BsmConte
 
   let approvals: BsmContentApprovalListItem[] = [];
   let workspaces: BsmContentApprovalWorkspaceOption[] = [];
+  let reviewerContacts: BsmContentApprovalReviewerContact[] = [];
   let shops: Array<{ id: string; name: string }> = [];
   let activeShopId: string | null = null;
   let loadError = false;
@@ -96,6 +101,7 @@ export default async function BsmContentApprovalsPage({ searchParams }: BsmConte
   try {
     approvals = await listBsmContentApprovals(service);
     workspaces = await listBsmContentApprovalWorkspaces(service, { actorProfileId: user.id });
+    reviewerContacts = await listBsmContentApprovalReviewerContacts(service);
   } catch {
     loadError = true;
   }
@@ -141,12 +147,12 @@ export default async function BsmContentApprovalsPage({ searchParams }: BsmConte
     <div className="mx-auto max-w-6xl space-y-6">
       <section className="border-b border-border pb-6">
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          BSM Content Approvals
+          Content Approvals
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Attach a customer review file or generated page, add the note that explains what the
-          customer should review, and track comments, decisions, and requested updates from the
-          shared approval record.
+          Manage each customer approval as a Review Workspace. Create the workspace for one shop,
+          add the files or generated pages reviewers need, and track comments, decisions, and
+          requested updates from one place.
         </p>
       </section>
 
@@ -156,13 +162,23 @@ export default async function BsmContentApprovalsPage({ searchParams }: BsmConte
         </div>
       ) : null}
 
-      <BsmContentApprovalManager
-        initialApprovals={approvals}
-        workspaces={workspaces}
-        shops={shops}
-        activeShopId={activeShopId}
-        activeWorkspaceProjectId={requestedWorkspaceId ?? null}
-      />
+      <section className="space-y-4 border-t border-border pt-6">
+        <div>
+          <h2 className="font-heading text-xl font-semibold tracking-tight">Documents</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Add one or more documents to the selected Review Workspace. A one-document approval is
+            still tracked as a workspace so reviewer progress and decisions stay auditable.
+          </p>
+        </div>
+        <BsmContentApprovalManager
+          initialApprovals={approvals}
+          workspaces={workspaces}
+          shops={shops}
+          reviewerContacts={reviewerContacts}
+          activeShopId={activeShopId}
+          activeWorkspaceProjectId={requestedWorkspaceId ?? null}
+        />
+      </section>
     </div>
   );
 }

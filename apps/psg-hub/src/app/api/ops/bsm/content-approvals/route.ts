@@ -69,6 +69,9 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const sourceKind = payload.sourceKind === "generated_page" ? "generated_page" : "uploaded_file";
+    if (typeof payload.reviewWorkspaceProjectId !== "string" || !payload.reviewWorkspaceProjectId.trim()) {
+      return NextResponse.json({ error: "Review Workspace is required." }, { status: 400 });
+    }
     const result = sourceKind === "generated_page"
       ? await createBsmGeneratedPageApproval({
           shopId: payload.shopId as string,

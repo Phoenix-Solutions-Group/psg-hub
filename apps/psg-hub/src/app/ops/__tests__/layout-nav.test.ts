@@ -14,11 +14,12 @@ describe("visibleOpsNavItems", () => {
       expect.arrayContaining([
         "Production",
         "Mail Editor",
-        "BSM Content Approvals",
+        "Content Approvals",
         "Companies",
         "User Access",
       ])
     );
+    expect(labels).not.toContain("BSM Review Workspace");
   });
 
   it("keeps capability-gated entries hidden from internal staff without grants", () => {
@@ -26,7 +27,8 @@ describe("visibleOpsNavItems", () => {
     expect(labels).toContain("Production");
     expect(labels).toContain("Companies");
     expect(labels).not.toContain("Mail Editor");
-    expect(labels).not.toContain("BSM Content Approvals");
+    expect(labels).not.toContain("Content Approvals");
+    expect(labels).not.toContain("BSM Review Workspace");
     expect(labels).not.toContain("User Access");
   });
 });

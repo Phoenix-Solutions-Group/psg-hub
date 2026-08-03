@@ -4,6 +4,7 @@ import {
   BSM_CONTENT_APPROVAL_FILE_ACCEPT,
   BSM_CONTENT_APPROVAL_UNSUPPORTED_FILE_MESSAGE,
   BsmContentApprovalManager,
+  getBsmReviewWorkspaceStartBlocker,
   getBsmContentApprovalFileValidationError,
   getBsmContentApprovalStorageContentType,
 } from "@/components/ops/bsm-content-approval-manager";
@@ -84,7 +85,7 @@ describe("BsmContentApprovalManager", () => {
     ).toBe("application/pdf");
   });
 
-  it("renders a Review Workspace picker scoped to the selected shop", () => {
+  it("renders a required Review Workspace picker scoped to the selected shop", () => {
     const html = renderToStaticMarkup(
       <BsmContentApprovalManager
         initialApprovals={[]}
@@ -116,6 +117,7 @@ describe("BsmContentApprovalManager", () => {
 
     expect(html).toContain("Review Workspace");
     expect(html).toContain("July proof review");
+    expect(html).toContain("Choose a Review Workspace");
     expect(html).not.toContain("Wallace review");
   });
 
@@ -179,6 +181,7 @@ describe("BsmContentApprovalManager", () => {
             customerProfileId: null,
             title: "July proof",
             status: "in_review",
+            processingStatus: "ready",
             contentType: "pdf",
             sourceKind: "uploaded_file",
             contextNote: "Confirm the offer.",
@@ -210,5 +213,60 @@ describe("BsmContentApprovalManager", () => {
 
     expect(html).toContain("July proof review");
     expect(html).toContain("Edit");
+  });
+
+  it("renders workspace-first controls for creating a workspace, adding reviewers, previewing, and starting review", () => {
+    const html = renderToStaticMarkup(
+      <BsmContentApprovalManager
+        initialApprovals={[]}
+        activeShopId="shop-a"
+        shops={[{ id: "shop-a", name: "Tracy's Collision" }]}
+        reviewerContacts={[{ email: "owner@example.com", name: "Shop Owner" }]}
+      />,
+    );
+
+    expect(html).toContain("Workspace title");
+    expect(html).toContain("Reviewer instructions");
+    expect(html).toContain("Shop Owner · owner@example.com");
+    expect(html).toContain("Preview read-only");
+    expect(html).toContain("Start review");
+  });
+
+  it("blocks review start until documents are ready and a reviewer is selected", () => {
+    expect(
+      getBsmReviewWorkspaceStartBlocker({
+        workspaceId: "",
+        documents: [],
+        reviewers: [],
+      }),
+    ).toBe("Create or select a Review Workspace first.");
+    expect(
+      getBsmReviewWorkspaceStartBlocker({
+        workspaceId: "workspace-a",
+        documents: [],
+        reviewers: [{ email: "owner@example.com" }],
+      }),
+    ).toBe("Add at least one document before starting review.");
+    expect(
+      getBsmReviewWorkspaceStartBlocker({
+        workspaceId: "workspace-a",
+        documents: [{ processingStatus: "pending" }],
+        reviewers: [{ email: "owner@example.com" }],
+      }),
+    ).toBe("Start review is available after every document finishes processing successfully.");
+    expect(
+      getBsmReviewWorkspaceStartBlocker({
+        workspaceId: "workspace-a",
+        documents: [{ processingStatus: "ready" }],
+        reviewers: [],
+      }),
+    ).toBe("Choose at least one reviewer before starting review.");
+    expect(
+      getBsmReviewWorkspaceStartBlocker({
+        workspaceId: "workspace-a",
+        documents: [{ processingStatus: "ready" }],
+        reviewers: [{ email: "owner@example.com" }],
+      }),
+    ).toBeNull();
   });
 });
