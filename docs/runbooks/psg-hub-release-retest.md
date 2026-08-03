@@ -2,13 +2,13 @@
 
 Owner: Engineering release readiness is owned by Ada. QA signoff is owned by Tess. Production deployment confirmation is owned by the engineer who merges or hotfixes the change. Board retest requests are owned by Ada unless she explicitly hands them to another named owner.
 
-Status: approved by Noelle for operations clarity on 2026-07-13; standard after merge to `main`.
+Status: active release guardrail after PSG-2605 production miss on 2026-08-03. This replaces the earlier production-project wording approved for operations clarity on 2026-07-13.
 
-Production project note: operators should look for the existing Vercel project currently named `psg-advantage-portal` for PSG Hub production deploys. The production domain is `hub.psgweb.me`. After the planned rename is completed, update this runbook and the pull request template to use the new Vercel project name `psg-digital/psg-hub`.
+Production target: PSG Hub production is Vercel project `psg-digital/psg-hub`, production branch `main`, and production domain `hub.psgweb.me`.
 
 ## Why This Exists
 
-PSG Hub work is not ready for retest just because code was committed. A change is only ready for Nick, the board, or QA to retest after the exact code has reached the production deployment and a basic post-deploy check has passed.
+PSG Hub work is not ready for review or retest just because code was committed, pushed, or merged. A change is only ready for Nick, the board, QA, or a customer to review in production after the exact code has reached the production deployment and a basic post-deploy check has passed.
 
 Use this runbook for PSG Hub changes that affect production behavior, customer-facing behavior, board-facing testing, authentication, billing, data access, or any release-bound milestone.
 
@@ -19,9 +19,9 @@ Use this runbook for PSG Hub changes that affect production behavior, customer-f
 | Committed | The change is saved in Git on one machine or branch. | It is not necessarily on GitHub, reviewed, merged, deployed, or live. |
 | Pushed | The branch is on GitHub. | It is not necessarily merged into `main` or live in production. |
 | Pull request ready | The change is visible for review with tests or checks named. | It is not approved or live. |
-| Merged | The change is in the branch Vercel builds for production, currently `main`. | It is not live until the Vercel production deployment finishes successfully. |
-| Deployed | Vercel built and published the commit for the current production project, `psg-advantage-portal`. | It is not ready for retest until the release owner confirms the expected behavior in production. |
-| Ready for retest | Production is running the expected commit and the release owner has checked the changed path. | This is the first point where QA, Nick, or the board should be asked to retest. |
+| Merged | The change is in `main`, the branch Vercel builds for production. | It is not live until the Vercel production deployment finishes successfully. |
+| Deployed | Vercel built and published the expected commit for `psg-digital/psg-hub`. | It is not ready for retest until the release owner checks the changed production path. |
+| Ready for retest | Production is running the expected commit and the changed path has been checked. | This is the first point where QA, Nick, the board, or a customer should be asked to retest. |
 
 ## Required Owners
 
@@ -43,8 +43,8 @@ Do not ask Nick, QA, the board, or a customer to retest until every item below i
 - [ ] A pull request exists, or the task comment explains the approved direct merge or hotfix path.
 - [ ] Focused verification ran and the result is recorded in the task.
 - [ ] Tess has completed QA signoff for user-facing, production-bound, or release-bound behavior.
-- [ ] The change is merged into the production branch, currently `main`.
-- [ ] Vercel project `psg-advantage-portal` shows a successful production deployment for the expected commit.
+- [ ] The change is merged into the production branch, `main`.
+- [ ] Vercel project `psg-digital/psg-hub` shows a successful production deployment for the expected commit.
 - [ ] The release owner checked the changed production path and recorded what was checked.
 - [ ] The Paperclip task comment says "ready for retest" only after the production commit and Vercel deployment are confirmed.
 
@@ -56,14 +56,10 @@ If any item is not true, say what is still missing instead of asking for retest.
 2. Use the shared-worktree process in `docs/runbooks/git-worktree-workflow.md`.
 3. Make the change on a task branch and commit only explicit file paths.
 4. Push the task branch to GitHub.
-5. Open or update the pull request with:
-   - what changed;
-   - how it was verified;
-   - whether QA is required;
-   - whether production deployment is required.
+5. Open or update the pull request with what changed, how it was verified, whether QA is required, and whether production deployment is required.
 6. Assign Tess a QA child task when the change affects user-facing or release-bound behavior.
 7. Merge to `main` only after required review and QA are complete.
-8. Confirm Vercel production deployment for the current production project, `psg-advantage-portal`, is green and points to the merged commit.
+8. Confirm Vercel production project `psg-digital/psg-hub` is green and points to the merged commit.
 9. Run the smallest production check that proves the changed path works.
 10. Post a Paperclip update that names the commit, deployment status, production check, and whether it is ready for retest.
 
@@ -73,9 +69,9 @@ Hotfixes are for urgent production defects only. A hotfix may move faster than a
 
 Before asking anyone to retest a hotfix:
 
-- Confirm the fix is on the production branch, currently `main`.
-- Confirm Vercel production project `psg-advantage-portal` deployed the exact fixed commit.
-- Confirm the affected production page, sign-in path, integration, or API behavior works after deployment.
+- Confirm the fix is on the production branch, `main`.
+- Confirm Vercel production project `psg-digital/psg-hub` deployed the exact fixed commit.
+- Confirm the affected production page, sign-in path, integration, or application programming interface behavior works after deployment.
 - Record the root cause and the guardrail added or planned.
 - Tell Nick, QA, or the board to retest only after those confirmations are complete.
 
@@ -91,7 +87,7 @@ Use Paperclip as the live source of truth for release state.
 - Move a task to `in_review` only when a real reviewer or approval path exists.
 - Move a task to `blocked` when a named owner must do something before release can continue.
 - Mark a task `done` only after verification is recorded and no release follow-up remains.
-- Create child tasks for QA, operator actions, Nick approvals, or Noelle operations review instead of burying those asks in comments.
+- Create child tasks for QA, operator actions, Nick approvals, Noelle operations review, or production-review asks instead of burying those asks in comments.
 - Do not use "ready for retest," "live," or "shipped" unless the production deployment and post-deploy check are recorded.
 
 ## Recommended Guardrails
@@ -115,7 +111,7 @@ Release status
 - Commit: <commit SHA>
 - Review path: <pull request or approved hotfix path>
 - QA owner and result: <Tess / not required because ...>
-- Production deployment: <Vercel project psg-advantage-portal, deployment result, commit>
+- Production deployment: <Vercel project psg-digital/psg-hub, deployment result, commit>
 - Production check: <what was checked in the live app>
 - Retest owner: <Nick / Tess / board / customer>
 - Ready for retest: <yes or no>
