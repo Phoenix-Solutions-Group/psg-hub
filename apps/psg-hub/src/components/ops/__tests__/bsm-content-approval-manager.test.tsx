@@ -4,6 +4,7 @@ import {
   BSM_CONTENT_APPROVAL_FILE_ACCEPT,
   BSM_CONTENT_APPROVAL_UNSUPPORTED_FILE_MESSAGE,
   BsmContentApprovalManager,
+  getBsmContentApprovalsSelectionUrl,
   getBsmReviewWorkspaceStartBlocker,
   getBsmContentApprovalFileValidationError,
   getBsmContentApprovalStorageContentType,
@@ -27,6 +28,22 @@ describe("BsmContentApprovalManager", () => {
     expect(html).toContain('<option value="shop-b" selected="">Wallace Auto Body</option>');
     expect(html).not.toContain(">shop-a</option>");
     expect(html).not.toContain(">shop-b</option>");
+  });
+
+  it("keeps the selected shop and Review Workspace in the reloadable page URL", () => {
+    expect(
+      getBsmContentApprovalsSelectionUrl(
+        "https://hub.test/ops/bsm-content-approvals?foo=bar#documents",
+        { shopId: " shop-a ", workspaceId: " workspace-a " },
+      ),
+    ).toBe("/ops/bsm-content-approvals?foo=bar&shopId=shop-a&workspaceId=workspace-a#documents");
+
+    expect(
+      getBsmContentApprovalsSelectionUrl(
+        "https://hub.test/ops/bsm-content-approvals?shopId=shop-a&workspaceId=workspace-a",
+        { shopId: "shop-b", workspaceId: "" },
+      ),
+    ).toBe("/ops/bsm-content-approvals?shopId=shop-b");
   });
 
   it("does not prompt staff with an internal shop ID when shops are unavailable", () => {

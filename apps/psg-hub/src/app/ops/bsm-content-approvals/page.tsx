@@ -92,6 +92,7 @@ export default async function BsmContentApprovalsPage({ searchParams }: BsmConte
     const requestedWorkspaceShopId = requestedWorkspace?.shopId ?? null;
     shops = ensureShopOption(shops, requestedWorkspaceShopId ?? requestedShopId);
     shops = filterCleanDemoShops(shops, user.email);
+    shops = ensureShopOption(shops, requestedWorkspaceShopId ?? requestedShopId);
     activeShopId =
       shops.find((shop) => shop.id === requestedWorkspaceShopId)?.id ??
       shops.find((shop) => shop.id === requestedShopId)?.id ??

@@ -1216,7 +1216,7 @@ export async function listBsmContentApprovalWorkspaces(
     .from("bsm_content_review_projects")
     .select("id, shop_id, title, status, current_round_id")
     .is("deleted_at", null)
-    .in("status", ["draft", "processing", "ready", "active"])
+    .in("status", ["draft", "processing", "ready", "active", "completed"])
     .order("updated_at", { ascending: false })
     .limit(100);
   if (opts.shopId) query = query.eq("shop_id", opts.shopId);

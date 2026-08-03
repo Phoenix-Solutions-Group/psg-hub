@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, FilePenLine, FileUp, Link, Play, RefreshCw, Trash2, UserPlus } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   BSM_CONTENT_APPROVALS_BUCKET,
@@ -104,6 +104,37 @@ export function getBsmContentApprovalStorageContentType(selectedFile: File) {
     return "text/plain";
   }
   return normalizedContentType ?? selectedFile.type;
+}
+
+export function getBsmContentApprovalsSelectionUrl(
+  currentHref: string,
+  selection: { shopId: string; workspaceId: string },
+) {
+  const url = new URL(currentHref);
+  const shopId = selection.shopId.trim();
+  const workspaceId = selection.workspaceId.trim();
+
+  if (shopId) {
+    url.searchParams.set("shopId", shopId);
+  } else {
+    url.searchParams.delete("shopId");
+  }
+
+  if (workspaceId) {
+    url.searchParams.set("workspaceId", workspaceId);
+  } else {
+    url.searchParams.delete("workspaceId");
+  }
+
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function replaceBsmContentApprovalsSelectionUrl(selection: { shopId: string; workspaceId: string }) {
+  const nextUrl = getBsmContentApprovalsSelectionUrl(window.location.href, selection);
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (nextUrl !== currentUrl) {
+    window.history.replaceState(null, "", nextUrl);
+  }
 }
 
 export function BsmContentApprovalManager({
@@ -214,6 +245,10 @@ export function BsmContentApprovalManager({
     !validationError &&
     (sourceKind === "generated_page" ? Boolean(generatedPagePath.trim()) : Boolean(file));
 
+  useEffect(() => {
+    replaceBsmContentApprovalsSelectionUrl({ shopId, workspaceId: reviewWorkspaceProjectId });
+  }, [shopId, reviewWorkspaceProjectId]);
+
   async function createWorkspace() {
     if (!shopId.trim() || !workspaceTitle.trim()) {
       setPhase({ kind: "error", message: "Choose a shop and enter a workspace title." });
@@ -246,6 +281,7 @@ export function BsmContentApprovalManager({
       };
       setWorkspaceOptions((current) => [workspace, ...current.filter((entry) => entry.id !== workspace.id)]);
       setReviewWorkspaceProjectId(workspace.id);
+      replaceBsmContentApprovalsSelectionUrl({ shopId: workspace.shopId, workspaceId: workspace.id });
       setWorkspaceTitle("");
       setWorkspaceInstructions("");
       setWorkspacePreview(null);
@@ -720,6 +756,7 @@ export function BsmContentApprovalManager({
                 onChange={(event) => {
                   setShopId(event.target.value);
                   setReviewWorkspaceProjectId("");
+                  replaceBsmContentApprovalsSelectionUrl({ shopId: event.target.value, workspaceId: "" });
                   setWorkspacePreview(null);
                   setStartedReview(null);
                 }}
@@ -736,7 +773,10 @@ export function BsmContentApprovalManager({
               <Input
                 id="bsm-approval-shop"
                 value={shopId}
-                onChange={(event) => setShopId(event.target.value)}
+                onChange={(event) => {
+                  setShopId(event.target.value);
+                  replaceBsmContentApprovalsSelectionUrl({ shopId: event.target.value, workspaceId: reviewWorkspaceProjectId });
+                }}
                 disabled={uploading || creatingWorkspace || startingReview}
                 placeholder="No shops available"
               />
@@ -890,6 +930,7 @@ export function BsmContentApprovalManager({
             value={reviewWorkspaceProjectId}
             onChange={(event) => {
               setReviewWorkspaceProjectId(event.target.value);
+              replaceBsmContentApprovalsSelectionUrl({ shopId, workspaceId: event.target.value });
               setWorkspacePreview(null);
               setStartedReview(null);
             }}
