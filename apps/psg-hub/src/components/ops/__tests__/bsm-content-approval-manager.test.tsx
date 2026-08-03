@@ -266,7 +266,7 @@ describe("BsmContentApprovalManager", () => {
     expect(html).toContain("Edit");
   });
 
-  it("renders workspace-first controls for creating a workspace, adding reviewers, previewing, and starting review", () => {
+  it("renders the board-requested order: workspace, documents, reviewers, then preview/start", () => {
     const html = renderToStaticMarkup(
       <BsmContentApprovalManager
         initialApprovals={[]}
@@ -281,6 +281,16 @@ describe("BsmContentApprovalManager", () => {
     expect(html).toContain("Shop Owner · owner@example.com");
     expect(html).toContain("Preview read-only");
     expect(html).toContain("Start review");
+
+    const workspaceIndex = html.indexOf(">Workspace<");
+    const documentsIndex = html.indexOf(">Documents<");
+    const reviewersIndex = html.indexOf(">Reviewers<");
+    const previewIndex = html.indexOf(">Preview or start review<");
+
+    expect(workspaceIndex).toBeGreaterThanOrEqual(0);
+    expect(documentsIndex).toBeGreaterThan(workspaceIndex);
+    expect(reviewersIndex).toBeGreaterThan(documentsIndex);
+    expect(previewIndex).toBeGreaterThan(reviewersIndex);
   });
 
   it("blocks review start until documents are ready and a reviewer is selected", () => {

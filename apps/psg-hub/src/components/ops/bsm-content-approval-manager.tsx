@@ -898,159 +898,6 @@ export function BsmContentApprovalManager({
             ) : null}
           </div>
         ) : null}
-        <div className="space-y-4 rounded-md border border-border bg-muted/20 p-4">
-          <div>
-            <h3 className="font-heading text-sm font-semibold">Reviewers</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Choose saved reviewer contacts or add a new contact before starting review.
-            </p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-            <div className="space-y-1.5">
-              <Label htmlFor="bsm-reviewer-email">Reviewer email</Label>
-              <Input
-                id="bsm-reviewer-email"
-                value={reviewerEmail}
-                onChange={(event) => setReviewerEmail(event.target.value)}
-                disabled={startingReview}
-                placeholder="reviewer@example.com"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="bsm-reviewer-name">Reviewer name</Label>
-              <Input
-                id="bsm-reviewer-name"
-                value={reviewerName}
-                onChange={(event) => setReviewerName(event.target.value)}
-                disabled={startingReview}
-                placeholder="Optional"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => addReviewer({ email: reviewerEmail, name: reviewerName || null })}
-              disabled={startingReview || !reviewerEmail.trim()}
-              className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
-            >
-              <UserPlus className="size-4" aria-hidden="true" />
-              Add reviewer
-            </button>
-          </div>
-          {reviewerContacts.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {reviewerContacts.slice(0, 8).map((contact) => (
-                <button
-                  key={contact.email}
-                  type="button"
-                  onClick={() => addReviewer(contact)}
-                  disabled={startingReview}
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-                >
-                  {contact.name ? `${contact.name} · ${contact.email}` : contact.email}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {selectedReviewers.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {selectedReviewers.map((reviewer) => (
-                <span
-                  key={reviewer.email}
-                  className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1 text-xs"
-                >
-                  {reviewer.name ? `${reviewer.name} · ${reviewer.email}` : reviewer.email}
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() =>
-                      setSelectedReviewers((current) => current.filter((entry) => entry.email !== reviewer.email))
-                    }
-                    aria-label={`Remove reviewer ${reviewer.email}`}
-                  >
-                    Remove
-                  </button>
-                </span>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-3 rounded-md border border-border p-3">
-          <div className="min-w-56 flex-1 text-sm text-muted-foreground">
-            {startBlocker ?? `${workspaceDocuments.length} ready document${workspaceDocuments.length === 1 ? "" : "s"} can be sent.`}
-          </div>
-          <button
-            type="button"
-            onClick={loadWorkspacePreview}
-            disabled={previewingWorkspace || !reviewWorkspaceProjectId}
-            className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
-          >
-            {previewingWorkspace ? (
-              <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Eye className="size-4" aria-hidden="true" />
-            )}
-            Preview read-only
-          </button>
-          <button
-            type="button"
-            onClick={startWorkspaceReview}
-            disabled={startingReview || Boolean(startBlocker)}
-            className={cn(buttonVariants({ variant: "default" }), "gap-2")}
-          >
-            {startingReview ? (
-              <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Play className="size-4" aria-hidden="true" />
-            )}
-            Start review
-          </button>
-        </div>
-        {workspacePreview ? (
-          <div className="rounded-md border border-border bg-muted/30 p-4 text-sm">
-            <div className="font-heading font-semibold">Preview mode · no comments or decisions are saved here</div>
-            <div className="mt-1 text-muted-foreground">
-              {workspacePreview.project.title} · {workspacePreview.project.status.replaceAll("_", " ")}
-            </div>
-            <div className="mt-3 space-y-2">
-              {workspacePreview.documents.length === 0 ? (
-                <div className="text-muted-foreground">No documents are attached yet.</div>
-              ) : (
-                workspacePreview.documents.map((document) => (
-                  <div key={document.itemId} className="rounded-md border border-border bg-background p-3">
-                    <div className="font-medium">{document.title}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {document.processingStatus.replaceAll("_", " ")} · {document.status.replaceAll("_", " ")}
-                    </div>
-                    {document.proofUrl ? (
-                      <a className="mt-2 inline-block font-medium text-ember" href={document.proofUrl} target="_blank" rel="noreferrer">
-                        Open proof
-                      </a>
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        ) : null}
-        {startedReview ? (
-          <div className="rounded-md border border-success/40 bg-success/10 p-4 text-sm">
-            <div className="font-heading font-semibold">Review started</div>
-            <div className="mt-1 text-muted-foreground">
-              {startedReview.documentCount} document{startedReview.documentCount === 1 ? "" : "s"} sent to {startedReview.invitations.length} reviewer{startedReview.invitations.length === 1 ? "" : "s"}.
-            </div>
-            <div className="mt-3 space-y-2">
-              {startedReview.invitations.map((invitation) => (
-                <div key={invitation.invitationId} className="rounded-md border border-border bg-background p-3">
-                  <div className="font-medium">{invitation.reviewerName ?? invitation.reviewerEmail}</div>
-                  <a className="break-all text-ember" href={`/review-workspace?invite=${encodeURIComponent(invitation.inviteToken)}`}>
-                    /review-workspace?invite={invitation.inviteToken}
-                  </a>
-                  <div className="mt-1 font-mono text-lg tracking-widest">{invitation.inviteCode}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </section>
 
       <section className="space-y-4 border-b border-border pb-8">
@@ -1191,6 +1038,171 @@ export function BsmContentApprovalManager({
           <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
             {phase.message}
           </p>
+        ) : null}
+      </section>
+
+      <section className="space-y-4 border-b border-border pb-8">
+        <div>
+          <h2 className="font-heading text-lg font-semibold">Reviewers</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Choose saved reviewer contacts or add a new contact before starting review.
+          </p>
+        </div>
+        <div className="space-y-4 rounded-md border border-border bg-muted/20 p-4">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+            <div className="space-y-1.5">
+              <Label htmlFor="bsm-reviewer-email">Reviewer email</Label>
+              <Input
+                id="bsm-reviewer-email"
+                value={reviewerEmail}
+                onChange={(event) => setReviewerEmail(event.target.value)}
+                disabled={startingReview}
+                placeholder="reviewer@example.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bsm-reviewer-name">Reviewer name</Label>
+              <Input
+                id="bsm-reviewer-name"
+                value={reviewerName}
+                onChange={(event) => setReviewerName(event.target.value)}
+                disabled={startingReview}
+                placeholder="Optional"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => addReviewer({ email: reviewerEmail, name: reviewerName || null })}
+              disabled={startingReview || !reviewerEmail.trim()}
+              className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
+            >
+              <UserPlus className="size-4" aria-hidden="true" />
+              Add reviewer
+            </button>
+          </div>
+          {reviewerContacts.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {reviewerContacts.slice(0, 8).map((contact) => (
+                <button
+                  key={contact.email}
+                  type="button"
+                  onClick={() => addReviewer(contact)}
+                  disabled={startingReview}
+                  className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                >
+                  {contact.name ? `${contact.name} · ${contact.email}` : contact.email}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {selectedReviewers.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {selectedReviewers.map((reviewer) => (
+                <span
+                  key={reviewer.email}
+                  className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1 text-xs"
+                >
+                  {reviewer.name ? `${reviewer.name} · ${reviewer.email}` : reviewer.email}
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() =>
+                      setSelectedReviewers((current) => current.filter((entry) => entry.email !== reviewer.email))
+                    }
+                    aria-label={`Remove reviewer ${reviewer.email}`}
+                  >
+                    Remove
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="space-y-4 border-b border-border pb-8">
+        <div>
+          <h2 className="font-heading text-lg font-semibold">Preview or start review</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Preview is optional and read-only. Starting review freezes the round and creates reviewer invitations.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-border p-3">
+          <div className="min-w-56 flex-1 text-sm text-muted-foreground">
+            {startBlocker ?? `${workspaceDocuments.length} ready document${workspaceDocuments.length === 1 ? "" : "s"} can be sent.`}
+          </div>
+          <button
+            type="button"
+            onClick={loadWorkspacePreview}
+            disabled={previewingWorkspace || !reviewWorkspaceProjectId}
+            className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
+          >
+            {previewingWorkspace ? (
+              <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Eye className="size-4" aria-hidden="true" />
+            )}
+            Preview read-only
+          </button>
+          <button
+            type="button"
+            onClick={startWorkspaceReview}
+            disabled={startingReview || Boolean(startBlocker)}
+            className={cn(buttonVariants({ variant: "default" }), "gap-2")}
+          >
+            {startingReview ? (
+              <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Play className="size-4" aria-hidden="true" />
+            )}
+            Start review
+          </button>
+        </div>
+        {workspacePreview ? (
+          <div className="rounded-md border border-border bg-muted/30 p-4 text-sm">
+            <div className="font-heading font-semibold">Preview mode · no comments or decisions are saved here</div>
+            <div className="mt-1 text-muted-foreground">
+              {workspacePreview.project.title} · {workspacePreview.project.status.replaceAll("_", " ")}
+            </div>
+            <div className="mt-3 space-y-2">
+              {workspacePreview.documents.length === 0 ? (
+                <div className="text-muted-foreground">No documents are attached yet.</div>
+              ) : (
+                workspacePreview.documents.map((document) => (
+                  <div key={document.itemId} className="rounded-md border border-border bg-background p-3">
+                    <div className="font-medium">{document.title}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {document.processingStatus.replaceAll("_", " ")} · {document.status.replaceAll("_", " ")}
+                    </div>
+                    {document.proofUrl ? (
+                      <a className="mt-2 inline-block font-medium text-ember" href={document.proofUrl} target="_blank" rel="noreferrer">
+                        Open proof
+                      </a>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        ) : null}
+        {startedReview ? (
+          <div className="rounded-md border border-success/40 bg-success/10 p-4 text-sm">
+            <div className="font-heading font-semibold">Review started</div>
+            <div className="mt-1 text-muted-foreground">
+              {startedReview.documentCount} document{startedReview.documentCount === 1 ? "" : "s"} sent to {startedReview.invitations.length} reviewer{startedReview.invitations.length === 1 ? "" : "s"}.
+            </div>
+            <div className="mt-3 space-y-2">
+              {startedReview.invitations.map((invitation) => (
+                <div key={invitation.invitationId} className="rounded-md border border-border bg-background p-3">
+                  <div className="font-medium">{invitation.reviewerName ?? invitation.reviewerEmail}</div>
+                  <a className="break-all text-ember" href={`/review-workspace?invite=${encodeURIComponent(invitation.inviteToken)}`}>
+                    /review-workspace?invite={invitation.inviteToken}
+                  </a>
+                  <div className="mt-1 font-mono text-lg tracking-widest">{invitation.inviteCode}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : null}
       </section>
 
