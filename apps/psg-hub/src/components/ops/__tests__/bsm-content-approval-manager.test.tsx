@@ -147,6 +147,57 @@ describe("BsmContentApprovalManager", () => {
     expect(html).toContain('<option value="workspace-a" selected="">July proof review');
   });
 
+  it("renders super-admin edit and remove controls for the selected Review Workspace", () => {
+    const html = renderToStaticMarkup(
+      <BsmContentApprovalManager
+        initialApprovals={[]}
+        activeShopId="shop-a"
+        activeWorkspaceProjectId="workspace-a"
+        canManageWorkspaces
+        shops={[{ id: "shop-a", name: "Tracy's Collision" }]}
+        workspaces={[
+          {
+            id: "workspace-a",
+            shopId: "shop-a",
+            title: "July proof review",
+            status: "draft",
+            currentRoundId: null,
+            documentCount: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(html).toContain("Super-admin workspace controls");
+    expect(html).toContain("Edit workspace");
+    expect(html).toContain("Remove workspace");
+  });
+
+  it("hides workspace edit and remove controls from non-superadmin staff", () => {
+    const html = renderToStaticMarkup(
+      <BsmContentApprovalManager
+        initialApprovals={[]}
+        activeShopId="shop-a"
+        activeWorkspaceProjectId="workspace-a"
+        shops={[{ id: "shop-a", name: "Tracy's Collision" }]}
+        workspaces={[
+          {
+            id: "workspace-a",
+            shopId: "shop-a",
+            title: "July proof review",
+            status: "draft",
+            currentRoundId: null,
+            documentCount: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(html).not.toContain("Super-admin workspace controls");
+    expect(html).not.toContain("Edit workspace");
+    expect(html).not.toContain("Remove workspace");
+  });
+
   it("keeps a requested workspace selectable when the shop only comes from the workspace", () => {
     const html = renderToStaticMarkup(
       <BsmContentApprovalManager

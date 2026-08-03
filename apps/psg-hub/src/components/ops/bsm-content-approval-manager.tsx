@@ -68,6 +68,10 @@ type WorkspacePreviewResponse =
     }
   | { error?: string };
 
+type WorkspaceUpdateResponse =
+  | { workspace: { id: string; shopId: string; title: string; status: string } }
+  | { error?: string };
+
 export function getBsmReviewWorkspaceStartBlocker(input: {
   workspaceId: string;
   documents: Array<{ processingStatus: string }>;
@@ -109,6 +113,7 @@ export function BsmContentApprovalManager({
   reviewerContacts = [],
   activeShopId,
   activeWorkspaceProjectId,
+  canManageWorkspaces = false,
 }: {
   initialApprovals: BsmContentApprovalListItem[];
   workspaces?: BsmContentApprovalWorkspaceOption[];
@@ -116,6 +121,7 @@ export function BsmContentApprovalManager({
   reviewerContacts?: BsmContentApprovalReviewerContact[];
   activeShopId?: string | null;
   activeWorkspaceProjectId?: string | null;
+  canManageWorkspaces?: boolean;
 }) {
   const [approvals, setApprovals] = useState(initialApprovals);
   const [workspaceOptions, setWorkspaceOptions] = useState(workspaces);
@@ -156,6 +162,10 @@ export function BsmContentApprovalManager({
     () => approvals.filter((item) => item.reviewWorkspace?.projectId === reviewWorkspaceProjectId),
     [approvals, reviewWorkspaceProjectId],
   );
+  const selectedWorkspace = useMemo(
+    () => workspaceOptions.find((workspace) => workspace.id === reviewWorkspaceProjectId) ?? null,
+    [workspaceOptions, reviewWorkspaceProjectId],
+  );
 
   const fileValidationError = useMemo(() => getBsmContentApprovalFileValidationError(file), [file]);
   const formValidationError = useMemo(() => {
@@ -188,6 +198,11 @@ export function BsmContentApprovalManager({
   const [startedReview, setStartedReview] = useState<Extract<ReviewStartResponse, { review: unknown }>["review"] | null>(null);
   const [previewingWorkspace, setPreviewingWorkspace] = useState(false);
   const [workspacePreview, setWorkspacePreview] = useState<Extract<WorkspacePreviewResponse, { result: unknown }>["result"] | null>(null);
+  const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
+  const [workspaceEditTitle, setWorkspaceEditTitle] = useState("");
+  const [workspaceEditInstructions, setWorkspaceEditInstructions] = useState("");
+  const [savingWorkspace, setSavingWorkspace] = useState(false);
+  const [removingWorkspaceId, setRemovingWorkspaceId] = useState<string | null>(null);
   const startBlocker = getBsmReviewWorkspaceStartBlocker({
     workspaceId: reviewWorkspaceProjectId,
     documents: workspaceDocuments,
@@ -324,6 +339,117 @@ export function BsmContentApprovalManager({
       });
     } finally {
       setStartingReview(false);
+    }
+  }
+
+  function beginWorkspaceEdit() {
+    if (!selectedWorkspace) return;
+    setEditingWorkspaceId(selectedWorkspace.id);
+    setWorkspaceEditTitle(selectedWorkspace.title);
+    setWorkspaceEditInstructions("");
+    setPhase({ kind: "idle" });
+  }
+
+  async function saveWorkspaceEdit() {
+    if (!selectedWorkspace || editingWorkspaceId !== selectedWorkspace.id) return;
+    if (!workspaceEditTitle.trim()) {
+      setPhase({ kind: "error", message: "Workspace title is required." });
+      return;
+    }
+
+    setSavingWorkspace(true);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch(`/api/ops/bsm/review-workspace/projects/${selectedWorkspace.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_workspace",
+          title: workspaceEditTitle.trim(),
+          description: workspaceEditInstructions.trim() || null,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as WorkspaceUpdateResponse;
+      if (!response.ok || !("workspace" in body)) {
+        throw new Error("error" in body && body.error ? body.error : "The Review Workspace could not be updated.");
+      }
+
+      setWorkspaceOptions((current) =>
+        current.map((workspace) =>
+          workspace.id === body.workspace.id
+            ? { ...workspace, title: body.workspace.title, status: body.workspace.status }
+            : workspace,
+        ),
+      );
+      setApprovals((current) =>
+        current.map((item) =>
+          item.reviewWorkspace?.projectId === body.workspace.id
+            ? {
+                ...item,
+                reviewWorkspace: {
+                  ...item.reviewWorkspace,
+                  projectTitle: body.workspace.title,
+                },
+              }
+            : item,
+        ),
+      );
+      setWorkspacePreview((current) =>
+        current && current.project.id === body.workspace.id
+          ? { ...current, project: { ...current.project, title: body.workspace.title, status: body.workspace.status } }
+          : current,
+      );
+      setEditingWorkspaceId(null);
+      setWorkspaceEditInstructions("");
+      setPhase({ kind: "success", message: "The Review Workspace was updated." });
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The Review Workspace could not be updated.",
+      });
+    } finally {
+      setSavingWorkspace(false);
+    }
+  }
+
+  async function removeSelectedWorkspace() {
+    if (!selectedWorkspace) return;
+    if (
+      !confirm(
+        `Remove Review Workspace "${selectedWorkspace.title}"? It will be hidden now and kept recoverable for 30 days.`,
+      )
+    ) {
+      return;
+    }
+
+    setRemovingWorkspaceId(selectedWorkspace.id);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch(`/api/ops/bsm/review-workspace/projects/${selectedWorkspace.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Removed from the Content Approvals workspace controls." }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "The Review Workspace could not be removed.");
+      }
+
+      const removedWorkspaceId = selectedWorkspace.id;
+      setWorkspaceOptions((current) => current.filter((workspace) => workspace.id !== removedWorkspaceId));
+      setApprovals((current) => current.filter((item) => item.reviewWorkspace?.projectId !== removedWorkspaceId));
+      setReviewWorkspaceProjectId("");
+      setEditingWorkspaceId(null);
+      setWorkspacePreview(null);
+      setStartedReview(null);
+      setPhase({ kind: "success", message: "The Review Workspace was removed from the active list." });
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The Review Workspace could not be removed.",
+      });
+    } finally {
+      setRemovingWorkspaceId(null);
     }
   }
 
@@ -686,6 +812,92 @@ export function BsmContentApprovalManager({
             ))}
           </select>
         </div>
+        {canManageWorkspaces && selectedWorkspace ? (
+          <div className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="font-heading text-sm font-semibold">Super-admin workspace controls</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Rename or remove the selected Review Workspace.
+                </p>
+              </div>
+              {editingWorkspaceId === selectedWorkspace.id ? null : (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={beginWorkspaceEdit}
+                    disabled={savingWorkspace || removingWorkspaceId === selectedWorkspace.id}
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
+                  >
+                    <FilePenLine className="size-3.5" aria-hidden="true" />
+                    Edit workspace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={removeSelectedWorkspace}
+                    disabled={savingWorkspace || removingWorkspaceId === selectedWorkspace.id}
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1 text-destructive hover:text-destructive")}
+                  >
+                    {removingWorkspaceId === selectedWorkspace.id ? (
+                      <RefreshCw className="size-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Trash2 className="size-3.5" aria-hidden="true" />
+                    )}
+                    {removingWorkspaceId === selectedWorkspace.id ? "Removing" : "Remove workspace"}
+                  </button>
+                </div>
+              )}
+            </div>
+            {editingWorkspaceId === selectedWorkspace.id ? (
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+                <div className="space-y-1.5">
+                  <Label htmlFor="bsm-workspace-edit-title">Workspace title</Label>
+                  <Input
+                    id="bsm-workspace-edit-title"
+                    value={workspaceEditTitle}
+                    onChange={(event) => setWorkspaceEditTitle(event.target.value)}
+                    disabled={savingWorkspace}
+                    maxLength={180}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bsm-workspace-edit-instructions">Reviewer instructions</Label>
+                  <Input
+                    id="bsm-workspace-edit-instructions"
+                    value={workspaceEditInstructions}
+                    onChange={(event) => setWorkspaceEditInstructions(event.target.value)}
+                    disabled={savingWorkspace}
+                    maxLength={4000}
+                    placeholder="Leave blank to clear the instructions"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={saveWorkspaceEdit}
+                    disabled={savingWorkspace || !workspaceEditTitle.trim()}
+                    className={cn(buttonVariants({ variant: "default", size: "sm" }), "gap-1")}
+                  >
+                    {savingWorkspace ? (
+                      <RefreshCw className="size-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <FilePenLine className="size-3.5" aria-hidden="true" />
+                    )}
+                    {savingWorkspace ? "Saving" : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingWorkspaceId(null)}
+                    disabled={savingWorkspace}
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div className="space-y-4 rounded-md border border-border bg-muted/20 p-4">
           <div>
             <h3 className="font-heading text-sm font-semibold">Reviewers</h3>

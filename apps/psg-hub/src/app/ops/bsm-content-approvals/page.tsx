@@ -136,6 +136,7 @@ export default async function BsmContentApprovalsPage({ searchParams }: BsmConte
           reviewerContacts={reviewerContacts}
           activeShopId={activeShopId}
           activeWorkspaceProjectId={requestedWorkspaceId ?? null}
+          canManageWorkspaces={access.role === "psg_superadmin"}
         />
       </section>
     </div>

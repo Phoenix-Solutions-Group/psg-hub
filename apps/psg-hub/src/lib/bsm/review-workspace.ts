@@ -58,6 +58,14 @@ export type CreateReviewWorkspaceProjectInput = {
   metadata?: Record<string, unknown> | null;
 };
 
+export type UpdateReviewWorkspaceProjectInput = {
+  projectId: string;
+  title: string;
+  description?: string | null;
+  actorProfileId: string;
+  actorRole: ReviewWorkspaceActorRole;
+};
+
 export type ReviewWorkspaceReviewerContactInput = {
   email: string;
   name?: string | null;
@@ -456,6 +464,58 @@ export async function createReviewWorkspaceProject(
   }
 
   return { id: projectId, shopId, title, status: "draft", ownerProfileId: actorProfileId };
+}
+
+export async function updateReviewWorkspaceProject(
+  input: UpdateReviewWorkspaceProjectInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+): Promise<ReviewWorkspaceProject> {
+  if (!isSuperadminRole(input.actorRole)) {
+    throw new ReviewWorkspaceInputError(403, "Only a superadmin can edit review workspaces");
+  }
+
+  const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
+  const title = cleanText("title", input.title, 180);
+  const description = cleanOptionalText("description", input.description, 4000);
+  const client = resolveClient(deps.client);
+  const now = (deps.now ?? new Date()).toISOString();
+  const access = await requireReviewWorkspaceStaffAccess(client, input.projectId, actorProfileId, input.actorRole);
+
+  const { data: projectRow, error: projectError } = await client
+    .from("bsm_content_review_projects")
+    .select("id, shop_id, status, owner_profile_id")
+    .eq("id", access.projectId)
+    .single();
+  if (projectError || !projectRow) {
+    throw new Error(`Could not load review workspace project: ${projectError?.message ?? "not found"}`);
+  }
+
+  const project = projectRow as Record<string, unknown>;
+  const { error: updateError } = await client
+    .from("bsm_content_review_projects")
+    .update({
+      title,
+      description,
+      updated_at: now,
+    })
+    .eq("id", access.projectId);
+  if (updateError) throw new Error(`Could not update review workspace project: ${updateError.message}`);
+
+  await insertEvent(client, {
+    shop_id: access.shopId,
+    review_item_id: null,
+    event_type: "review_workspace_project_updated",
+    actor_profile_id: actorProfileId,
+    payload_jsonb: { projectId: access.projectId, title },
+  });
+
+  return {
+    id: access.projectId,
+    shopId: access.shopId,
+    title,
+    status: (project.status as string | null) ?? access.status,
+    ownerProfileId: (project.owner_profile_id as string | null) ?? actorProfileId,
+  };
 }
 
 export async function startReviewWorkspaceRound(

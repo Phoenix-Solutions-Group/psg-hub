@@ -7,6 +7,7 @@ import {
   closeReviewWorkspaceRoundEarly,
   getStaffReviewWorkspaceResult,
   removeReviewWorkspaceProject,
+  updateReviewWorkspaceProject,
 } from "@/lib/bsm/review-workspace";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
@@ -58,8 +59,30 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  if (payload?.action === "update_workspace") {
+    try {
+      const workspace = await updateReviewWorkspaceProject({
+        projectId: id,
+        actorProfileId: gate.userId,
+        actorRole: gate.access.role,
+        title: typeof payload.title === "string" ? payload.title : "",
+        description: typeof payload.description === "string" ? payload.description : null,
+      });
+      return NextResponse.json({ workspace }, { headers: { "Cache-Control": "private, no-store" } });
+    } catch (error) {
+      if (error instanceof ReviewWorkspaceInputError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      console.error(
+        "[ops/bsm/review-workspace/projects] update failed:",
+        error instanceof Error ? error.message : error,
+      );
+      return NextResponse.json({ error: "Could not update the review workspace." }, { status: 500 });
+    }
+  }
+
   if (payload?.action !== "close_early") {
-    return NextResponse.json({ error: "action must be close_early" }, { status: 400 });
+    return NextResponse.json({ error: "action must be update_workspace or close_early" }, { status: 400 });
   }
 
   try {
