@@ -164,10 +164,10 @@ export default async function BsmContentApprovalsPage({ searchParams }: BsmConte
 
       <section className="space-y-4 border-t border-border pt-6">
         <div>
-          <h2 className="font-heading text-xl font-semibold tracking-tight">Documents</h2>
+          <h2 className="font-heading text-xl font-semibold tracking-tight">Approval setup</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Add one or more documents to the selected Review Workspace. A one-document approval is
-            still tracked as a workspace so reviewer progress and decisions stay auditable.
+            Choose or create the Review Workspace, add documents, choose reviewers, then preview or start
+            the customer review.
           </p>
         </div>
         <BsmContentApprovalManager
