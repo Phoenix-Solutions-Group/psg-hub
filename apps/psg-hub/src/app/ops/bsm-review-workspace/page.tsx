@@ -1,12 +1,4 @@
 import { redirect } from "next/navigation";
-import { ReviewWorkspaceConsole } from "@/app/ops/bsm-review-workspace/review-workspace-console";
-import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
-import {
-  bsmReviewWorkspaceInternalEnabled,
-  listStaffReviewWorkspaces,
-} from "@/lib/bsm/review-workspace";
-import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,70 +20,5 @@ export function normalizeCompanyShops(rows: Array<{ shop_id: unknown; name: unkn
 }
 
 export default async function BsmReviewWorkspacePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const access = await getOpsAccess(user.id);
-  if (!hasOpsFn(access, "manage_bsm_content_approvals")) {
-    return (
-      <div className="mx-auto max-w-2xl rounded-lg border border-border p-6">
-        <h1 className="font-heading text-lg font-semibold">BSM Review Workspace</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Your security profile does not grant access to manage BSM review workspaces.
-        </p>
-      </div>
-    );
-  }
-
-  if (!bsmReviewWorkspaceInternalEnabled()) {
-    return (
-      <div className="mx-auto max-w-2xl rounded-lg border border-border p-6">
-        <h1 className="font-heading text-lg font-semibold">BSM Review Workspace</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          This internal QA surface is disabled in this environment.
-        </p>
-      </div>
-    );
-  }
-
-  const service = createServiceClient();
-  const { data: shopRows } = await service
-    .from("companies")
-    .select("shop_id, name")
-    .eq("status", "active")
-    .not("shop_id", "is", null)
-    .order("name", { ascending: true })
-    .limit(500);
-  const shops = normalizeCompanyShops(shopRows ?? []);
-  const shopNames = new Map(shops.map((shop) => [shop.id, shop.name]));
-  const workspaces = (await listStaffReviewWorkspaces(user.id, access.role, { client: service }))
-    .map((workspace) => ({ ...workspace, shopName: workspace.shopName ?? shopNames.get(workspace.shopId) ?? null }));
-
-  return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <section className="border-b border-border pb-6">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">BSM Review Workspace</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Create and inspect private review projects for QA. This page does not send customer
-          email or publish public links.
-        </p>
-      </section>
-
-      {shops.length ? (
-        <ReviewWorkspaceConsole
-          shops={shops}
-          defaultShopId={shops[0]?.id ?? null}
-          initialWorkspaces={workspaces}
-          canRemoveWorkspaces={access.role === "psg_superadmin"}
-        />
-      ) : (
-        <div className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-warning-foreground">
-          No QA shop is available in this environment.
-        </div>
-      )}
-    </div>
-  );
+  redirect("/ops/bsm-content-approvals");
 }

@@ -1,8 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { normalizeCompanyShops } from "@/app/ops/bsm-review-workspace/page";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ReviewWorkspaceConsole } from "@/app/ops/bsm-review-workspace/review-workspace-console";
+
+const { redirect } = vi.hoisted(() => ({
+  redirect: vi.fn((url: string) => {
+    throw new Error(`REDIRECT:${url}`);
+  }),
+}));
+
+vi.mock("next/navigation", () => ({ redirect }));
+
+const BsmReviewWorkspacePage = (await import("@/app/ops/bsm-review-workspace/page")).default;
 
 describe("normalizeCompanyShops", () => {
   it("returns one sorted shop option per shop id", () => {
@@ -22,8 +32,15 @@ describe("normalizeCompanyShops", () => {
   });
 });
 
+describe("BsmReviewWorkspacePage", () => {
+  it("redirects the old Review Workspace admin route into Content Approvals", async () => {
+    await expect(BsmReviewWorkspacePage()).rejects.toThrow("REDIRECT:/ops/bsm-content-approvals");
+    expect(redirect).toHaveBeenCalledWith("/ops/bsm-content-approvals");
+  });
+});
+
 describe("ReviewWorkspaceConsole upload entry", () => {
-  it("links staff to the upload form with the selected shop context", () => {
+  it("links staff to the consolidated document form with the selected shop context", () => {
     const html = renderToStaticMarkup(
       createElement(ReviewWorkspaceConsole, {
         shops: [
@@ -34,7 +51,7 @@ describe("ReviewWorkspaceConsole upload entry", () => {
       }),
     );
 
-    expect(html).toContain("Upload file");
+    expect(html).toContain("Add document");
     expect(html).toContain("/ops/bsm-content-approvals?shopId=shop-b");
   });
 
