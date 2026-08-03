@@ -51,6 +51,16 @@ function isImageProof(contentType: string | null): boolean {
   return Boolean(contentType?.startsWith("image/"));
 }
 
+function guestFileUrl(sessionHash: string | null, doc: Workspace["documents"][number]): string | null {
+  if (!sessionHash || doc.contentType !== "text/html") return null;
+  const params = new URLSearchParams({
+    sessionHash,
+    reviewItemId: doc.itemId,
+    versionId: doc.versionId,
+  });
+  return `/api/bsm/review-workspace/file?${params.toString()}`;
+}
+
 export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   const [code, setCode] = useState("");
   const [sessionHash, setSessionHash] = useState<string | null>(null);
@@ -232,7 +242,9 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
       ) : (
         <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
           <section className="min-w-0 space-y-4">
-            {workspace.documents.map((doc) => (
+            {workspace.documents.map((doc) => {
+              const renderedProofUrl = guestFileUrl(sessionHash, doc) ?? doc.proofUrl;
+              return (
               <Card key={doc.itemId}>
                 <CardHeader>
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -269,15 +281,15 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-medium">
-                              {doc.originalFilename ?? doc.proofUrl ?? "Proof preview"}
+                              {doc.originalFilename ?? renderedProofUrl ?? "Proof preview"}
                             </div>
                             {doc.contentType ? (
                               <div className="text-xs text-muted-foreground">{doc.contentType}</div>
                             ) : null}
                           </div>
-                          {doc.proofUrl ? (
+                          {renderedProofUrl ? (
                             <a
-                              href={doc.proofUrl}
+                              href={renderedProofUrl}
                               target="_blank"
                               rel="noreferrer"
                               className="inline-flex items-center gap-1 text-sm font-medium text-ember hover:text-foreground"
@@ -312,15 +324,15 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                               {doc.proofContent.cta}
                             </div>
                           </article>
-                        ) : isImageProof(doc.contentType) && doc.proofUrl ? (
+                        ) : isImageProof(doc.contentType) && renderedProofUrl ? (
                           <img
-                            src={doc.proofUrl}
+                            src={renderedProofUrl}
                             alt={`${doc.title} proof`}
                             className="max-h-[680px] w-full object-contain bg-white"
                           />
-                        ) : canFrameProof(doc.proofUrl) ? (
+                        ) : canFrameProof(renderedProofUrl) ? (
                           <iframe
-                            src={doc.proofUrl}
+                            src={renderedProofUrl}
                             title={`${doc.title} proof`}
                             className="h-[680px] w-full bg-white"
                             sandbox=""
@@ -346,7 +358,8 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </section>
 
           <aside className="min-w-0 space-y-4">
