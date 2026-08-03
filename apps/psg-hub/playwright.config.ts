@@ -52,6 +52,12 @@ if (
 ) {
   testEnv.BSM_REVIEW_WORKSPACE_INTERNAL_ENABLED = "1";
 }
+if (!isDemoCapture && !process.env.DEMO_OPERATOR_EMAIL) {
+  testEnv.DEMO_OPERATOR_EMAIL = "ops-staff@e2e.test";
+}
+if (!isDemoCapture && !process.env.DEMO_SHOP_EMAIL) {
+  testEnv.DEMO_SHOP_EMAIL = "owner@e2e.test";
+}
 
 // Also expose the local target to the Playwright runner process itself, so
 // global.setup.ts (service-role seed) and the local-only guard see the same
