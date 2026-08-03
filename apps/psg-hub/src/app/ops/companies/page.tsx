@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
 import { NewCompanyForm } from "@/components/ops/new-company-form";
 import { filterCompaniesByWord } from "@/lib/ops/company-search";
+import { filterCleanDemoCompanies } from "@/lib/ops/demo-user-filter";
 
 type CompanyRow = {
   id: string;
@@ -47,7 +48,7 @@ export default async function CompaniesPage({ searchParams }: Props) {
     .select("id, name, phone, contact, status")
     .order("name", { ascending: true })
     .limit(500);
-  const allCompanies = (data ?? []) as CompanyRow[];
+  const allCompanies = filterCleanDemoCompanies((data ?? []) as CompanyRow[], user.email);
   const companies = filterCompaniesByWord(allCompanies, query);
 
   return (

@@ -5,6 +5,7 @@ import { listBsmContentApprovals, listBsmContentApprovalWorkspaces } from "@/lib
 import type { BsmContentApprovalListItem, BsmContentApprovalWorkspaceOption } from "@/lib/bsm/content-approvals-shared";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { filterCleanDemoShops } from "@/lib/ops/demo-user-filter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,6 +85,7 @@ export default async function BsmContentApprovalsPage({ searchParams }: BsmConte
     const requestedWorkspace = workspaces.find((workspace) => workspace.id === requestedWorkspaceId);
     const requestedWorkspaceShopId = requestedWorkspace?.shopId ?? null;
     shops = ensureShopOption(shops, requestedWorkspaceShopId ?? requestedShopId);
+    shops = filterCleanDemoShops(shops, user.email);
     activeShopId =
       shops.find((shop) => shop.id === requestedWorkspaceShopId)?.id ??
       shops.find((shop) => shop.id === requestedShopId)?.id ??

@@ -4,6 +4,25 @@ type DemoUserCandidate = {
   isDeleted?: boolean;
 };
 
+type DemoShopCandidate = {
+  name: string;
+  slug?: string | null;
+};
+
+type DemoCompanyCandidate = {
+  name: string;
+};
+
+type CleanDemoEnv = {
+  DEMO_OPERATOR_EMAIL?: string;
+  DEMO_SHOP_EMAIL?: string;
+};
+
+const CLEAN_DEMO_OPERATOR_EMAILS = ["admin@psghub.me"] as const;
+const CLEAN_DEMO_USER_EMAILS = ["admin@psghub.me", "test@psghub.me"] as const;
+const CLEAN_DEMO_SHOP_NAME = "Riverside Collision";
+const CLEAN_DEMO_SHOP_SLUG = "riverside-collision";
+
 const TEST_EMAIL_PATTERNS = [
   /^qa-test-/i,
   /^qa[-_.+]/i,
@@ -38,4 +57,80 @@ export function isInternalDemoUser(user: DemoUserCandidate) {
 
 export function filterInternalDemoUsers<T extends DemoUserCandidate>(users: T[]) {
   return users.filter((user) => !isInternalDemoUser(user));
+}
+
+function normalizeEmail(email?: string | null): string {
+  return (email ?? "").trim().toLowerCase();
+}
+
+function defaultCleanDemoEnv(): CleanDemoEnv {
+  return {
+    DEMO_OPERATOR_EMAIL: process.env.DEMO_OPERATOR_EMAIL,
+    DEMO_SHOP_EMAIL: process.env.DEMO_SHOP_EMAIL,
+  };
+}
+
+function cleanDemoOperatorEmails(env: CleanDemoEnv = defaultCleanDemoEnv()): Set<string> {
+  return new Set([
+    ...CLEAN_DEMO_OPERATOR_EMAILS,
+    normalizeEmail(env.DEMO_OPERATOR_EMAIL),
+  ]);
+}
+
+function cleanDemoUserEmails(env: CleanDemoEnv = defaultCleanDemoEnv()): Set<string> {
+  return new Set([
+    ...CLEAN_DEMO_USER_EMAILS,
+    normalizeEmail(env.DEMO_OPERATOR_EMAIL),
+    normalizeEmail(env.DEMO_SHOP_EMAIL),
+  ]);
+}
+
+export function shouldUseCleanDemoVisibility(
+  userEmail?: string | null,
+  env: CleanDemoEnv = defaultCleanDemoEnv()
+): boolean {
+  const normalizedUserEmail = normalizeEmail(userEmail);
+  return (
+    normalizedUserEmail.length > 0 &&
+    cleanDemoOperatorEmails(env).has(normalizedUserEmail)
+  );
+}
+
+export function filterCleanDemoUsers<T extends DemoUserCandidate>(
+  users: T[],
+  currentUserEmail?: string | null,
+  env: CleanDemoEnv = defaultCleanDemoEnv()
+): T[] {
+  const visible = filterInternalDemoUsers(users);
+  if (!shouldUseCleanDemoVisibility(currentUserEmail, env)) return visible;
+
+  const demoEmails = cleanDemoUserEmails(env);
+  return visible.filter((user) => demoEmails.has(normalizeEmail(user.email)));
+}
+
+export function filterCleanDemoShops<T extends DemoShopCandidate>(
+  shops: T[],
+  currentUserEmail?: string | null,
+  env: CleanDemoEnv = defaultCleanDemoEnv()
+): T[] {
+  if (!shouldUseCleanDemoVisibility(currentUserEmail, env)) return shops;
+  return shops.filter((shop) => {
+    const name = shop.name.trim().toLowerCase();
+    const slug = (shop.slug ?? "").trim().toLowerCase();
+    return (
+      name === CLEAN_DEMO_SHOP_NAME.toLowerCase() ||
+      slug === CLEAN_DEMO_SHOP_SLUG
+    );
+  });
+}
+
+export function filterCleanDemoCompanies<T extends DemoCompanyCandidate>(
+  companies: T[],
+  currentUserEmail?: string | null,
+  env: CleanDemoEnv = defaultCleanDemoEnv()
+): T[] {
+  if (!shouldUseCleanDemoVisibility(currentUserEmail, env)) return companies;
+  return companies.filter(
+    (company) => company.name.trim().toLowerCase() === CLEAN_DEMO_SHOP_NAME.toLowerCase()
+  );
 }

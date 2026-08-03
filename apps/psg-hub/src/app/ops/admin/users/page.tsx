@@ -17,7 +17,7 @@ import {
   type AdminTier,
   type ShopMemberRole,
 } from "@/lib/ops/user-management";
-import { filterInternalDemoUsers } from "@/lib/ops/demo-user-filter";
+import { filterCleanDemoShops, filterCleanDemoUsers } from "@/lib/ops/demo-user-filter";
 
 function cleanRole(role: unknown): AdminAppRole | null {
   return (ADMIN_APP_ROLES as readonly string[]).includes(role as string)
@@ -103,18 +103,21 @@ export default async function UsersAdminPage() {
     });
   }
 
-  const shops: ManagedShop[] = (shopsRaw ?? []).map((s) => {
-    const id = s.id as string;
-    const sub = subByShopId.get(id);
-    return {
-      id,
-      name: ((s.name as string | null) ?? (s.slug as string | null) ?? id).trim(),
-      slug: (s.slug as string | null) ?? null,
-      tier: sub?.tier ?? null,
-      tierLabel: sub?.tier ? ADMIN_TIER_LABELS[sub.tier] : "No subscription tier set",
-      subscriptionStatus: sub?.status ?? null,
-    };
-  });
+  const shops: ManagedShop[] = filterCleanDemoShops(
+    (shopsRaw ?? []).map((s) => {
+      const id = s.id as string;
+      const sub = subByShopId.get(id);
+      return {
+        id,
+        name: ((s.name as string | null) ?? (s.slug as string | null) ?? id).trim(),
+        slug: (s.slug as string | null) ?? null,
+        tier: sub?.tier ?? null,
+        tierLabel: sub?.tier ? ADMIN_TIER_LABELS[sub.tier] : "No subscription tier set",
+        subscriptionStatus: sub?.status ?? null,
+      };
+    }),
+    user.email
+  );
 
   const shopNameById = new Map(shops.map((s) => [s.id, s.name]));
   const membershipsByUserId = new Map<string, ManagedUser["memberships"]>();
@@ -137,7 +140,7 @@ export default async function UsersAdminPage() {
     ...(memberships ?? []).map((m) => m.user_id as string),
   ]);
 
-  const users: ManagedUser[] = filterInternalDemoUsers(
+  const users: ManagedUser[] = filterCleanDemoUsers(
     [...profileIds]
       .map((profileId) => {
         const authUser = authUsersById.get(profileId);
@@ -156,7 +159,8 @@ export default async function UsersAdminPage() {
           memberships: membershipsByUserId.get(profileId) ?? [],
         };
       })
-      .sort((a, b) => a.displayName.localeCompare(b.displayName))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    user.email
   );
 
   return (
