@@ -74,7 +74,8 @@ export function formatSyncedAt(iso: string): string {
 
 /** Short axis label for an ISO date ("Jun 4") — fixed locale + UTC. */
 export function formatShortDate(isoDate: string): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
+  const datePart = isoDate.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? isoDate;
+  const d = new Date(`${datePart}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return isoDate;
   return d.toLocaleDateString("en-US", {
     month: "short",
