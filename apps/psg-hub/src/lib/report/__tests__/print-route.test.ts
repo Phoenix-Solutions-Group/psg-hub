@@ -7,6 +7,8 @@ import {
 import { getMonthlySnapshot, getSnapshots } from "@/lib/analytics/snapshots";
 import { loadReportNarrative } from "@/lib/report/storage";
 import { getReviewSentimentSummary } from "@/lib/reviews/sentiment-summary";
+import { getDirectMailMetrics } from "@/lib/analytics/direct-mail";
+import { getLatestLocalFalconSnapshot } from "@/lib/local-falcon/store";
 
 // 12-05c wiring guard — the print (PDF) path must bind BOTH monthly readers so the
 // GA4 dimensional sections + the Website-performance block reach the report. These
@@ -34,6 +36,12 @@ vi.mock("@/lib/reviews/sentiment-summary", () => ({
     avgConfidence: null,
     topThemes: [],
   })),
+}));
+vi.mock("@/lib/analytics/direct-mail", () => ({
+  getDirectMailMetrics: vi.fn(async () => null),
+}));
+vi.mock("@/lib/local-falcon/store", () => ({
+  getLatestLocalFalconSnapshot: vi.fn(async () => null),
 }));
 
 // AC-1 auth + slug clauses for the INTERNAL print route. The route renders ANY
@@ -87,6 +95,8 @@ describe("print defaultLoader wires the monthly readers (12-05c)", () => {
   beforeEach(() => {
     vi.mocked(getMonthlySnapshot).mockClear();
     vi.mocked(getSnapshots).mockClear();
+    vi.mocked(getDirectMailMetrics).mockClear();
+    vi.mocked(getLatestLocalFalconSnapshot).mockClear();
     vi.mocked(loadReportNarrative).mockResolvedValue({ headline: "h" } as never);
   });
 
@@ -105,6 +115,12 @@ describe("print defaultLoader wires the monthly readers (12-05c)", () => {
     expect(getReviewSentimentSummary).toHaveBeenCalledWith(expect.anything(), {
       shopId,
       month: "2026-05",
+    });
+    expect(getDirectMailMetrics).toHaveBeenCalledWith({
+      authorizedShopIds: [shopId],
+      from: "2026-05-01",
+      to: "2026-05-31",
+      client: expect.anything(),
     });
     // and for the correct month (date = {month}-01 happens inside the reader)
     for (const call of vi.mocked(getMonthlySnapshot).mock.calls) {

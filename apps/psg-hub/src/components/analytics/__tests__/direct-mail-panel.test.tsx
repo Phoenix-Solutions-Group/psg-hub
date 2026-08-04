@@ -80,6 +80,16 @@ describe("DirectMailPanel", () => {
           outcomes: 9,
           outcomeRate: 0.3,
         },
+        monthlyTrend: [
+          {
+            month: "2026-07",
+            mailed: 42,
+            outcomes: null,
+            outcomeRate: null,
+            message:
+              "Mined outcomes are available as an overall shop result; month-by-month outcomes need month-scoped mining.",
+          },
+        ],
         lastUpdatedAt: "2026-07-11T00:00:00Z",
         message: null,
       },
@@ -112,6 +122,9 @@ describe("DirectMailPanel", () => {
     expect(html).toContain("Response signal rate");
     expect(html).toContain("Best-performing letter");
     expect(html).toContain("Letters by campaign type");
+    expect(html).toContain("Monthly mail-result trend");
+    expect(html).toContain("Jul 2026");
+    expect(html).toContain("Results pending");
     expect(html).toContain("Households reached");
     expect(html).toContain("31");
     expect(html).toContain("Thank-you, warranty, and survey notice (A)");

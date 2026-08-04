@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
+import letterLibrary from "../../../../../docs/ops/mail/letter-library.json";
 
 const MIN_RESULT_SENDS = 25;
 
@@ -14,23 +15,26 @@ const SENT_PRODUCTION_STATUSES = [
   "returned_to_sender",
 ] as const;
 
-const PIECE_LABELS: Record<string, string> = {
-  t: "Total-loss thank-you",
-  "04": "Thank-you and warranty",
-  "04b": "Thank-you and warranty, variant B",
-  "07": "Thank-you, warranty, and survey notice",
-  "10": "Survey reminder",
-  "10b": "Survey thank-you and referral ask",
-  "12": "Driver's license renewal reminder",
-  "13": "Birthday greeting",
-  "14": "Follow-up letter",
-  "15": "Follow-up letter",
-  "16": "Follow-up letter",
-  b: "Birthday greeting",
+const FALLBACK_PIECE_LABELS: Record<string, string> = {
   postcard: "Postcard",
   letter: "Letter",
   self_mailer: "Self-mailer",
 };
+
+type LetterLibraryPiece = {
+  piece_code?: string;
+  name?: string;
+};
+
+const PIECE_LABELS: Record<string, string> = Object.fromEntries(
+  ((letterLibrary as { pieces?: LetterLibraryPiece[] }).pieces ?? []).flatMap(
+    (piece): Array<[string, string]> => {
+      const code = piece.piece_code?.trim();
+      const name = piece.name?.trim();
+      return code && name ? [[code, name]] : [];
+    }
+  )
+);
 
 type CompanyRow = {
   id: string;
@@ -115,7 +119,16 @@ export type DirectMailResults = {
   responsesOrOutcomes: number;
   responseRate: number | null;
   bestPerformingPiece: DirectMailPieceSummary | null;
+  monthlyTrend: DirectMailMonthlyResultTrendPoint[];
   lastUpdatedAt: string | null;
+  message: string | null;
+};
+
+export type DirectMailMonthlyResultTrendPoint = {
+  month: string;
+  mailed: number;
+  outcomes: number | null;
+  outcomeRate: number | null;
   message: string | null;
 };
 
@@ -201,6 +214,7 @@ export const EMPTY_DIRECT_MAIL_METRICS: DirectMailMetrics = {
     responsesOrOutcomes: 0,
     responseRate: null,
     bestPerformingPiece: null,
+    monthlyTrend: [],
     lastUpdatedAt: null,
     message: "Direct-mail results are not available yet.",
   },
@@ -339,6 +353,11 @@ export function summarizeDirectMailMetrics({
     repairOrderAmountRows,
     companyProgramAmountRows,
   });
+  const monthlyTrend = summarizeMonthlyResultTrend({
+    sentEvents,
+    resultStatus,
+    priorRows,
+  });
 
   const metrics: DirectMailMetrics = {
     shopIds: [...new Set(shopIds)],
@@ -373,6 +392,7 @@ export function summarizeDirectMailMetrics({
       responsesOrOutcomes: resultStatus === "ready" ? totalOutcomes : 0,
       responseRate,
       bestPerformingPiece: bestPiece,
+      monthlyTrend,
       lastUpdatedAt: resultStatus === "ready" ? latestPriorUpdate : null,
       message: resultMessage(resultStatus, totalPriorSent),
     },
@@ -671,12 +691,46 @@ function bySentThenPiece(a: DirectMailPieceSummary, b: DirectMailPieceSummary): 
 function newPiece(pieceCode: string, variant: string | null): DirectMailPieceSummary {
   return {
     pieceCode,
-    label: PIECE_LABELS[pieceCode] ?? `Piece ${pieceCode}`,
+    label: PIECE_LABELS[pieceCode] ?? FALLBACK_PIECE_LABELS[pieceCode] ?? `Piece ${pieceCode}`,
     variant,
     sent: 0,
     outcomes: 0,
     outcomeRate: null,
   };
+}
+
+function summarizeMonthlyResultTrend({
+  sentEvents,
+  resultStatus,
+  priorRows,
+}: {
+  sentEvents: SentEvent[];
+  resultStatus: DirectMailResultStatus;
+  priorRows: PriorRow[];
+}): DirectMailMonthlyResultTrendPoint[] {
+  const byMonth = new Map<string, number>();
+  for (const event of sentEvents) {
+    const month = event.sentDate.slice(0, 7);
+    byMonth.set(month, (byMonth.get(month) ?? 0) + 1);
+  }
+
+  const message =
+    priorRows.length === 0
+      ? "Monthly results are waiting on mined outcome history."
+      : resultStatus === "ready"
+        ? "Mined outcomes are available as an overall shop result; month-by-month outcomes need month-scoped mining."
+        : "Monthly results are waiting on a larger mined outcome sample.";
+
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .slice(0, 12)
+    .map(([month, mailed]) => ({
+      month,
+      mailed,
+      outcomes: null,
+      outcomeRate: null,
+      message,
+    }));
 }
 
 function pieceKey(pieceCode: string, variant: string | null): string {

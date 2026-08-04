@@ -220,7 +220,7 @@ describe("renderReportHtml", () => {
             piecesByType: [
               {
                 pieceCode: "07",
-                label: "Thank-you, warranty, and survey notice",
+                label: "Thank-You + Warranty + Survey Notice (full mailing)",
                 variant: "A",
                 sent: 30,
                 outcomes: 9,
@@ -237,12 +237,22 @@ describe("renderReportHtml", () => {
             responseRate: 0.3,
             bestPerformingPiece: {
               pieceCode: "07",
-              label: "Thank-you, warranty, and survey notice",
+              label: "Thank-You + Warranty + Survey Notice (full mailing)",
               variant: "A",
               sent: 30,
               outcomes: 9,
               outcomeRate: 0.3,
             },
+            monthlyTrend: [
+              {
+                month: "2026-05",
+                mailed: 42,
+                outcomes: null,
+                outcomeRate: null,
+                message:
+                  "Mined outcomes are available as an overall shop result; month-by-month outcomes need month-scoped mining.",
+              },
+            ],
             lastUpdatedAt: "2026-05-20T00:00:00Z",
             message: null,
           },
@@ -277,7 +287,10 @@ describe("renderReportHtml", () => {
     expect(html).toContain("Letters mailed");
     expect(html).toContain("42");
     expect(html).toContain("Households reached");
-    expect(html).toContain("Thank-you, warranty, and survey notice (A)");
+    expect(html).toContain("Thank-You + Warranty + Survey Notice (full mailing) (A)");
+    expect(html).toContain("Monthly mail-result trend");
+    expect(html).toContain("May 2026");
+    expect(html).toContain("Results pending");
     expect(html).toContain("30.0%");
     expect(html).not.toMatch(/street|phone|email|household key|recipient row/i);
   });

@@ -666,6 +666,19 @@ function renderDirectMailBlock(directMail: DirectMailMetrics): string {
         `<li>${escapeHtml(formatShortDate(day.date))}: ${formatNumber(day.sent)} mailed</li>`
     )
     .join("");
+  const monthlyTrend = directMail.results.monthlyTrend
+    .slice(0, 6)
+    .map(
+      (month) =>
+        `<tr><td>${escapeHtml(formatReportMonth(month.month))}</td>` +
+        `<td class="now">${formatNumber(month.mailed)}</td>` +
+        `<td class="tgt">${
+          month.outcomeRate === null
+            ? "Results pending"
+            : `${(month.outcomeRate * 100).toFixed(1)}%`
+        }</td></tr>`
+    )
+    .join("");
   const resultNote = directMail.results.message
     ? `<p class="src">${escapeHtml(directMail.results.message)}</p>`
     : directMail.results.bestPerformingPiece
@@ -681,6 +694,9 @@ function renderDirectMailBlock(directMail: DirectMailMetrics): string {
     (pieceRows
       ? `<table class="psg"><thead><tr><th>Piece</th><th>Mailed</th><th>Outcomes</th></tr></thead><tbody>${pieceRows}</tbody></table>`
       : "") +
+    (monthlyTrend
+      ? `<h3>Monthly mail-result trend</h3><table class="psg"><thead><tr><th>Month</th><th>Mailed</th><th>Result rate</th></tr></thead><tbody>${monthlyTrend}</tbody></table>`
+      : "") +
     (recent ? `<ul class="takeaways">${recent}</ul>` : "") +
     resultNote +
     `</section>`
@@ -689,6 +705,16 @@ function renderDirectMailBlock(directMail: DirectMailMetrics): string {
 
 function formatDirectMailPiece(piece: DirectMailPieceSummary): string {
   return piece.variant ? `${piece.label} (${piece.variant})` : piece.label;
+}
+
+function formatReportMonth(value: string): string {
+  const [year, month] = value.split("-");
+  if (!year || !month) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${year}-${month}-01T00:00:00Z`));
 }
 
 /**

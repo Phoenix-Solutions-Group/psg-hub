@@ -179,6 +179,7 @@ describe("assembleReportData", () => {
           responsesOrOutcomes: 0,
           responseRate: null,
           bestPerformingPiece: null,
+          monthlyTrend: [],
           lastUpdatedAt: null,
           message: "Direct-mail results are waiting on shop-scoped mined send-history outcomes.",
         },
