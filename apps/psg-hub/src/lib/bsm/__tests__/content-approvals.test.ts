@@ -149,6 +149,7 @@ class ChainSelect {
       existingItemProjectId?: string | null;
       existingReviewers?: Array<Record<string, unknown>>;
       missingSchemaCacheColumns?: Map<string, string[]>;
+      projectStatus?: string;
       roundStatus?: string;
     } = {},
     private selectedColumns = "",
@@ -184,7 +185,7 @@ class ChainSelect {
           id: PROJECT_ID,
           shop_id: SHOP_ID,
           title: "July customer review",
-          status: "active",
+          status: this.options.projectStatus ?? "ready",
           current_round_id: ROUND_ID,
           deleted_at: null,
         },
@@ -288,6 +289,7 @@ function createWorkspaceFakeClient(options: {
   existingItemProjectId?: string | null;
   existingReviewers?: Array<Record<string, unknown>>;
   missingSchemaCacheColumnsByTable?: Record<string, string[]>;
+  projectStatus?: string;
   roundStatus?: string;
 } = {}) {
   const inserts: Array<{ table: string; payload: Record<string, unknown> | Array<Record<string, unknown>> }> = [];
@@ -361,7 +363,7 @@ class WorkspaceListSelect {
             id: PROJECT_ID,
             shop_id: SHOP_ID,
             title: "Production upload retest",
-            status: "active",
+            status: "ready",
             current_round_id: ROUND_ID,
           },
         ],
@@ -437,7 +439,7 @@ describe("BSM content approval upload helpers", () => {
     );
   });
 
-  it("lists active shop workspaces for authorized staff without requiring collaborator rows", async () => {
+  it("lists document-mutable shop workspaces for authorized staff without requiring collaborator rows", async () => {
     const { client, selectedTables } = createWorkspaceListFakeClient();
 
     const result = await listBsmContentApprovalWorkspaces(client as never, {
@@ -450,7 +452,7 @@ describe("BSM content approval upload helpers", () => {
         id: PROJECT_ID,
         shopId: SHOP_ID,
         title: "Production upload retest",
-        status: "active",
+        status: "ready",
         currentRoundId: ROUND_ID,
         documentCount: 2,
       },
@@ -624,8 +626,8 @@ describe("BSM content approval upload helpers", () => {
     expect(createSignedUploadUrl).toHaveBeenCalledOnce();
   });
 
-  it("queues uploaded workspace documents for the next round once the current round is active", async () => {
-    const { client, inserts } = createWorkspaceFakeClient({ roundStatus: "active" });
+  it("blocks uploaded workspace documents once the review has started", async () => {
+    const { client, inserts } = createWorkspaceFakeClient({ projectStatus: "active", roundStatus: "active" });
     const createSignedUploadUrl = vi.fn(async (path: string) => ({
       data: { path, signedUrl: "https://upload.example", token: "token-queued" },
       error: null,
@@ -634,29 +636,46 @@ describe("BSM content approval upload helpers", () => {
       from: vi.fn(() => ({ createSignedUploadUrl })),
     };
 
-    const result = await createBsmContentApprovalUpload(
-      {
-        shopId: SHOP_ID,
-        customerProfileId: PROFILE_ID,
-        reviewWorkspaceProjectId: PROJECT_ID,
-        actorProfileId: ACTOR_ID,
-        title: "Late homepage proof",
-        contextNote: "This should wait for the next round.",
-        fileName: "late-proof.pdf",
-        contentType: "application/pdf",
-        byteSize: 2048,
-      },
-      { client: client as never, storage },
-    );
+    await expect(
+      createBsmContentApprovalUpload(
+        {
+          shopId: SHOP_ID,
+          customerProfileId: PROFILE_ID,
+          reviewWorkspaceProjectId: PROJECT_ID,
+          actorProfileId: ACTOR_ID,
+          title: "Late homepage proof",
+          contextNote: "This should wait for the next round.",
+          fileName: "late-proof.pdf",
+          contentType: "application/pdf",
+          byteSize: 2048,
+        },
+        { client: client as never, storage },
+      ),
+    ).rejects.toThrow("This Review Workspace has already been started or closed");
 
-    expect(result.item.status).toBe("draft");
-    expect(inserts.find((entry) => entry.table === "bsm_content_review_round_documents")).toBeUndefined();
-    expect(inserts.find((entry) => entry.table === "bsm_content_review_reviewers")).toBeUndefined();
-    expect(inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload).toMatchObject({
-      project_id: PROJECT_ID,
-      round_id: null,
-      introduced_by_round_id: null,
+    expect(inserts).toEqual([]);
+    expect(createSignedUploadUrl).not.toHaveBeenCalled();
+  });
+
+  it("blocks attaching existing library items to closed Review Workspaces", async () => {
+    const { client, inserts, updates } = createWorkspaceFakeClient({
+      existingItemProjectId: null,
+      projectStatus: "completed",
     });
+
+    await expect(
+      attachBsmContentApprovalToWorkspace(
+        {
+          itemId: ITEM_ID,
+          reviewWorkspaceProjectId: PROJECT_ID,
+          actorProfileId: ACTOR_ID,
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("This Review Workspace has already been started or closed");
+
+    expect(inserts).toEqual([]);
+    expect(updates).toEqual([]);
   });
 
   it("allows a super admin to upload into a Review Workspace without being a collaborator", async () => {

@@ -31,6 +31,8 @@ type ReviewWorkspaceAttachmentTarget = {
   includeInCurrentRound: boolean;
 };
 
+const REVIEW_WORKSPACE_DOCUMENT_MUTABLE_STATUSES = new Set(["draft", "processing", "ready"]);
+
 export type ContentApprovalStorage = {
   from(bucket: string): {
     createSignedUploadUrl(path: string): Promise<{
@@ -273,6 +275,10 @@ async function loadReviewWorkspaceForAttachment(
   if (projectError) throw new Error(`Could not load review workspace: ${projectError.message}`);
   if (!project || project.deleted_at) {
     throw new ApprovalUploadInputError("Choose an active Review Workspace for this shop");
+  }
+  const projectStatus = (project.status as string | null) ?? "";
+  if (!REVIEW_WORKSPACE_DOCUMENT_MUTABLE_STATUSES.has(projectStatus)) {
+    throw new ApprovalUploadInputError("This Review Workspace has already been started or closed");
   }
   const currentRoundId = (project.current_round_id as string | null) ?? null;
   const { data: round, error: roundError } = currentRoundId
@@ -1216,7 +1222,7 @@ export async function listBsmContentApprovalWorkspaces(
     .from("bsm_content_review_projects")
     .select("id, shop_id, title, status, current_round_id")
     .is("deleted_at", null)
-    .in("status", ["draft", "processing", "ready", "active", "completed"])
+    .in("status", [...REVIEW_WORKSPACE_DOCUMENT_MUTABLE_STATUSES])
     .order("updated_at", { ascending: false })
     .limit(100);
   if (opts.shopId) query = query.eq("shop_id", opts.shopId);
