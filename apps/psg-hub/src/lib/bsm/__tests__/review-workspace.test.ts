@@ -16,6 +16,7 @@ import {
   removeReviewWorkspaceProject,
   reopenGuestReviewRound,
   submitGuestReviewRound,
+  updateReviewWorkspaceProject,
 } from "@/lib/bsm/review-workspace";
 
 const SHOP_ID = "11111111-1111-4111-8111-111111111111";
@@ -587,6 +588,64 @@ describe("BSM review workspace foundation service", () => {
         payload: expect.objectContaining({ event_type: "review_workspace_project_removed" }),
       }),
     ]));
+  });
+
+  it("updates a review workspace for superadmins and records an event", async () => {
+    const { client, updates, inserts } = createFakeClient({ collaborator: false });
+
+    await expect(
+      updateReviewWorkspaceProject(
+        {
+          projectId: PROJECT_ID,
+          actorProfileId: ACTOR_ID,
+          actorRole: "psg_superadmin",
+          title: "Updated website review",
+          description: "Check the revised proof package.",
+        },
+        { client: client as never, now: new Date("2026-07-28T20:30:00.000Z") },
+      ),
+    ).resolves.toMatchObject({
+      id: PROJECT_ID,
+      shopId: SHOP_ID,
+      title: "Updated website review",
+      status: "active",
+    });
+
+    expect(updates).toContainEqual(expect.objectContaining({
+      table: "bsm_content_review_projects",
+      payload: expect.objectContaining({
+        title: "Updated website review",
+        description: "Check the revised proof package.",
+        updated_at: "2026-07-28T20:30:00.000Z",
+      }),
+      filters: { id: PROJECT_ID },
+    }));
+    expect(inserts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        table: "bsm_content_review_events",
+        payload: expect.objectContaining({
+          event_type: "review_workspace_project_updated",
+          actor_profile_id: ACTOR_ID,
+        }),
+      }),
+    ]));
+  });
+
+  it("blocks review workspace edits for non-superadmin staff", async () => {
+    const { client, updates } = createFakeClient();
+
+    await expect(
+      updateReviewWorkspaceProject(
+        {
+          projectId: PROJECT_ID,
+          actorProfileId: ACTOR_ID,
+          actorRole: "psg_internal",
+          title: "Updated website review",
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("Only a superadmin can edit review workspaces");
+    expect(updates).toEqual([]);
   });
 
   it("uses idempotency keys for processing jobs and deletion tombstones", async () => {

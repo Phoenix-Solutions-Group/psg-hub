@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { BSM_CONTENT_APPROVALS_BUCKET } from "@/lib/bsm/content-approvals-shared";
 import { createServiceClient } from "@/lib/supabase/service";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -14,6 +15,7 @@ type ReviewWorkspaceStorageClient = ReviewWorkspaceDbClient & {
         path: string,
         expiresIn: number,
       ): Promise<{ data: { signedUrl: string } | null; error: { message: string } | null }>;
+      download(path: string): Promise<{ data: Blob | null; error: { message: string } | null }>;
     };
   };
 };
@@ -56,6 +58,14 @@ export type CreateReviewWorkspaceProjectInput = {
   description?: string | null;
   actorProfileId: string;
   metadata?: Record<string, unknown> | null;
+};
+
+export type UpdateReviewWorkspaceProjectInput = {
+  projectId: string;
+  title: string;
+  description?: string | null;
+  actorProfileId: string;
+  actorRole: ReviewWorkspaceActorRole;
 };
 
 export type ReviewWorkspaceReviewerContactInput = {
@@ -203,6 +213,13 @@ export type CloseReviewWorkspaceRoundEarlyInput = {
   actorProfileId: string;
   actorRole?: ReviewWorkspaceActorRole;
   reason: string;
+};
+
+export type GuestReviewWorkspaceFileDownload = {
+  data: Blob;
+  originalFilename: string;
+  contentType: string;
+  byteSize: number;
 };
 
 export type ReviewWorkspaceProofContent = {
@@ -456,6 +473,58 @@ export async function createReviewWorkspaceProject(
   }
 
   return { id: projectId, shopId, title, status: "draft", ownerProfileId: actorProfileId };
+}
+
+export async function updateReviewWorkspaceProject(
+  input: UpdateReviewWorkspaceProjectInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+): Promise<ReviewWorkspaceProject> {
+  if (!isSuperadminRole(input.actorRole)) {
+    throw new ReviewWorkspaceInputError(403, "Only a superadmin can edit review workspaces");
+  }
+
+  const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
+  const title = cleanText("title", input.title, 180);
+  const description = cleanOptionalText("description", input.description, 4000);
+  const client = resolveClient(deps.client);
+  const now = (deps.now ?? new Date()).toISOString();
+  const access = await requireReviewWorkspaceStaffAccess(client, input.projectId, actorProfileId, input.actorRole);
+
+  const { data: projectRow, error: projectError } = await client
+    .from("bsm_content_review_projects")
+    .select("id, shop_id, status, owner_profile_id")
+    .eq("id", access.projectId)
+    .single();
+  if (projectError || !projectRow) {
+    throw new Error(`Could not load review workspace project: ${projectError?.message ?? "not found"}`);
+  }
+
+  const project = projectRow as Record<string, unknown>;
+  const { error: updateError } = await client
+    .from("bsm_content_review_projects")
+    .update({
+      title,
+      description,
+      updated_at: now,
+    })
+    .eq("id", access.projectId);
+  if (updateError) throw new Error(`Could not update review workspace project: ${updateError.message}`);
+
+  await insertEvent(client, {
+    shop_id: access.shopId,
+    review_item_id: null,
+    event_type: "review_workspace_project_updated",
+    actor_profile_id: actorProfileId,
+    payload_jsonb: { projectId: access.projectId, title },
+  });
+
+  return {
+    id: access.projectId,
+    shopId: access.shopId,
+    title,
+    status: (project.status as string | null) ?? access.status,
+    ownerProfileId: (project.owner_profile_id as string | null) ?? actorProfileId,
+  };
 }
 
 export async function startReviewWorkspaceRound(
@@ -1552,6 +1621,71 @@ export async function getGuestReviewWorkspace(
       message: (row.message as string | null) ?? null,
       submittedAt: (row.submitted_at as string | null) ?? null,
     })),
+  };
+}
+
+export async function getGuestReviewWorkspaceFileDownload(
+  input: { sessionHash: string; reviewItemId: string; versionId: string },
+  deps: { client?: ReviewWorkspaceDbClient } = {},
+): Promise<GuestReviewWorkspaceFileDownload> {
+  const client = resolveClient(deps.client);
+  const access = await requireGuestReviewSession(client, input.sessionHash);
+  const reviewItemId = assertUuid("reviewItemId", input.reviewItemId);
+  const versionId = assertUuid("versionId", input.versionId);
+  await requireRoundDocumentAccess(client, access, reviewItemId, versionId);
+
+  const { data: version, error } = await client
+    .from("bsm_content_review_versions")
+    .select(`
+      id,
+      original_filename,
+      content_type,
+      byte_size,
+      storage_bucket,
+      storage_path,
+      processed_storage_bucket,
+      processed_storage_path,
+      processed_content_type
+    `)
+    .eq("id", versionId)
+    .eq("review_item_id", reviewItemId)
+    .eq("shop_id", access.shopId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not load review document file: ${error.message}`);
+  if (!version) throw new ReviewWorkspaceInputError(404, "Review document file not found");
+
+  const row = version as Record<string, unknown>;
+  const processedBucket = typeof row.processed_storage_bucket === "string" && row.processed_storage_bucket.trim()
+    ? row.processed_storage_bucket
+    : null;
+  const processedPath = typeof row.processed_storage_path === "string" && row.processed_storage_path.trim()
+    ? row.processed_storage_path
+    : null;
+  const storageBucket = typeof row.storage_bucket === "string" && row.storage_bucket.trim()
+    ? row.storage_bucket
+    : null;
+  const storagePath = typeof row.storage_path === "string" && row.storage_path.trim()
+    ? row.storage_path
+    : null;
+  const bucket = processedBucket ?? storageBucket;
+  const path = processedPath ?? storagePath;
+  if (bucket !== BSM_CONTENT_APPROVALS_BUCKET || !path) {
+    throw new ReviewWorkspaceInputError(404, "Review document file not found");
+  }
+
+  const storage = (client as ReviewWorkspaceStorageClient).storage;
+  if (!storage) throw new Error("Review workspace file storage is not configured");
+  const { data, error: downloadError } = await storage.from(BSM_CONTENT_APPROVALS_BUCKET).download(path);
+  if (downloadError || !data) throw new ReviewWorkspaceInputError(404, "Review document file not found");
+
+  return {
+    data,
+    originalFilename: (row.original_filename as string | null) ?? "review-file",
+    contentType:
+      (processedPath ? (row.processed_content_type as string | null) : null) ??
+      (row.content_type as string | null) ??
+      "application/octet-stream",
+    byteSize: data.size || (row.byte_size as number | null) || 0,
   };
 }
 
