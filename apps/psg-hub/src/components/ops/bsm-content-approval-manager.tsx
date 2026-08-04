@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, FilePenLine, FileUp, Link, Play, RefreshCw, Trash2, UserPlus } from "lucide-react";
+import { ExternalLink, Eye, FilePenLine, FileText, FileUp, ImageIcon, Link, Monitor, Play, RefreshCw, Trash2, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -63,7 +63,7 @@ type WorkspacePreviewResponse =
   | {
       result: {
         project: { id: string; title: string; status: string };
-        documents: Array<{ itemId: string; title: string; processingStatus: string; status: string; proofUrl: string | null }>;
+        documents: WorkspacePreviewDocument[];
       };
     }
   | { error?: string };
@@ -71,6 +71,27 @@ type WorkspacePreviewResponse =
 type WorkspaceUpdateResponse =
   | { workspace: { id: string; shopId: string; title: string; status: string } }
   | { error?: string };
+
+export type WorkspacePreviewDocument = {
+  itemId: string;
+  versionId: string | null;
+  title: string;
+  processingStatus: string;
+  status: string;
+  originalFilename: string | null;
+  contentType: string | null;
+  previewUrl: string | null;
+  generatedPagePath: string | null;
+  proofUrl: string | null;
+  proofContent: {
+    eyebrow: string;
+    headline: string;
+    body: string;
+    bullets: string[];
+    cta: string;
+    sourceUrl: string | null;
+  } | null;
+};
 
 export function getBsmReviewWorkspaceStartBlocker(input: {
   workspaceId: string;
@@ -104,6 +125,193 @@ export function getBsmContentApprovalStorageContentType(selectedFile: File) {
     return "text/plain";
   }
   return normalizedContentType ?? selectedFile.type;
+}
+
+function isPreviewImageProof(document: WorkspacePreviewDocument): boolean {
+  return Boolean(document.contentType?.startsWith("image/"));
+}
+
+function isPreviewPdfProof(document: WorkspacePreviewDocument): boolean {
+  return document.contentType === "application/pdf";
+}
+
+function isPreviewHtmlProof(document: WorkspacePreviewDocument): boolean {
+  const filename = document.originalFilename?.trim().toLowerCase() ?? "";
+  return document.contentType === "text/html" || filename.endsWith(".html") || filename.endsWith(".htm");
+}
+
+function isPreviewGeneratedPageProof(document: WorkspacePreviewDocument): boolean {
+  return document.contentType === "generated_page" || Boolean(document.generatedPagePath);
+}
+
+function canFramePreviewProof(url: string | null): url is string {
+  if (!url) return false;
+  if (url.startsWith("/")) return true;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+export function workspacePreviewDocumentKindLabel(document: WorkspacePreviewDocument): string {
+  if (isPreviewGeneratedPageProof(document)) return "Generated page";
+  if (isPreviewPdfProof(document)) return "PDF";
+  if (isPreviewHtmlProof(document)) return "Website proof";
+  if (document.proofContent) return "Page proof";
+  if (isPreviewImageProof(document)) return "Image";
+  return document.contentType ?? "Proof";
+}
+
+function workspacePreviewDocumentKey(document: WorkspacePreviewDocument): string {
+  return `${document.itemId}:${document.versionId ?? "draft"}`;
+}
+
+function workspacePreviewDocumentUrl(document: WorkspacePreviewDocument): string | null {
+  if (isPreviewGeneratedPageProof(document)) {
+    return document.previewUrl ?? (document.proofUrl && document.proofUrl !== document.generatedPagePath ? document.proofUrl : null);
+  }
+  return document.previewUrl ?? document.proofUrl;
+}
+
+function workspacePreviewDocumentIcon(document: WorkspacePreviewDocument, selected: boolean) {
+  const className = cn("size-4 shrink-0", selected ? "text-white" : "text-ember");
+  if (isPreviewImageProof(document)) return <ImageIcon className={className} aria-hidden="true" />;
+  if (isPreviewGeneratedPageProof(document) || document.proofContent) return <Monitor className={className} aria-hidden="true" />;
+  return <FileText className={className} aria-hidden="true" />;
+}
+
+export function WorkspacePreviewProof({
+  document,
+}: {
+  document: WorkspacePreviewDocument;
+}) {
+  const proofUrl = workspacePreviewDocumentUrl(document);
+  const canFrame = canFramePreviewProof(proofUrl);
+
+  return (
+    <div className="overflow-hidden rounded-md border border-border bg-background">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium">
+            {document.originalFilename ?? proofUrl ?? document.generatedPagePath ?? "Proof preview"}
+          </div>
+          <div className="text-xs text-muted-foreground">{workspacePreviewDocumentKindLabel(document)}</div>
+        </div>
+        {proofUrl ? (
+          <a
+            href={proofUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-medium text-ember hover:text-foreground"
+          >
+            <ExternalLink className="size-4" aria-hidden="true" />
+            Open proof
+          </a>
+        ) : null}
+      </div>
+      {document.proofContent ? (
+        <article className="bg-white p-5 text-foreground sm:p-8">
+          <div className="text-xs font-semibold uppercase text-ember">{document.proofContent.eyebrow}</div>
+          <h4 className="mt-2 font-heading text-2xl font-semibold">{document.proofContent.headline}</h4>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{document.proofContent.body}</p>
+          {document.proofContent.bullets.length ? (
+            <ul className="mt-4 space-y-2 text-sm">
+              {document.proofContent.bullets.map((bullet) => (
+                <li key={bullet} className="flex gap-2">
+                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-ember" aria-hidden="true" />
+                  <span>{bullet}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <div className="mt-5 inline-flex rounded-md bg-ember px-3 py-2 text-sm font-medium text-white">
+            {document.proofContent.cta}
+          </div>
+        </article>
+      ) : isPreviewImageProof(document) && proofUrl ? (
+        <img src={proofUrl} alt={`${document.title} proof`} className="max-h-[640px] w-full bg-white object-contain" />
+      ) : (isPreviewPdfProof(document) || isPreviewHtmlProof(document) || isPreviewGeneratedPageProof(document)) && canFrame ? (
+        <iframe
+          src={proofUrl}
+          title={`${document.title} proof`}
+          className="h-[640px] w-full bg-white"
+          sandbox={isPreviewGeneratedPageProof(document) ? "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox" : undefined}
+        />
+      ) : canFrame ? (
+        <iframe src={proofUrl} title={`${document.title} proof`} className="h-[640px] w-full bg-white" />
+      ) : (
+        <div className="p-4 text-sm text-muted-foreground">
+          This proof does not have a working preview yet. Attach the rendered page, PDF, or image file before starting review.
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function WorkspacePreviewScreen({
+  documents,
+  selectedDocumentKey,
+  onSelectDocument,
+}: {
+  documents: WorkspacePreviewDocument[];
+  selectedDocumentKey: string | null;
+  onSelectDocument: (key: string) => void;
+}) {
+  const selectedDocument =
+    documents.find((document) => workspacePreviewDocumentKey(document) === selectedDocumentKey) ??
+    documents[0] ??
+    null;
+
+  if (!selectedDocument) return null;
+
+  return (
+    <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[minmax(220px,300px)_minmax(0,1fr)]">
+      <div className="space-y-2">
+        {documents.map((document, index) => {
+          const key = workspacePreviewDocumentKey(document);
+          const selected = key === workspacePreviewDocumentKey(selectedDocument);
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onSelectDocument(key)}
+              className={cn(
+                "w-full rounded-md border p-3 text-left transition-colors",
+                selected
+                  ? "border-[#142838] bg-[#142838] text-white shadow-sm"
+                  : "border-border bg-background hover:border-primary/50",
+              )}
+              aria-pressed={selected}
+            >
+              <div className="flex items-start gap-2">
+                {workspacePreviewDocumentIcon(document, selected)}
+                <div className="min-w-0">
+                  <div className={cn("text-xs", selected ? "text-white" : "text-muted-foreground")}>
+                    Screen {index + 1}
+                  </div>
+                  <div className="mt-1 line-clamp-2 text-sm font-medium">{document.title}</div>
+                  <div className={cn("mt-2 text-xs capitalize", selected ? "text-white" : "text-muted-foreground")}>
+                    {workspacePreviewDocumentKindLabel(document)} · {document.processingStatus.replaceAll("_", " ")}
+                  </div>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <div className="min-w-0 space-y-3">
+        <div>
+          <div className="font-medium">{selectedDocument.title}</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {selectedDocument.processingStatus.replaceAll("_", " ")} · {selectedDocument.status.replaceAll("_", " ")}
+          </div>
+        </div>
+        <WorkspacePreviewProof document={selectedDocument} />
+      </div>
+    </div>
+  );
 }
 
 export function getBsmContentApprovalsSelectionUrl(
@@ -230,6 +438,7 @@ export function BsmContentApprovalManager({
   const [startedReview, setStartedReview] = useState<Extract<ReviewStartResponse, { review: unknown }>["review"] | null>(null);
   const [previewingWorkspace, setPreviewingWorkspace] = useState(false);
   const [workspacePreview, setWorkspacePreview] = useState<Extract<WorkspacePreviewResponse, { result: unknown }>["result"] | null>(null);
+  const [selectedPreviewDocumentKey, setSelectedPreviewDocumentKey] = useState<string | null>(null);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [workspaceEditTitle, setWorkspaceEditTitle] = useState("");
   const [workspaceEditInstructions, setWorkspaceEditInstructions] = useState("");
@@ -322,6 +531,9 @@ export function BsmContentApprovalManager({
         throw new Error("error" in body && body.error ? body.error : "The Review Workspace preview could not be loaded.");
       }
       setWorkspacePreview(body.result);
+      setSelectedPreviewDocumentKey(
+        body.result.documents[0] ? workspacePreviewDocumentKey(body.result.documents[0]) : null,
+      );
     } catch (error) {
       setPhase({
         kind: "error",
@@ -478,6 +690,7 @@ export function BsmContentApprovalManager({
       setReviewWorkspaceProjectId("");
       setEditingWorkspaceId(null);
       setWorkspacePreview(null);
+      setSelectedPreviewDocumentKey(null);
       setStartedReview(null);
       setPhase({ kind: "success", message: "The Review Workspace was removed from the active list." });
     } catch (error) {
@@ -1421,22 +1634,15 @@ export function BsmContentApprovalManager({
             <div className="mt-3 space-y-2">
               {workspacePreview.documents.length === 0 ? (
                 <div className="text-muted-foreground">No documents are attached yet.</div>
-              ) : (
-                workspacePreview.documents.map((document) => (
-                  <div key={document.itemId} className="rounded-md border border-border bg-background p-3">
-                    <div className="font-medium">{document.title}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {document.processingStatus.replaceAll("_", " ")} · {document.status.replaceAll("_", " ")}
-                    </div>
-                    {document.proofUrl ? (
-                      <a className="mt-2 inline-block font-medium text-ember" href={document.proofUrl} target="_blank" rel="noreferrer">
-                        Open proof
-                      </a>
-                    ) : null}
-                  </div>
-                ))
-              )}
+              ) : null}
             </div>
+            {workspacePreview.documents.length > 0 ? (
+              <WorkspacePreviewScreen
+                documents={workspacePreview.documents}
+                selectedDocumentKey={selectedPreviewDocumentKey}
+                onSelectDocument={setSelectedPreviewDocumentKey}
+              />
+            ) : null}
           </div>
         ) : null}
         {startedReview ? (
