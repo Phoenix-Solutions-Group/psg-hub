@@ -4,10 +4,14 @@ import {
   BSM_CONTENT_APPROVAL_FILE_ACCEPT,
   BSM_CONTENT_APPROVAL_UNSUPPORTED_FILE_MESSAGE,
   BsmContentApprovalManager,
+  WorkspacePreviewProof,
+  WorkspacePreviewScreen,
   getBsmContentApprovalsSelectionUrl,
   getBsmReviewWorkspaceStartBlocker,
   getBsmContentApprovalFileValidationError,
   getBsmContentApprovalStorageContentType,
+  workspacePreviewDocumentKindLabel,
+  type WorkspacePreviewDocument,
 } from "@/components/ops/bsm-content-approval-manager";
 
 describe("BsmContentApprovalManager", () => {
@@ -474,5 +478,95 @@ describe("BsmContentApprovalManager", () => {
         reviewers: [{ email: "owner@example.com" }],
       }),
     ).toBeNull();
+  });
+
+  it("renders the operator preview as selectable proof screens", () => {
+    const documents: WorkspacePreviewDocument[] = [
+      {
+        itemId: "item-html",
+        versionId: "version-html",
+        title: "Uploaded HTML proof",
+        processingStatus: "ready",
+        status: "draft",
+        originalFilename: "homepage.html",
+        contentType: "text/html",
+        previewUrl: null,
+        generatedPagePath: null,
+        proofUrl: "https://storage.example/homepage.html",
+        proofContent: null,
+      },
+      {
+        itemId: "item-page",
+        versionId: "version-page",
+        title: "Generated page proof",
+        processingStatus: "ready",
+        status: "draft",
+        originalFilename: null,
+        contentType: "generated_page",
+        previewUrl: "https://preview.example/generated-proof",
+        generatedPagePath: "/generated/internal-only-proof",
+        proofUrl: "/generated/internal-only-proof",
+        proofContent: null,
+      },
+    ];
+
+    const html = renderToStaticMarkup(
+      <WorkspacePreviewScreen
+        documents={documents}
+        selectedDocumentKey="item-page:version-page"
+        onSelectDocument={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Screen 1");
+    expect(html).toContain("Screen 2");
+    expect(html).toContain("Uploaded HTML proof");
+    expect(html).toContain("Generated page proof");
+    expect(html).toContain('src="https://preview.example/generated-proof"');
+    expect(html).not.toContain("/generated/internal-only-proof");
+    expect(workspacePreviewDocumentKindLabel(documents[0])).toBe("Website proof");
+    expect(workspacePreviewDocumentKindLabel(documents[1])).toBe("Generated page");
+  });
+
+  it("renders PDF and image proofs inline in the operator preview", () => {
+    const pdfHtml = renderToStaticMarkup(
+      <WorkspacePreviewProof
+        document={{
+          itemId: "item-pdf",
+          versionId: "version-pdf",
+          title: "PDF proof",
+          processingStatus: "ready",
+          status: "draft",
+          originalFilename: "proof.pdf",
+          contentType: "application/pdf",
+          previewUrl: null,
+          generatedPagePath: null,
+          proofUrl: "https://storage.example/proof.pdf",
+          proofContent: null,
+        }}
+      />,
+    );
+    const imageHtml = renderToStaticMarkup(
+      <WorkspacePreviewProof
+        document={{
+          itemId: "item-image",
+          versionId: "version-image",
+          title: "Image proof",
+          processingStatus: "ready",
+          status: "draft",
+          originalFilename: "proof.jpg",
+          contentType: "image/jpeg",
+          previewUrl: null,
+          generatedPagePath: null,
+          proofUrl: "https://storage.example/proof.jpg",
+          proofContent: null,
+        }}
+      />,
+    );
+
+    expect(pdfHtml).toContain("<iframe");
+    expect(pdfHtml).toContain('src="https://storage.example/proof.pdf"');
+    expect(imageHtml).toContain("<img");
+    expect(imageHtml).toContain('src="https://storage.example/proof.jpg"');
   });
 });

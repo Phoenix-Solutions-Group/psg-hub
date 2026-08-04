@@ -202,6 +202,10 @@ export type StaffReviewWorkspaceResult = {
     title: string;
     processingStatus: string;
     status: string;
+    originalFilename: string | null;
+    contentType: string | null;
+    previewUrl: string | null;
+    generatedPagePath: string | null;
     proofUrl: string | null;
     proofContent: ReviewWorkspaceProofContent | null;
   }>;
@@ -913,6 +917,10 @@ export async function getStaffReviewWorkspaceResult(
         title: row.title as string,
         processingStatus: row.processing_status as string,
         status: row.status as string,
+        originalFilename: (version?.original_filename as string | null) ?? null,
+        contentType: reviewerDocumentContentType(version ?? null),
+        previewUrl,
+        generatedPagePath,
         proofUrl: previewUrl ?? generatedPagePath ?? signedProofUrl,
         proofContent: proofContentFromMetadata(sourceMetadata) ?? proofContentFromMetadata(snapshot),
       };
