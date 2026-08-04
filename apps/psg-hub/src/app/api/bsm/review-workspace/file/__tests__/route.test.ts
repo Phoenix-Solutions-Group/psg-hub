@@ -62,7 +62,7 @@ describe("guest review workspace file route", () => {
     await expect(response.text()).resolves.toContain("<h1>Saved page</h1>");
   });
 
-  it("keeps PDF files inline with a PDF-friendly browser policy", async () => {
+  it("keeps PDF files inline without a page policy that can block Chrome's PDF viewer", async () => {
     getGuestReviewWorkspaceFileDownload.mockResolvedValueOnce({
       data: new Blob(["%PDF-1.4"], { type: "application/pdf" }),
       originalFilename: "review-proof.pdf",
@@ -79,6 +79,7 @@ describe("guest review workspace file route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("application/pdf");
     expect(response.headers.get("Content-Disposition")).toBe('inline; filename="review-proof.pdf"');
-    expect(response.headers.get("Content-Security-Policy")).toContain("object-src 'self' blob: data:");
+    expect(response.headers.get("Content-Security-Policy")).toBeNull();
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 });

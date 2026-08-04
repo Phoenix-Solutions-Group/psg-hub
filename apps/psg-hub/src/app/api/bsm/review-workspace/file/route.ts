@@ -41,10 +41,17 @@ function inlineContentSecurityPolicy(contentType: string, originalFilename: stri
       "form-action 'none'",
     ].join("; ");
   }
-  if (resolvedContentType === "application/pdf") {
-    return "default-src 'self' blob: data:; object-src 'self' blob: data:; frame-src 'self' blob: data:";
-  }
   return "default-src 'none'";
+}
+
+function securityHeaders(contentType: string, originalFilename: string): Record<string, string> {
+  const resolvedContentType = inlineContentType(contentType, originalFilename);
+  if (resolvedContentType === "application/pdf") {
+    return {};
+  }
+  return {
+    "Content-Security-Policy": inlineContentSecurityPolicy(contentType, originalFilename),
+  };
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -66,7 +73,7 @@ export async function GET(request: Request): Promise<Response> {
         "Content-Length": String(file.byteSize),
         "Content-Disposition": `inline; filename="${safeFilename(file.originalFilename)}"`,
         "Cache-Control": "private, no-store",
-        "Content-Security-Policy": inlineContentSecurityPolicy(file.contentType, file.originalFilename),
+        ...securityHeaders(file.contentType, file.originalFilename),
         "X-Content-Type-Options": "nosniff",
       },
     });

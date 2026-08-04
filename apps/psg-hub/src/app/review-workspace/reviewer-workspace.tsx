@@ -55,8 +55,17 @@ function isPdfProof(contentType: string | null): boolean {
   return contentType === "application/pdf";
 }
 
-function isInlineFileProof(contentType: string | null): boolean {
-  return contentType === "text/html" || contentType === "application/pdf";
+function isHtmlFilename(fileName: string | null): boolean {
+  const normalized = fileName?.trim().toLowerCase() ?? "";
+  return normalized.endsWith(".html") || normalized.endsWith(".htm");
+}
+
+function isHtmlProof(doc: Workspace["documents"][number]): boolean {
+  return doc.contentType === "text/html" || isHtmlFilename(doc.originalFilename);
+}
+
+function isInlineFileProof(doc: Workspace["documents"][number]): boolean {
+  return isHtmlProof(doc) || doc.contentType === "application/pdf";
 }
 
 function isGeneratedPageProof(doc: Workspace["documents"][number]): boolean {
@@ -64,7 +73,7 @@ function isGeneratedPageProof(doc: Workspace["documents"][number]): boolean {
 }
 
 function guestFileUrl(sessionHash: string | null, doc: Workspace["documents"][number]): string | null {
-  if (!sessionHash || !isInlineFileProof(doc.contentType)) return null;
+  if (!sessionHash || !isInlineFileProof(doc)) return null;
   if (!doc.originalFilename) return null;
   const params = new URLSearchParams({
     sessionHash,
@@ -81,7 +90,7 @@ function documentKey(doc: Workspace["documents"][number]): string {
 function documentKindLabel(doc: Workspace["documents"][number]): string {
   if (isGeneratedPageProof(doc)) return "Generated page";
   if (doc.contentType === "application/pdf") return "PDF";
-  if (doc.contentType === "text/html") return "Website proof";
+  if (isHtmlProof(doc)) return "Website proof";
   if (doc.proofContent) return "Page proof";
   if (isImageProof(doc.contentType)) return "Image";
   return doc.contentType ?? "Proof";
@@ -99,7 +108,7 @@ function proofLabel(doc: Workspace["documents"][number], proofUrl: string | null
 }
 
 function frameSandbox(doc: Workspace["documents"][number]): string | undefined {
-  if (doc.contentType === "text/html") return "allow-popups allow-popups-to-escape-sandbox";
+  if (isHtmlProof(doc)) return "allow-popups allow-popups-to-escape-sandbox";
   if (isGeneratedPageProof(doc)) return "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox";
   return undefined;
 }
