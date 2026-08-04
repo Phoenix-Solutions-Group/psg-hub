@@ -51,8 +51,16 @@ function isImageProof(contentType: string | null): boolean {
   return Boolean(contentType?.startsWith("image/"));
 }
 
+function isPdfProof(contentType: string | null): boolean {
+  return contentType === "application/pdf";
+}
+
 function isInlineFileProof(contentType: string | null): boolean {
   return contentType === "text/html" || contentType === "application/pdf";
+}
+
+function isGeneratedPageProof(doc: Workspace["documents"][number]): boolean {
+  return doc.contentType === "generated_page" || Boolean(doc.generatedPagePath);
 }
 
 function guestFileUrl(sessionHash: string | null, doc: Workspace["documents"][number]): string | null {
@@ -71,15 +79,29 @@ function documentKey(doc: Workspace["documents"][number]): string {
 }
 
 function documentKindLabel(doc: Workspace["documents"][number]): string {
-  if (doc.proofContent) return "Page proof";
+  if (isGeneratedPageProof(doc)) return "Generated page";
   if (doc.contentType === "application/pdf") return "PDF";
   if (doc.contentType === "text/html") return "Website proof";
+  if (doc.proofContent) return "Page proof";
   if (isImageProof(doc.contentType)) return "Image";
   return doc.contentType ?? "Proof";
 }
 
 function statusLabel(value: string | null | undefined): string {
   return value?.replaceAll("_", " ") ?? "Open";
+}
+
+function proofLabel(doc: Workspace["documents"][number], proofUrl: string | null): string {
+  if (doc.originalFilename) return doc.originalFilename;
+  if (proofUrl) return proofUrl;
+  if (doc.generatedPagePath) return doc.generatedPagePath;
+  return "Proof preview";
+}
+
+function frameSandbox(doc: Workspace["documents"][number]): string | undefined {
+  if (doc.contentType === "text/html") return "allow-popups allow-popups-to-escape-sandbox";
+  if (isGeneratedPageProof(doc)) return "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox";
+  return undefined;
 }
 
 export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
@@ -238,7 +260,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
           {workspace?.project.title ?? "Enter your review code"}
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          This private review is for checking PSG-prepared content before it is used.
+          Check each proof screen, add private comments to the selected item, then send one final decision.
         </p>
       </header>
 
@@ -331,7 +353,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
           </section>
 
           <aside className="min-w-0 space-y-4 xl:sticky xl:top-6 xl:max-h-[calc(100svh-3rem)] xl:overflow-y-auto">
-            <Card>
+            <Card className="xl:sticky xl:top-6">
               <CardHeader>
                 <CardTitle>{isReadOnly ? "Submitted review" : "Your review"}</CardTitle>
                 <CardDescription>
@@ -358,7 +380,8 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                 ) : (
                   <>
                     <fieldset className="space-y-2">
-                      <legend className="font-heading text-sm font-medium">Decision for all documents</legend>
+                      <legend className="font-heading text-sm font-medium">Final decision</legend>
+                      <p className="text-xs text-muted-foreground">This decision covers every proof in this review.</p>
                       <label className="flex items-center gap-2 text-sm">
                         <input type="radio" name="decision" checked={decision === "approved"} onChange={() => setDecision("approved")} />
                         Approve
@@ -369,7 +392,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                       </label>
                     </fieldset>
                     <div className="space-y-2">
-                      <Label htmlFor="private-comment">Private comment</Label>
+                      <Label htmlFor="private-comment">Comment for selected proof</Label>
                       <div className="text-xs text-muted-foreground">
                         Applies to {activeDocument?.title ?? "the selected document"}
                       </div>
@@ -382,7 +405,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                     </div>
                     <Button type="button" variant="outline" onClick={saveComment} disabled={pending || !activeDocument}>
                       <MessageSquare className="size-4" aria-hidden="true" />
-                      Add comment to selected document
+                      Add comment to selected proof
                     </Button>
                     <div className="space-y-2">
                       <Label htmlFor="submit-message">Decision note</Label>
@@ -439,9 +462,14 @@ function ProofCanvas({
   isReadOnly: boolean;
   onSelectForComment: () => void;
 }) {
-  const renderedProofUrl = guestFileUrl(sessionHash, doc) ?? doc.proofUrl;
+  const inlineFileUrl = guestFileUrl(sessionHash, doc);
+  const generatedPreviewUrl = isGeneratedPageProof(doc)
+    ? doc.previewUrl ?? (doc.proofUrl && doc.proofUrl !== doc.generatedPagePath ? doc.proofUrl : null)
+    : null;
+  const renderedProofUrl = inlineFileUrl ?? (isGeneratedPageProof(doc) ? generatedPreviewUrl : doc.previewUrl ?? doc.proofUrl);
   const documentComments = workspace.comments.filter((item) => item.reviewItemId === doc.itemId);
   const itemDecision = workspace.decisions.find((item) => item.reviewItemId === doc.itemId);
+  const canShowGeneratedPreview = isGeneratedPageProof(doc) && canFrameProof(generatedPreviewUrl);
 
   return (
     <Card>
@@ -477,7 +505,7 @@ function ProofCanvas({
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">
-                  {doc.originalFilename ?? doc.generatedPagePath ?? renderedProofUrl ?? "Proof preview"}
+                  {proofLabel(doc, renderedProofUrl)}
                 </div>
                 <div className="text-xs text-muted-foreground">{documentKindLabel(doc)}</div>
               </div>
@@ -493,7 +521,14 @@ function ProofCanvas({
                 </a>
               ) : null}
             </div>
-            {doc.proofContent ? (
+            {canShowGeneratedPreview ? (
+              <iframe
+                src={generatedPreviewUrl ?? ""}
+                title={`${doc.title} proof`}
+                className="h-[720px] w-full bg-white"
+                sandbox={frameSandbox(doc)}
+              />
+            ) : doc.proofContent ? (
               <article className="bg-white p-5 text-foreground sm:p-8">
                 <div className="text-xs font-semibold uppercase text-ember">
                   {doc.proofContent.eyebrow}
@@ -524,16 +559,27 @@ function ProofCanvas({
                 alt={`${doc.title} proof`}
                 className="max-h-[720px] w-full bg-white object-contain"
               />
+            ) : isPdfProof(doc.contentType) && renderedProofUrl ? (
+              <object
+                data={renderedProofUrl}
+                type="application/pdf"
+                className="h-[720px] w-full bg-white"
+                aria-label={`${doc.title} PDF proof`}
+              >
+                <div className="p-4 text-sm text-muted-foreground">
+                  Chrome could not show this PDF inline. Open the proof in a new tab, then add your comment here.
+                </div>
+              </object>
             ) : canFrameProof(renderedProofUrl) ? (
               <iframe
                 src={renderedProofUrl}
                 title={`${doc.title} proof`}
                 className="h-[720px] w-full bg-white"
-                sandbox=""
+                sandbox={frameSandbox(doc)}
               />
             ) : (
               <div className="p-4 text-sm text-muted-foreground">
-                This proof cannot be previewed inline. Open the proof in a new tab, then add your comment here.
+                This proof does not have a working preview link yet. Ask PSG to attach the page, PDF, or image file, then come back to this screen.
               </div>
             )}
           </div>
@@ -541,7 +587,7 @@ function ProofCanvas({
           {!isReadOnly ? (
             <Button type="button" variant="outline" onClick={onSelectForComment}>
               <MessageSquare className="size-4" aria-hidden="true" />
-              Comment on this document
+              Comment on this proof
             </Button>
           ) : null}
         </div>

@@ -18,10 +18,33 @@ function safeFilename(value: string): string {
   );
 }
 
-function inlineContentType(contentType: string): string {
-  if (contentType === "text/html") return "text/html; charset=utf-8";
+function inlineContentType(contentType: string, originalFilename: string): string {
+  const filename = originalFilename.trim().toLowerCase();
+  if (contentType === "text/html" || filename.endsWith(".html") || filename.endsWith(".htm")) {
+    return "text/html; charset=utf-8";
+  }
   if (contentType === "text/markdown" || contentType === "text/plain") return `${contentType}; charset=utf-8`;
   return contentType;
+}
+
+function inlineContentSecurityPolicy(contentType: string, originalFilename: string): string {
+  const resolvedContentType = inlineContentType(contentType, originalFilename);
+  if (resolvedContentType.startsWith("text/html")) {
+    return [
+      "sandbox allow-popups allow-popups-to-escape-sandbox",
+      "default-src 'none'",
+      "img-src data: blob: https:",
+      "style-src 'unsafe-inline' https:",
+      "font-src data: https:",
+      "script-src 'none'",
+      "base-uri 'none'",
+      "form-action 'none'",
+    ].join("; ");
+  }
+  if (resolvedContentType === "application/pdf") {
+    return "default-src 'self' blob: data:; object-src 'self' blob: data:; frame-src 'self' blob: data:";
+  }
+  return "default-src 'none'";
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -39,14 +62,11 @@ export async function GET(request: Request): Promise<Response> {
     return new Response(file.data, {
       status: 200,
       headers: {
-        "Content-Type": inlineContentType(file.contentType),
+        "Content-Type": inlineContentType(file.contentType, file.originalFilename),
         "Content-Length": String(file.byteSize),
         "Content-Disposition": `inline; filename="${safeFilename(file.originalFilename)}"`,
         "Cache-Control": "private, no-store",
-        "Content-Security-Policy":
-          file.contentType === "text/html"
-            ? "sandbox; default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; font-src data:;"
-            : "default-src 'none'",
+        "Content-Security-Policy": inlineContentSecurityPolicy(file.contentType, file.originalFilename),
         "X-Content-Type-Options": "nosniff",
       },
     });
