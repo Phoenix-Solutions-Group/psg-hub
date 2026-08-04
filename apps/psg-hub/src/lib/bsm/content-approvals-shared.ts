@@ -37,17 +37,20 @@ export function normalizeApprovalMimeType(
   fileName: unknown,
   contentType: unknown,
 ): BsmApprovalUploadMimeType | null {
+  const extension = typeof fileName === "string" ? fileName.trim().toLowerCase().split(".").pop() : null;
+  const extensionContentType = extension ? APPROVAL_FILE_EXTENSION_MIME_TYPES[extension] ?? null : null;
+
   if (typeof contentType === "string") {
     const normalized = contentType.trim().toLowerCase();
+    if ((normalized === "text/plain" || normalized === "application/octet-stream") && extensionContentType) {
+      return extensionContentType;
+    }
     if (normalized in SUPPORTED_APPROVAL_FILE_TYPES) {
       return normalized as BsmApprovalUploadMimeType;
     }
   }
 
-  if (typeof fileName !== "string") return null;
-  const extension = fileName.trim().toLowerCase().split(".").pop();
-  if (!extension) return null;
-  return APPROVAL_FILE_EXTENSION_MIME_TYPES[extension] ?? null;
+  return extensionContentType;
 }
 
 export type BsmContentApprovalListItem = {

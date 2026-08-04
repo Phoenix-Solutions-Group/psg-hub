@@ -1,7 +1,10 @@
 import "server-only";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { BSM_CONTENT_APPROVALS_BUCKET } from "@/lib/bsm/content-approvals-shared";
+import {
+  BSM_CONTENT_APPROVALS_BUCKET,
+  normalizeApprovalMimeType,
+} from "@/lib/bsm/content-approvals-shared";
 import { createServiceClient } from "@/lib/supabase/service";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -115,6 +118,13 @@ export type GuestSessionAccess = {
   invitationStatus: string;
   submittedAt: string | null;
 };
+
+function reviewerDocumentContentType(version: Record<string, unknown> | null): string | null {
+  if (!version) return null;
+  const storedContentType = (version.content_type as string | null) ?? null;
+  const originalFilename = (version.original_filename as string | null) ?? null;
+  return normalizeApprovalMimeType(originalFilename, storedContentType) ?? storedContentType;
+}
 
 export type AddGuestPinCommentInput = {
   sessionHash: string;
@@ -1599,7 +1609,7 @@ export async function getGuestReviewWorkspace(
         processingStatus: (item?.processing_status as string | null) ?? "pending",
         sectionTitle: sectionId ? sectionTitles.get(sectionId) ?? null : null,
         originalFilename: (version?.original_filename as string | null) ?? null,
-        contentType: (version?.content_type as string | null) ?? null,
+        contentType: reviewerDocumentContentType(version),
         previewUrl,
         generatedPagePath,
         proofUrl: previewUrl ?? generatedPagePath ?? signedProofUrl,

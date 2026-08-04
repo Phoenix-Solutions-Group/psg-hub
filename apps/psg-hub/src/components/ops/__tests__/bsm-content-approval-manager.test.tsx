@@ -88,6 +88,13 @@ describe("BsmContentApprovalManager", () => {
     ).toBe("text/plain");
     expect(
       getBsmContentApprovalStorageContentType(
+        new File(["<html></html>"], "landing.html", {
+          type: "text/plain",
+        }),
+      ),
+    ).toBe("text/plain");
+    expect(
+      getBsmContentApprovalStorageContentType(
         new File(["# Proof"], "proof.md", {
           type: "text/markdown",
         }),

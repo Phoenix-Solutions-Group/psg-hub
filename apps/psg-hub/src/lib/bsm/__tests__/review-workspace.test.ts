@@ -129,6 +129,7 @@ type FakeClientOptions = {
   expiredSession?: boolean;
   emptyVersionMetadata?: boolean;
   uploadedFileProof?: boolean;
+  mislabeledHtmlProof?: boolean;
   submitted?: boolean;
   hasPin?: boolean;
   legacyEventsRequireReviewItem?: boolean;
@@ -233,6 +234,26 @@ class Query {
       };
     }
     if (this.table === "bsm_content_review_versions") {
+      if (this.options.mislabeledHtmlProof) {
+        return {
+          data: [
+            {
+              id: VERSION_ID,
+              original_filename: "homepage-proof.html",
+              content_type: "text/plain",
+              preview_url: null,
+              generated_page_path: null,
+              storage_bucket: "bsm-content-approvals",
+              storage_path: `${SHOP_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/homepage-proof.html`,
+              processed_storage_bucket: null,
+              processed_storage_path: null,
+              source_metadata_jsonb: {},
+              snapshot_jsonb: {},
+            },
+          ],
+          error: null,
+        };
+      }
       if (this.options.uploadedFileProof) {
         return {
           data: [
@@ -929,6 +950,19 @@ describe("BSM review workspace foundation service", () => {
       proofUrl:
         "https://storage.example/bsm-content-approvals/11111111-1111-4111-8111-111111111111/77777777-7777-4777-8777-777777777777/88888888-8888-4888-8888-888888888888/homepage-proof.pdf?token=review",
       proofContent: null,
+    });
+  });
+
+  it("treats uploaded HTML proofs as HTML when storage records them as plain text", async () => {
+    const { client } = createFakeClient({ mislabeledHtmlProof: true });
+
+    const workspace = await getGuestReviewWorkspace("session-hash", { client: client as never });
+
+    expect(workspace.documents[0]).toMatchObject({
+      originalFilename: "homepage-proof.html",
+      contentType: "text/html",
+      proofUrl:
+        "https://storage.example/bsm-content-approvals/11111111-1111-4111-8111-111111111111/77777777-7777-4777-8777-777777777777/88888888-8888-4888-8888-888888888888/homepage-proof.html?token=review",
     });
   });
 
