@@ -104,6 +104,16 @@ function frameSandbox(doc: Workspace["documents"][number]): string | undefined {
   return undefined;
 }
 
+export function PdfProofFrame({ title, url }: { title: string; url: string }) {
+  return (
+    <iframe
+      src={url}
+      title={`${title} PDF proof`}
+      className="h-[720px] w-full bg-white"
+    />
+  );
+}
+
 export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   const [code, setCode] = useState("");
   const [sessionHash, setSessionHash] = useState<string | null>(null);
@@ -560,16 +570,7 @@ function ProofCanvas({
                 className="max-h-[720px] w-full bg-white object-contain"
               />
             ) : isPdfProof(doc.contentType) && renderedProofUrl ? (
-              <object
-                data={renderedProofUrl}
-                type="application/pdf"
-                className="h-[720px] w-full bg-white"
-                aria-label={`${doc.title} PDF proof`}
-              >
-                <div className="p-4 text-sm text-muted-foreground">
-                  Chrome could not show this PDF inline. Open the proof in a new tab, then add your comment here.
-                </div>
-              </object>
+              <PdfProofFrame title={doc.title} url={renderedProofUrl} />
             ) : canFrameProof(renderedProofUrl) ? (
               <iframe
                 src={renderedProofUrl}
