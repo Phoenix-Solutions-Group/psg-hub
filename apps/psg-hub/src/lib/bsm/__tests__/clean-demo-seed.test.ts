@@ -47,6 +47,12 @@ describe("clean BSM demo seed", () => {
       authorityScore: 41,
       backlinks: 142,
     });
+    expect(CLEAN_DEMO_SEED.directMail).toEqual({
+      sends: 45,
+      priorSent: 72,
+      priorOutcomes: 11,
+      segmentKey: "demo-riverside-direct-mail",
+    });
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.previousShopSlug);
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.legacyShopSlug);
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.previousPilotShopSlug);

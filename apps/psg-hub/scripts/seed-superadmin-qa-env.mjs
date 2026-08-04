@@ -26,6 +26,7 @@ const shopPassword = process.env.DEMO_SHOP_PASSWORD;
 const includeInternalRegressionUser = shouldSeedInternalRegressionUser(process.env);
 const internalEmail = includeInternalRegressionUser ? process.env.DEMO_INTERNAL_EMAIL : undefined;
 const internalPassword = includeInternalRegressionUser ? process.env.DEMO_INTERNAL_PASSWORD : undefined;
+const directMailOnly = process.env.SEED_RIVERSIDE_DIRECT_MAIL_ONLY === "1";
 
 export const CLEAN_DEMO_SEED = {
   operatorDisplayName: "BSM Demo Admin",
@@ -49,6 +50,12 @@ export const CLEAN_DEMO_SEED = {
     organicKeywords: 57,
     authorityScore: 41,
     backlinks: 142,
+  },
+  directMail: {
+    sends: 45,
+    priorSent: 72,
+    priorOutcomes: 11,
+    segmentKey: "demo-riverside-direct-mail",
   },
 };
 
@@ -323,12 +330,101 @@ async function seedRiversideAnalytics(shopId) {
   if (error) throw new Error(`Riverside analytics seed failed: ${error.message}`);
 }
 
+async function seedRiversideDirectMail(shopId) {
+  const company = await upsertByLookup({
+    table: "companies",
+    filters: { shop_id: shopId },
+    insert: {
+      shop_id: shopId,
+      name: CLEAN_DEMO_SEED.shopName,
+      status: "active",
+    },
+    update: {
+      name: CLEAN_DEMO_SEED.shopName,
+      status: "active",
+    },
+    label: "Riverside direct-mail company",
+  });
+  const dates = trailingDemoDates(CLEAN_DEMO_SEED.directMail.sends);
+  const historyRows = dates.map((sentDate, index) => ({
+    company_id: company.id,
+    shop_name: CLEAN_DEMO_SEED.shopName,
+    piece_code: index % 3 === 0 ? "07" : index % 3 === 1 ? "10" : "14",
+    piece_variant: "letter",
+    sent_date: sentDate,
+    recipient_hash: `demo-riverside-recipient-${index}`,
+    household_key: `demo-riverside-household-${index % 36}`,
+    send_ref: `demo:riverside:${sentDate}:${index}`,
+    source: "demo_seed",
+  }));
+
+  assertNoSupabaseError(
+    await supabase
+      .from("mail_send_history")
+      .delete()
+      .eq("company_id", company.id)
+      .eq("source", "demo_seed"),
+    "Delete prior Riverside direct-mail demo history"
+  );
+  assertNoSupabaseError(
+    await supabase
+      .from("mail_send_priors")
+      .delete()
+      .eq("company_id", company.id)
+      .eq("segment_key", CLEAN_DEMO_SEED.directMail.segmentKey),
+    "Delete prior Riverside direct-mail demo result priors"
+  );
+
+  assertNoSupabaseError(
+    await supabase
+      .from("mail_send_history")
+      .upsert(historyRows, { onConflict: "send_ref" }),
+    "Seed Riverside direct-mail send history"
+  );
+  assertNoSupabaseError(
+    await supabase.from("mail_send_priors").upsert(
+      {
+        company_id: company.id,
+        shop_name: CLEAN_DEMO_SEED.shopName,
+        segment_key: CLEAN_DEMO_SEED.directMail.segmentKey,
+        piece_code: "07",
+        trigger: "survey_followup_warranty",
+        ab_variant: "A",
+        n_sent: CLEAN_DEMO_SEED.directMail.priorSent,
+        n_outcome: CLEAN_DEMO_SEED.directMail.priorOutcomes,
+        outcome_rate:
+          CLEAN_DEMO_SEED.directMail.priorOutcomes /
+          CLEAN_DEMO_SEED.directMail.priorSent,
+        method_ref: "seed-superadmin-qa-env:riverside-direct-mail",
+      },
+      { onConflict: "segment_key,piece_code,ab_variant" }
+    ),
+    "Seed Riverside direct-mail result priors"
+  );
+}
+
 async function main() {
+  supabase = connectSupabase();
+  if (directMailOnly) {
+    const { data: shop, error } = await supabase
+      .from("shops")
+      .select("id")
+      .eq("slug", CLEAN_DEMO_SEED.shopSlug)
+      .maybeSingle();
+    if (error) throw new Error(`Riverside shop lookup failed: ${error.message}`);
+    if (!shop?.id) {
+      throw new Error(`Riverside shop ${CLEAN_DEMO_SEED.shopSlug} was not found.`);
+    }
+    await seedRiversideDirectMail(shop.id);
+    console.log("Seeded Riverside direct-mail dashboard data.");
+    console.log(`Shop: ${shop.id}`);
+    return;
+  }
+
   const missingDemoEnv = requiredDemoEnvNames(process.env).filter((key) => !process.env[key]);
   if (missingDemoEnv.length > 0) {
     throw new Error(`Missing required demo seed env vars: ${missingDemoEnv.join(", ")}.`);
   }
-  supabase = connectSupabase();
 
   await cleanupLegacyDemoSeedRows();
 
@@ -438,6 +534,7 @@ async function main() {
   if (subError) throw new Error(`Subscription upsert failed: ${subError.message}`);
 
   await seedRiversideAnalytics(shop.id);
+  await seedRiversideDirectMail(shop.id);
 
   await upsertByLookup({
     table: "modules",
