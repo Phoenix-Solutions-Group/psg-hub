@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle, ExternalLink, Lock, MessageSquare, RotateCcw, Send } from "lucide-react";
+import { CheckCircle, ExternalLink, FileText, ImageIcon, Lock, MessageSquare, Monitor, RotateCcw, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,14 +51,35 @@ function isImageProof(contentType: string | null): boolean {
   return Boolean(contentType?.startsWith("image/"));
 }
 
+function isInlineFileProof(contentType: string | null): boolean {
+  return contentType === "text/html" || contentType === "application/pdf";
+}
+
 function guestFileUrl(sessionHash: string | null, doc: Workspace["documents"][number]): string | null {
-  if (!sessionHash || doc.contentType !== "text/html") return null;
+  if (!sessionHash || !isInlineFileProof(doc.contentType)) return null;
+  if (!doc.originalFilename) return null;
   const params = new URLSearchParams({
     sessionHash,
     reviewItemId: doc.itemId,
     versionId: doc.versionId,
   });
   return `/api/bsm/review-workspace/file?${params.toString()}`;
+}
+
+function documentKey(doc: Workspace["documents"][number]): string {
+  return `${doc.itemId}:${doc.versionId}`;
+}
+
+function documentKindLabel(doc: Workspace["documents"][number]): string {
+  if (doc.proofContent) return "Page proof";
+  if (doc.contentType === "application/pdf") return "PDF";
+  if (doc.contentType === "text/html") return "Website proof";
+  if (isImageProof(doc.contentType)) return "Image";
+  return doc.contentType ?? "Proof";
+}
+
+function statusLabel(value: string | null | undefined): string {
+  return value?.replaceAll("_", " ") ?? "Open";
 }
 
 export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
@@ -73,7 +94,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const activeDocument =
-    workspace?.documents.find((doc) => `${doc.itemId}:${doc.versionId}` === selectedDocumentKey) ??
+    workspace?.documents.find((doc) => documentKey(doc) === selectedDocumentKey) ??
     workspace?.documents[0] ??
     null;
   const isReadOnly = Boolean(workspace?.reviewer.readOnly);
@@ -240,134 +261,83 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] xl:items-start">
           <section className="min-w-0 space-y-4">
-            {workspace.documents.map((doc) => {
-              const renderedProofUrl = guestFileUrl(sessionHash, doc) ?? doc.proofUrl;
-              return (
-              <Card key={doc.itemId}>
-                <CardHeader>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <CardTitle>{doc.title}</CardTitle>
-                      <CardDescription>{doc.sectionTitle ?? "Review document"} · {doc.processingStatus}</CardDescription>
-                    </div>
-                    <Badge>{workspace.round.status}</Badge>
+            <Card>
+              <CardHeader>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <CardTitle>Documents to review</CardTitle>
+                    <CardDescription>
+                      Choose one proof at a time. Comments and decisions stay tied to the selected document.
+                    </CardDescription>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="min-h-64 rounded-lg border border-border bg-background p-4 sm:p-5">
-                    <div className="max-w-3xl space-y-4">
-                      <h2 className="font-heading text-xl font-semibold">Collision repair page proof</h2>
-                      <p className="text-sm leading-6 text-muted-foreground">
-                        Review this proof for customer-facing accuracy. Private comments remain tied to
-                        your invitation and are visible to PSG staff after submission.
-                      </p>
-                      <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        <div className="min-w-0 rounded-md border border-border p-3">
-                          <div className="text-xs text-muted-foreground">Status</div>
-                          <div className="break-words font-medium">{doc.processingStatus}</div>
-                        </div>
-                        <div className="min-w-0 rounded-md border border-border p-3">
-                          <div className="text-xs text-muted-foreground">Comments</div>
-                          <div className="break-words font-medium">{workspace.comments.filter((item) => item.reviewItemId === doc.itemId).length}</div>
-                        </div>
-                        <div className="min-w-0 rounded-md border border-border p-3">
-                          <div className="text-xs text-muted-foreground">Decision</div>
-                          <div className="break-words font-medium">{workspace.decisions.find((item) => item.reviewItemId === doc.itemId)?.decision.replace("_", " ") ?? "Open"}</div>
-                        </div>
-                      </div>
-                      <div className="overflow-hidden rounded-md border border-border bg-background">
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
+                  <Badge>{workspace.documents.length} {workspace.documents.length === 1 ? "document" : "documents"}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {workspace.documents.map((doc, index) => {
+                    const key = documentKey(doc);
+                    const isSelected = activeDocument ? key === documentKey(activeDocument) : index === 0;
+                    const commentCount = workspace.comments.filter((item) => item.reviewItemId === doc.itemId).length;
+                    const itemDecision = workspace.decisions.find((item) => item.reviewItemId === doc.itemId);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSelectedDocumentKey(key)}
+                        className={`min-h-28 rounded-md border p-3 text-left text-sm transition-colors ${
+                          isSelected
+                            ? "border-primary bg-accent text-accent-foreground"
+                            : "border-border bg-background hover:border-primary/50"
+                        }`}
+                        aria-pressed={isSelected}
+                      >
+                        <div className="flex items-start gap-2">
+                          {doc.proofContent ? (
+                            <Monitor className="mt-0.5 size-4 shrink-0 text-ember" aria-hidden="true" />
+                          ) : isImageProof(doc.contentType) ? (
+                            <ImageIcon className="mt-0.5 size-4 shrink-0 text-ember" aria-hidden="true" />
+                          ) : (
+                            <FileText className="mt-0.5 size-4 shrink-0 text-ember" aria-hidden="true" />
+                          )}
                           <div className="min-w-0">
-                            <div className="truncate text-sm font-medium">
-                              {doc.originalFilename ?? renderedProofUrl ?? "Proof preview"}
-                            </div>
-                            {doc.contentType ? (
-                              <div className="text-xs text-muted-foreground">{doc.contentType}</div>
-                            ) : null}
+                            <div className="text-xs text-muted-foreground">Document {index + 1}</div>
+                            <div className="mt-1 line-clamp-2 font-medium">{doc.title}</div>
                           </div>
-                          {renderedProofUrl ? (
-                            <a
-                              href={renderedProofUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-sm font-medium text-ember hover:text-foreground"
-                            >
-                              <ExternalLink className="size-4" aria-hidden="true" />
-                              Open proof
-                            </a>
-                          ) : null}
                         </div>
-                        {doc.proofContent ? (
-                          <article className="bg-white p-5 text-foreground sm:p-8">
-                            <div className="text-xs font-semibold uppercase text-ember">
-                              {doc.proofContent.eyebrow}
-                            </div>
-                            <h3 className="mt-2 font-heading text-2xl font-semibold">
-                              {doc.proofContent.headline}
-                            </h3>
-                            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                              {doc.proofContent.body}
-                            </p>
-                            {doc.proofContent.bullets.length ? (
-                              <ul className="mt-4 space-y-2 text-sm">
-                                {doc.proofContent.bullets.map((bullet) => (
-                                  <li key={bullet} className="flex gap-2">
-                                    <CheckCircle className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
-                                    <span>{bullet}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : null}
-                            <div className="mt-5 inline-flex rounded-md bg-ember px-3 py-2 text-sm font-medium text-white">
-                              {doc.proofContent.cta}
-                            </div>
-                          </article>
-                        ) : isImageProof(doc.contentType) && renderedProofUrl ? (
-                          <img
-                            src={renderedProofUrl}
-                            alt={`${doc.title} proof`}
-                            className="max-h-[680px] w-full object-contain bg-white"
-                          />
-                        ) : canFrameProof(renderedProofUrl) ? (
-                          <iframe
-                            src={renderedProofUrl}
-                            title={`${doc.title} proof`}
-                            className="h-[680px] w-full bg-white"
-                            sandbox=""
-                          />
-                        ) : (
-                          <div className="p-4 text-sm text-muted-foreground">
-                            The proof link is not available for this review item.
-                          </div>
-                        )}
-                      </div>
-                      {!isReadOnly ? (
-                        <Button
-                          type="button"
-                          variant={`${doc.itemId}:${doc.versionId}` === `${activeDocument?.itemId}:${activeDocument?.versionId}` ? "default" : "outline"}
-                          className="mt-4"
-                          onClick={() => setSelectedDocumentKey(`${doc.itemId}:${doc.versionId}`)}
-                        >
-                          <MessageSquare className="size-4" aria-hidden="true" />
-                          Comment on this document
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              );
-            })}
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span>{documentKindLabel(doc)}</span>
+                          <span>{commentCount} {commentCount === 1 ? "comment" : "comments"}</span>
+                          <span>{statusLabel(itemDecision?.decision)}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {activeDocument ? (
+              <ProofCanvas
+                doc={activeDocument}
+                workspace={workspace}
+                sessionHash={sessionHash}
+                isReadOnly={isReadOnly}
+                onSelectForComment={() => setSelectedDocumentKey(documentKey(activeDocument))}
+              />
+            ) : null}
           </section>
 
-          <aside className="min-w-0 space-y-4">
+          <aside className="min-w-0 space-y-4 xl:sticky xl:top-6 xl:max-h-[calc(100svh-3rem)] xl:overflow-y-auto">
             <Card>
               <CardHeader>
                 <CardTitle>{isReadOnly ? "Submitted review" : "Your review"}</CardTitle>
                 <CardDescription>
-                  {isReadOnly ? "Your response is locked and can no longer be changed." : "Choose a decision and add private notes where needed."}
+                  {isReadOnly
+                    ? "Your response is locked and can no longer be changed."
+                    : `Reviewing: ${activeDocument?.title ?? "choose a document"}`}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -388,7 +358,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                 ) : (
                   <>
                     <fieldset className="space-y-2">
-                      <legend className="font-heading text-sm font-medium">Decision</legend>
+                      <legend className="font-heading text-sm font-medium">Decision for all documents</legend>
                       <label className="flex items-center gap-2 text-sm">
                         <input type="radio" name="decision" checked={decision === "approved"} onChange={() => setDecision("approved")} />
                         Approve
@@ -412,7 +382,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                     </div>
                     <Button type="button" variant="outline" onClick={saveComment} disabled={pending || !activeDocument}>
                       <MessageSquare className="size-4" aria-hidden="true" />
-                      Add suggestion
+                      Add comment to selected document
                     </Button>
                     <div className="space-y-2">
                       <Label htmlFor="submit-message">Decision note</Label>
@@ -453,5 +423,129 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+function ProofCanvas({
+  doc,
+  workspace,
+  sessionHash,
+  isReadOnly,
+  onSelectForComment,
+}: {
+  doc: Workspace["documents"][number];
+  workspace: Workspace;
+  sessionHash: string | null;
+  isReadOnly: boolean;
+  onSelectForComment: () => void;
+}) {
+  const renderedProofUrl = guestFileUrl(sessionHash, doc) ?? doc.proofUrl;
+  const documentComments = workspace.comments.filter((item) => item.reviewItemId === doc.itemId);
+  const itemDecision = workspace.decisions.find((item) => item.reviewItemId === doc.itemId);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle>{doc.title}</CardTitle>
+            <CardDescription>
+              {doc.sectionTitle ?? documentKindLabel(doc)} · {statusLabel(doc.processingStatus)}
+            </CardDescription>
+          </div>
+          <Badge>{statusLabel(workspace.round.status)}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-3">
+            <div className="min-w-0 rounded-md border border-border p-3">
+              <div className="text-xs text-muted-foreground">Document status</div>
+              <div className="break-words font-medium capitalize">{statusLabel(doc.processingStatus)}</div>
+            </div>
+            <div className="min-w-0 rounded-md border border-border p-3">
+              <div className="text-xs text-muted-foreground">Private comments</div>
+              <div className="break-words font-medium">{documentComments.length}</div>
+            </div>
+            <div className="min-w-0 rounded-md border border-border p-3">
+              <div className="text-xs text-muted-foreground">Decision</div>
+              <div className="break-words font-medium capitalize">{statusLabel(itemDecision?.decision)}</div>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-md border border-border bg-background">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">
+                  {doc.originalFilename ?? doc.generatedPagePath ?? renderedProofUrl ?? "Proof preview"}
+                </div>
+                <div className="text-xs text-muted-foreground">{documentKindLabel(doc)}</div>
+              </div>
+              {renderedProofUrl ? (
+                <a
+                  href={renderedProofUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-ember hover:text-foreground"
+                >
+                  <ExternalLink className="size-4" aria-hidden="true" />
+                  Open proof
+                </a>
+              ) : null}
+            </div>
+            {doc.proofContent ? (
+              <article className="bg-white p-5 text-foreground sm:p-8">
+                <div className="text-xs font-semibold uppercase text-ember">
+                  {doc.proofContent.eyebrow}
+                </div>
+                <h3 className="mt-2 font-heading text-2xl font-semibold">
+                  {doc.proofContent.headline}
+                </h3>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+                  {doc.proofContent.body}
+                </p>
+                {doc.proofContent.bullets.length ? (
+                  <ul className="mt-4 space-y-2 text-sm">
+                    {doc.proofContent.bullets.map((bullet) => (
+                      <li key={bullet} className="flex gap-2">
+                        <CheckCircle className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div className="mt-5 inline-flex rounded-md bg-ember px-3 py-2 text-sm font-medium text-white">
+                  {doc.proofContent.cta}
+                </div>
+              </article>
+            ) : isImageProof(doc.contentType) && renderedProofUrl ? (
+              <img
+                src={renderedProofUrl}
+                alt={`${doc.title} proof`}
+                className="max-h-[720px] w-full bg-white object-contain"
+              />
+            ) : canFrameProof(renderedProofUrl) ? (
+              <iframe
+                src={renderedProofUrl}
+                title={`${doc.title} proof`}
+                className="h-[720px] w-full bg-white"
+                sandbox=""
+              />
+            ) : (
+              <div className="p-4 text-sm text-muted-foreground">
+                This proof cannot be previewed inline. Open the proof in a new tab, then add your comment here.
+              </div>
+            )}
+          </div>
+
+          {!isReadOnly ? (
+            <Button type="button" variant="outline" onClick={onSelectForComment}>
+              <MessageSquare className="size-4" aria-hidden="true" />
+              Comment on this document
+            </Button>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -131,7 +131,7 @@ test("BSM content approvals release gate: admin creates, reviewer comments and s
   await expect(reviewer.getByText("Add at least one private comment before requesting changes.")).toBeVisible();
 
   await reviewer.getByLabel("Private comment").fill("Please update the warranty offer wording before approval.");
-  await reviewer.getByRole("button", { name: "Add suggestion" }).click();
+  await reviewer.getByRole("button", { name: "Add comment to selected document" }).click();
   await expect(reviewer.getByText("Please update the warranty offer wording before approval.")).toBeVisible();
   await reviewer.getByLabel("Decision note").fill("The page is close, but the warranty offer needs clearer wording.");
   await reviewer.getByRole("button", { name: "Submit review" }).click();
