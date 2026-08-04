@@ -357,6 +357,7 @@ class WorkspaceListSelect {
 
   then(resolve: (value: { data: Array<Record<string, unknown>>; error: null }) => unknown) {
     if (this.table === "bsm_content_review_projects") {
+      expect(this.filters.status).toEqual(["draft", "processing", "ready", "active", "completed"]);
       return Promise.resolve({
         data: [
           {
@@ -366,14 +367,37 @@ class WorkspaceListSelect {
             status: "ready",
             current_round_id: ROUND_ID,
           },
+          {
+            id: "99999999-9999-4999-8999-999999999999",
+            shop_id: SHOP_ID,
+            title: "Active reviewer feedback",
+            status: "active",
+            current_round_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          },
+          {
+            id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            shop_id: SHOP_ID,
+            title: "Completed reviewer feedback",
+            status: "completed",
+            current_round_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          },
         ],
         error: null,
       }).then(resolve);
     }
     if (this.table === "bsm_content_review_items") {
-      expect(this.filters.project_id).toEqual([PROJECT_ID]);
+      expect(this.filters.project_id).toEqual([
+        PROJECT_ID,
+        "99999999-9999-4999-8999-999999999999",
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      ]);
       return Promise.resolve({
-        data: [{ project_id: PROJECT_ID }, { project_id: PROJECT_ID }],
+        data: [
+          { project_id: PROJECT_ID },
+          { project_id: PROJECT_ID },
+          { project_id: "99999999-9999-4999-8999-999999999999" },
+          { project_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+        ],
         error: null,
       }).then(resolve);
     }
@@ -439,7 +463,7 @@ describe("BSM content approval upload helpers", () => {
     );
   });
 
-  it("lists document-mutable shop workspaces for authorized staff without requiring collaborator rows", async () => {
+  it("lists operator-visible shop workspaces for authorized staff without requiring collaborator rows", async () => {
     const { client, selectedTables } = createWorkspaceListFakeClient();
 
     const result = await listBsmContentApprovalWorkspaces(client as never, {
@@ -455,6 +479,22 @@ describe("BSM content approval upload helpers", () => {
         status: "ready",
         currentRoundId: ROUND_ID,
         documentCount: 2,
+      },
+      {
+        id: "99999999-9999-4999-8999-999999999999",
+        shopId: SHOP_ID,
+        title: "Active reviewer feedback",
+        status: "active",
+        currentRoundId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        documentCount: 1,
+      },
+      {
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        shopId: SHOP_ID,
+        title: "Completed reviewer feedback",
+        status: "completed",
+        currentRoundId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        documentCount: 1,
       },
     ]);
     expect(selectedTables).toEqual([

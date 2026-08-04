@@ -32,6 +32,11 @@ type ReviewWorkspaceAttachmentTarget = {
 };
 
 const REVIEW_WORKSPACE_DOCUMENT_MUTABLE_STATUSES = new Set(["draft", "processing", "ready"]);
+const REVIEW_WORKSPACE_OPERATOR_VISIBLE_STATUSES = new Set([
+  ...REVIEW_WORKSPACE_DOCUMENT_MUTABLE_STATUSES,
+  "active",
+  "completed",
+]);
 
 export type ContentApprovalStorage = {
   from(bucket: string): {
@@ -1222,7 +1227,7 @@ export async function listBsmContentApprovalWorkspaces(
     .from("bsm_content_review_projects")
     .select("id, shop_id, title, status, current_round_id")
     .is("deleted_at", null)
-    .in("status", [...REVIEW_WORKSPACE_DOCUMENT_MUTABLE_STATUSES])
+    .in("status", [...REVIEW_WORKSPACE_OPERATOR_VISIBLE_STATUSES])
     .order("updated_at", { ascending: false })
     .limit(100);
   if (opts.shopId) query = query.eq("shop_id", opts.shopId);
