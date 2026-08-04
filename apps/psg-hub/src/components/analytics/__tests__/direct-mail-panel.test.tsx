@@ -40,7 +40,7 @@ describe("DirectMailPanel", () => {
         },
         householdsReached: 31,
         latestSentDate: "2026-07-10",
-        lastUpdatedAt: "2026-07-11T00:00:00Z",
+        lastUpdatedAt: "2026-08-04T17:15:23.707034+00:00",
         piecesByType: [
           {
             pieceCode: "07",
@@ -129,6 +129,8 @@ describe("DirectMailPanel", () => {
     expect(html).toContain("31");
     expect(html).toContain("Thank-you, warranty, and survey notice (A)");
     expect(html).toContain("30.0%");
+    expect(html).toContain("Last updated Aug 4");
+    expect(html).not.toContain("2026-08-04T17:15:23.707034+00:00");
     expect(html).toContain("Jul 10");
   });
 

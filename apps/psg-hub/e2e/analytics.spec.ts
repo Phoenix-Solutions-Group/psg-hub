@@ -57,7 +57,9 @@ test.describe("analytics — per-shop (OWNER)", () => {
     await expect(mail.getByText("9", { exact: true }).first()).toBeVisible();
     await expect(mail).toContainText("Response signal rate");
     await expect(mail).toContainText("30.0%");
-    await expect(mail).toContainText("Thank-you, warranty, and survey notice");
+    await expect(mail).toContainText(/Last updated [A-Z][a-z]{2} \d{1,2}/);
+    await expect(mail).not.toContainText(/\d{4}-\d{2}-\d{2}T/);
+    await expect(mail).toContainText("Thank-You + Warranty + Survey Notice (full mailing)");
     await expectNoDirectMailPrivateFields(mail);
 
     // REAL recharts render: SVG path geometry inside the chart region (the

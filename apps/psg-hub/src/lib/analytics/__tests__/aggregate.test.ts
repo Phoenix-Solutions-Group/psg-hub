@@ -121,6 +121,7 @@ describe("toSeries", () => {
 describe("formatters (fixed locale + UTC — deterministic)", () => {
   it("formatShortDate", () => {
     expect(formatShortDate("2026-06-04")).toBe("Jun 4");
+    expect(formatShortDate("2026-08-04T17:15:23.707034+00:00")).toBe("Aug 4");
     expect(formatShortDate("not-a-date")).toBe("not-a-date");
   });
 
