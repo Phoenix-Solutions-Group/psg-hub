@@ -130,6 +130,7 @@ type FakeClientOptions = {
   emptyVersionMetadata?: boolean;
   uploadedFileProof?: boolean;
   mislabeledHtmlProof?: boolean;
+  draftStaffPreview?: boolean;
   submitted?: boolean;
   hasPin?: boolean;
   legacyEventsRequireReviewItem?: boolean;
@@ -211,24 +212,8 @@ class Query {
           current_version_id: VERSION_ID,
           title: "Home page",
           processing_status: "ready",
-          status: "in_review",
+          status: this.options.draftStaffPreview ? "draft" : "in_review",
           section_id: SECTION_ID,
-          version: {
-            id: VERSION_ID,
-            preview_url: "/dashboard/content",
-            generated_page_path: "/dashboard/content",
-            source_metadata_jsonb: {
-              proofContent: {
-                eyebrow: "Website",
-                headline: "Home page",
-                body: "Demo-safe page copy is visible in the private review workspace.",
-                bullets: ["Confirm the offer", "Confirm the next step"],
-                cta: "Schedule my repair review",
-                sourceUrl: null,
-              },
-            },
-            snapshot_jsonb: {},
-          },
         }],
         error: null,
       };
@@ -367,8 +352,8 @@ class Query {
           id: PROJECT_ID,
           shop_id: SHOP_ID,
           title: "Website review",
-          status: "active",
-          current_round_id: ROUND_ID,
+          status: this.options.draftStaffPreview ? "draft" : "active",
+          current_round_id: this.options.draftStaffPreview ? null : ROUND_ID,
           updated_at: "2026-07-28T19:00:00.000Z",
           created_at: "2026-07-28T18:00:00.000Z",
           company: { name: "Alpha Auto Body" },
@@ -475,7 +460,16 @@ class Query {
 
   single() {
     if (this.table === "bsm_content_review_projects") {
-      return Promise.resolve({ data: { id: PROJECT_ID, shop_id: SHOP_ID, title: "Website review", status: "active", current_round_id: ROUND_ID }, error: null });
+      return Promise.resolve({
+        data: {
+          id: PROJECT_ID,
+          shop_id: SHOP_ID,
+          title: "Website review",
+          status: this.options.draftStaffPreview ? "draft" : "active",
+          current_round_id: this.options.draftStaffPreview ? null : ROUND_ID,
+        },
+        error: null,
+      });
     }
     if (this.table === "bsm_content_review_rounds") {
       return Promise.resolve({ data: { id: ROUND_ID, status: "active" }, error: null });
@@ -997,6 +991,27 @@ describe("BSM review workspace foundation service", () => {
         message: "Update the offer.",
       }),
     ]);
+  });
+
+  it("loads staff preview documents before the customer review round starts", async () => {
+    const { client } = createFakeClient({ draftStaffPreview: true });
+
+    const result = await getStaffReviewWorkspaceResult(PROJECT_ID, ACTOR_ID, { client: client as never });
+
+    expect(result.round).toBeNull();
+    expect(result.documents).toHaveLength(1);
+    expect(result.documents[0]).toMatchObject({
+      itemId: REVIEW_ITEM_ID,
+      versionId: VERSION_ID,
+      title: "Home page",
+      status: "draft",
+      previewUrl: "/dashboard/content",
+      generatedPagePath: "/dashboard/content",
+      proofUrl: "/dashboard/content",
+      proofContent: expect.objectContaining({
+        headline: "Home page",
+      }),
+    });
   });
 
   it("stores reviewer pin comments against the reviewer invitation only", async () => {

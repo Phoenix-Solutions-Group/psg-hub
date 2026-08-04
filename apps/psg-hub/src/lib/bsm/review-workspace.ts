@@ -829,13 +829,13 @@ export async function getStaffReviewWorkspaceResult(
   const project = projectRow as Record<string, unknown>;
   const roundId = (project.current_round_id as string | null) ?? null;
 
-  const [{ data: roundRows }, { data: itemRows }, { data: commentRows }, { data: decisionRows }] = await Promise.all([
+  const [{ data: roundRows, error: roundError }, { data: itemRows, error: itemError }, { data: commentRows, error: commentError }, { data: decisionRows, error: decisionError }] = await Promise.all([
     roundId
       ? client
           .from("bsm_content_review_rounds")
           .select("id, status, outcome, completed_at")
           .eq("id", roundId)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
     client
       .from("bsm_content_review_items")
       .select(`
@@ -843,18 +843,7 @@ export async function getStaffReviewWorkspaceResult(
         current_version_id,
         title,
         processing_status,
-        status,
-        version:bsm_content_review_versions (
-          id,
-          preview_url,
-          generated_page_path,
-          storage_bucket,
-          storage_path,
-          processed_storage_bucket,
-          processed_storage_path,
-          source_metadata_jsonb,
-          snapshot_jsonb
-        )
+        status
       `)
       .eq("project_id", access.projectId)
       .is("deleted_at", null)
@@ -866,15 +855,34 @@ export async function getStaffReviewWorkspaceResult(
           .eq("round_id", roundId)
           .in("draft_status", ["submitted", "locked"])
           .order("created_at", { ascending: true })
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
     roundId
       ? client
           .from("bsm_content_review_decisions")
           .select("id, invitation_id, review_item_id, decision, message, submitted_at")
           .eq("round_id", roundId)
           .order("submitted_at", { ascending: true })
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
   ]);
+  if (roundError) throw new Error(`Could not load review workspace round: ${roundError.message}`);
+  if (itemError) throw new Error(`Could not load Review Workspace documents: ${itemError.message}`);
+  if (commentError) throw new Error(`Could not load review workspace comments: ${commentError.message}`);
+  if (decisionError) throw new Error(`Could not load review workspace decisions: ${decisionError.message}`);
+
+  const itemRecords = (itemRows ?? []) as Array<Record<string, unknown>>;
+  const versionIds = itemRecords
+    .map((row) => row.current_version_id)
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  const { data: versionRows, error: versionError } = versionIds.length
+    ? await client
+        .from("bsm_content_review_versions")
+        .select("id, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, source_metadata_jsonb, snapshot_jsonb")
+        .in("id", versionIds)
+    : { data: [], error: null };
+  if (versionError) throw new Error(`Could not load Review Workspace document versions: ${versionError.message}`);
+  const versionsById = new Map(
+    ((versionRows ?? []) as Array<Record<string, unknown>>).map((version) => [version.id as string, version]),
+  );
   const round = ((roundRows ?? []) as Array<Record<string, unknown>>)[0] ?? null;
 
   return {
@@ -893,11 +901,9 @@ export async function getStaffReviewWorkspaceResult(
           completedAt: (round.completed_at as string | null) ?? null,
         }
       : null,
-    documents: await Promise.all(((itemRows ?? []) as Array<Record<string, unknown>>).map(async (row) => {
-      const rawVersion = row.version;
-      const version = rawVersion && typeof rawVersion === "object"
-        ? (Array.isArray(rawVersion) ? rawVersion[0] : rawVersion) as Record<string, unknown> | undefined
-        : undefined;
+    documents: await Promise.all(itemRecords.map(async (row) => {
+      const versionId = (row.current_version_id as string | null) ?? null;
+      const version = versionId ? versionsById.get(versionId) : undefined;
       const sourceMetadata = (version?.source_metadata_jsonb as Record<string, unknown> | null) ?? {};
       const snapshot = (version?.snapshot_jsonb as Record<string, unknown> | null) ?? {};
       const previewUrl = typeof sourceMetadata.previewUrl === "string" && sourceMetadata.previewUrl.trim()
@@ -913,7 +919,7 @@ export async function getStaffReviewWorkspaceResult(
       const signedProofUrl = await createSignedProofUrl(client, version);
       return {
         itemId: row.id as string,
-        versionId: (row.current_version_id as string | null) ?? null,
+        versionId,
         title: row.title as string,
         processingStatus: row.processing_status as string,
         status: row.status as string,
