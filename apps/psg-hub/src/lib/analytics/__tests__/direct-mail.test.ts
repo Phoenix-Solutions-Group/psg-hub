@@ -55,9 +55,15 @@ describe("summarizeDirectMailMetrics", () => {
     expect(out.activity.latestSentDate).toBe("2026-07-11");
     expect(out.activity.piecesByType[0]).toMatchObject({
       pieceCode: "07",
-      label: "Thank-you, warranty, and survey notice",
+      label: "Thank-You + Warranty + Survey Notice (full mailing)",
       variant: "letter",
       sent: 2,
+    });
+    expect(out.results.monthlyTrend[0]).toMatchObject({
+      month: "2026-07",
+      mailed: 4,
+      outcomes: null,
+      outcomeRate: null,
     });
     expect(out.activity.recentSendActivity[0]).toMatchObject({
       date: "2026-07-11",

@@ -162,6 +162,58 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
 
             <Card>
               <CardHeader>
+                <CardTitle>Monthly mail-result trend</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {metrics.results.monthlyTrend.length === 0 ? (
+                  <p className="text-muted-foreground">
+                    Monthly direct-mail trends will appear after PSG imports dated send
+                    history for this shop.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b text-muted-foreground">
+                        <tr>
+                          <th className="py-2 pr-3 font-heading font-medium">Month</th>
+                          <th className="py-2 pr-3 text-right font-heading font-medium">
+                            Mailed
+                          </th>
+                          <th className="py-2 text-right font-heading font-medium">
+                            Result rate
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {metrics.results.monthlyTrend.slice(0, 6).map((month) => (
+                          <tr key={month.month}>
+                            <td className="py-2 pr-3">{formatMonth(month.month)}</td>
+                            <td className="py-2 pr-3 text-right">
+                              {formatNumber(month.mailed)}
+                            </td>
+                            <td className="py-2 text-right">
+                              {month.outcomeRate === null
+                                ? "Results pending"
+                                : formatPercent(month.outcomeRate)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {metrics.results.monthlyTrend[0]?.message ? (
+                      <p className="mt-3 text-sm text-muted-foreground">
+                        {metrics.results.monthlyTrend[0].message}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
                 <CardTitle>Recent mail activity</CardTitle>
               </CardHeader>
               <CardContent>
@@ -237,6 +289,16 @@ export function formatPieceLabel(piece: DirectMailPieceSummary): string {
 
 export function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatMonth(value: string): string {
+  const [year, month] = value.split("-");
+  if (!year || !month) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${year}-${month}-01T00:00:00Z`));
 }
 
 function formatSalesShareDetail(metrics: DirectMailMetrics): string {

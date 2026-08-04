@@ -11,6 +11,7 @@ import {
 import { loadReportNarrative } from "@/lib/report/storage";
 import { getReviewSentimentSummary } from "@/lib/reviews/sentiment-summary";
 import { getLatestLocalFalconSnapshot } from "@/lib/local-falcon/store";
+import { getDirectMailMetrics } from "@/lib/analytics/direct-mail";
 import { renderReportHtml } from "@/lib/report/render";
 import type { ReportData } from "@/lib/report/types";
 import type { ReportNarrative } from "@/lib/report/schema";
@@ -107,6 +108,13 @@ export const defaultLoader: PrintPayloadLoader = async (shopId, period) => {
     readReviewSentiment,
     readLocalFalconVisibility: ({ shopId: s }) =>
       getLatestLocalFalconSnapshot(service, { shopId: s }),
+    readDirectMailMetrics: ({ shopId: s, from, to }) =>
+      getDirectMailMetrics({
+        authorizedShopIds: [s],
+        from,
+        to,
+        client: service,
+      }),
   });
   return { reportData, narrative };
 };
