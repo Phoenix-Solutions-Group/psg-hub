@@ -118,17 +118,17 @@ export function reviewDocumentTileClassName(isSelected: boolean): string {
   return cn(
     "min-h-28 rounded-md border p-3 text-left text-sm transition-colors",
     isSelected
-      ? "border-primary bg-primary text-primary-foreground shadow-sm"
+      ? "border-[#142838] bg-[#142838] text-white shadow-sm"
       : "border-border bg-background hover:border-primary/50",
   );
 }
 
 export function reviewDocumentTileMutedTextClassName(isSelected: boolean): string {
-  return isSelected ? "text-primary-foreground" : "text-muted-foreground";
+  return isSelected ? "text-white" : "text-muted-foreground";
 }
 
 export function reviewDocumentTileIconClassName(isSelected: boolean): string {
-  return cn("mt-0.5 size-4 shrink-0", isSelected ? "text-primary-foreground" : "text-ember");
+  return cn("mt-0.5 size-4 shrink-0", isSelected ? "text-white" : "text-ember");
 }
 
 export function PdfProofFrame({ title, url }: { title: string; url: string }) {
@@ -425,7 +425,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                       </label>
                     </fieldset>
                     <div className="space-y-2">
-                      <Label htmlFor="private-comment">Comment for selected proof</Label>
+                      <Label htmlFor="private-comment">Private comment</Label>
                       <div className="text-xs text-muted-foreground">
                         Applies to {activeDocument?.title ?? "the selected document"}
                       </div>
@@ -438,7 +438,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                     </div>
                     <Button type="button" variant="outline" onClick={saveComment} disabled={pending || !activeDocument}>
                       <MessageSquare className="size-4" aria-hidden="true" />
-                      Add comment to selected proof
+                      Add comment to selected document
                     </Button>
                     <div className="space-y-2">
                       <Label htmlFor="submit-message">Decision note</Label>
