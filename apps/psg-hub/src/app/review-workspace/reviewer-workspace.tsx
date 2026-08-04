@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 type Workspace = {
   project: { id: string; title: string; status: string };
@@ -111,6 +112,23 @@ function frameSandbox(doc: Workspace["documents"][number]): string | undefined {
   if (isHtmlProof(doc)) return "allow-popups allow-popups-to-escape-sandbox";
   if (isGeneratedPageProof(doc)) return "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox";
   return undefined;
+}
+
+export function reviewDocumentTileClassName(isSelected: boolean): string {
+  return cn(
+    "min-h-28 rounded-md border p-3 text-left text-sm transition-colors",
+    isSelected
+      ? "border-primary bg-primary text-primary-foreground shadow-sm"
+      : "border-border bg-background hover:border-primary/50",
+  );
+}
+
+export function reviewDocumentTileMutedTextClassName(isSelected: boolean): string {
+  return isSelected ? "text-primary-foreground" : "text-muted-foreground";
+}
+
+export function reviewDocumentTileIconClassName(isSelected: boolean): string {
+  return cn("mt-0.5 size-4 shrink-0", isSelected ? "text-primary-foreground" : "text-ember");
 }
 
 export function PdfProofFrame({ title, url }: { title: string; url: string }) {
@@ -328,27 +346,23 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                         key={key}
                         type="button"
                         onClick={() => setSelectedDocumentKey(key)}
-                        className={`min-h-28 rounded-md border p-3 text-left text-sm transition-colors ${
-                          isSelected
-                            ? "border-primary bg-accent text-accent-foreground"
-                            : "border-border bg-background hover:border-primary/50"
-                        }`}
+                        className={reviewDocumentTileClassName(isSelected)}
                         aria-pressed={isSelected}
                       >
                         <div className="flex items-start gap-2">
                           {doc.proofContent ? (
-                            <Monitor className="mt-0.5 size-4 shrink-0 text-ember" aria-hidden="true" />
+                            <Monitor className={reviewDocumentTileIconClassName(isSelected)} aria-hidden="true" />
                           ) : isImageProof(doc.contentType) ? (
-                            <ImageIcon className="mt-0.5 size-4 shrink-0 text-ember" aria-hidden="true" />
+                            <ImageIcon className={reviewDocumentTileIconClassName(isSelected)} aria-hidden="true" />
                           ) : (
-                            <FileText className="mt-0.5 size-4 shrink-0 text-ember" aria-hidden="true" />
+                            <FileText className={reviewDocumentTileIconClassName(isSelected)} aria-hidden="true" />
                           )}
                           <div className="min-w-0">
-                            <div className="text-xs text-muted-foreground">Document {index + 1}</div>
+                            <div className={cn("text-xs", reviewDocumentTileMutedTextClassName(isSelected))}>Document {index + 1}</div>
                             <div className="mt-1 line-clamp-2 font-medium">{doc.title}</div>
                           </div>
                         </div>
-                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <div className={cn("mt-3 flex flex-wrap gap-2 text-xs", reviewDocumentTileMutedTextClassName(isSelected))}>
                           <span>{documentKindLabel(doc)}</span>
                           <span>{commentCount} {commentCount === 1 ? "comment" : "comments"}</span>
                           <span>{statusLabel(itemDecision?.decision)}</span>

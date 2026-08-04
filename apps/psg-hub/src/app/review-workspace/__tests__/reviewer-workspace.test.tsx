@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { PdfProofFrame } from "../reviewer-workspace";
+import {
+  PdfProofFrame,
+  reviewDocumentTileClassName,
+  reviewDocumentTileIconClassName,
+  reviewDocumentTileMutedTextClassName,
+} from "../reviewer-workspace";
 
 describe("review workspace PDF proof rendering", () => {
   it("embeds PDF proofs in an inline frame without the Chrome object fallback text", () => {
@@ -15,5 +20,20 @@ describe("review workspace PDF proof rendering", () => {
     expect(html).toContain("/api/bsm/review-workspace/file?");
     expect(html).toContain("July homepage proof PDF proof");
     expect(html).not.toContain("Chrome could not show this PDF inline");
+  });
+});
+
+describe("review workspace document chooser contrast", () => {
+  it("uses high-contrast selected colors for the document tile and nested metadata", () => {
+    expect(reviewDocumentTileClassName(true)).toContain("bg-primary");
+    expect(reviewDocumentTileClassName(true)).toContain("text-primary-foreground");
+    expect(reviewDocumentTileMutedTextClassName(true)).toBe("text-primary-foreground");
+    expect(reviewDocumentTileIconClassName(true)).toContain("text-primary-foreground");
+  });
+
+  it("keeps unselected document metadata muted", () => {
+    expect(reviewDocumentTileClassName(false)).toContain("bg-background");
+    expect(reviewDocumentTileMutedTextClassName(false)).toBe("text-muted-foreground");
+    expect(reviewDocumentTileIconClassName(false)).toContain("text-ember");
   });
 });
