@@ -80,6 +80,7 @@ export default async function UsersAdminPage() {
     { data: memberships },
     { data: shopsRaw },
     { data: subscriptions },
+    { data: inviteAuditRows },
   ] = await Promise.all([
     listAllAuthUsers(service),
     service.from("profiles").select("id, display_name"),
@@ -87,6 +88,7 @@ export default async function UsersAdminPage() {
     service.from("shop_users").select("user_id, shop_id, role"),
     service.from("shops").select("id, name, slug").order("name", { ascending: true }),
     service.from("subscriptions").select("shop_id, tier, status"),
+    service.from("access_audit").select("target_profile_id").eq("action", "user.invite"),
   ]);
 
   const profileNameById = new Map<string, string>();
@@ -146,6 +148,11 @@ export default async function UsersAdminPage() {
   }
 
   const authUsersById = new Map(authUsers.map((u) => [u.id, u]));
+  const inviteCreatedProfileIds = new Set(
+    (inviteAuditRows ?? [])
+      .map((row) => row.target_profile_id)
+      .filter((profileId): profileId is string => typeof profileId === "string")
+  );
   const profileIds = new Set<string>([
     ...authUsers.map((u) => u.id),
     ...(profiles ?? []).map((p) => p.id as string),
@@ -173,7 +180,9 @@ export default async function UsersAdminPage() {
         };
       })
       .sort((a, b) => a.displayName.localeCompare(b.displayName)),
-    user.email
+    user.email,
+    undefined,
+    inviteCreatedProfileIds
   );
 
   return (

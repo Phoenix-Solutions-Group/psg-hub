@@ -1,4 +1,5 @@
 type DemoUserCandidate = {
+  profileId?: string;
   displayName: string;
   email: string | null;
   isDeleted?: boolean;
@@ -63,8 +64,20 @@ export function isInternalDemoUser(user: DemoUserCandidate) {
   );
 }
 
-export function filterInternalDemoUsers<T extends DemoUserCandidate>(users: T[]) {
-  return users.filter((user) => !isInternalDemoUser(user));
+function isExplicitlyVisibleUser(
+  user: DemoUserCandidate,
+  extraVisibleProfileIds?: ReadonlySet<string>
+) {
+  return Boolean(user.profileId && extraVisibleProfileIds?.has(user.profileId));
+}
+
+export function filterInternalDemoUsers<T extends DemoUserCandidate>(
+  users: T[],
+  extraVisibleProfileIds?: ReadonlySet<string>
+) {
+  return users.filter(
+    (user) => isExplicitlyVisibleUser(user, extraVisibleProfileIds) || !isInternalDemoUser(user)
+  );
 }
 
 function normalizeEmail(email?: string | null): string {
@@ -123,14 +136,19 @@ export function shouldUseCleanDemoVisibility(
 export function filterCleanDemoUsers<T extends DemoUserCandidate>(
   users: T[],
   currentUserEmail?: string | null,
-  env: CleanDemoEnv = defaultCleanDemoEnv()
+  env: CleanDemoEnv = defaultCleanDemoEnv(),
+  extraVisibleProfileIds?: ReadonlySet<string>
 ): T[] {
   if (!shouldUseCleanDemoVisibility(currentUserEmail, env)) {
-    return filterInternalDemoUsers(users);
+    return filterInternalDemoUsers(users, extraVisibleProfileIds);
   }
 
   const demoEmails = cleanDemoUserEmails(env);
-  return users.filter((user) => demoEmails.has(normalizeEmail(user.email)));
+  return users.filter(
+    (user) =>
+      isExplicitlyVisibleUser(user, extraVisibleProfileIds) ||
+      demoEmails.has(normalizeEmail(user.email))
+  );
 }
 
 function isCleanDemoShop(shop: DemoShopCandidate) {

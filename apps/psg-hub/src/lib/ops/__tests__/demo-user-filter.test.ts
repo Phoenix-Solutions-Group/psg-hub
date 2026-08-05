@@ -62,6 +62,34 @@ describe("demo user filter", () => {
     ).toBe(true);
   });
 
+  it("keeps admin-invited QA accounts visible for access confirmation", () => {
+    const users = [
+      {
+        profileId: "profile-visible",
+        displayName: "QA invite check",
+        email: "qa-invite-check@example.org",
+      },
+      {
+        profileId: "profile-hidden",
+        displayName: "QA stale seed",
+        email: "qa-stale-seed@example.org",
+      },
+      {
+        profileId: "profile-real",
+        displayName: "Riverside Collision Owner",
+        email: "owner@riversidecollision.example",
+      },
+    ];
+
+    expect(filterInternalDemoUsers(users, new Set(["profile-visible"]))).toEqual([
+      users[0],
+      users[2],
+    ]);
+    expect(
+      filterCleanDemoUsers(users, "admin@psghub.me", {}, new Set(["profile-visible"]))
+    ).toEqual([users[0]]);
+  });
+
   it("keeps realistic Riverside and PSG staff users visible", () => {
     const users = [
       {
