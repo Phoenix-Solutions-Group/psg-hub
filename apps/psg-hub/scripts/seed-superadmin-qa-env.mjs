@@ -35,6 +35,7 @@ export const CLEAN_DEMO_SEED = {
   clientName: "Riverside Collision",
   shopName: "Riverside Collision",
   shopSlug: "riverside-collision",
+  packageTier: "performance",
   moduleSlug: "bsm-demo-walkthrough",
   moduleDisplayName: "BSM Demo Walkthrough",
   previousClientName: "BSM Demo Client",
@@ -50,6 +51,19 @@ export const CLEAN_DEMO_SEED = {
     organicKeywords: 57,
     authorityScore: 41,
     backlinks: 142,
+    adSpend: 136,
+    adClicks: 42,
+    adImpressions: 1820,
+    adConversions: 5,
+    sessions: 96,
+    users: 71,
+    keyEvents: 8,
+    searchClicks: 34,
+    searchImpressions: 1640,
+    calls: 6,
+    websiteClicks: 11,
+    directionRequests: 4,
+    profileImpressions: 710,
   },
   directMail: {
     sends: 45,
@@ -297,31 +311,100 @@ function trailingDemoDates(days) {
 async function seedRiversideAnalytics(shopId) {
   const dates = trailingDemoDates(30);
   const latest = CLEAN_DEMO_SEED.riversideAnalytics;
-  const rows = dates.map((date, index) => {
+  const syncedAt = `${dates.at(-1)}T12:00:00Z`;
+  const rows = dates.flatMap((date, index) => {
     const remainingDays = dates.length - 1 - index;
-    return {
-      shop_id: shopId,
-      source: "semrush",
-      date,
-      period: "daily",
-      synced_at: `${dates.at(-1)}T12:00:00Z`,
-      metrics: {
-        organic_traffic: latest.organicTraffic - remainingDays,
-        organic_keywords: latest.organicKeywords - remainingDays,
-        organic_traffic_cost: 580 + index * 11,
-        backlinks: latest.backlinks - remainingDays,
-        authority_score: latest.authorityScore,
+    const adSpend = latest.adSpend - remainingDays * 2;
+    const adConversions = Math.max(1, latest.adConversions - Math.floor(remainingDays / 8));
+    const searchImpressions = latest.searchImpressions - remainingDays * 18;
+    return [
+      {
+        shop_id: shopId,
+        source: "semrush",
+        date,
+        period: "daily",
+        synced_at: syncedAt,
+        metrics: {
+          organic_traffic: latest.organicTraffic - remainingDays,
+          organic_keywords: latest.organicKeywords - remainingDays,
+          organic_traffic_cost: 580 + index * 11,
+          backlinks: latest.backlinks - remainingDays,
+          authority_score: latest.authorityScore,
+        },
       },
-    };
+      {
+        shop_id: shopId,
+        source: "google_ads",
+        date,
+        period: "daily",
+        synced_at: syncedAt,
+        metrics: {
+          spend: adSpend,
+          clicks: latest.adClicks - Math.floor(remainingDays / 2),
+          impressions: latest.adImpressions - remainingDays * 24,
+          conversions: adConversions,
+          cpl: adSpend / adConversions,
+          cost_micros: adSpend * 1_000_000,
+          conversion_tracking_verified: true,
+        },
+      },
+      {
+        shop_id: shopId,
+        source: "ga4",
+        date,
+        period: "daily",
+        synced_at: syncedAt,
+        metrics: {
+          sessions: latest.sessions - remainingDays,
+          total_users: latest.users - remainingDays,
+          active_users: latest.users - Math.floor(remainingDays / 2),
+          new_users: 18 + (index % 7),
+          engaged_sessions: latest.sessions - remainingDays - 14,
+          key_events: latest.keyEvents - Math.floor(remainingDays / 8),
+          engagement_rate: 0.71,
+        },
+      },
+      {
+        shop_id: shopId,
+        source: "gsc",
+        date,
+        period: "daily",
+        synced_at: syncedAt,
+        metrics: {
+          clicks: latest.searchClicks - Math.floor(remainingDays / 3),
+          impressions: searchImpressions,
+          ctr: (latest.searchClicks - Math.floor(remainingDays / 3)) / searchImpressions,
+          position: 7.8,
+        },
+      },
+      {
+        shop_id: shopId,
+        source: "gbp",
+        date,
+        period: "daily",
+        synced_at: syncedAt,
+        metrics: {
+          impressions_desktop_maps: 88 + index,
+          impressions_desktop_search: 126 + index * 2,
+          impressions_mobile_maps: 164 + index * 2,
+          impressions_mobile_search: 226 + index * 3,
+          impressions_total: latest.profileImpressions - remainingDays * 6,
+          website_clicks: latest.websiteClicks - Math.floor(remainingDays / 8),
+          call_clicks: latest.calls - Math.floor(remainingDays / 10),
+          direction_requests: latest.directionRequests - Math.floor(remainingDays / 12),
+          conversations: 1 + (index % 2),
+        },
+      },
+    ];
   });
 
-  const { error: deleteGoogleError } = await supabase
+  const { error: deleteDemoMetricsError } = await supabase
     .from("analytics_snapshots")
     .delete()
     .eq("shop_id", shopId)
-    .in("source", ["google_ads", "ga4", "gsc", "gbp", "gbp_presence"]);
-  if (deleteGoogleError) {
-    throw new Error(`Riverside Google demo cleanup failed: ${deleteGoogleError.message}`);
+    .in("source", ["semrush", "google_ads", "ga4", "gsc", "gbp", "gbp_presence"]);
+  if (deleteDemoMetricsError) {
+    throw new Error(`Riverside analytics demo cleanup failed: ${deleteDemoMetricsError.message}`);
   }
 
   const { error } = await supabase
@@ -526,7 +609,7 @@ async function main() {
       shop_id: shop.id,
       stripe_customer_id: `qa-superadmin-${shop.id}`,
       stripe_subscription_id: `qa-superadmin-${shop.id}`,
-      tier: "growth",
+      tier: CLEAN_DEMO_SEED.packageTier,
       status: "active",
     },
     { onConflict: "shop_id" }

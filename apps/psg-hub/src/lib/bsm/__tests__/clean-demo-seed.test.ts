@@ -41,11 +41,17 @@ describe("clean BSM demo seed", () => {
     expect(CLEAN_DEMO_SEED.operatorDisplayName).toBe("BSM Demo Admin");
     expect(CLEAN_DEMO_SEED.shopUserDisplayName).toBe("BSM Demo User");
     expect(CLEAN_DEMO_SEED.shopName).toBe("Riverside Collision");
-    expect(CLEAN_DEMO_SEED.riversideAnalytics).toEqual({
+    expect(CLEAN_DEMO_SEED.packageTier).toBe("performance");
+    expect(CLEAN_DEMO_SEED.riversideAnalytics).toMatchObject({
       organicTraffic: 184,
       organicKeywords: 57,
       authorityScore: 41,
       backlinks: 142,
+      adSpend: 136,
+      adConversions: 5,
+      sessions: 96,
+      searchClicks: 34,
+      profileImpressions: 710,
     });
     expect(CLEAN_DEMO_SEED.directMail).toEqual({
       sends: 45,
