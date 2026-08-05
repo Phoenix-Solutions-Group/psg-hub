@@ -138,6 +138,10 @@ function appliedFromFile(path) {
   let names;
   if (raw.startsWith('[')) {
     names = JSON.parse(raw).map((row) => String(row.name ?? row.version ?? row));
+  } else if (raw.startsWith('{')) {
+    const parsed = JSON.parse(raw);
+    const rows = parsed.rows ?? parsed.data ?? [];
+    names = rows.map((row) => String(row.name ?? row.version ?? row));
   } else {
     names = raw.split('\n').map((l) => l.trim()).filter(Boolean);
   }

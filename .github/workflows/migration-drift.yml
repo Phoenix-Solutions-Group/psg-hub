@@ -21,6 +21,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Daily production guardrail. PR/push checks catch drift during code review;
+    # this catches production drift even when no one is actively merging code.
+    - cron: "42 11 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -71,3 +75,28 @@ jobs:
             exit 0
           fi
           exit $code
+
+  scheduled-report:
+    name: production drift issue reporter
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Report production drift to Paperclip
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PAPERCLIP_API_URL: ${{ secrets.PAPERCLIP_API_URL }}
+          PAPERCLIP_API_KEY: ${{ secrets.PAPERCLIP_API_KEY }}
+          PAPERCLIP_COMPANY_ID: a38dde7c-f8ee-4901-804d-bf1d6887dbf0
+          PAPERCLIP_PROJECT_ID: a9ae4312-c9b0-4481-a2aa-bbea9c3dbd6c
+          PAPERCLIP_GOAL_ID: d89fd784-a2a3-407d-888e-8cf9c401768f
+          PAPERCLIP_ASSIGNEE_AGENT_ID: 535baaa9-466b-4b9c-b0ba-3b50211c3c6a
+        run: node scripts/report-migration-drift.mjs
