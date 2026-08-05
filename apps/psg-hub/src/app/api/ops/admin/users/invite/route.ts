@@ -130,9 +130,6 @@ export async function POST(request: NextRequest) {
     console.error("[api/ops/admin/users invite POST] listUsers failed:", existingAuthUser.error.message);
     return NextResponse.json({ error: "Failed to check existing users" }, { status: 500 });
   }
-  if (existingAuthUser.user) {
-    return NextResponse.json({ error: "A user with that email already exists" }, { status: 409 });
-  }
 
   let shop: { id: string; name: string | null; slug: string | null } | null = null;
   if (shopId) {
@@ -149,30 +146,36 @@ export async function POST(request: NextRequest) {
     shop = data as { id: string; name: string | null; slug: string | null };
   }
 
-  const redirectTo = inviteRedirectTo();
-  const invite = await service.auth.admin.inviteUserByEmail(email, {
-    data: { display_name: email },
-    ...(redirectTo ? { redirectTo } : {}),
-  });
+  let invitedUser = existingAuthUser.user ?? null;
+  let delivery = "existing_auth_user_access_repaired";
+  let status = 200;
+  if (!invitedUser) {
+    const redirectTo = inviteRedirectTo();
+    const invite = await service.auth.admin.inviteUserByEmail(email, {
+      data: { display_name: email },
+      ...(redirectTo ? { redirectTo } : {}),
+    });
 
-  let invitedUser = invite.data.user;
-  let delivery = "supabase_invite_email";
-  if (invite.error) {
-    console.error("[api/ops/admin/users invite POST] invite failed:", invite.error.message);
-    if (!isReservedTestEmail(email)) {
-      return NextResponse.json({ error: "Failed to send user invite" }, { status: 500 });
-    }
+    invitedUser = invite.data.user;
+    delivery = "supabase_invite_email";
+    status = 201;
+    if (invite.error) {
+      console.error("[api/ops/admin/users invite POST] invite failed:", invite.error.message);
+      if (!isReservedTestEmail(email)) {
+        return NextResponse.json({ error: "Failed to send user invite" }, { status: 500 });
+      }
 
-    const demoInvite = await createDemoInviteUser(service, email);
-    if (demoInvite.error) {
-      console.error(
-        "[api/ops/admin/users invite POST] demo invite fallback failed:",
-        demoInvite.error.message
-      );
-      return NextResponse.json({ error: "Failed to send user invite" }, { status: 500 });
+      const demoInvite = await createDemoInviteUser(service, email);
+      if (demoInvite.error) {
+        console.error(
+          "[api/ops/admin/users invite POST] demo invite fallback failed:",
+          demoInvite.error.message
+        );
+        return NextResponse.json({ error: "Failed to send user invite" }, { status: 500 });
+      }
+      invitedUser = demoInvite.user;
+      delivery = demoInvite.delivery;
     }
-    invitedUser = demoInvite.user;
-    delivery = demoInvite.delivery;
   }
 
   const invitedUserId = invitedUser?.id;
@@ -236,6 +239,6 @@ export async function POST(request: NextRequest) {
         shopRole,
       },
     },
-    { status: 201 }
+    { status }
   );
 }

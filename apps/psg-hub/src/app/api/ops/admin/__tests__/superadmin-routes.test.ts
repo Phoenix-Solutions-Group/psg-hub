@@ -647,11 +647,13 @@ describe("admin user routes", () => {
     expect(auditEvents).toHaveLength(0);
   });
 
-  it("rejects duplicate invite emails before mutating access", async () => {
+  it("repairs access rows when rerunning an invite for an existing auth user", async () => {
     listUsersMock.mockResolvedValue({
       data: { users: [{ id: "existing-user", email: "new@example.com" }] },
       error: null,
     });
+    queue("profiles", "upsert", { data: null, error: null });
+    queue("app_user_roles", "upsert", { data: null, error: null });
 
     const res = await userInviteRoute.POST(
       req("POST", "/api/ops/admin/users/invite", {
@@ -660,13 +662,33 @@ describe("admin user routes", () => {
       })
     );
 
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
     expect(inviteUserByEmailMock).not.toHaveBeenCalled();
-    expect(operations).toHaveLength(0);
-    expect(auditEvents).toHaveLength(0);
+    expect(operations).toEqual([
+      {
+        table: "profiles",
+        op: "upsert",
+        payload: { id: "existing-user", display_name: "new@example.com" },
+      },
+      {
+        table: "app_user_roles",
+        op: "upsert",
+        payload: { profile_id: "existing-user", role: "customer" },
+      },
+    ]);
+    expect(auditEvents).toEqual([
+      expect.objectContaining({
+        action: "user.invite",
+        targetProfileId: "existing-user",
+        payload: expect.objectContaining({
+          email: "new@example.com",
+          delivery: "existing_auth_user_access_repaired",
+        }),
+      }),
+    ]);
   });
 
-  it("rejects duplicate invite emails found after the first auth user page", async () => {
+  it("repairs existing auth users found after the first auth user page", async () => {
     listUsersMock
       .mockResolvedValueOnce({
         data: {
@@ -686,6 +708,8 @@ describe("admin user routes", () => {
         },
         error: null,
       });
+    queue("profiles", "upsert", { data: null, error: null });
+    queue("app_user_roles", "upsert", { data: null, error: null });
 
     const res = await userInviteRoute.POST(
       req("POST", "/api/ops/admin/users/invite", {
@@ -694,12 +718,23 @@ describe("admin user routes", () => {
       })
     );
 
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
     expect(listUsersMock).toHaveBeenNthCalledWith(1, { page: 1, perPage: 1000 });
     expect(listUsersMock).toHaveBeenNthCalledWith(2, { page: 2, perPage: 1000 });
     expect(inviteUserByEmailMock).not.toHaveBeenCalled();
-    expect(operations).toHaveLength(0);
-    expect(auditEvents).toHaveLength(0);
+    expect(operations).toEqual([
+      {
+        table: "profiles",
+        op: "upsert",
+        payload: { id: "existing-user", display_name: "new@example.com" },
+      },
+      {
+        table: "app_user_roles",
+        op: "upsert",
+        payload: { profile_id: "existing-user", role: "customer" },
+      },
+    ]);
+    expect(auditEvents).toHaveLength(1);
   });
 
   it("audits granting and removing superadmin explicitly", async () => {
