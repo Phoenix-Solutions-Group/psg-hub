@@ -3,10 +3,14 @@ export const RIVERSIDE_ANALYTICS_DEMO_SHOP = {
   slug: "riverside-collision",
 } as const;
 
-const RIVERSIDE_ANALYTICS_DEMO_EMAILS = ["test@psghub.me"] as const;
+const RIVERSIDE_ANALYTICS_DEMO_EMAILS = [
+  "test@psghub.me",
+  "nick@phoenixsolutionsgroup.net",
+] as const;
 
 type RiversideAnalyticsDemoEnv = {
   DEMO_SHOP_EMAIL?: string;
+  DEMO_REVIEWER_EMAILS?: string;
   VERCEL_URL?: string;
   VERCEL_ENV?: string;
 };
@@ -22,10 +26,18 @@ function normalizeEmail(email?: string | null): string {
   return (email ?? "").trim().toLowerCase();
 }
 
+function splitEmails(value?: string): string[] {
+  return (value ?? "")
+    .split(",")
+    .map(normalizeEmail)
+    .filter((email) => email.length > 0);
+}
+
 function configuredDemoEmails(env: RiversideAnalyticsDemoEnv | NodeJS.ProcessEnv) {
   return new Set([
     ...RIVERSIDE_ANALYTICS_DEMO_EMAILS,
     normalizeEmail(env.DEMO_SHOP_EMAIL),
+    ...splitEmails(env.DEMO_REVIEWER_EMAILS),
   ]);
 }
 

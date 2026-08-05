@@ -31,6 +31,29 @@ describe("Riverside Analytics preview demo fallback", () => {
     ).toBe(true);
   });
 
+  it("activates for Nick's board-review account in preview", () => {
+    expect(
+      shouldUseRiversideAnalyticsPreviewFallback({
+        userEmail: " Nick@PhoenixSolutionsGroup.Net ",
+        activeShopName: "Tedesco Auto Body",
+        env: { VERCEL_ENV: "preview" },
+      })
+    ).toBe(true);
+  });
+
+  it("activates for extra configured reviewer emails in preview", () => {
+    expect(
+      shouldUseRiversideAnalyticsPreviewFallback({
+        userEmail: "reviewer@example.test",
+        activeShopName: "Tedesco Auto Body",
+        env: {
+          DEMO_REVIEWER_EMAILS: "reviewer@example.test, second@example.test",
+          VERCEL_ENV: "preview",
+        },
+      })
+    ).toBe(true);
+  });
+
   it("activates on PSG Vercel preview hosts when VERCEL_ENV is unavailable", () => {
     expect(
       shouldUseRiversideAnalyticsPreviewFallback({
@@ -52,7 +75,7 @@ describe("Riverside Analytics preview demo fallback", () => {
   it("does not activate outside Vercel previews", () => {
     expect(
       shouldUseRiversideAnalyticsPreviewFallback({
-        userEmail: previewEnv.DEMO_SHOP_EMAIL,
+        userEmail: "nick@phoenixsolutionsgroup.net",
         activeShopName: "Tedesco Auto Body",
         env: { ...previewEnv, VERCEL_ENV: "production" },
       })
