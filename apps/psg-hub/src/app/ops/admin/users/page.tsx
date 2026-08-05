@@ -21,7 +21,11 @@ import {
   filterCleanDemoShops,
   filterCleanDemoUsers,
 } from "@/lib/ops/demo-user-filter";
-import { listAllAdminRows, listAllAuthUsers } from "@/lib/ops/admin-user-list";
+import {
+  emailFromInviteAuditPayload,
+  listAllAdminRows,
+  listAllAuthUsers,
+} from "@/lib/ops/admin-user-list";
 
 function cleanRole(role: unknown): AdminAppRole | null {
   return (ADMIN_APP_ROLES as readonly string[]).includes(role as string)
@@ -74,13 +78,17 @@ export default async function UsersAdminPage() {
   ] = await Promise.all([
     listAllAuthUsers(service),
     listAllAdminRows<{ id: string; display_name: string | null }>(() =>
-      service.from("profiles").select("id, display_name")
+      service.from("profiles").select("id, display_name").order("id", { ascending: true })
     ),
     listAllAdminRows<{ profile_id: string; role: string | null }>(() =>
-      service.from("app_user_roles").select("profile_id, role")
+      service.from("app_user_roles").select("profile_id, role").order("profile_id", { ascending: true })
     ),
     listAllAdminRows<{ user_id: string; shop_id: string; role: string | null }>(() =>
-      service.from("shop_users").select("user_id, shop_id, role")
+      service
+        .from("shop_users")
+        .select("user_id, shop_id, role")
+        .order("user_id", { ascending: true })
+        .order("shop_id", { ascending: true })
     ),
     listAllAdminRows<{ id: string; name: string | null; slug: string | null }>(() =>
       service.from("shops").select("id, name, slug").order("name", { ascending: true })
@@ -88,8 +96,12 @@ export default async function UsersAdminPage() {
     listAllAdminRows<{ shop_id: string; tier: string | null; status: string | null }>(() =>
       service.from("subscriptions").select("shop_id, tier, status")
     ),
-    listAllAdminRows<{ target_profile_id: string | null }>(() =>
-      service.from("access_audit").select("target_profile_id").eq("action", "user.invite")
+    listAllAdminRows<{ target_profile_id: string | null; payload_jsonb: unknown }>(() =>
+      service
+        .from("access_audit")
+        .select("target_profile_id, payload_jsonb")
+        .eq("action", "user.invite")
+        .order("ts", { ascending: false })
     ),
   ]);
 
@@ -150,6 +162,12 @@ export default async function UsersAdminPage() {
   }
 
   const authUsersById = new Map(authUsers.map((u) => [u.id, u]));
+  const invitedEmailByProfileId = new Map<string, string>();
+  for (const row of inviteAuditRows) {
+    if (typeof row.target_profile_id !== "string") continue;
+    const email = emailFromInviteAuditPayload(row.payload_jsonb);
+    if (email) invitedEmailByProfileId.set(row.target_profile_id, email);
+  }
   const inviteCreatedProfileIds = new Set(
     inviteAuditRows
       .map((row) => row.target_profile_id)
@@ -168,7 +186,11 @@ export default async function UsersAdminPage() {
       .map((profileId) => {
         const authUser = authUsersById.get(profileId);
         const profileName = profileNameById.get(profileId) ?? "";
-        const email = authUser?.email ?? (looksLikeEmail(profileName) ? profileName : null);
+        const email =
+          authUser?.email ??
+          (looksLikeEmail(profileName) ? profileName : null) ??
+          invitedEmailByProfileId.get(profileId) ??
+          null;
         const displayName =
           profileName || email || profileId.slice(0, 8);
         const isSuspended = Boolean(authUser?.banned_until);

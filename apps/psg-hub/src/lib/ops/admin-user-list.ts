@@ -47,3 +47,13 @@ export async function listAllAuthUsers(service: ReturnType<typeof createServiceC
   }
   return users;
 }
+
+export function emailFromInviteAuditPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+
+  const email = (payload as { email?: unknown }).email;
+  if (typeof email !== "string") return null;
+
+  const trimmed = email.trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) ? trimmed : null;
+}

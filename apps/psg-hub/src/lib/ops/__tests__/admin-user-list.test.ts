@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listAllAdminRows } from "@/lib/ops/admin-user-list";
+import { emailFromInviteAuditPayload, listAllAdminRows } from "@/lib/ops/admin-user-list";
 
 function pagedRows(total: number) {
   const rows = Array.from({ length: total }, (_value, index) => ({ id: index + 1 }));
@@ -40,5 +40,19 @@ describe("listAllAdminRows", () => {
         },
       }))
     ).rejects.toThrow("permission denied");
+  });
+});
+
+describe("emailFromInviteAuditPayload", () => {
+  it("normalizes the invite email stored in Access Audit payloads", () => {
+    expect(emailFromInviteAuditPayload({ email: " New.User@Example.ORG " })).toBe(
+      "new.user@example.org"
+    );
+  });
+
+  it("ignores missing or invalid Access Audit payload emails", () => {
+    expect(emailFromInviteAuditPayload(null)).toBeNull();
+    expect(emailFromInviteAuditPayload({ email: "not-an-email" })).toBeNull();
+    expect(emailFromInviteAuditPayload({ email: 123 })).toBeNull();
   });
 });
