@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
@@ -22,6 +21,7 @@ import {
   filterCleanDemoShops,
   filterCleanDemoUsers,
 } from "@/lib/ops/demo-user-filter";
+import { listAllAdminRows, listAllAuthUsers } from "@/lib/ops/admin-user-list";
 
 function cleanRole(role: unknown): AdminAppRole | null {
   return (ADMIN_APP_ROLES as readonly string[]).includes(role as string)
@@ -41,20 +41,6 @@ function cleanTier(tier: unknown): AdminTier | null {
 
 function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
-async function listAllAuthUsers(service: ReturnType<typeof createServiceClient>) {
-  const perPage = 1000;
-  const users: User[] = [];
-  for (let page = 1; ; page += 1) {
-    const result = await service.auth.admin.listUsers({ page, perPage });
-    if (result.error) {
-      throw result.error;
-    }
-    users.push(...result.data.users);
-    if (result.data.users.length < perPage) break;
-  }
-  return users;
 }
 
 export default async function UsersAdminPage() {
@@ -79,34 +65,46 @@ export default async function UsersAdminPage() {
   const service = createServiceClient();
   const [
     authUsers,
-    { data: profiles },
-    { data: roleRows },
-    { data: memberships },
-    { data: shopsRaw },
-    { data: subscriptions },
-    { data: inviteAuditRows },
+    profiles,
+    roleRows,
+    memberships,
+    shopsRaw,
+    subscriptions,
+    inviteAuditRows,
   ] = await Promise.all([
     listAllAuthUsers(service),
-    service.from("profiles").select("id, display_name"),
-    service.from("app_user_roles").select("profile_id, role"),
-    service.from("shop_users").select("user_id, shop_id, role"),
-    service.from("shops").select("id, name, slug").order("name", { ascending: true }),
-    service.from("subscriptions").select("shop_id, tier, status"),
-    service.from("access_audit").select("target_profile_id").eq("action", "user.invite"),
+    listAllAdminRows<{ id: string; display_name: string | null }>(() =>
+      service.from("profiles").select("id, display_name")
+    ),
+    listAllAdminRows<{ profile_id: string; role: string | null }>(() =>
+      service.from("app_user_roles").select("profile_id, role")
+    ),
+    listAllAdminRows<{ user_id: string; shop_id: string; role: string | null }>(() =>
+      service.from("shop_users").select("user_id, shop_id, role")
+    ),
+    listAllAdminRows<{ id: string; name: string | null; slug: string | null }>(() =>
+      service.from("shops").select("id, name, slug").order("name", { ascending: true })
+    ),
+    listAllAdminRows<{ shop_id: string; tier: string | null; status: string | null }>(() =>
+      service.from("subscriptions").select("shop_id, tier, status")
+    ),
+    listAllAdminRows<{ target_profile_id: string | null }>(() =>
+      service.from("access_audit").select("target_profile_id").eq("action", "user.invite")
+    ),
   ]);
 
   const profileNameById = new Map<string, string>();
-  for (const p of profiles ?? []) {
+  for (const p of profiles) {
     profileNameById.set(p.id as string, (p.display_name as string) ?? "");
   }
 
   const roleByProfileId = new Map<string, AdminAppRole | null>();
-  for (const r of roleRows ?? []) {
+  for (const r of roleRows) {
     roleByProfileId.set(r.profile_id as string, cleanRole(r.role));
   }
 
   const subByShopId = new Map<string, { tier: AdminTier | null; status: string | null }>();
-  for (const s of subscriptions ?? []) {
+  for (const s of subscriptions) {
     subByShopId.set(s.shop_id as string, {
       tier: cleanTier(s.tier),
       status: (s.status as string | null) ?? null,
@@ -114,7 +112,7 @@ export default async function UsersAdminPage() {
   }
 
   const shops: ManagedShop[] = filterCleanDemoShops(
-    (shopsRaw ?? []).map((s) => {
+    shopsRaw.map((s) => {
       const id = s.id as string;
       const sub = subByShopId.get(id);
       return {
@@ -132,7 +130,7 @@ export default async function UsersAdminPage() {
   const shopNameById = new Map(shops.map((s) => [s.id, s.name]));
   const membershipsByUserId = new Map<string, ManagedUser["memberships"]>();
   const visibleMemberships = filterCleanDemoShopMemberships(
-    (memberships ?? []).map((m) => ({
+    memberships.map((m) => ({
       userId: m.user_id as string,
       shopId: m.shop_id as string,
       role: m.role,
@@ -153,15 +151,15 @@ export default async function UsersAdminPage() {
 
   const authUsersById = new Map(authUsers.map((u) => [u.id, u]));
   const inviteCreatedProfileIds = new Set(
-    (inviteAuditRows ?? [])
+    inviteAuditRows
       .map((row) => row.target_profile_id)
       .filter((profileId): profileId is string => typeof profileId === "string")
   );
   const profileIds = new Set<string>([
     ...authUsers.map((u) => u.id),
-    ...(profiles ?? []).map((p) => p.id as string),
-    ...(roleRows ?? []).map((r) => r.profile_id as string),
-    ...(memberships ?? []).map((m) => m.user_id as string),
+    ...profiles.map((p) => p.id as string),
+    ...roleRows.map((r) => r.profile_id as string),
+    ...memberships.map((m) => m.user_id as string),
     ...inviteCreatedProfileIds,
   ]);
 
