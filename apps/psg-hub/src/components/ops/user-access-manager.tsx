@@ -20,6 +20,17 @@ import {
 
 const NO_TIER_VALUE = "__no_tier__";
 
+type InviteUserResponse = {
+  user?: {
+    id?: string;
+    email?: string;
+    role?: AdminAppRole;
+    shopId?: string | null;
+    shopRole?: ShopMemberRole | null;
+  };
+  error?: string;
+};
+
 export type ManagedShop = {
   id: string;
   name: string;
@@ -52,8 +63,16 @@ export function UserAccessManager({
   shops: ManagedShop[];
 }) {
   const [query, setQuery] = useState("");
+  const [optimisticUsers, setOptimisticUsers] = useState<ManagedUser[]>([]);
+  const visibleUserSource = useMemo(() => {
+    const usersByProfileId = new Map(users.map((user) => [user.profileId, user]));
+    for (const user of optimisticUsers) {
+      usersByProfileId.set(user.profileId, usersByProfileId.get(user.profileId) ?? user);
+    }
+    return [...usersByProfileId.values()].sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [optimisticUsers, users]);
   const filtered = useMemo(() => {
-    const visibleUsers = users.filter((user) => !user.isDeleted);
+    const visibleUsers = visibleUserSource.filter((user) => !user.isDeleted);
     const q = query.trim().toLowerCase();
     if (!q) return visibleUsers;
     return visibleUsers.filter((u) =>
@@ -62,11 +81,17 @@ export function UserAccessManager({
         .toLowerCase()
         .includes(q)
     );
-  }, [query, users]);
+  }, [query, visibleUserSource]);
 
   return (
     <section className="space-y-6">
-      <InviteUserForm shops={shops} />
+      <InviteUserForm
+        shops={shops}
+        onInvited={(user) => {
+          setOptimisticUsers((current) => [user, ...current]);
+          setQuery(user.email ?? user.displayName);
+        }}
+      />
 
       <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -101,7 +126,13 @@ export function UserAccessManager({
   );
 }
 
-function InviteUserForm({ shops }: { shops: ManagedShop[] }) {
+function InviteUserForm({
+  shops,
+  onInvited,
+}: {
+  shops: ManagedShop[];
+  onInvited: (user: ManagedUser) => void;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AdminAppRole>("customer");
@@ -128,9 +159,31 @@ function InviteUserForm({ shops }: { shops: ManagedShop[] }) {
           shopRole: shopId ? shopRole : undefined,
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as InviteUserResponse;
       if (!res.ok) {
         throw new Error(data.error ?? `Invite failed (${res.status})`);
+      }
+      const invitedUser = data.user;
+      if (invitedUser?.id && invitedUser.email) {
+        const invitedShop = invitedUser.shopId
+          ? shops.find((shop) => shop.id === invitedUser.shopId)
+          : null;
+        onInvited({
+          profileId: invitedUser.id,
+          displayName: invitedUser.email,
+          email: invitedUser.email,
+          bannedUntil: null,
+          isDeleted: false,
+          isSuspended: false,
+          role: invitedUser.role ?? role,
+          memberships: invitedShop && invitedUser.shopId
+            ? [{
+                shopId: invitedUser.shopId,
+                shopName: invitedShop.name,
+                role: invitedUser.shopRole ?? shopRole,
+              }]
+            : [],
+        });
       }
 
       setEmail("");

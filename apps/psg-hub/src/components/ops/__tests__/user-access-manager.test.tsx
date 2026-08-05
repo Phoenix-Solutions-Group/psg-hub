@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+
+import { flushSync } from "react-dom";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   UserAccessManager,
@@ -59,7 +63,45 @@ function render() {
   return renderToStaticMarkup(<UserAccessManager users={users} shops={shops} />);
 }
 
+function changeField(field: HTMLInputElement | HTMLSelectElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), "value")?.set;
+  setter?.call(field, value);
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+  field.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function findByLabel(container: HTMLElement, labelText: string) {
+  const label = [...container.querySelectorAll<HTMLLabelElement>("label")].find((node) =>
+    node.textContent?.includes(labelText)
+  );
+  const id = label?.getAttribute("for");
+  const field = id ? container.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`) : null;
+  if (!field) throw new Error(`Missing field: ${labelText}`);
+  return field;
+}
+
+function findButton(container: HTMLElement, text: string) {
+  const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find((node) =>
+    node.textContent?.includes(text)
+  );
+  if (!button) throw new Error(`Missing button: ${text}`);
+  return button;
+}
+
 describe("UserAccessManager", () => {
+  let root: Root | null = null;
+  let container: HTMLDivElement | null = null;
+
+  afterEach(() => {
+    if (root) {
+      flushSync(() => root?.unmount());
+      root = null;
+    }
+    container?.remove();
+    container = null;
+    vi.unstubAllGlobals();
+  });
+
   it("shows invited/demo admins and their multiple shop assignments", () => {
     const html = render();
 
@@ -99,5 +141,49 @@ describe("UserAccessManager", () => {
     expect(html).toContain(">No subscription tier</option>");
     expect(html).toContain(">Growth</option>");
     expect(html).toContain(">Performance</option>");
+  });
+
+  it("adds a successfully invited user to the visible searchable list immediately", async () => {
+    const invitedEmail = "qa-invite-check@example.org";
+    vi.stubGlobal("fetch", vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      expect(body).toMatchObject({
+        email: invitedEmail,
+        role: "psg_superadmin",
+        shopId: shops[0].id,
+        shopRole: "manager",
+      });
+      return Response.json({
+        user: {
+          id: "99999999-9999-4999-8999-999999999999",
+          email: invitedEmail,
+          role: "psg_superadmin",
+          shopId: shops[0].id,
+          shopRole: "manager",
+        },
+      }, { status: 201 });
+    }));
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    flushSync(() => {
+      root?.render(<UserAccessManager users={users} shops={shops} />);
+    });
+
+    changeField(findByLabel(container, "Email"), invitedEmail);
+    changeField(findByLabel(container, "Global role"), "psg_superadmin");
+    changeField(findByLabel(container, "Starting shop"), shops[0].id);
+    await vi.waitFor(() => expect(container?.textContent).toContain("Shop role"));
+    changeField(findByLabel(container, "Shop role"), "manager");
+    findButton(container, "Send invite").click();
+
+    await vi.waitFor(() => {
+      expect(container?.textContent).toContain(invitedEmail);
+      expect(container?.textContent).toContain("Superadmin");
+      expect(container?.textContent).toContain("Wallace Collision");
+      expect(container?.textContent).toContain("Manager");
+    });
+    expect(container.querySelector<HTMLInputElement>('input[placeholder="Search users"]')?.value).toBe(invitedEmail);
   });
 });

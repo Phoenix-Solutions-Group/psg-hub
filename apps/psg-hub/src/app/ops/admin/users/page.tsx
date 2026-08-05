@@ -39,6 +39,10 @@ function cleanTier(tier: unknown): AdminTier | null {
   return (ADMIN_TIERS as readonly string[]).includes(tier as string) ? (tier as AdminTier) : null;
 }
 
+function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 async function listAllAuthUsers(service: ReturnType<typeof createServiceClient>) {
   const perPage = 1000;
   const users: User[] = [];
@@ -158,15 +162,17 @@ export default async function UsersAdminPage() {
     ...(profiles ?? []).map((p) => p.id as string),
     ...(roleRows ?? []).map((r) => r.profile_id as string),
     ...(memberships ?? []).map((m) => m.user_id as string),
+    ...inviteCreatedProfileIds,
   ]);
 
   const users: ManagedUser[] = filterCleanDemoUsers(
     [...profileIds]
       .map((profileId) => {
         const authUser = authUsersById.get(profileId);
-        const email = authUser?.email ?? null;
+        const profileName = profileNameById.get(profileId) ?? "";
+        const email = authUser?.email ?? (looksLikeEmail(profileName) ? profileName : null);
         const displayName =
-          profileNameById.get(profileId) || email || profileId.slice(0, 8);
+          profileName || email || profileId.slice(0, 8);
         const isSuspended = Boolean(authUser?.banned_until);
         return {
           profileId,
