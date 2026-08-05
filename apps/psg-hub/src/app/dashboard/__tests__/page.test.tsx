@@ -13,6 +13,13 @@ let mockCounts = {
   published: 0,
 };
 let mockLatestAudit: { report: ShopAuditReport } | null = null;
+let mockLocalFalcon: {
+  capturedAt: string;
+  shareOfLocalVoice: number | null;
+} | null = null;
+let mockPresenceRow: { metrics: Record<string, unknown> } | null = null;
+let mockGscRows: { date: string; metrics: Record<string, unknown> }[] = [];
+let mockGaRows: { date: string; metrics: Record<string, unknown> }[] = [];
 const recordBsmPilotEvent = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -68,6 +75,17 @@ vi.mock("@/lib/seo-audit/run", () => ({
   getLatestShopAudit: vi.fn(async () => mockLatestAudit),
 }));
 
+vi.mock("@/lib/local-falcon/store", () => ({
+  getLatestLocalFalconSnapshot: vi.fn(async () => mockLocalFalcon),
+}));
+
+vi.mock("@/lib/analytics/snapshots", () => ({
+  getLatestMonthlySnapshot: vi.fn(async () => mockPresenceRow),
+  getSnapshots: vi.fn(async (_service, args: { source: string }) =>
+    args.source === "gsc" ? mockGscRows : mockGaRows,
+  ),
+}));
+
 vi.mock("@/lib/bsm/pilot-events", () => ({
   recordBsmPilotEvent: (...a: unknown[]) => recordBsmPilotEvent(...a),
 }));
@@ -108,6 +126,10 @@ beforeEach(() => {
     published: 0,
   };
   mockLatestAudit = null;
+  mockLocalFalcon = null;
+  mockPresenceRow = null;
+  mockGscRows = [];
+  mockGaRows = [];
   recordBsmPilotEvent.mockReset();
 });
 
@@ -128,6 +150,16 @@ describe("DashboardPage first-login trust state", () => {
     expect(html).toContain(
       "Drafts will appear after BSM has enough shop signals to create them.",
     );
+    expect(html).toContain("Marketing visibility");
+    expect(html).toContain("Local map visibility");
+    expect(html).toContain("Waiting on first scan");
+    expect(html).toContain("Local presence");
+    expect(html).toContain("Waiting on profile data");
+    expect(html).toContain("Search performance");
+    expect(html).toContain("Waiting on search data");
+    expect(html).toContain("Google Analytics property connection");
+    expect(html).toContain("Not connected yet");
+    expect(html).toContain("View full analytics");
     expect(html.indexOf("Your first check has not run yet.")).toBeLessThan(
       html.indexOf("Content Items"),
     );
@@ -149,6 +181,34 @@ describe("DashboardPage first-login trust state", () => {
       published: 2,
     };
     mockLatestAudit = { report: report() };
+    mockLocalFalcon = {
+      capturedAt: "2026-08-01T00:00:00.000Z",
+      shareOfLocalVoice: 42.6,
+    };
+    mockPresenceRow = {
+      metrics: {
+        average_rating: 4.7,
+        total_review_count: 128,
+      },
+    };
+    mockGscRows = [
+      {
+        date: "2026-08-02",
+        metrics: {
+          clicks: 37,
+          impressions: 1420,
+        },
+      },
+    ];
+    mockGaRows = [
+      {
+        date: "2026-08-02",
+        metrics: {
+          sessions: 214,
+          total_users: 177,
+        },
+      },
+    ];
 
     const html = renderToStaticMarkup(await DashboardPage());
 
@@ -156,6 +216,14 @@ describe("DashboardPage first-login trust state", () => {
     expect(html).toContain(">4<");
     expect(html).toContain(">1<");
     expect(html).toContain(">2<");
+    expect(html).toContain("42.6%");
+    expect(html).toContain("Share of Local Voice from the Aug 1 map scan.");
+    expect(html).toContain("4.7 rating");
+    expect(html).toContain("128 Google reviews currently counted.");
+    expect(html).toContain("37 clicks");
+    expect(html).toContain("1,420 search impressions");
+    expect(html).toContain("214 sessions");
+    expect(html).toContain("177 website users");
     expect(html).not.toContain("Not started yet");
   });
 });

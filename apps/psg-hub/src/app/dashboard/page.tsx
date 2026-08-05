@@ -6,6 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { getLatestShopAudit } from "@/lib/seo-audit/run";
 import {
+  getLatestMonthlySnapshot,
+  getSnapshots,
+} from "@/lib/analytics/snapshots";
+import { readAnalyticsSection } from "@/lib/analytics/safe-read";
+import {
+  formatNumber,
+  formatShortDate,
+  trailingWindow,
+  type DatedMetrics,
+} from "@/lib/analytics/aggregate";
+import { getLatestLocalFalconSnapshot } from "@/lib/local-falcon/store";
+import {
   buildFirstLoginValueState,
   type FirstLoginValueState,
 } from "@/lib/bsm/first-login-value";
@@ -17,6 +29,14 @@ type DashboardStat = {
   emptyLabel: string;
   helper: string;
 };
+
+type VisibilityCard = {
+  title: string;
+  value: string;
+  helper: string;
+};
+
+const WINDOW_DAYS = 30;
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -33,6 +53,28 @@ export default async function DashboardPage() {
   let pendingReview = 0;
   let published = 0;
   let firstLoginValue: FirstLoginValueState | null = null;
+  let marketingVisibility: VisibilityCard[] = [
+    {
+      title: "Local map visibility",
+      value: "Waiting on first scan",
+      helper: "Map ranking appears after PSG imports a Local Falcon scan for this shop.",
+    },
+    {
+      title: "Local presence",
+      value: "Waiting on profile data",
+      helper: "Google Business Profile health appears after the shop connects its profile.",
+    },
+    {
+      title: "Search performance",
+      value: "Waiting on search data",
+      helper: "Search clicks and impressions appear after Search Console is connected.",
+    },
+    {
+      title: "Google Analytics property connection",
+      value: "Not connected yet",
+      helper: "Website sessions appear after the shop connects its Google Analytics property.",
+    },
+  ];
 
   if (user) {
     const { activeShopId } = await getActiveShopContext(user.id);
@@ -56,6 +98,10 @@ export default async function DashboardPage() {
       published = pub.count ?? 0;
       const latestAudit = await getLatestShopAudit(service, activeShopId);
       firstLoginValue = buildFirstLoginValueState(latestAudit?.report ?? null);
+      marketingVisibility = await getMarketingVisibilityCards(
+        service,
+        activeShopId,
+      );
       await recordBsmPilotEvent(service, {
         eventName: "first_login_card_viewed",
         shopId: activeShopId,
@@ -145,6 +191,188 @@ export default async function DashboardPage() {
           );
         })}
       </div>
+
+      <section
+        className="space-y-4"
+        aria-labelledby="marketing-visibility-heading"
+      >
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2
+              id="marketing-visibility-heading"
+              className="font-heading text-lg font-semibold tracking-tight"
+            >
+              Marketing visibility
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              The core signals a shop owner needs to see whether local
+              marketing is working.
+            </p>
+          </div>
+          <Link
+            className={buttonVariants({ variant: "outline" })}
+            href="/dashboard/analytics"
+          >
+            View full analytics
+          </Link>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {marketingVisibility.map((item) => (
+            <Card key={item.title}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {item.title}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-2xl font-bold tracking-tight">{item.value}</p>
+                <p className="text-sm leading-5 text-muted-foreground">
+                  {item.helper}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
     </div>
   );
+}
+
+async function getMarketingVisibilityCards(
+  service: ReturnType<typeof createServiceClient>,
+  shopId: string,
+): Promise<VisibilityCard[]> {
+  const { from, to } = trailingWindow(WINDOW_DAYS);
+  const readWarnings: { section: string; message: string }[] = [];
+
+  const [localFalcon, presenceRow, gscRows, gaRows] = await Promise.all([
+    readAnalyticsSection(
+      "dashboard Local Falcon",
+      () => getLatestLocalFalconSnapshot(service, { shopId }),
+      null,
+      readWarnings,
+    ),
+    readAnalyticsSection(
+      "dashboard Business Profile status",
+      () =>
+        getLatestMonthlySnapshot(service, {
+          shopId,
+          source: "gbp_presence",
+        }),
+      null,
+      readWarnings,
+    ),
+    readAnalyticsSection(
+      "dashboard Search Console",
+      () =>
+        getSnapshots(service, {
+          shopId,
+          source: "gsc",
+          period: "daily",
+          from,
+          to,
+        }),
+      [],
+      readWarnings,
+    ),
+    readAnalyticsSection(
+      "dashboard Google Analytics",
+      () =>
+        getSnapshots(service, {
+          shopId,
+          source: "ga4",
+          period: "daily",
+          from,
+          to,
+        }),
+      [],
+      readWarnings,
+    ),
+  ]);
+
+  const latestGsc = latestMetrics(gscRows);
+  const latestGa = latestMetrics(gaRows);
+  const presenceMetrics = presenceRow?.metrics as
+    | Record<string, unknown>
+    | undefined;
+
+  const localMapValue =
+    localFalcon?.shareOfLocalVoice === null || !localFalcon
+      ? "Waiting on first scan"
+      : `${localFalcon.shareOfLocalVoice.toFixed(1)}%`;
+  const localMapHelper = localFalcon
+    ? `Share of Local Voice from the ${formatShortDate(
+        localFalcon.capturedAt,
+      )} map scan.`
+    : "Map ranking appears after PSG imports a Local Falcon scan for this shop.";
+
+  const averageRating =
+    typeof presenceMetrics?.average_rating === "number"
+      ? presenceMetrics.average_rating
+      : null;
+  const reviewCount =
+    typeof presenceMetrics?.total_review_count === "number"
+      ? presenceMetrics.total_review_count
+      : null;
+
+  const clicks = metricNumber(latestGsc, "clicks");
+  const impressions = metricNumber(latestGsc, "impressions");
+  const sessions = metricNumber(latestGa, "sessions");
+  const users = metricNumber(latestGa, "total_users");
+
+  return [
+    {
+      title: "Local map visibility",
+      value: localMapValue,
+      helper: localMapHelper,
+    },
+    {
+      title: "Local presence",
+      value:
+        averageRating === null
+          ? "Waiting on profile data"
+          : `${averageRating.toFixed(1)} rating`,
+      helper:
+        reviewCount === null
+          ? "Google Business Profile health appears after the shop connects its profile."
+          : `${formatNumber(reviewCount)} Google reviews currently counted.`,
+    },
+    {
+      title: "Search performance",
+      value:
+        clicks === null
+          ? "Waiting on search data"
+          : `${formatNumber(clicks)} clicks`,
+      helper:
+        impressions === null
+          ? "Search clicks and impressions appear after Search Console is connected."
+          : `${formatNumber(impressions)} search impressions in the latest synced day.`,
+    },
+    {
+      title: "Google Analytics property connection",
+      value:
+        sessions === null
+          ? "Not connected yet"
+          : `${formatNumber(sessions)} sessions`,
+      helper:
+        users === null
+          ? "Website sessions appear after the shop connects its Google Analytics property."
+          : `${formatNumber(users)} website users in the latest synced day.`,
+    },
+  ];
+}
+
+function latestMetrics(rows: DatedMetrics[]): Record<string, unknown> | null {
+  const latest = rows
+    .filter((row) => row.date)
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  return latest?.metrics ?? null;
+}
+
+function metricNumber(
+  metrics: Record<string, unknown> | null,
+  key: string,
+): number | null {
+  const value = metrics?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
