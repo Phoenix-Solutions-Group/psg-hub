@@ -151,6 +151,76 @@ create table if not exists public.bsm_content_review_processing_jobs (
     check (sanitization_status in ('not_needed', 'pending', 'complete', 'failed'))
 );
 
+-- Production may already have the v2 foundation shape of this table. In that
+-- case create-if-not-exists skips the worker-contract columns above, so keep the
+-- upgrade path additive before adding indexes/FKs that reference those columns.
+alter table public.bsm_content_review_processing_jobs
+  add column if not exists job_type text not null default 'review_copy',
+  add column if not exists scan_status text not null default 'pending',
+  add column if not exists conversion_status text not null default 'not_needed',
+  add column if not exists sanitization_status text not null default 'not_needed',
+  add column if not exists attempts integer not null default 0 check (attempts >= 0),
+  add column if not exists max_attempts integer not null default 3 check (max_attempts > 0),
+  add column if not exists requested_capabilities_jsonb jsonb not null default '[]'::jsonb,
+  add column if not exists worker_runtime text not null default 'unassigned',
+  add column if not exists worker_job_ref text,
+  add column if not exists input_manifest_jsonb jsonb not null default '{}'::jsonb,
+  add column if not exists result_manifest_jsonb jsonb not null default '{}'::jsonb,
+  add column if not exists locked_at timestamptz,
+  add column if not exists locked_by text,
+  add column if not exists completed_at timestamptz,
+  add column if not exists next_attempt_at timestamptz;
+
+create unique index if not exists bsm_content_review_processing_jobs_unique_key
+  on public.bsm_content_review_processing_jobs (shop_id, idempotency_key);
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'bsm_content_review_processing_jobs_type_check'
+      and conrelid = 'public.bsm_content_review_processing_jobs'::regclass
+  ) then
+    alter table public.bsm_content_review_processing_jobs
+      add constraint bsm_content_review_processing_jobs_type_check
+      check (job_type in ('scan', 'convert', 'sanitize', 'review_copy', 'summary', 'purge'));
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'bsm_content_review_processing_jobs_scan_status_check'
+      and conrelid = 'public.bsm_content_review_processing_jobs'::regclass
+  ) then
+    alter table public.bsm_content_review_processing_jobs
+      add constraint bsm_content_review_processing_jobs_scan_status_check
+      check (scan_status in ('pending', 'clean', 'infected', 'failed'));
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'bsm_content_review_processing_jobs_conversion_status_check'
+      and conrelid = 'public.bsm_content_review_processing_jobs'::regclass
+  ) then
+    alter table public.bsm_content_review_processing_jobs
+      add constraint bsm_content_review_processing_jobs_conversion_status_check
+      check (conversion_status in ('not_needed', 'pending', 'complete', 'failed', 'blocked_runtime'));
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'bsm_content_review_processing_jobs_sanitization_status_check'
+      and conrelid = 'public.bsm_content_review_processing_jobs'::regclass
+  ) then
+    alter table public.bsm_content_review_processing_jobs
+      add constraint bsm_content_review_processing_jobs_sanitization_status_check
+      check (sanitization_status in ('not_needed', 'pending', 'complete', 'failed'));
+  end if;
+end $$;
+
 alter table public.bsm_content_review_items
   drop constraint if exists bsm_content_review_items_latest_processing_job_fkey;
 alter table public.bsm_content_review_items
