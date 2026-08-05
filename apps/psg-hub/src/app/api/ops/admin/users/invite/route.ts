@@ -100,6 +100,32 @@ async function createDemoInviteUser(
   return { user: created.data.user, delivery: "demo_reserved_email_user_created" };
 }
 
+async function existingInviteIsComplete(
+  service: ReturnType<typeof createServiceClient>,
+  profileId: string,
+  shopId: string | null
+) {
+  const [profileResult, roleResult, shopResult] = await Promise.all([
+    service.from("profiles").select("id").eq("id", profileId).maybeSingle(),
+    service.from("app_user_roles").select("profile_id").eq("profile_id", profileId).maybeSingle(),
+    shopId
+      ? service
+          .from("shop_users")
+          .select("user_id")
+          .eq("user_id", profileId)
+          .eq("shop_id", shopId)
+          .maybeSingle()
+      : Promise.resolve({ data: { user_id: profileId }, error: null }),
+  ]);
+
+  const error = profileResult.error ?? roleResult.error ?? shopResult.error;
+  if (error) return { error };
+
+  return {
+    complete: Boolean(profileResult.data && roleResult.data && shopResult.data),
+  };
+}
+
 export async function POST(request: NextRequest) {
   const gate = await requireOpsFn("manage_users");
   if (!gate.ok) return gate.response;
@@ -149,6 +175,20 @@ export async function POST(request: NextRequest) {
   let invitedUser = existingAuthUser.user ?? null;
   let delivery = "existing_auth_user_access_repaired";
   let status = 200;
+  if (invitedUser?.id) {
+    const existingState = await existingInviteIsComplete(service, invitedUser.id, shopId ?? null);
+    if (existingState.error) {
+      console.error(
+        "[api/ops/admin/users invite POST] existing access lookup failed:",
+        existingState.error.message
+      );
+      return NextResponse.json({ error: "Failed to check existing user access" }, { status: 500 });
+    }
+    if (existingState.complete) {
+      return NextResponse.json({ error: "A user with that email already exists" }, { status: 409 });
+    }
+  }
+
   if (!invitedUser) {
     const redirectTo = inviteRedirectTo();
     const invite = await service.auth.admin.inviteUserByEmail(email, {

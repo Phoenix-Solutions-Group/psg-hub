@@ -652,6 +652,8 @@ describe("admin user routes", () => {
       data: { users: [{ id: "existing-user", email: "new@example.com" }] },
       error: null,
     });
+    queue("profiles", "select", { data: null, error: null });
+    queue("app_user_roles", "select", { data: null, error: null });
     queue("profiles", "upsert", { data: null, error: null });
     queue("app_user_roles", "upsert", { data: null, error: null });
 
@@ -688,6 +690,28 @@ describe("admin user routes", () => {
     ]);
   });
 
+  it("rejects a duplicate invite after the user access rows already exist", async () => {
+    listUsersMock.mockResolvedValue({
+      data: { users: [{ id: "existing-user", email: "new@example.com" }] },
+      error: null,
+    });
+    queue("profiles", "select", { data: { id: "existing-user" }, error: null });
+    queue("app_user_roles", "select", { data: { profile_id: "existing-user" }, error: null });
+
+    const res = await userInviteRoute.POST(
+      req("POST", "/api/ops/admin/users/invite", {
+        email: "new@example.com",
+        role: "customer",
+      })
+    );
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "A user with that email already exists" });
+    expect(inviteUserByEmailMock).not.toHaveBeenCalled();
+    expect(operations).toHaveLength(0);
+    expect(auditEvents).toHaveLength(0);
+  });
+
   it("repairs existing auth users found after the first auth user page", async () => {
     listUsersMock
       .mockResolvedValueOnce({
@@ -708,6 +732,8 @@ describe("admin user routes", () => {
         },
         error: null,
       });
+    queue("profiles", "select", { data: null, error: null });
+    queue("app_user_roles", "select", { data: null, error: null });
     queue("profiles", "upsert", { data: null, error: null });
     queue("app_user_roles", "upsert", { data: null, error: null });
 
