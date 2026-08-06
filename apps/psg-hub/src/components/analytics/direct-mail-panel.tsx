@@ -492,17 +492,23 @@ function ServiceAreaView() {
             <MapPin className="h-5 w-5" aria-hidden="true" />
           </span>
         </div>
-        <p className="font-heading text-sm font-semibold">General service area</p>
+        <p className="font-heading text-sm font-semibold">
+          General service area (illustrative)
+        </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          This is a safe, map-like view around the shop. It does not show exact
-          recipient locations.
+          This is a general illustration of the shop&apos;s trade area, not a map of
+          where letters actually went. PSG doesn&apos;t track ZIP or city data for
+          mailed pieces today.
         </p>
       </div>
       <div className="mt-4 space-y-2 text-sm">
-        <ServiceAreaLegend dotClassName="bg-primary" label="Core service area" value="Closest repeat-customer radius" />
-        <ServiceAreaLegend dotClassName="bg-primary/50" label="Extended reach" value="Nearby communities PSG can monitor" />
-        <ServiceAreaLegend dotClassName="bg-border" label="Occasional reach" value="Shown only as grouped context" />
+        <ServiceAreaLegend dotClassName="bg-primary" label="Primary trade area" />
+        <ServiceAreaLegend dotClassName="bg-primary/50" label="Broader trade area" />
+        <ServiceAreaLegend dotClassName="bg-border" label="Occasional reach" />
       </div>
+      <p className="mt-3 text-sm text-muted-foreground">
+        Illustrative only - not derived from actual mail-send locations.
+      </p>
     </div>
   );
 }
@@ -510,11 +516,9 @@ function ServiceAreaView() {
 function ServiceAreaLegend({
   dotClassName,
   label,
-  value,
 }: {
   dotClassName: string;
   label: string;
-  value: string;
 }) {
   return (
     <div className="flex items-start justify-between gap-3 border-t border-border pt-2">
@@ -522,7 +526,6 @@ function ServiceAreaLegend({
         <span className={cn("h-2 w-2 rounded-full", dotClassName)} />
         {label}
       </span>
-      <span className="max-w-[13rem] text-right text-muted-foreground">{value}</span>
     </div>
   );
 }

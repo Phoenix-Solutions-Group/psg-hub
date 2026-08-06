@@ -125,8 +125,12 @@ describe("DirectMailPanel", () => {
     expect(html).toContain("Response signal rate");
     expect(html).toContain("Best-performing letter");
     expect(html).toContain("Where mail went");
-    expect(html).toContain("General service area");
-    expect(html).toContain("not show exact recipient locations");
+    expect(html).toContain("General service area (illustrative)");
+    expect(html).toContain("not a map of where letters actually went");
+    expect(html).toContain("doesn&#x27;t track ZIP or city data");
+    expect(html).toContain("Primary trade area");
+    expect(html).toContain("Broader trade area");
+    expect(html).toContain("Illustrative only - not derived from actual mail-send locations");
     expect(html).toContain("Letters by campaign type");
     expect(html).toContain("Monthly mail-result trend");
     expect(html).toContain("Jul 2026");
