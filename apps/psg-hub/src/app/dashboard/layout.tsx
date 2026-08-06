@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { Logo } from "@/components/brand/logo";
 import { OnboardingScreen } from "@/components/dashboard/onboarding-screen";
 import { ShopSwitcher } from "@/components/dashboard/shop-switcher";
@@ -10,7 +11,9 @@ import { getOpsAccess, isOpsStaff } from "@/lib/auth/ops-access";
 import { getActiveShopContext } from "@/lib/shop/context";
 import {
   RIVERSIDE_ANALYTICS_DEMO_SHOP,
+  getRiversideAnalyticsPreviewShop,
   shouldUseRiversideAnalyticsPreviewFallback,
+  type SupabaseShopLookup,
 } from "@/lib/bsm/riverside-analytics-demo";
 import { buildDashboardNav } from "@/lib/dashboard/nav";
 
@@ -54,7 +57,25 @@ export default async function DashboardLayout({
       requestHost,
     })
   ) {
-    if (riversideDemoShop) {
+    const service = createServiceClient() as unknown as SupabaseShopLookup;
+    const previewShop = await getRiversideAnalyticsPreviewShop(
+      service,
+      {
+        userEmail: user.email,
+        activeShopName,
+        requestHost,
+      }
+    );
+    if (previewShop) {
+      activeShopId = previewShop.id;
+      displayShops = [
+        {
+          id: previewShop.id,
+          name: previewShop.name,
+          role: riversideDemoShop?.role ?? "owner",
+        },
+      ];
+    } else if (riversideDemoShop) {
       activeShopId = riversideDemoShop.id;
     } else if (activeShopId) {
       displayShops = shops.map((shop) =>
