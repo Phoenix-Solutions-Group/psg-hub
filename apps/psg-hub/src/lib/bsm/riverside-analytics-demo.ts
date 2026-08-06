@@ -15,6 +15,21 @@ type RiversideAnalyticsDemoEnv = {
   VERCEL_ENV?: string;
 };
 
+type RiversideAnalyticsDemoShop = {
+  id: string;
+  name: string;
+};
+
+export type SupabaseShopLookup = {
+  from(table: "shops"): {
+    select(columns: string): {
+      eq(column: string, value: string): {
+        maybeSingle(): PromiseLike<{ data: unknown }>;
+      };
+    };
+  };
+};
+
 type ShouldUseRiversideAnalyticsPreviewFallbackArgs = {
   userEmail?: string | null;
   activeShopName?: string | null;
@@ -80,4 +95,29 @@ export function shouldUseRiversideAnalyticsPreviewFallback({
     normalizedUserEmail.length > 0 &&
     configuredDemoEmails(runtimeEnv).has(normalizedUserEmail)
   );
+}
+
+export async function getRiversideAnalyticsPreviewShop(
+  service: unknown,
+  args: ShouldUseRiversideAnalyticsPreviewFallbackArgs
+): Promise<RiversideAnalyticsDemoShop | null> {
+  if (!shouldUseRiversideAnalyticsPreviewFallback(args)) return null;
+
+  const shopLookup = service as SupabaseShopLookup;
+  const { data } = await shopLookup
+    .from("shops")
+    .select("id, name")
+    .eq("slug", RIVERSIDE_ANALYTICS_DEMO_SHOP.slug)
+    .maybeSingle();
+  const fallbackShop = data as { id?: unknown; name?: unknown } | null;
+
+  if (typeof fallbackShop?.id !== "string") return null;
+
+  return {
+    id: fallbackShop.id,
+    name:
+      typeof fallbackShop.name === "string" && fallbackShop.name.trim()
+        ? fallbackShop.name
+        : RIVERSIDE_ANALYTICS_DEMO_SHOP.name,
+  };
 }

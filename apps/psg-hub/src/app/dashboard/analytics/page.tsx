@@ -17,6 +17,7 @@ import {
 } from "@/lib/analytics/direct-mail";
 import {
   RIVERSIDE_ANALYTICS_DEMO_SHOP,
+  getRiversideAnalyticsPreviewShop,
   shouldUseRiversideAnalyticsPreviewFallback,
 } from "@/lib/bsm/riverside-analytics-demo";
 import {
@@ -185,50 +186,67 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const { shops, activeShopId: resolvedActiveShopId } =
     await getActiveShopContext(user.id);
   let activeShopId = resolvedActiveShopId;
-  if (!activeShopId) {
-    // Layout's 06-03 gate already routes no-shop users to onboarding; this is a
-    // staff-without-membership edge — keep them on the dashboard home.
-    redirect("/dashboard");
-  }
+  let analyticsReader = supabase;
+  const requestHost = (await headers()).get("host");
 
   // The scope toggle exists ONLY for multi-shop (MSO) users.
   const scopeAll = params.scope === "all" && shops.length > 1;
-  let analyticsReader = supabase;
   const riversideDemoShop = shops.find(
     (s) => s.name === RIVERSIDE_ANALYTICS_DEMO_SHOP.name
   );
-  if (!scopeAll && riversideDemoShop) {
-    activeShopId = riversideDemoShop.id;
-  }
   let activeShopName =
-    shops.find((s) => s.id === activeShopId)?.name || "Your shop";
-  const requestHost = (await headers()).get("host");
-  // Preview-only board-demo fallback: if the configured demo login still has a
-  // stale shop membership, show the seeded Riverside demo without exposing this
-  // path to normal customers or production.
-  if (
+    shops.find((s) => s.id === activeShopId)?.name ?? null;
+  const useRiversidePreviewFallback =
     !scopeAll &&
     shouldUseRiversideAnalyticsPreviewFallback({
       userEmail: user.email,
       activeShopName,
       requestHost,
-    })
+    });
+  if (!activeShopId) {
+    if (useRiversidePreviewFallback) {
+      const fallbackShop = await getRiversideAnalyticsPreviewShop(service, {
+        userEmail: user.email,
+        activeShopName,
+        requestHost,
+      });
+      if (fallbackShop) {
+        activeShopId = fallbackShop.id;
+        activeShopName = fallbackShop.name;
+        analyticsReader = service;
+      }
+    }
+    if (!activeShopId) {
+      // Layout's 06-03 gate already routes no-shop users to onboarding; this is a
+      // staff-without-membership edge — keep them on the dashboard home.
+      redirect("/dashboard");
+    }
+  }
+  if (!scopeAll && riversideDemoShop) {
+    activeShopId = riversideDemoShop.id;
+    activeShopName = riversideDemoShop.name;
+  }
+  // Preview-only board-demo fallback: if the configured demo login still has a
+  // stale shop membership, show the seeded Riverside demo without exposing this
+  // path to normal customers or production.
+  if (
+    useRiversidePreviewFallback &&
+    activeShopName !== RIVERSIDE_ANALYTICS_DEMO_SHOP.name
   ) {
-    const { data: fallbackShop } = await service
-      .from("shops")
-      .select("id, name")
-      .eq("slug", RIVERSIDE_ANALYTICS_DEMO_SHOP.slug)
-      .maybeSingle();
-    if (fallbackShop?.id) {
-      activeShopId = fallbackShop.id as string;
-      activeShopName =
-        (fallbackShop.name as string | null) ??
-        RIVERSIDE_ANALYTICS_DEMO_SHOP.name;
+    const fallbackShop = await getRiversideAnalyticsPreviewShop(service, {
+      userEmail: user.email,
+      activeShopName,
+      requestHost,
+    });
+    if (fallbackShop) {
+      activeShopId = fallbackShop.id;
+      activeShopName = fallbackShop.name;
       analyticsReader = service;
     } else {
       activeShopName = RIVERSIDE_ANALYTICS_DEMO_SHOP.name;
     }
   }
+  activeShopName ??= "Your shop";
   const showGoogleDemoCards =
     !scopeAll && activeShopName === RIVERSIDE_ANALYTICS_DEMO_SHOP.name;
   // 11-01: the GA4 + GSC link is owner-only (the authorize route also enforces it).

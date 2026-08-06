@@ -22,6 +22,7 @@ import {
   type FirstLoginValueState,
 } from "@/lib/bsm/first-login-value";
 import { recordBsmPilotEvent } from "@/lib/bsm/pilot-events";
+import { getRiversideAnalyticsPreviewShop } from "@/lib/bsm/riverside-analytics-demo";
 
 type DashboardStat = {
   label: string;
@@ -77,9 +78,17 @@ export default async function DashboardPage() {
   ];
 
   if (user) {
-    const { activeShopId } = await getActiveShopContext(user.id);
+    const { shops, activeShopId: resolvedActiveShopId } =
+      await getActiveShopContext(user.id);
+    const activeShopName =
+      shops.find((shop) => shop.id === resolvedActiveShopId)?.name ?? null;
+    const service = createServiceClient();
+    const previewShop = await getRiversideAnalyticsPreviewShop(service, {
+      userEmail: user.email,
+      activeShopName,
+    });
+    const activeShopId = previewShop?.id ?? resolvedActiveShopId;
     if (activeShopId) {
-      const service = createServiceClient();
       const countFor = (status?: string) => {
         let q = service
           .from("content_items")

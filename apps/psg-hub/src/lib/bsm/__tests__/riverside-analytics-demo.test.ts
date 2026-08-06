@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   RIVERSIDE_ANALYTICS_DEMO_SHOP,
+  getRiversideAnalyticsPreviewShop,
   shouldUseRiversideAnalyticsPreviewFallback,
 } from "@/lib/bsm/riverside-analytics-demo";
 
@@ -36,6 +37,16 @@ describe("Riverside Analytics preview demo fallback", () => {
       shouldUseRiversideAnalyticsPreviewFallback({
         userEmail: " Nick@PhoenixSolutionsGroup.Net ",
         activeShopName: "Tedesco Auto Body",
+        env: { VERCEL_ENV: "preview" },
+      })
+    ).toBe(true);
+  });
+
+  it("activates for Nick's board-review account without an active customer shop", () => {
+    expect(
+      shouldUseRiversideAnalyticsPreviewFallback({
+        userEmail: " Nick@PhoenixSolutionsGroup.Net ",
+        activeShopName: null,
         env: { VERCEL_ENV: "preview" },
       })
     ).toBe(true);
@@ -107,5 +118,49 @@ describe("Riverside Analytics preview demo fallback", () => {
         env: previewEnv,
       })
     ).toBe(true);
+  });
+
+  it("resolves the Riverside shop record for a preview reviewer", async () => {
+    const service = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: {
+                id: "shop_riverside",
+                name: RIVERSIDE_ANALYTICS_DEMO_SHOP.name,
+              },
+            }),
+          }),
+        }),
+      }),
+    };
+
+    await expect(
+      getRiversideAnalyticsPreviewShop(service, {
+        userEmail: "nick@phoenixsolutionsgroup.net",
+        activeShopName: null,
+        env: { VERCEL_ENV: "preview" },
+      })
+    ).resolves.toEqual({
+      id: "shop_riverside",
+      name: RIVERSIDE_ANALYTICS_DEMO_SHOP.name,
+    });
+  });
+
+  it("does not look up Riverside outside the private preview path", async () => {
+    const service = {
+      from: () => {
+        throw new Error("unexpected lookup");
+      },
+    };
+
+    await expect(
+      getRiversideAnalyticsPreviewShop(service, {
+        userEmail: "nick@phoenixsolutionsgroup.net",
+        activeShopName: null,
+        env: { VERCEL_ENV: "production" },
+      })
+    ).resolves.toBeNull();
   });
 });
