@@ -20,7 +20,8 @@ describe("DirectMailPanel", () => {
     const html = renderPanel();
     expect(html).toContain("No direct-mail data imported yet");
     expect(html).toContain("customer reach will appear here");
-    expect(html).not.toMatch(/address|phone|email|household key/i);
+    expect(html).toContain("Privacy:");
+    expect(html).not.toMatch(/phone|email|household key|recipient hash/i);
   });
 
   it("renders activity, pieces, recent activity, and ready results", () => {
@@ -113,14 +114,19 @@ describe("DirectMailPanel", () => {
     expect(html).toContain("12");
     expect(html).toContain("Letters mailed this year");
     expect(html).toContain("90 estimated people reached");
+    expect(html).toContain("Measured");
     expect(html).toContain("Estimated referral reach");
-    expect(html).toContain("each mailed letter leads to 3 people");
+    expect(html).toContain("Model: each mailed letter leads to 3 people");
+    expect(html).toContain("Estimate");
     expect(html).toContain("Post-repair sales share");
     expect(html).toContain("60.0%");
     expect(html).toContain("$1,200 post-repair sales");
     expect(html).toContain("Customer response signals");
     expect(html).toContain("Response signal rate");
     expect(html).toContain("Best-performing letter");
+    expect(html).toContain("Where mail went");
+    expect(html).toContain("General service area");
+    expect(html).toContain("not show exact recipient locations");
     expect(html).toContain("Letters by campaign type");
     expect(html).toContain("Monthly mail-result trend");
     expect(html).toContain("Jul 2026");
@@ -132,6 +138,9 @@ describe("DirectMailPanel", () => {
     expect(html).toContain("Last updated Aug 4");
     expect(html).not.toContain("2026-08-04T17:15:23.707034+00:00");
     expect(html).toContain("Jul 10");
+    expect(html).toContain("Some numbers are estimates");
+    expect(html).toContain("recipient names");
+    expect(html).not.toMatch(/recipient hash|household key|phone number|email address/i);
   });
 
   it("renders partial activity with an honest results-unavailable state", () => {
