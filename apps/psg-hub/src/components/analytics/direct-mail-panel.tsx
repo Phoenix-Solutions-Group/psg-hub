@@ -1,6 +1,8 @@
 import type { DirectMailMetrics, DirectMailPieceSummary } from "@/lib/analytics/direct-mail";
 import { formatNumber, formatShortDate } from "@/lib/analytics/aggregate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { Home, Mail, Megaphone, TrendingUp, Users, type LucideIcon } from "lucide-react";
 
 type DirectMailPanelProps = {
   metrics: DirectMailMetrics;
@@ -10,10 +12,13 @@ type DirectMailPanelProps = {
 export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
   const hasActivity = metrics.activity.lettersMailed > 0;
   const hasResults = metrics.results.status === "ready";
+  const resultStatus = getResultStatus(metrics);
+  const topPiece =
+    metrics.results.bestPerformingPiece ?? metrics.activity.piecesByType[0] ?? null;
 
   return (
     <section aria-labelledby="direct-mail-heading" className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-2">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2
             id="direct-mail-heading"
@@ -26,7 +31,17 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
             history is available.
           </p>
         </div>
-        <p className="text-sm text-muted-foreground">{formatLastUpdated(metrics)}</p>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span
+            className={cn(
+              "rounded-full border px-2.5 py-1 font-heading text-xs font-medium",
+              resultStatus.className
+            )}
+          >
+            {resultStatus.label}
+          </span>
+          <span className="text-muted-foreground">{formatLastUpdated(metrics)}</span>
+        </div>
       </div>
 
       {!hasActivity && !hasResults ? (
@@ -43,8 +58,75 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
         </Card>
       ) : (
         <>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
+            <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="font-heading text-sm font-medium text-muted-foreground">
+                    Direct-mail reach
+                  </p>
+                  <p className="mt-2 text-4xl font-bold tracking-tight">
+                    {formatNumber(metrics.activity.lettersMailedMonthToDate)}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    letters mailed this month
+                  </p>
+                </div>
+                <div className="rounded-full border border-border bg-muted/50 p-3 text-primary">
+                  <Mail className="h-5 w-5" aria-hidden="true" />
+                </div>
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <SummaryStat
+                  label="This year"
+                  value={formatNumber(metrics.activity.lettersMailedYearToDate)}
+                />
+                <SummaryStat
+                  label="Lifetime"
+                  value={formatNumber(metrics.activity.lettersMailedLifetime)}
+                />
+                <SummaryStat
+                  label="Est. people reached"
+                  value={formatNumber(metrics.activity.estimatedReferralReach.monthToDate)}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-muted/25 p-4">
+              <p className="font-heading text-sm font-medium text-muted-foreground">
+                Strongest signal
+              </p>
+              <p className="mt-2 text-xl font-semibold tracking-tight">
+                {topPiece ? formatPieceLabel(topPiece) : "Building history"}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {hasResults
+                  ? `${formatNumber(
+                      metrics.results.responsesOrOutcomes
+                    )} response signals across mailed pieces`
+                  : metrics.results.message ?? "Results appear after enough mailed history"}
+              </p>
+              <div className="mt-4">
+                <BarMeter
+                  label="Response signal rate"
+                  value={
+                    metrics.results.responseRate === null
+                      ? "Building history"
+                      : formatPercent(metrics.results.responseRate)
+                  }
+                  percent={
+                    metrics.results.responseRate === null
+                      ? 0
+                      : clampPercent(metrics.results.responseRate)
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
+              icon={Mail}
               label="Letters mailed this month"
               value={formatNumber(metrics.activity.lettersMailedMonthToDate)}
               detail={
@@ -54,6 +136,7 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
               }
             />
             <KpiCard
+              icon={Megaphone}
               label="Letters mailed this year"
               value={formatNumber(metrics.activity.lettersMailedYearToDate)}
               detail={`${formatNumber(
@@ -61,6 +144,7 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
               )} estimated people reached`}
             />
             <KpiCard
+              icon={TrendingUp}
               label="Letters mailed lifetime"
               value={formatNumber(metrics.activity.lettersMailedLifetime)}
               detail={`${formatNumber(
@@ -68,6 +152,7 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
               )} estimated people reached`}
             />
             <KpiCard
+              icon={Users}
               label="Estimated referral reach"
               value={formatNumber(metrics.activity.estimatedReferralReach.monthToDate)}
               detail="Estimate: each mailed letter leads to 3 people hearing about it"
@@ -76,6 +161,7 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
+              icon={Home}
               label="Households reached"
               value={
                 metrics.activity.householdsReached === null
@@ -85,6 +171,7 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
               detail="Counts households, not individual people"
             />
             <KpiCard
+              icon={Users}
               label="Customer response signals"
               value={
                 hasResults
@@ -94,6 +181,7 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
               detail={metrics.results.message ?? "Repeat visits, referrals, and survey replies"}
             />
             <KpiCard
+              icon={TrendingUp}
               label="Response signal rate"
               value={
                 metrics.results.responseRate === null
@@ -107,6 +195,7 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
               }
             />
             <KpiCard
+              icon={TrendingUp}
               label="Post-repair sales share"
               value={
                 metrics.postRepairSalesShare.share === null
@@ -128,33 +217,23 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
                     Campaign type details will appear after send history is imported.
                   </p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead className="border-b text-muted-foreground">
-                        <tr>
-                          <th className="py-2 pr-3 font-heading font-medium">Piece</th>
-                          <th className="py-2 pr-3 text-right font-heading font-medium">
-                            Mailed
-                          </th>
-                          <th className="py-2 text-right font-heading font-medium">
-                            Response signals
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {metrics.activity.piecesByType.slice(0, 8).map((piece) => (
-                          <tr key={`${piece.pieceCode}:${piece.variant ?? ""}`}>
-                            <td className="py-2 pr-3">{formatPieceLabel(piece)}</td>
-                            <td className="py-2 pr-3 text-right">
-                              {formatNumber(piece.sent)}
-                            </td>
-                            <td className="py-2 text-right">
-                              {piece.outcomes > 0 ? formatNumber(piece.outcomes) : "n/a"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="space-y-4">
+                    {metrics.activity.piecesByType.slice(0, 8).map((piece) => (
+                      <BarMeter
+                        key={`${piece.pieceCode}:${piece.variant ?? ""}`}
+                        label={formatPieceLabel(piece)}
+                        value={`${formatNumber(piece.sent)} mailed`}
+                        detail={
+                          piece.outcomes > 0
+                            ? `${formatNumber(piece.outcomes)} response signals`
+                            : "Response signals pending"
+                        }
+                        percent={shareOfMax(
+                          piece.sent,
+                          metrics.activity.piecesByType.map((item) => item.sent)
+                        )}
+                      />
+                    ))}
                   </div>
                 )}
               </CardContent>
@@ -171,35 +250,23 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
                     history for this shop.
                   </p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead className="border-b text-muted-foreground">
-                        <tr>
-                          <th className="py-2 pr-3 font-heading font-medium">Month</th>
-                          <th className="py-2 pr-3 text-right font-heading font-medium">
-                            Mailed
-                          </th>
-                          <th className="py-2 text-right font-heading font-medium">
-                            Result rate
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {metrics.results.monthlyTrend.slice(0, 6).map((month) => (
-                          <tr key={month.month}>
-                            <td className="py-2 pr-3">{formatMonth(month.month)}</td>
-                            <td className="py-2 pr-3 text-right">
-                              {formatNumber(month.mailed)}
-                            </td>
-                            <td className="py-2 text-right">
-                              {month.outcomeRate === null
-                                ? "Results pending"
-                                : formatPercent(month.outcomeRate)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="space-y-4">
+                    {metrics.results.monthlyTrend.slice(0, 6).map((month) => (
+                      <BarMeter
+                        key={month.month}
+                        label={formatMonth(month.month)}
+                        value={`${formatNumber(month.mailed)} mailed`}
+                        detail={
+                          month.outcomeRate === null
+                            ? "Results pending"
+                            : `${formatPercent(month.outcomeRate)} result rate`
+                        }
+                        percent={shareOfMax(
+                          month.mailed,
+                          metrics.results.monthlyTrend.map((item) => item.mailed)
+                        )}
+                      />
+                    ))}
                     {metrics.results.monthlyTrend[0]?.message ? (
                       <p className="mt-3 text-sm text-muted-foreground">
                         {metrics.results.monthlyTrend[0].message}
@@ -226,7 +293,7 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
                     {metrics.activity.recentSendActivity.slice(0, 6).map((day) => (
                       <div
                         key={day.date}
-                        className="flex items-start justify-between gap-4 border-b pb-3 last:border-b-0 last:pb-0"
+                        className="grid gap-3 border-b pb-3 last:border-b-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_7rem]"
                       >
                         <div>
                           <p className="font-heading text-sm font-medium">
@@ -236,9 +303,17 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
                             {day.pieces.slice(0, 3).map(formatPieceLabel).join(", ")}
                           </p>
                         </div>
-                        <p className="text-right text-sm font-medium">
+                        <p className="text-left text-sm font-medium sm:text-right">
                           {formatNumber(day.sent)} mailed
                         </p>
+                        <div className="sm:col-span-2">
+                          <MeterBar
+                            percent={shareOfMax(
+                              day.sent,
+                              metrics.activity.recentSendActivity.map((item) => item.sent)
+                            )}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -253,10 +328,12 @@ export function DirectMailPanel({ metrics, scopeLabel }: DirectMailPanelProps) {
 }
 
 function KpiCard({
+  icon: Icon,
   label,
   value,
   detail,
 }: {
+  icon: LucideIcon;
   label: string;
   value: string;
   detail: string;
@@ -264,16 +341,98 @@ function KpiCard({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {label}
-        </CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            {label}
+          </CardTitle>
+          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </div>
       </CardHeader>
       <CardContent>
         <p className="text-2xl font-bold tracking-tight">{value}</p>
-        <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
+        <p className="mt-2 min-h-10 text-sm text-muted-foreground">{detail}</p>
       </CardContent>
     </Card>
   );
+}
+
+function SummaryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border bg-background px-3 py-2">
+      <p className="font-heading text-xs font-medium text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-semibold tracking-tight">{value}</p>
+    </div>
+  );
+}
+
+function BarMeter({
+  label,
+  value,
+  detail,
+  percent,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  percent: number;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="font-heading text-sm font-medium">{label}</p>
+        <p className="text-sm font-medium">{value}</p>
+      </div>
+      <MeterBar percent={percent} />
+      {detail ? <p className="text-xs text-muted-foreground">{detail}</p> : null}
+    </div>
+  );
+}
+
+function MeterBar({ percent }: { percent: number }) {
+  return (
+    <div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+      <div
+        className="h-full rounded-full bg-primary"
+        style={{ width: `${Math.max(4, percent)}%` }}
+      />
+    </div>
+  );
+}
+
+function getResultStatus(metrics: DirectMailMetrics): {
+  label: string;
+  className: string;
+} {
+  if (metrics.results.status === "ready") {
+    return {
+      label: "Results ready",
+      className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    };
+  }
+
+  if (metrics.activity.lettersMailed > 0) {
+    return {
+      label: "Activity live",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    };
+  }
+
+  return {
+    label: "Waiting on import",
+    className: "border-border bg-background text-foreground",
+  };
+}
+
+function shareOfMax(value: number, values: number[]): number {
+  const max = Math.max(...values.filter((item) => Number.isFinite(item)), 0);
+  if (max <= 0) return 0;
+  return clampPercent(value / max);
+}
+
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(0, value * 100));
 }
 
 function formatLastUpdated(metrics: DirectMailMetrics): string {
