@@ -160,7 +160,46 @@ describe("review workspace processing contract", () => {
     expect(commands.some((command) => command.cmd.includes("soffice") && command.args?.includes("--convert-to"))).toBe(true);
   });
 
-  it("rejects active HTML before provisioning a converter", async () => {
+  it("returns safe HTML unchanged for native sandboxed rendering after the malware scan", async () => {
+    const commands: Array<{ cmd: string; args?: string[] }> = [];
+    let locked = false;
+    let stopped = false;
+    const source = Buffer.from("<!doctype html><style>main{color:#c2410c}</style><main>Review proof</main>");
+    const sandbox = {
+      name: "sandbox-clean-html",
+      fs: {
+        mkdir: async () => undefined,
+        writeFile: async () => undefined,
+        readFile: async () => Buffer.alloc(0),
+      },
+      async runCommand(input: { cmd: string; args?: string[] }) {
+        commands.push(input);
+        return {
+          exitCode: 0,
+          stdout: async () => input.args?.includes("--version") ? "ClamAV 1.5.2" : "",
+          stderr: async () => "",
+        };
+      },
+      async updateNetworkPolicy() {
+        locked = true;
+      },
+      async stop() {
+        stopped = true;
+      },
+    };
+
+    const result = await processReviewFileInSandbox(
+      { fileName: "proof.html", contentType: "text/html", data: source },
+      { createSandbox: async () => sandbox },
+    );
+
+    expect(result).toMatchObject({ data: source, contentType: "text/html", converter: null });
+    expect(commands.some((command) => command.cmd === "bash" || command.cmd.includes("soffice"))).toBe(false);
+    expect(locked).toBe(true);
+    expect(stopped).toBe(true);
+  });
+
+  it("rejects active HTML before provisioning a sandbox", async () => {
     let created = false;
     await expect(processReviewFileInSandbox(
       { fileName: "unsafe.html", contentType: "text/html", data: Buffer.from("<script>alert(1)</script>") },

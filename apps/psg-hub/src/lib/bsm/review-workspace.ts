@@ -1037,7 +1037,11 @@ export async function getStaffReviewWorkspaceResult(
         : typeof version?.generated_page_path === "string" && version.generated_page_path.trim()
           ? version.generated_page_path
           : null;
-      const signedProofUrl = await createSignedProofUrl(client, version);
+      const contentType = reviewerDocumentContentType(version ?? null);
+      const privateProofUrl = contentType === "text/html" && fileProofTarget(version) && versionId
+        ? `/api/ops/bsm/review-workspace/file?projectId=${encodeURIComponent(access.projectId)}&reviewItemId=${encodeURIComponent(row.id as string)}&versionId=${encodeURIComponent(versionId)}`
+        : null;
+      const signedProofUrl = privateProofUrl ? null : await createSignedProofUrl(client, version);
       return {
         itemId: row.id as string,
         versionId,
@@ -1045,10 +1049,10 @@ export async function getStaffReviewWorkspaceResult(
         processingStatus: row.processing_status as string,
         status: row.status as string,
         originalFilename: (version?.original_filename as string | null) ?? null,
-        contentType: reviewerDocumentContentType(version ?? null),
+        contentType,
         previewUrl,
         generatedPagePath,
-        proofUrl: previewUrl ?? generatedPagePath ?? signedProofUrl,
+        proofUrl: previewUrl ?? generatedPagePath ?? privateProofUrl ?? signedProofUrl,
         proofContent: proofContentFromMetadata(sourceMetadata) ?? proofContentFromMetadata(snapshot),
       };
     })),
@@ -1819,6 +1823,33 @@ export async function getGuestReviewWorkspaceFileDownload(
   const versionId = assertUuid("versionId", input.versionId);
   await requireRoundDocumentAccess(client, access, reviewItemId, versionId);
 
+  return downloadReviewWorkspaceFile(client, {
+    projectId: access.projectId,
+    shopId: access.shopId,
+    reviewItemId,
+    versionId,
+  });
+}
+
+export async function getStaffReviewWorkspaceFileDownload(
+  input: { projectId: string; actorProfileId: string; actorRole?: ReviewWorkspaceActorRole; reviewItemId: string; versionId: string },
+  deps: { client?: ReviewWorkspaceDbClient } = {},
+): Promise<GuestReviewWorkspaceFileDownload> {
+  const client = resolveClient(deps.client);
+  const access = await requireReviewWorkspaceStaffAccess(client, input.projectId, input.actorProfileId, input.actorRole);
+  return downloadReviewWorkspaceFile(client, {
+    projectId: access.projectId,
+    shopId: access.shopId,
+    reviewItemId: assertUuid("reviewItemId", input.reviewItemId),
+    versionId: assertUuid("versionId", input.versionId),
+  });
+}
+
+async function downloadReviewWorkspaceFile(
+  client: ReviewWorkspaceDbClient,
+  input: { projectId: string; shopId: string; reviewItemId: string; versionId: string },
+): Promise<GuestReviewWorkspaceFileDownload> {
+
   const { data: version, error } = await client
     .from("bsm_content_review_versions")
     .select(`
@@ -1833,9 +1864,10 @@ export async function getGuestReviewWorkspaceFileDownload(
       processed_storage_path,
       processed_content_type
     `)
-    .eq("id", versionId)
-    .eq("review_item_id", reviewItemId)
-    .eq("shop_id", access.shopId)
+    .eq("id", input.versionId)
+    .eq("review_item_id", input.reviewItemId)
+    .eq("project_id", input.projectId)
+    .eq("shop_id", input.shopId)
     .maybeSingle();
   if (error) throw new Error(`Could not load review document file: ${error.message}`);
   if (!version) throw new ReviewWorkspaceInputError(404, "Review document file not found");

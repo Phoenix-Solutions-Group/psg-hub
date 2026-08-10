@@ -263,7 +263,7 @@ export function WorkspacePreviewProof({
           </div>
           <div className="text-xs text-muted-foreground">{workspacePreviewDocumentKindLabel(document)}</div>
         </div>
-        {proofUrl ? (
+        {proofUrl && !isPreviewHtmlProof(document) ? (
           <a
             href={proofUrl}
             target="_blank"
@@ -301,7 +301,13 @@ export function WorkspacePreviewProof({
           src={proofUrl}
           title={`${document.title} proof`}
           className="h-[640px] w-full bg-white"
-          sandbox={isPreviewGeneratedPageProof(document) ? "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox" : undefined}
+          sandbox={
+            isPreviewGeneratedPageProof(document)
+              ? "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+              : isPreviewHtmlProof(document)
+                ? ""
+                : undefined
+          }
         />
       ) : canFrame ? (
         <iframe src={proofUrl} title={`${document.title} proof`} className="h-[640px] w-full bg-white" />

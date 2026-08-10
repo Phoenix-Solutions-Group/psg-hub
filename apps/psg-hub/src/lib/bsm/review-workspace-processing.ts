@@ -391,7 +391,7 @@ export type ReviewWorkspaceSandbox = {
 
 export type ReviewWorkspaceSandboxResult = {
   data: Buffer;
-  contentType: "application/pdf";
+  contentType: "application/pdf" | "text/html";
   scanEngine: string;
   converter: string | null;
   sandboxId: string;
@@ -468,7 +468,7 @@ export async function processReviewFileInSandbox(
       "Malware scanner installation",
     );
 
-    if (plan.fileKind !== "pdf") {
+    if (plan.fileKind === "doc" || plan.fileKind === "docx") {
       const installScript = [
         `curl --fail --location --silent --show-error '${LIBREOFFICE_URL}' -o /tmp/${LIBREOFFICE_ARCHIVE}`,
         "rm -rf /tmp/libreoffice-rpms",
@@ -496,10 +496,10 @@ export async function processReviewFileInSandbox(
       "Malware scanner version check",
     ));
 
-    if (plan.fileKind === "pdf") {
+    if (plan.fileKind === "pdf" || plan.fileKind === "html") {
       return {
         data: input.data,
-        contentType: "application/pdf",
+        contentType: plan.fileKind === "html" ? "text/html" : "application/pdf",
         scanEngine,
         converter: null,
         sandboxId: sandbox.name,
@@ -532,7 +532,7 @@ export async function processReviewFileInSandbox(
 export async function processReviewWorkspaceUploadedVersion(
   input: { projectId: string; shopId: string; reviewItemId: string; versionId: string },
   deps: { client?: SupabaseClient; createSandbox?: () => Promise<ReviewWorkspaceSandbox> } = {},
-): Promise<{ processingStatus: "ready"; processedContentType: "application/pdf"; processedStoragePath: string }> {
+): Promise<{ processingStatus: "ready"; processedContentType: "application/pdf" | "text/html"; processedStoragePath: string }> {
   const projectId = assertUuid("projectId", input.projectId);
   const shopId = assertUuid("shopId", input.shopId);
   const reviewItemId = assertUuid("reviewItemId", input.reviewItemId);
@@ -611,7 +611,7 @@ export async function processReviewWorkspaceUploadedVersion(
       documentId: reviewItemId,
       versionId,
       artifactKind: "review-copy",
-      fileName: `${originalFilename.replace(/\.[^.]+$/, "") || "review-copy"}.pdf`,
+      fileName: `${originalFilename.replace(/\.[^.]+$/, "") || "review-copy"}.${result.contentType === "text/html" ? "html" : "pdf"}`,
     });
     const { error: uploadError } = await client.storage
       .from(BSM_CONTENT_APPROVALS_BUCKET)

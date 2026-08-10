@@ -519,6 +519,11 @@ describe("BsmContentApprovalManager", () => {
     expect(html).not.toContain("/generated/internal-only-proof");
     expect(workspacePreviewDocumentKindLabel(documents[0])).toBe("Website proof");
     expect(workspacePreviewDocumentKindLabel(documents[1])).toBe("Generated page");
+
+    const uploadedHtml = renderToStaticMarkup(<WorkspacePreviewProof document={documents[0]} />);
+    expect(uploadedHtml).toContain('src="https://storage.example/homepage.html"');
+    expect(uploadedHtml).toContain('sandbox=""');
+    expect(uploadedHtml).not.toContain("Open proof");
   });
 
   it("renders PDF and image proofs inline in the operator preview", () => {

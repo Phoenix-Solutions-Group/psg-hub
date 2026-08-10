@@ -137,7 +137,7 @@ type FakeClientOptions = {
   expiredSession?: boolean;
   emptyVersionMetadata?: boolean;
   uploadedFileProof?: boolean;
-  mislabeledHtmlProof?: boolean;
+  uploadedHtmlProof?: boolean;
   draftStaffPreview?: boolean;
   submitted?: boolean;
   hasPin?: boolean;
@@ -237,20 +237,22 @@ class Query {
     }
     if (this.table === "bsm_content_review_versions") {
       if (this.options.uploadedFileProof) {
+        const extension = this.options.uploadedHtmlProof ? "html" : "pdf";
+        const contentType = this.options.uploadedHtmlProof ? "text/html" : "application/pdf";
         return {
           data: [
             {
               id: VERSION_ID,
               project_id: PROJECT_ID,
-              original_filename: "homepage-proof.pdf",
-              content_type: "application/pdf",
+              original_filename: `homepage-proof.${extension}`,
+              content_type: contentType,
               preview_url: null,
               generated_page_path: null,
               storage_bucket: "bsm-content-approvals",
-              storage_path: `${SHOP_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/homepage-proof.pdf`,
+              storage_path: `${SHOP_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/homepage-proof.${extension}`,
               processed_storage_bucket: "bsm-content-approvals",
-              processed_storage_path: `${SHOP_ID}/${PROJECT_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/review-copy/homepage-proof.pdf`,
-              processed_content_type: "application/pdf",
+              processed_storage_path: `${SHOP_ID}/${PROJECT_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/review-copy/homepage-proof.${extension}`,
+              processed_content_type: contentType,
               source_metadata_jsonb: {},
               snapshot_jsonb: {},
             },
@@ -1047,6 +1049,25 @@ describe("BSM review workspace foundation service", () => {
       proofContent: expect.objectContaining({
         headline: "Home page",
       }),
+    });
+  });
+
+  it("uses the protected HTML route while retaining signed PDF previews for staff", async () => {
+    const pdf = createFakeClient({ uploadedFileProof: true, draftStaffPreview: true });
+    const html = createFakeClient({ uploadedFileProof: true, uploadedHtmlProof: true, draftStaffPreview: true });
+
+    const [pdfResult, htmlResult] = await Promise.all([
+      getStaffReviewWorkspaceResult(PROJECT_ID, ACTOR_ID, { client: pdf.client as never }),
+      getStaffReviewWorkspaceResult(PROJECT_ID, ACTOR_ID, { client: html.client as never }),
+    ]);
+
+    expect(pdfResult.documents[0]).toMatchObject({
+      contentType: "application/pdf",
+      proofUrl: expect.stringContaining("https://storage.example/bsm-content-approvals/"),
+    });
+    expect(htmlResult.documents[0]).toMatchObject({
+      contentType: "text/html",
+      proofUrl: `/api/ops/bsm/review-workspace/file?projectId=${PROJECT_ID}&reviewItemId=${REVIEW_ITEM_ID}&versionId=${VERSION_ID}`,
     });
   });
 
