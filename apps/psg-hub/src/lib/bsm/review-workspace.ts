@@ -379,6 +379,15 @@ function fileProofTarget(version: Record<string, unknown> | null | undefined): {
   return path && bucket ? { bucket, path } : null;
 }
 
+function reviewerDocumentContentType(version: Record<string, unknown> | null | undefined): string | null {
+  const hasProcessedProof = typeof version?.processed_storage_path === "string" && version.processed_storage_path.trim();
+  return (
+    (hasProcessedProof ? (version?.processed_content_type as string | null) : null) ??
+    (version?.content_type as string | null) ??
+    null
+  );
+}
+
 async function createSignedProofUrl(
   client: ReviewWorkspaceDbClient,
   version: Record<string, unknown> | null | undefined,
@@ -866,7 +875,7 @@ export async function getStaffReviewWorkspaceResult(
   const { data: versionRows, error: versionError } = versionIds.length
     ? await client
         .from("bsm_content_review_versions")
-        .select("id, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, source_metadata_jsonb, snapshot_jsonb")
+        .select("id, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb")
         .in("id", versionIds)
     : { data: [], error: null };
   if (versionError) throw new Error(`Could not load Review Workspace document versions: ${versionError.message}`);
@@ -1558,7 +1567,7 @@ export async function getGuestReviewWorkspace(
   const { data: versions } = versionIds.length
     ? await client
         .from("bsm_content_review_versions")
-        .select("id, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, source_metadata_jsonb, snapshot_jsonb")
+        .select("id, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb")
         .in("id", versionIds)
     : { data: [] };
   const versionsById = new Map(((versions ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
@@ -1613,7 +1622,7 @@ export async function getGuestReviewWorkspace(
         processingStatus: (item?.processing_status as string | null) ?? "pending",
         sectionTitle: sectionId ? sectionTitles.get(sectionId) ?? null : null,
         originalFilename: (version?.original_filename as string | null) ?? null,
-        contentType: (version?.content_type as string | null) ?? null,
+        contentType: reviewerDocumentContentType(version),
         previewUrl,
         generatedPagePath,
         proofUrl: previewUrl ?? generatedPagePath ?? signedProofUrl,
