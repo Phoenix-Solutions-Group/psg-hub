@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { CheckCircle, ExternalLink, Highlighter, Lock, MapPin, RotateCcw, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +67,12 @@ type Workspace = {
 };
 
 type HighlightSegment = { text: string; highlighted: boolean };
+type HighlightRegistry = {
+  delete(name: string): void;
+  set(name: string, highlight: unknown): void;
+};
+
+const HTML_REVIEW_BLOCKS = "p,h1,h2,h3,h4,h5,h6,li,blockquote,td,th,figcaption,a,button,label";
 
 export function buildHighlightSegments(
   text: string,
@@ -131,6 +137,108 @@ function isPdfProof(contentType: string | null): boolean {
   return contentType === "application/pdf";
 }
 
+function isHtmlProof(contentType: string | null): boolean {
+  return contentType === "text/html";
+}
+
+function elementForSelectionNode(node: Node): Element | null {
+  return node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
+}
+
+function selectionAnchor(
+  document: Document,
+  selection: Selection,
+  startBlock: HTMLElement,
+  endBlock: HTMLElement,
+  blockId: string,
+): { anchor: TextSelectionAnchor | null; error: string | null } {
+  const range = selection.getRangeAt(0);
+  if (startBlock !== endBlock || !startBlock.contains(range.commonAncestorContainer)) {
+    return { anchor: null, error: "Highlight text within one content block at a time." };
+  }
+  const before = document.createRange();
+  before.selectNodeContents(startBlock);
+  before.setEnd(range.startContainer, range.startOffset);
+  const through = document.createRange();
+  through.selectNodeContents(startBlock);
+  through.setEnd(range.endContainer, range.endOffset);
+  let startOffset = before.toString().length;
+  let endOffset = through.toString().length;
+  const rawText = (startBlock.textContent ?? "").slice(startOffset, endOffset);
+  const leadingWhitespace = rawText.length - rawText.trimStart().length;
+  const trailingWhitespace = rawText.length - rawText.trimEnd().length;
+  startOffset += leadingWhitespace;
+  endOffset -= trailingWhitespace;
+  const text = rawText.trim();
+  if (!text || text.length > 500) {
+    return {
+      anchor: null,
+      error: text.length > 500 ? "Highlight 500 characters or fewer." : "Select text before adding the highlight.",
+    };
+  }
+  return { anchor: { kind: "text", blockId, startOffset, endOffset, text }, error: null };
+}
+
+function htmlReviewBlock(document: Document, node: Node): HTMLElement | null {
+  const element = elementForSelectionNode(node);
+  return element?.closest<HTMLElement>(HTML_REVIEW_BLOCKS) ?? document.body;
+}
+
+function htmlReviewBlockId(document: Document, block: HTMLElement): string | null {
+  if (block === document.body) return "html:body";
+  const path: number[] = [];
+  let current: HTMLElement | null = block;
+  while (current && current !== document.body) {
+    const parent: HTMLElement | null = current.parentElement;
+    if (!parent) return null;
+    const index = Array.from(parent.children).indexOf(current);
+    if (index < 0) return null;
+    path.unshift(index);
+    current = parent;
+  }
+  return current === document.body ? `html:${path.join(".")}` : null;
+}
+
+function htmlReviewBlockFromId(document: Document, blockId: string): HTMLElement | null {
+  if (blockId === "html:body") return document.body;
+  if (!blockId.startsWith("html:")) return null;
+  let current: HTMLElement = document.body;
+  const parts = blockId.slice(5).split(".");
+  for (const part of parts) {
+    if (!/^\d+$/.test(part)) return null;
+    const child = current.children.item(Number(part));
+    if (!child) return null;
+    current = child as HTMLElement;
+  }
+  return current;
+}
+
+function rangeForHtmlAnchor(document: Document, anchor: TextSelectionAnchor): Range | null {
+  const block = htmlReviewBlockFromId(document, anchor.blockId);
+  if (!block || anchor.endOffset <= anchor.startOffset) return null;
+  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+  let consumed = 0;
+  let start: { node: Text; offset: number } | null = null;
+  let end: { node: Text; offset: number } | null = null;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const textNode = node as Text;
+    const next = consumed + textNode.data.length;
+    if (!start && anchor.startOffset <= next) {
+      start = { node: textNode, offset: Math.max(0, anchor.startOffset - consumed) };
+    }
+    if (anchor.endOffset <= next) {
+      end = { node: textNode, offset: Math.max(0, anchor.endOffset - consumed) };
+      break;
+    }
+    consumed = next;
+  }
+  if (!start || !end) return null;
+  const range = document.createRange();
+  range.setStart(start.node, start.offset);
+  range.setEnd(end.node, end.offset);
+  return range;
+}
+
 function highlightedText(text: string, selections: TextSelectionAnchor[]): ReactNode {
   return buildHighlightSegments(text, selections).map((segment, index) =>
     segment.highlighted ? (
@@ -153,6 +261,8 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   const [pendingAnchor, setPendingAnchor] = useState<PendingAnchor | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const htmlProofFrameRef = useRef<HTMLIFrameElement>(null);
+  const [htmlProofLoad, setHtmlProofLoad] = useState(0);
 
   const activeDocument =
     workspace?.documents.find((document) => documentKey(document) === selectedDocumentKey) ??
@@ -169,6 +279,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   const activeDecision = decisions[activeKey];
   const activeDecisionNote = decisionNotes[activeKey] ?? "";
   const nextAnnotationNumber = commentsForActiveDocument.length + 1;
+  const canHighlightActiveDocument = Boolean(activeDocument?.proofContent) || isHtmlProof(activeDocument?.contentType ?? null);
 
   async function verifyInvite() {
     setPending(true);
@@ -231,39 +342,91 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
     const range = selection.getRangeAt(0);
-    const startElement = range.startContainer.nodeType === Node.ELEMENT_NODE
-      ? range.startContainer as Element
-      : range.startContainer.parentElement;
-    const endElement = range.endContainer.nodeType === Node.ELEMENT_NODE
-      ? range.endContainer as Element
-      : range.endContainer.parentElement;
+    const startElement = elementForSelectionNode(range.startContainer);
+    const endElement = elementForSelectionNode(range.endContainer);
     const startBlock = startElement?.closest<HTMLElement>("[data-review-block]");
     const endBlock = endElement?.closest<HTMLElement>("[data-review-block]");
-    if (!startBlock || startBlock !== endBlock || !startBlock.contains(range.commonAncestorContainer)) {
+    if (!startBlock || !endBlock) {
       setError("Highlight text within one content block at a time.");
       return;
     }
-    const before = document.createRange();
-    before.selectNodeContents(startBlock);
-    before.setEnd(range.startContainer, range.startOffset);
-    const through = document.createRange();
-    through.selectNodeContents(startBlock);
-    through.setEnd(range.endContainer, range.endOffset);
-    const startOffset = before.toString().length;
-    const endOffset = through.toString().length;
-    const text = (startBlock.textContent ?? "").slice(startOffset, endOffset).trim();
-    if (!text || text.length > 500) {
-      setError(text.length > 500 ? "Highlight 500 characters or fewer." : "Select text before adding the highlight.");
+    const result = selectionAnchor(
+      document,
+      selection,
+      startBlock,
+      endBlock,
+      startBlock.dataset.reviewBlock ?? "body",
+    );
+    if (!result.anchor) {
+      setError(result.error);
       return;
     }
-    setPendingAnchor({
-      kind: "highlight",
-      selection: { kind: "text", blockId: startBlock.dataset.reviewBlock ?? "body", startOffset, endOffset, text },
-    });
+    setPendingAnchor({ kind: "highlight", selection: result.anchor });
     setAnnotationMode(null);
     setError(null);
     selection.removeAllRanges();
   }
+
+  useEffect(() => {
+    if (annotationMode !== "highlight" || !isHtmlProof(activeDocument?.contentType ?? null)) return;
+    const document = htmlProofFrameRef.current?.contentDocument;
+    if (!document) return;
+    const capture = () => {
+      const selection = document.getSelection();
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+      const range = selection.getRangeAt(0);
+      const startBlock = htmlReviewBlock(document, range.startContainer);
+      const endBlock = htmlReviewBlock(document, range.endContainer);
+      const blockId = startBlock ? htmlReviewBlockId(document, startBlock) : null;
+      if (!startBlock || !endBlock || !blockId) {
+        setError("Highlight text within one content block at a time.");
+        return;
+      }
+      const result = selectionAnchor(document, selection, startBlock, endBlock, blockId);
+      if (!result.anchor) {
+        setError(result.error);
+        return;
+      }
+      setPendingAnchor({ kind: "highlight", selection: result.anchor });
+      setAnnotationMode(null);
+      setError(null);
+      selection.removeAllRanges();
+    };
+    document.addEventListener("mouseup", capture);
+    return () => document.removeEventListener("mouseup", capture);
+  }, [activeDocument?.contentType, activeKey, annotationMode, htmlProofLoad]);
+
+  useEffect(() => {
+    if (!isHtmlProof(activeDocument?.contentType ?? null)) return;
+    const frame = htmlProofFrameRef.current;
+    const document = frame?.contentDocument;
+    const frameWindow = frame?.contentWindow;
+    if (!document || !frameWindow) return;
+    const css = (frameWindow as unknown as { CSS?: { highlights?: HighlightRegistry } }).CSS;
+    const HighlightConstructor = (frameWindow as unknown as { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
+    if (!css?.highlights || !HighlightConstructor) return;
+
+    let style = document.getElementById("review-workspace-highlight-styles") as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "review-workspace-highlight-styles";
+      style.textContent = "::highlight(review-workspace-saved){background:#f7c94888;color:inherit}::highlight(review-workspace-pending){background:#f97316aa;color:inherit}";
+      document.head.append(style);
+    }
+
+    const savedRanges = commentsForActiveDocument.flatMap((comment) => {
+      const range = comment.selection ? rangeForHtmlAnchor(document, comment.selection) : null;
+      return range ? [range] : [];
+    });
+    css.highlights.delete("review-workspace-saved");
+    if (savedRanges.length) css.highlights.set("review-workspace-saved", new HighlightConstructor(...savedRanges));
+
+    const pendingRange = pendingAnchor?.kind === "highlight"
+      ? rangeForHtmlAnchor(document, pendingAnchor.selection)
+      : null;
+    css.highlights.delete("review-workspace-pending");
+    if (pendingRange) css.highlights.set("review-workspace-pending", new HighlightConstructor(pendingRange));
+  }, [activeDocument?.contentType, activeKey, commentsForActiveDocument, htmlProofLoad, pendingAnchor]);
 
   async function saveComment() {
     if (!sessionHash || !activeDocument || !pendingAnchor || !comment.trim()) {
@@ -496,6 +659,15 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                         </article>
                       ) : isImageProof(activeDocument.contentType) && activeDocument.proofUrl ? (
                         <img src={activeDocument.proofUrl} alt={`${activeDocument.title} proof`} className="max-h-[680px] w-full object-contain bg-white" />
+                      ) : isHtmlProof(activeDocument.contentType) && canFrameProof(activeDocument.proofUrl) ? (
+                        <iframe
+                          ref={htmlProofFrameRef}
+                          src={activeDocument.proofUrl}
+                          title={`${activeDocument.title} proof`}
+                          className="h-[680px] w-full bg-white"
+                          sandbox="allow-same-origin"
+                          onLoad={() => setHtmlProofLoad((current) => current + 1)}
+                        />
                       ) : canFrameProof(activeDocument.proofUrl) ? (
                         <iframe src={activeDocument.proofUrl} title={`${activeDocument.title} proof`} className="h-[680px] w-full bg-white" sandbox="" />
                       ) : (
@@ -547,10 +719,10 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                       <Label>Anchor a private comment</Label>
                       <div className="grid grid-cols-2 gap-2">
                         <Button type="button" variant={annotationMode === "pin" ? "default" : "outline"} onClick={() => { setAnnotationMode("pin"); setPendingAnchor(null); setError(null); }} disabled={!activeDocument}><MapPin className="size-4" aria-hidden="true" />Place pin</Button>
-                        <Button type="button" variant={annotationMode === "highlight" ? "default" : "outline"} onClick={() => { setAnnotationMode("highlight"); setPendingAnchor(null); setError(null); }} disabled={!activeDocument?.proofContent} title={activeDocument?.proofContent ? "Select text in the proof" : "This review copy does not expose selectable text"}><Highlighter className="size-4" aria-hidden="true" />Highlight text</Button>
+                        <Button type="button" variant={annotationMode === "highlight" ? "default" : "outline"} onClick={() => { setAnnotationMode("highlight"); setPendingAnchor(null); setError(null); }} disabled={!canHighlightActiveDocument} title={canHighlightActiveDocument ? "Select text in the proof" : "This review copy does not expose selectable text"}><Highlighter className="size-4" aria-hidden="true" />Highlight text</Button>
                       </div>
                       <p className="text-xs leading-5 text-muted-foreground">
-                        {annotationMode === "pin" ? "Click the exact spot in the proof." : annotationMode === "highlight" ? "Select text within one paragraph, heading, bullet, or button." : pendingAnchor?.kind === "pin" ? `Pin ${nextAnnotationNumber} is placed.` : pendingAnchor?.kind === "highlight" ? `Highlighted: “${pendingAnchor.selection.text}”` : activeDocument?.proofContent ? "Use a pin or select text before writing your comment." : "Text highlighting is unavailable for this review copy; use a pin."}
+                        {annotationMode === "pin" ? "Click the exact spot in the proof." : annotationMode === "highlight" ? "Select text within one paragraph, heading, table cell, bullet, or button." : pendingAnchor?.kind === "pin" ? `Pin ${nextAnnotationNumber} is placed.` : pendingAnchor?.kind === "highlight" ? `Highlighted: “${pendingAnchor.selection.text}”` : canHighlightActiveDocument ? "Use a pin or select text before writing your comment." : "Text highlighting is unavailable for this review copy; use a pin."}
                       </p>
                     </div>
 
