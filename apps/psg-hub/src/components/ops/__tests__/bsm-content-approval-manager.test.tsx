@@ -59,17 +59,17 @@ describe("BsmContentApprovalManager", () => {
     expect(html).not.toContain("00000000-0000-0000-0000-000000000000");
   });
 
-  it("allows admins to select PDF, Markdown, and HTML documents from the file picker", () => {
+  it("allows admins to select PDF, HTML, DOC, and DOCX documents from the file picker", () => {
     const html = renderToStaticMarkup(
       <BsmContentApprovalManager initialApprovals={[]} activeShopId={null} shops={[]} />,
     );
 
     expect(html).toContain(`accept="${BSM_CONTENT_APPROVAL_FILE_ACCEPT}"`);
     expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".pdf");
-    expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".md");
-    expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".markdown");
     expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".html");
     expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".htm");
+    expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".doc");
+    expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".docx");
   });
 
   it("returns the promised unsupported-file message for blocked uploads", () => {
@@ -321,7 +321,7 @@ describe("BsmContentApprovalManager", () => {
     const documentWorkspacePickerIndex = html.indexOf("Review Workspace for these documents");
     const workspaceDocumentsIndex = html.indexOf(">Workspace documents<");
     const reviewersIndex = html.indexOf(">Reviewers<");
-    const previewIndex = html.indexOf(">Preview or start review<");
+    const previewIndex = html.indexOf(">Preview, send, and monitor<");
 
     expect(workspaceIndex).toBeGreaterThanOrEqual(0);
     expect(documentsIndex).toBeGreaterThan(workspaceIndex);

@@ -34,7 +34,7 @@ describe("ReviewWorkspaceConsole upload entry", () => {
       }),
     );
 
-    expect(html).toContain("Upload file");
+    expect(html).toContain("Add document");
     expect(html).toContain("/ops/bsm-content-approvals?shopId=shop-b");
   });
 });

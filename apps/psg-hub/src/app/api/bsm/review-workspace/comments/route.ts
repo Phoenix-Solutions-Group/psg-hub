@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import {
   ReviewWorkspaceInputError,
-  addGuestReviewPinComment,
+  addGuestReviewAnnotation,
   bsmReviewWorkspaceInternalEnabled,
 } from "@/lib/bsm/review-workspace";
 
@@ -16,7 +16,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!payload) return NextResponse.json({ error: "The request body was not readable." }, { status: 400 });
 
   try {
-    const comment = await addGuestReviewPinComment({
+    const comment = await addGuestReviewAnnotation({
       sessionHash: payload.sessionHash as string,
       reviewItemId: payload.reviewItemId as string,
       versionId: payload.versionId as string,
@@ -24,9 +24,10 @@ export async function POST(request: Request): Promise<Response> {
       pinNumber: Number(payload.pinNumber),
       pageNumber: payload.pageNumber == null ? null : Number(payload.pageNumber),
       viewport: payload.viewport === "mobile" || payload.viewport === "pdf_page" ? payload.viewport : "desktop",
-      xRatio: typeof payload.xRatio === "number" ? payload.xRatio : 0.5,
-      yRatio: typeof payload.yRatio === "number" ? payload.yRatio : 0.5,
-      selection: typeof payload.selection === "object" && payload.selection ? payload.selection as Record<string, unknown> : {},
+      anchorKind: payload.anchorKind === "highlight" ? "highlight" : "pin",
+      xRatio: typeof payload.xRatio === "number" ? payload.xRatio : null,
+      yRatio: typeof payload.yRatio === "number" ? payload.yRatio : null,
+      selection: typeof payload.selection === "object" && payload.selection ? payload.selection as Record<string, unknown> : null,
     });
     return NextResponse.json({ comment }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

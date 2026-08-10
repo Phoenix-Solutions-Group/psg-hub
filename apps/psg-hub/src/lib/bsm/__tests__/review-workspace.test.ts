@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  addGuestReviewPinComment,
+  addGuestReviewAnnotation,
   closeReviewWorkspaceRoundEarly,
   createInternalReviewWorkspaceSlice,
   createReviewWorkspaceDeletionTombstone,
@@ -15,6 +15,8 @@ import {
   requireReviewWorkspaceStaffAccess,
   removeReviewWorkspaceProject,
   reopenGuestReviewRound,
+  revokeReviewWorkspaceInvitation,
+  startReviewWorkspaceRound,
   submitGuestReviewRound,
   updateReviewWorkspaceProject,
 } from "@/lib/bsm/review-workspace";
@@ -27,6 +29,8 @@ const INVITATION_ID = "55555555-5555-4555-8555-555555555555";
 const SESSION_ID = "66666666-6666-4666-8666-666666666666";
 const REVIEW_ITEM_ID = "77777777-7777-4777-8777-777777777777";
 const VERSION_ID = "88888888-8888-4888-8888-888888888888";
+const SECOND_REVIEW_ITEM_ID = "77777777-7777-4777-8777-777777777778";
+const SECOND_VERSION_ID = "88888888-8888-4888-8888-888888888889";
 const SECTION_ID = "99999999-9999-4999-8999-999999999999";
 const MIGRATION = readFileSync(
   join(process.cwd(), "supabase/migrations/20260728183000_bsm_review_workspace_foundation.sql"),
@@ -34,6 +38,10 @@ const MIGRATION = readFileSync(
 );
 const PROCESSING_CONTRACT_MIGRATION = readFileSync(
   join(process.cwd(), "supabase/migrations/20260728174500_bsm_review_workspace_processing_contract.sql"),
+  "utf8",
+);
+const ANNOTATION_MIGRATION = readFileSync(
+  join(process.cwd(), "supabase/migrations/20260810000000_bsm_review_workspace_highlight_annotations.sql"),
   "utf8",
 );
 
@@ -137,8 +145,12 @@ type FakeClientOptions = {
   missingSchemaCacheColumns?: Record<string, string[]>;
   roundInvitations?: Array<Record<string, unknown>>;
   roundDecisionRows?: Array<Record<string, unknown>>;
+  roundDocuments?: Array<Record<string, unknown>>;
   roundDocumentInScope?: boolean;
   roundDocumentTenantMismatch?: boolean;
+  currentRoundStatus?: string;
+  currentRoundNumber?: number;
+  itemVersionId?: string;
 };
 
 class Query {
@@ -185,7 +197,7 @@ class Query {
       ) {
         return { data: [], error: null };
       }
-      return { data: [{ review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID }], error: null };
+      return { data: this.options.roundDocuments ?? [{ review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID }], error: null };
     }
     if (this.table === "bsm_content_review_comments") {
       if (this.filters.limit === 1) {
@@ -198,8 +210,13 @@ class Query {
             review_item_id: REVIEW_ITEM_ID,
             version_id: VERSION_ID,
             body: "Owner one private note",
+            comment_kind: "pin",
             pin_number: 1,
             draft_status: "draft",
+            viewport: "desktop",
+            x_ratio: 0.4,
+            y_ratio: 0.6,
+            selection_jsonb: {},
           },
         ],
         error: null,
@@ -209,7 +226,7 @@ class Query {
       return {
         data: [{
           id: REVIEW_ITEM_ID,
-          current_version_id: VERSION_ID,
+          current_version_id: this.options.itemVersionId ?? VERSION_ID,
           title: "Home page",
           processing_status: "ready",
           status: this.options.draftStaffPreview ? "draft" : "in_review",
@@ -224,14 +241,16 @@ class Query {
           data: [
             {
               id: VERSION_ID,
+              project_id: PROJECT_ID,
               original_filename: "homepage-proof.pdf",
               content_type: "application/pdf",
               preview_url: null,
               generated_page_path: null,
               storage_bucket: "bsm-content-approvals",
               storage_path: `${SHOP_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/homepage-proof.pdf`,
-              processed_storage_bucket: null,
-              processed_storage_path: null,
+              processed_storage_bucket: "bsm-content-approvals",
+              processed_storage_path: `${SHOP_ID}/${PROJECT_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/review-copy/homepage-proof.pdf`,
+              processed_content_type: "application/pdf",
               source_metadata_jsonb: {},
               snapshot_jsonb: {},
             },
@@ -318,6 +337,8 @@ class Query {
         data: this.options.roundInvitations ?? [
           {
             id: INVITATION_ID,
+            reviewer_email: "owner@example.com",
+            reviewer_name: "Shop Owner",
             status: "submitted",
             revoked_at: null,
             submitted_at: "2026-07-28T19:30:00.000Z",
@@ -452,7 +473,14 @@ class Query {
       });
     }
     if (this.table === "bsm_content_review_rounds") {
-      return Promise.resolve({ data: { id: ROUND_ID, status: "active" }, error: null });
+      return Promise.resolve({
+        data: {
+          id: ROUND_ID,
+          status: this.options.currentRoundStatus ?? "active",
+          round_number: this.options.currentRoundNumber ?? 1,
+        },
+        error: null,
+      });
     }
     return Promise.resolve({ data: null, error: null });
   }
@@ -468,6 +496,11 @@ class MutationQuery {
   ) {}
 
   eq(column: string, value: unknown) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  in(column: string, value: unknown[]) {
     this.filters[column] = value;
     return this;
   }
@@ -771,6 +804,42 @@ describe("BSM review workspace foundation service", () => {
     expect(updates.some((entry) => entry.table === "bsm_content_review_projects" && entry.payload.status === "active")).toBe(true);
   });
 
+  it("starts a new round with only revised documents after the prior round completes", async () => {
+    const { client, inserts, updates } = createFakeClient({
+      currentRoundStatus: "completed",
+      currentRoundNumber: 1,
+      itemVersionId: SECOND_VERSION_ID,
+    });
+
+    const result = await startReviewWorkspaceRound(
+      {
+        projectId: PROJECT_ID,
+        actorProfileId: ACTOR_ID,
+        actorRole: "psg_superadmin",
+        reviewers: [{ email: "owner@example.com", name: "Shop Owner" }],
+      },
+      { client: client as never, now: new Date("2026-07-29T18:00:00.000Z") },
+    );
+
+    expect(result.documentCount).toBe(1);
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_rounds")?.payload).toMatchObject({
+      round_number: 2,
+      status: "active",
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_round_documents")?.payload).toMatchObject({
+      review_item_id: REVIEW_ITEM_ID,
+      version_id: SECOND_VERSION_ID,
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_invitations")?.payload).toMatchObject({
+      status: "sent",
+      reviewer_email: "owner@example.com",
+    });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_projects")?.payload).toMatchObject({
+      status: "active",
+      current_round_id: result.roundId,
+    });
+  });
+
   it("retries review item creation without source_kind against a stale schema cache", async () => {
     const { client, inserts } = createFakeClient({
       missingSchemaCacheColumns: { bsm_content_review_items: ["source_kind"] },
@@ -873,6 +942,7 @@ describe("BSM review workspace foundation service", () => {
         itemId: REVIEW_ITEM_ID,
         versionId: VERSION_ID,
         title: "Home page",
+        note: null,
         processingStatus: "ready",
         sectionTitle: "Website",
         originalFilename: null,
@@ -911,7 +981,7 @@ describe("BSM review workspace foundation service", () => {
     });
   });
 
-  it("returns a signed proof URL for uploaded files in the guest workspace", async () => {
+  it("returns the exact session-authorized file route for uploaded files in the guest workspace", async () => {
     const { client } = createFakeClient({ uploadedFileProof: true });
 
     const workspace = await getGuestReviewWorkspace("session-hash", { client: client as never });
@@ -921,8 +991,7 @@ describe("BSM review workspace foundation service", () => {
       contentType: "application/pdf",
       previewUrl: null,
       generatedPagePath: null,
-      proofUrl:
-        "https://storage.example/bsm-content-approvals/11111111-1111-4111-8111-111111111111/77777777-7777-4777-8777-777777777777/88888888-8888-4888-8888-888888888888/homepage-proof.pdf?token=review",
+      proofUrl: `/api/bsm/review-workspace/file?sessionHash=session-hash&reviewItemId=${REVIEW_ITEM_ID}&versionId=${VERSION_ID}`,
       proofContent: null,
     });
   });
@@ -984,7 +1053,7 @@ describe("BSM review workspace foundation service", () => {
   it("stores reviewer pin comments against the reviewer invitation only", async () => {
     const { client, inserts } = createFakeClient();
 
-    await addGuestReviewPinComment(
+    await addGuestReviewAnnotation(
       {
         sessionHash: "session-hash",
         reviewItemId: REVIEW_ITEM_ID,
@@ -1020,11 +1089,48 @@ describe("BSM review workspace foundation service", () => {
     });
   });
 
+  it("stores a reviewer text highlight without fabricated pin coordinates", async () => {
+    const { client, inserts } = createFakeClient();
+
+    await addGuestReviewAnnotation(
+      {
+        sessionHash: "session-hash",
+        reviewItemId: REVIEW_ITEM_ID,
+        versionId: VERSION_ID,
+        body: "Use the approved offer wording here.",
+        pinNumber: 2,
+        viewport: "desktop",
+        anchorKind: "highlight",
+        selection: {
+          kind: "text",
+          blockId: "body",
+          startOffset: 5,
+          endOffset: 18,
+          text: "safe page copy",
+        },
+      },
+      { client: client as never },
+    );
+
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_comments")?.payload).toMatchObject({
+      comment_kind: "highlight",
+      x_ratio: null,
+      y_ratio: null,
+      selection_jsonb: {
+        kind: "text",
+        blockId: "body",
+        startOffset: 5,
+        endOffset: 18,
+        text: "safe page copy",
+      },
+    });
+  });
+
   it("blocks new reviewer comments after submit", async () => {
     const submitted = createFakeClient({ submitted: true });
 
     await expect(
-      addGuestReviewPinComment(
+      addGuestReviewAnnotation(
         {
           sessionHash: "session-hash",
           reviewItemId: REVIEW_ITEM_ID,
@@ -1068,6 +1174,25 @@ describe("BSM review workspace foundation service", () => {
       draft_status: "locked",
       locked_at: "2026-07-28T19:30:00.000Z",
     });
+  });
+
+  it("requires one decision for every document in the round", async () => {
+    const { client } = createFakeClient({
+      roundDocuments: [
+        { review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID },
+        { review_item_id: SECOND_REVIEW_ITEM_ID, version_id: SECOND_VERSION_ID },
+      ],
+    });
+
+    await expect(
+      submitGuestReviewRound(
+        {
+          sessionHash: "session-hash",
+          decisions: [{ reviewItemId: REVIEW_ITEM_ID, versionId: VERSION_ID, decision: "approved" }],
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("Submit exactly one decision for every required document");
   });
 
   it("does not complete a round until every active reviewer has submitted", async () => {
@@ -1167,7 +1292,18 @@ describe("BSM review workspace foundation service", () => {
   });
 
   it("records manual early close as closed early instead of approved", async () => {
-    const { client, updates, inserts } = createFakeClient();
+    const { client, updates, inserts } = createFakeClient({
+      roundInvitations: [
+        {
+          id: INVITATION_ID,
+          reviewer_email: "owner@example.com",
+          reviewer_name: "Shop Owner",
+          status: "sent",
+          revoked_at: null,
+          submitted_at: null,
+        },
+      ],
+    });
 
     const result = await closeReviewWorkspaceRoundEarly(
       {
@@ -1188,13 +1324,65 @@ describe("BSM review workspace foundation service", () => {
     expect(inserts.find((entry) => entry.table === "bsm_content_review_events")?.payload).toMatchObject({
       event_type: "review_workspace_round_closed_early",
     });
+    expect(result.nonresponders).toEqual([{ email: "owner@example.com", name: "Shop Owner" }]);
+    expect(updates.find((entry) => entry.table === "bsm_content_review_invitations")?.payload).toMatchObject({
+      status: "revoked",
+      revoked_by_profile_id: ACTOR_ID,
+    });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_sessions")?.payload).toMatchObject({
+      revoked_at: "2026-07-28T20:00:00.000Z",
+    });
+  });
+
+  it("revokes an active reviewer invitation and its sessions", async () => {
+    const { client, updates, inserts } = createFakeClient();
+
+    await revokeReviewWorkspaceInvitation(
+      {
+        projectId: PROJECT_ID,
+        invitationId: INVITATION_ID,
+        actorProfileId: ACTOR_ID,
+        actorRole: "psg_superadmin",
+        reason: "The customer removed this reviewer from the approval team.",
+      },
+      { client: client as never, now: new Date("2026-07-28T20:15:00.000Z") },
+    );
+
+    expect(updates.find((entry) => entry.table === "bsm_content_review_invitations")?.payload).toMatchObject({
+      status: "revoked",
+      revoked_at: "2026-07-28T20:15:00.000Z",
+    });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_sessions")?.payload).toMatchObject({
+      revoked_at: "2026-07-28T20:15:00.000Z",
+    });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_reviewers")?.payload).toMatchObject({
+      submission_status: "revoked",
+      removed_at: "2026-07-28T20:15:00.000Z",
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_events")?.payload).toMatchObject({
+      event_type: "review_workspace_invitation_revoked",
+    });
+  });
+
+  it("does not let an admin relabel a completed round as closed early", async () => {
+    const { client } = createFakeClient({ currentRoundStatus: "completed" });
+
+    await expect(closeReviewWorkspaceRoundEarly(
+      {
+        projectId: PROJECT_ID,
+        actorProfileId: ACTOR_ID,
+        actorRole: "psg_superadmin",
+        reason: "Too late to close this round.",
+      },
+      { client: client as never },
+    )).rejects.toThrow("This review round is no longer open");
   });
 
   it("rejects pin comments for documents outside the active review round", async () => {
     const { client } = createFakeClient({ roundDocumentInScope: false });
 
     await expect(
-      addGuestReviewPinComment(
+      addGuestReviewAnnotation(
         {
           sessionHash: "session-hash",
           reviewItemId: "99999999-9999-4999-8999-999999999998",
@@ -1214,7 +1402,7 @@ describe("BSM review workspace foundation service", () => {
     const { client } = createFakeClient({ roundDocumentTenantMismatch: true });
 
     await expect(
-      addGuestReviewPinComment(
+      addGuestReviewAnnotation(
         {
           sessionHash: "session-hash",
           reviewItemId: REVIEW_ITEM_ID,
@@ -1276,12 +1464,13 @@ describe("BSM review workspace foundation service", () => {
     ).rejects.toThrow("requires at least one pin");
   });
 
-  it("keeps route exposure behind an explicit internal feature gate", async () => {
+  it("keeps the reviewer workspace on by default with an emergency off switch", async () => {
     const { bsmReviewWorkspaceInternalEnabled } = await import("@/lib/bsm/review-workspace");
 
-    expect(bsmReviewWorkspaceInternalEnabled({})).toBe(false);
+    expect(bsmReviewWorkspaceInternalEnabled({})).toBe(true);
     expect(bsmReviewWorkspaceInternalEnabled({ BSM_REVIEW_WORKSPACE_INTERNAL_ENABLED: "1" })).toBe(true);
     expect(bsmReviewWorkspaceInternalEnabled({ BSM_REVIEW_WORKSPACE_INTERNAL_ENABLED: "true" })).toBe(true);
+    expect(bsmReviewWorkspaceInternalEnabled({ BSM_REVIEW_WORKSPACE_INTERNAL_ENABLED: "false" })).toBe(false);
   });
 
   it("keeps the database foundation shop-scoped, reviewer-private, immutable, and default-deny", () => {
@@ -1316,5 +1505,11 @@ describe("BSM review workspace foundation service", () => {
         "input_jsonb",
       ]),
     );
+  });
+
+  it("allows highlight annotations and immutable decision resubmission revisions", () => {
+    expect(ANNOTATION_MIGRATION).toContain("'pin', 'highlight', 'clarification_reply'");
+    expect(ANNOTATION_MIGRATION).toContain("invitation_id,\n    submission_revision");
+    expect(ANNOTATION_MIGRATION).toContain("drop index if exists public.bsm_content_review_decisions_v2_active_uniq");
   });
 });

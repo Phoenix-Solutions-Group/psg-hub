@@ -8,6 +8,7 @@ export const SUPPORTED_APPROVAL_FILE_TYPES = {
   "image/webp": { extension: "webp", contentType: "image" },
   "text/markdown": { extension: "md", contentType: "document" },
   "text/html": { extension: "html", contentType: "document" },
+  "application/msword": { extension: "doc", contentType: "document" },
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
     extension: "docx",
     contentType: "document",
@@ -29,6 +30,7 @@ export type BsmContentApprovalWorkspaceOption = {
 };
 
 const APPROVAL_FILE_EXTENSION_MIME_TYPES: Record<string, BsmApprovalUploadMimeType> = {
+  doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   htm: "text/html",
   html: "text/html",

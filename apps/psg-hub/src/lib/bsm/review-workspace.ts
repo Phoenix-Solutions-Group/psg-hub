@@ -116,7 +116,15 @@ export type GuestSessionAccess = {
   submittedAt: string | null;
 };
 
-export type AddGuestPinCommentInput = {
+export type ReviewWorkspaceTextSelection = {
+  kind: "text";
+  blockId: string;
+  startOffset: number;
+  endOffset: number;
+  text: string;
+};
+
+export type AddGuestAnnotationInput = {
   sessionHash: string;
   reviewItemId: string;
   versionId: string;
@@ -124,9 +132,10 @@ export type AddGuestPinCommentInput = {
   pinNumber: number;
   pageNumber?: number | null;
   viewport: "desktop" | "mobile" | "pdf_page";
-  xRatio: number;
-  yRatio: number;
-  selection?: Record<string, unknown>;
+  anchorKind?: "pin" | "highlight";
+  xRatio?: number | null;
+  yRatio?: number | null;
+  selection?: Record<string, unknown> | null;
 };
 
 export type ReviewWorkspaceDocumentInput = {
@@ -163,13 +172,14 @@ export type VerifyGuestInvitationInput = {
 };
 
 export type GuestReviewWorkspace = {
-  project: { id: string; title: string; status: string };
+  project: { id: string; title: string; description: string | null; status: string };
   round: { id: string; status: string };
   reviewer: { email: string; submittedAt: string | null; readOnly: boolean };
   documents: Array<{
     itemId: string;
     versionId: string;
     title: string;
+    note: string | null;
     processingStatus: string;
     sectionTitle: string | null;
     originalFilename: string | null;
@@ -179,7 +189,19 @@ export type GuestReviewWorkspace = {
     proofUrl: string | null;
     proofContent: ReviewWorkspaceProofContent | null;
   }>;
-  comments: Array<{ id: string; reviewItemId: string; versionId: string; body: string; pinNumber: number | null; draftStatus: string }>;
+  comments: Array<{
+    id: string;
+    reviewItemId: string;
+    versionId: string;
+    body: string;
+    commentKind: "pin" | "highlight";
+    pinNumber: number | null;
+    draftStatus: string;
+    viewport: string | null;
+    xRatio: number | null;
+    yRatio: number | null;
+    selection: ReviewWorkspaceTextSelection | null;
+  }>;
   decisions: Array<{ reviewItemId: string; versionId: string; decision: string; message: string | null; submittedAt: string | null }>;
 };
 
@@ -199,7 +221,24 @@ export type StaffReviewWorkspaceResult = {
     proofUrl: string | null;
     proofContent: ReviewWorkspaceProofContent | null;
   }>;
-  submittedComments: Array<{ id: string; invitationId: string | null; reviewItemId: string; body: string; pinNumber: number | null; draftStatus: string }>;
+  reviewers: Array<{
+    invitationId: string;
+    email: string;
+    name: string | null;
+    status: string;
+    submittedAt: string | null;
+    revokedAt: string | null;
+  }>;
+  submittedComments: Array<{
+    id: string;
+    invitationId: string | null;
+    reviewItemId: string;
+    body: string;
+    commentKind: "pin" | "highlight";
+    pinNumber: number | null;
+    draftStatus: string;
+    selection: ReviewWorkspaceTextSelection | null;
+  }>;
   decisions: Array<{ id: string; invitationId: string | null; reviewItemId: string; decision: string; message: string | null; submittedAt: string | null }>;
 };
 
@@ -214,6 +253,14 @@ export type ReopenGuestReviewRoundInput = {
 
 export type CloseReviewWorkspaceRoundEarlyInput = {
   projectId: string;
+  actorProfileId: string;
+  actorRole?: ReviewWorkspaceActorRole;
+  reason: string;
+};
+
+export type RevokeReviewWorkspaceInvitationInput = {
+  projectId: string;
+  invitationId: string;
   actorProfileId: string;
   actorRole?: ReviewWorkspaceActorRole;
   reason: string;
@@ -280,6 +327,29 @@ function assertRatio(label: string, value: unknown): number {
   return value;
 }
 
+function cleanTextSelection(value: unknown): ReviewWorkspaceTextSelection {
+  if (!value || typeof value !== "object") {
+    throw new ReviewWorkspaceInputError(400, "A text highlight selection is required");
+  }
+  const selection = value as Record<string, unknown>;
+  const blockId = cleanText("selection.blockId", selection.blockId, 120);
+  const text = cleanText("selection.text", selection.text, 500);
+  const startOffset = Number(selection.startOffset);
+  const endOffset = Number(selection.endOffset);
+  if (!Number.isInteger(startOffset) || startOffset < 0 || !Number.isInteger(endOffset) || endOffset <= startOffset || endOffset > 50_000) {
+    throw new ReviewWorkspaceInputError(400, "The text highlight range is not valid");
+  }
+  return { kind: "text", blockId, startOffset, endOffset, text };
+}
+
+function readTextSelection(value: unknown): ReviewWorkspaceTextSelection | null {
+  try {
+    return cleanTextSelection(value);
+  } catch {
+    return null;
+  }
+}
+
 function resolveClient(client?: ReviewWorkspaceDbClient): ReviewWorkspaceDbClient {
   return client ?? createServiceClient();
 }
@@ -289,7 +359,7 @@ function isSuperadminRole(role: ReviewWorkspaceActorRole): boolean {
 }
 
 export function bsmReviewWorkspaceInternalEnabled(env: Record<string, string | undefined> = process.env): boolean {
-  return env.BSM_REVIEW_WORKSPACE_INTERNAL_ENABLED === "1" || env.BSM_REVIEW_WORKSPACE_INTERNAL_ENABLED === "true";
+  return !["0", "false"].includes(env.BSM_REVIEW_WORKSPACE_INTERNAL_ENABLED?.trim().toLowerCase() ?? "");
 }
 
 function hashSecret(value: string): string {
@@ -370,6 +440,8 @@ function fileProofTarget(version: Record<string, unknown> | null | undefined): {
     : null;
   if (processedPath && processedBucket) return { bucket: processedBucket, path: processedPath };
 
+  if (version?.project_id) return null;
+
   const path = typeof version?.storage_path === "string" && version.storage_path.trim()
     ? version.storage_path
     : null;
@@ -381,6 +453,7 @@ function fileProofTarget(version: Record<string, unknown> | null | undefined): {
 
 function reviewerDocumentContentType(version: Record<string, unknown> | null | undefined): string | null {
   const hasProcessedProof = typeof version?.processed_storage_path === "string" && version.processed_storage_path.trim();
+  if (version?.project_id && !hasProcessedProof) return null;
   return (
     (hasProcessedProof ? (version?.processed_content_type as string | null) : null) ??
     (version?.content_type as string | null) ??
@@ -564,8 +637,8 @@ export async function startReviewWorkspaceRound(
   const client = resolveClient(deps.client);
   const now = deps.now ?? new Date();
   const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, input.actorRole);
-  if (["active", "completed", "closed_early", "archived", "deleting", "deleted"].includes(access.status)) {
-    throw new ReviewWorkspaceInputError(400, "This Review Workspace has already been started or closed");
+  if (["archived", "deleting", "deleted"].includes(access.status)) {
+    throw new ReviewWorkspaceInputError(400, "This Review Workspace is not available for a new round");
   }
 
   const { data: projectRow, error: projectError } = await client
@@ -576,8 +649,30 @@ export async function startReviewWorkspaceRound(
   if (projectError || !projectRow) {
     throw new Error(`Could not load review workspace project: ${projectError?.message ?? "not found"}`);
   }
-  if ((projectRow as Record<string, unknown>).current_round_id) {
-    throw new ReviewWorkspaceInputError(400, "This Review Workspace already has an active review round");
+  const currentRoundId = ((projectRow as Record<string, unknown>).current_round_id as string | null) ?? null;
+  let roundNumber = 1;
+  const priorVersionByItem = new Map<string, string>();
+  if (currentRoundId) {
+    const [{ data: currentRound, error: currentRoundError }, { data: priorDocuments, error: priorDocumentsError }] = await Promise.all([
+      client.from("bsm_content_review_rounds").select("id, status, round_number").eq("id", currentRoundId).single(),
+      client
+        .from("bsm_content_review_round_documents")
+        .select("review_item_id, version_id")
+        .eq("round_id", currentRoundId)
+        .eq("project_id", access.projectId)
+        .eq("shop_id", access.shopId),
+    ]);
+    if (currentRoundError || !currentRound) {
+      throw new Error(`Could not load the current review round: ${currentRoundError?.message ?? "not found"}`);
+    }
+    if (["active", "inviting"].includes(currentRound.status as string)) {
+      throw new ReviewWorkspaceInputError(400, "This Review Workspace already has an active review round");
+    }
+    if (priorDocumentsError) throw new Error(`Could not load the prior review documents: ${priorDocumentsError.message}`);
+    roundNumber = Number(currentRound.round_number ?? 1) + 1;
+    for (const row of (priorDocuments ?? []) as Array<Record<string, unknown>>) {
+      priorVersionByItem.set(row.review_item_id as string, row.version_id as string);
+    }
   }
 
   const { data: itemRows, error: itemError } = await client
@@ -605,6 +700,13 @@ export async function startReviewWorkspaceRound(
     );
   }
 
+  const reviewDocuments = currentRoundId
+    ? documents.filter((document) => priorVersionByItem.get(document.itemId) !== document.versionId)
+    : documents;
+  if (reviewDocuments.length === 0) {
+    throw new ReviewWorkspaceInputError(400, "Upload or generate a revised document before starting another review round");
+  }
+
   const roundId = randomUUID();
   const expiresAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
   const reminderDueAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -613,14 +715,14 @@ export async function startReviewWorkspaceRound(
     id: roundId,
     project_id: access.projectId,
     shop_id: access.shopId,
-    round_number: 1,
+    round_number: roundNumber,
     status: "active",
     started_by_profile_id: actorProfileId,
     started_at: now.toISOString(),
   });
   if (roundError) throw new Error(`Could not start review round: ${roundError.message}`);
 
-  for (const document of documents) {
+  for (const document of reviewDocuments) {
     const { error } = await client.from("bsm_content_review_round_documents").insert({
       round_id: roundId,
       project_id: access.projectId,
@@ -647,14 +749,14 @@ export async function startReviewWorkspaceRound(
       status: "sent",
       token_hash: hashSecret(inviteToken),
       code_hash: hashSecret(inviteCode),
-      last_code_sent_at: now.toISOString(),
+      last_code_sent_at: null,
       expires_at: expiresAt,
       reminder_due_at: reminderDueAt,
       created_by_profile_id: actorProfileId,
     });
     if (inviteError) throw new Error(`Could not create review invitation: ${inviteError.message}`);
 
-    for (const document of documents) {
+    for (const document of reviewDocuments) {
       await insertWithSchemaCacheFallback(client, "bsm_content_review_reviewers", {
         review_item_id: document.itemId,
         shop_id: access.shopId,
@@ -680,8 +782,7 @@ export async function startReviewWorkspaceRound(
   const { error: itemUpdateError } = await client
     .from("bsm_content_review_items")
     .update({ status: "in_review", updated_at: now.toISOString() })
-    .eq("project_id", access.projectId)
-    .is("deleted_at", null);
+    .in("id", reviewDocuments.map((document) => document.itemId));
   if (itemUpdateError) throw new Error(`Could not mark documents in review: ${itemUpdateError.message}`);
 
   const { error: projectUpdateError } = await client
@@ -700,11 +801,12 @@ export async function startReviewWorkspaceRound(
       projectId: access.projectId,
       roundId,
       invitationCount: invitations.length,
-      documentCount: documents.length,
+      documentCount: reviewDocuments.length,
+      roundNumber,
     },
   });
 
-  return { projectId: access.projectId, roundId, invitations, documentCount: documents.length };
+  return { projectId: access.projectId, roundId, invitations, documentCount: reviewDocuments.length };
 }
 
 export async function requireReviewWorkspaceStaffAccess(
@@ -828,12 +930,20 @@ export async function getStaffReviewWorkspaceResult(
   const project = projectRow as Record<string, unknown>;
   const roundId = (project.current_round_id as string | null) ?? null;
 
-  const [{ data: roundRows, error: roundError }, { data: itemRows, error: itemError }, { data: commentRows, error: commentError }, { data: decisionRows, error: decisionError }] = await Promise.all([
+  const [{ data: roundRows, error: roundError }, { data: roundDocumentRows, error: roundDocumentError }, { data: itemRows, error: itemError }, { data: invitationRows, error: invitationError }, { data: commentRows, error: commentError }, { data: decisionRows, error: decisionError }] = await Promise.all([
     roundId
       ? client
           .from("bsm_content_review_rounds")
           .select("id, status, outcome, completed_at")
           .eq("id", roundId)
+      : Promise.resolve({ data: [], error: null }),
+    roundId
+      ? client
+          .from("bsm_content_review_round_documents")
+          .select("review_item_id, version_id")
+          .eq("round_id", roundId)
+          .eq("project_id", access.projectId)
+          .eq("shop_id", access.shopId)
       : Promise.resolve({ data: [], error: null }),
     client
       .from("bsm_content_review_items")
@@ -849,8 +959,15 @@ export async function getStaffReviewWorkspaceResult(
       .order("position", { ascending: true }),
     roundId
       ? client
+          .from("bsm_content_review_invitations")
+          .select("id, reviewer_email, reviewer_name, status, submitted_at, revoked_at")
+          .eq("round_id", roundId)
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    roundId
+      ? client
           .from("bsm_content_review_comments")
-          .select("id, invitation_id, review_item_id, body, pin_number, draft_status")
+          .select("id, invitation_id, review_item_id, body, comment_kind, pin_number, draft_status, selection_jsonb")
           .eq("round_id", roundId)
           .in("draft_status", ["submitted", "locked"])
           .order("created_at", { ascending: true })
@@ -860,22 +977,27 @@ export async function getStaffReviewWorkspaceResult(
           .from("bsm_content_review_decisions")
           .select("id, invitation_id, review_item_id, decision, message, submitted_at")
           .eq("round_id", roundId)
-          .order("submitted_at", { ascending: true })
+          .order("submitted_at", { ascending: false })
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (roundError) throw new Error(`Could not load review workspace round: ${roundError.message}`);
+  if (roundDocumentError) throw new Error(`Could not load review workspace round documents: ${roundDocumentError.message}`);
   if (itemError) throw new Error(`Could not load Review Workspace documents: ${itemError.message}`);
+  if (invitationError) throw new Error(`Could not load review workspace invitations: ${invitationError.message}`);
   if (commentError) throw new Error(`Could not load review workspace comments: ${commentError.message}`);
   if (decisionError) throw new Error(`Could not load review workspace decisions: ${decisionError.message}`);
 
   const itemRecords = (itemRows ?? []) as Array<Record<string, unknown>>;
+  const roundVersionByItem = new Map(((roundDocumentRows ?? []) as Array<Record<string, unknown>>).map(
+    (row) => [row.review_item_id as string, row.version_id as string],
+  ));
   const versionIds = itemRecords
-    .map((row) => row.current_version_id)
+    .map((row) => roundVersionByItem.get(row.id as string) ?? row.current_version_id)
     .filter((value): value is string => typeof value === "string" && value.length > 0);
   const { data: versionRows, error: versionError } = versionIds.length
     ? await client
         .from("bsm_content_review_versions")
-        .select("id, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb")
+        .select("id, project_id, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb")
         .in("id", versionIds)
     : { data: [], error: null };
   if (versionError) throw new Error(`Could not load Review Workspace document versions: ${versionError.message}`);
@@ -901,7 +1023,7 @@ export async function getStaffReviewWorkspaceResult(
         }
       : null,
     documents: await Promise.all(itemRecords.map(async (row) => {
-      const versionId = (row.current_version_id as string | null) ?? null;
+      const versionId = roundVersionByItem.get(row.id as string) ?? (row.current_version_id as string | null) ?? null;
       const version = versionId ? versionsById.get(versionId) : undefined;
       const sourceMetadata = (version?.source_metadata_jsonb as Record<string, unknown> | null) ?? {};
       const snapshot = (version?.snapshot_jsonb as Record<string, unknown> | null) ?? {};
@@ -930,15 +1052,28 @@ export async function getStaffReviewWorkspaceResult(
         proofContent: proofContentFromMetadata(sourceMetadata) ?? proofContentFromMetadata(snapshot),
       };
     })),
+    reviewers: ((invitationRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      invitationId: row.id as string,
+      email: row.reviewer_email as string,
+      name: (row.reviewer_name as string | null) ?? null,
+      status: row.status as string,
+      submittedAt: (row.submitted_at as string | null) ?? null,
+      revokedAt: (row.revoked_at as string | null) ?? null,
+    })),
     submittedComments: ((commentRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
       id: row.id as string,
       invitationId: (row.invitation_id as string | null) ?? null,
       reviewItemId: row.review_item_id as string,
       body: row.body as string,
+      commentKind: row.comment_kind === "highlight" ? "highlight" as const : "pin" as const,
       pinNumber: (row.pin_number as number | null) ?? null,
       draftStatus: row.draft_status as string,
+      selection: readTextSelection(row.selection_jsonb),
     })),
-    decisions: ((decisionRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    decisions: [...new Map(((decisionRows ?? []) as Array<Record<string, unknown>>).slice().reverse().map((row) => [
+      `${row.invitation_id}:${row.review_item_id}`,
+      row,
+    ])).values()].map((row) => ({
       id: row.id as string,
       invitationId: (row.invitation_id as string | null) ?? null,
       reviewItemId: row.review_item_id as string,
@@ -1404,18 +1539,32 @@ async function updateRoundCompletionAfterSubmission(
   }
 
   const activeInvitationIds = activeInvitations.map((row) => row.id as string);
-  const { data: decisions, error: decisionsError } = await client
-    .from("bsm_content_review_decisions")
-    .select("invitation_id, review_item_id, decision, submitted_at")
-    .eq("round_id", input.roundId)
-    .in("invitation_id", activeInvitationIds)
-    .order("submitted_at", { ascending: false });
+  const [{ data: decisions, error: decisionsError }, { data: roundDocuments, error: roundDocumentsError }] = await Promise.all([
+    client
+      .from("bsm_content_review_decisions")
+      .select("invitation_id, review_item_id, decision, submitted_at")
+      .eq("round_id", input.roundId)
+      .in("invitation_id", activeInvitationIds)
+      .order("submitted_at", { ascending: false }),
+    client
+      .from("bsm_content_review_round_documents")
+      .select("review_item_id")
+      .eq("round_id", input.roundId)
+      .eq("project_id", input.projectId)
+      .eq("shop_id", input.shopId)
+      .eq("decision_required", true),
+  ]);
   if (decisionsError) throw new Error(`Could not load review round decisions: ${decisionsError.message}`);
+  if (roundDocumentsError) throw new Error(`Could not load required review documents: ${roundDocumentsError.message}`);
 
   const latestDecisionByReviewerDocument = new Map<string, Record<string, unknown>>();
   for (const decision of (decisions ?? []) as Array<Record<string, unknown>>) {
     const key = `${decision.invitation_id}:${decision.review_item_id}`;
     if (!latestDecisionByReviewerDocument.has(key)) latestDecisionByReviewerDocument.set(key, decision);
+  }
+  const requiredDecisionCount = activeInvitationIds.length * ((roundDocuments ?? []) as Array<Record<string, unknown>>).length;
+  if (requiredDecisionCount === 0 || latestDecisionByReviewerDocument.size !== requiredDecisionCount) {
+    return { completed: false, outcome: null };
   }
   const outcome = [...latestDecisionByReviewerDocument.values()].some((decision) => decision.decision === "changes_requested")
     ? "changes_requested"
@@ -1436,8 +1585,8 @@ async function updateRoundCompletionAfterSubmission(
   return { completed: true, outcome };
 }
 
-export async function addGuestReviewPinComment(
-  input: AddGuestPinCommentInput,
+export async function addGuestReviewAnnotation(
+  input: AddGuestAnnotationInput,
   deps: { client?: ReviewWorkspaceDbClient } = {},
 ) {
   const client = resolveClient(deps.client);
@@ -1448,8 +1597,10 @@ export async function addGuestReviewPinComment(
   const reviewItemId = assertUuid("reviewItemId", input.reviewItemId);
   const versionId = assertUuid("versionId", input.versionId);
   const body = cleanText("body", input.body, 2000);
-  const xRatio = assertRatio("xRatio", input.xRatio);
-  const yRatio = assertRatio("yRatio", input.yRatio);
+  const anchorKind = input.anchorKind === "highlight" ? "highlight" : "pin";
+  const selection = anchorKind === "highlight" ? cleanTextSelection(input.selection) : null;
+  const xRatio = anchorKind === "pin" ? assertRatio("xRatio", input.xRatio) : null;
+  const yRatio = anchorKind === "pin" ? assertRatio("yRatio", input.yRatio) : null;
   await requireRoundDocumentAccess(client, access, reviewItemId, versionId);
   if (!Number.isInteger(input.pinNumber) || input.pinNumber <= 0) {
     throw new ReviewWorkspaceInputError(400, "pinNumber is required");
@@ -1487,14 +1638,14 @@ export async function addGuestReviewPinComment(
       author_profile_id: null,
       body,
       visibility: "shop_and_psg",
-      comment_kind: "pin",
+      comment_kind: anchorKind,
       draft_status: "draft",
       pin_number: input.pinNumber,
       page_number: input.pageNumber ?? null,
       viewport: input.viewport,
       x_ratio: xRatio,
       y_ratio: yRatio,
-      selection_jsonb: input.selection ?? {},
+      selection_jsonb: selection ?? {},
     })
     .select("id, thread_id, body, draft_status")
     .single();
@@ -1510,7 +1661,7 @@ export async function addGuestReviewPinComment(
     shop_id: access.shopId,
     review_item_id: reviewItemId,
     version_id: versionId,
-    event_type: "review_workspace_pin_comment_drafted",
+    event_type: "review_workspace_annotation_drafted",
     actor_profile_id: null,
     payload_jsonb: {
       projectId: access.projectId,
@@ -1519,6 +1670,7 @@ export async function addGuestReviewPinComment(
       threadId,
       commentId,
       pinNumber: input.pinNumber,
+      anchorKind,
     },
   });
 
@@ -1533,7 +1685,7 @@ export async function getGuestReviewWorkspace(
   const access = await requireGuestReviewSession(client, sessionHash);
 
   const [{ data: project }, { data: round }, { data: docs }, { data: comments }, { data: decisions }] = await Promise.all([
-    client.from("bsm_content_review_projects").select("id, title, status").eq("id", access.projectId).single(),
+    client.from("bsm_content_review_projects").select("id, title, description, status").eq("id", access.projectId).single(),
     client.from("bsm_content_review_rounds").select("id, status").eq("id", access.roundId).single(),
     client
       .from("bsm_content_review_round_documents")
@@ -1543,7 +1695,7 @@ export async function getGuestReviewWorkspace(
       .eq("shop_id", access.shopId),
     client
       .from("bsm_content_review_comments")
-      .select("id, review_item_id, version_id, body, pin_number, draft_status")
+      .select("id, review_item_id, version_id, body, comment_kind, pin_number, draft_status, viewport, x_ratio, y_ratio, selection_jsonb")
       .eq("round_id", access.roundId)
       .eq("invitation_id", access.invitationId)
       .order("created_at", { ascending: true }),
@@ -1551,7 +1703,8 @@ export async function getGuestReviewWorkspace(
       .from("bsm_content_review_decisions")
       .select("review_item_id, version_id, decision, message, submitted_at")
       .eq("round_id", access.roundId)
-      .eq("invitation_id", access.invitationId),
+      .eq("invitation_id", access.invitationId)
+      .order("submitted_at", { ascending: true }),
   ]);
 
   const itemIds = ((docs ?? []) as Array<Record<string, unknown>>)
@@ -1561,13 +1714,13 @@ export async function getGuestReviewWorkspace(
     .map((row) => row.version_id)
     .filter((value): value is string => typeof value === "string");
   const { data: items } = itemIds.length
-    ? await client.from("bsm_content_review_items").select("id, title, processing_status, section_id").in("id", itemIds)
+    ? await client.from("bsm_content_review_items").select("id, title, admin_context_note, processing_status, section_id").in("id", itemIds)
     : { data: [] };
   const itemsById = new Map(((items ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
   const { data: versions } = versionIds.length
     ? await client
         .from("bsm_content_review_versions")
-        .select("id, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb")
+        .select("id, project_id, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb")
         .in("id", versionIds)
     : { data: [] };
   const versionsById = new Map(((versions ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
@@ -1587,6 +1740,7 @@ export async function getGuestReviewWorkspace(
     project: {
       id: (project as Record<string, unknown>).id as string,
       title: (project as Record<string, unknown>).title as string,
+      description: ((project as Record<string, unknown>).description as string | null) ?? null,
       status: (project as Record<string, unknown>).status as string,
     },
     round: {
@@ -1613,19 +1767,22 @@ export async function getGuestReviewWorkspace(
         : typeof version?.generated_page_path === "string" && version.generated_page_path.trim()
           ? version.generated_page_path
           : null;
-      const signedProofUrl = await createSignedProofUrl(client, version);
+      const privateProofUrl = fileProofTarget(version)
+        ? `/api/bsm/review-workspace/file?sessionHash=${encodeURIComponent(sessionHash)}&reviewItemId=${encodeURIComponent(row.review_item_id as string)}&versionId=${encodeURIComponent(row.version_id as string)}`
+        : null;
       const sectionId = (item?.section_id as string | null) ?? null;
       return {
         itemId: row.review_item_id as string,
         versionId: row.version_id as string,
         title: (item?.title as string | null) ?? "Review document",
+        note: (item?.admin_context_note as string | null) ?? null,
         processingStatus: (item?.processing_status as string | null) ?? "pending",
         sectionTitle: sectionId ? sectionTitles.get(sectionId) ?? null : null,
         originalFilename: (version?.original_filename as string | null) ?? null,
         contentType: reviewerDocumentContentType(version),
         previewUrl,
         generatedPagePath,
-        proofUrl: previewUrl ?? generatedPagePath ?? signedProofUrl,
+        proofUrl: previewUrl ?? generatedPagePath ?? privateProofUrl,
         proofContent: proofContentFromMetadata(metadata) ?? proofContentFromMetadata(snapshot),
       };
     })),
@@ -1634,8 +1791,13 @@ export async function getGuestReviewWorkspace(
       reviewItemId: row.review_item_id as string,
       versionId: row.version_id as string,
       body: row.body as string,
+      commentKind: row.comment_kind === "highlight" ? "highlight" : "pin",
       pinNumber: (row.pin_number as number | null) ?? null,
       draftStatus: row.draft_status as string,
+      viewport: (row.viewport as string | null) ?? null,
+      xRatio: row.x_ratio == null ? null : Number(row.x_ratio),
+      yRatio: row.y_ratio == null ? null : Number(row.y_ratio),
+      selection: readTextSelection(row.selection_jsonb),
     })),
     decisions: ((decisions ?? []) as Array<Record<string, unknown>>).map((row) => ({
       reviewItemId: row.review_item_id as string,
@@ -1661,6 +1823,7 @@ export async function getGuestReviewWorkspaceFileDownload(
     .from("bsm_content_review_versions")
     .select(`
       id,
+      project_id,
       original_filename,
       content_type,
       byte_size,
@@ -1684,14 +1847,11 @@ export async function getGuestReviewWorkspaceFileDownload(
   const processedPath = typeof row.processed_storage_path === "string" && row.processed_storage_path.trim()
     ? row.processed_storage_path
     : null;
-  const storageBucket = typeof row.storage_bucket === "string" && row.storage_bucket.trim()
-    ? row.storage_bucket
-    : null;
-  const storagePath = typeof row.storage_path === "string" && row.storage_path.trim()
-    ? row.storage_path
-    : null;
-  const bucket = processedBucket ?? storageBucket;
-  const path = processedPath ?? storagePath;
+  if (row.project_id && (processedBucket !== BSM_CONTENT_APPROVALS_BUCKET || !processedPath)) {
+    throw new ReviewWorkspaceInputError(404, "The processed review copy is not available");
+  }
+  const bucket = processedBucket ?? (typeof row.storage_bucket === "string" ? row.storage_bucket : null);
+  const path = processedPath ?? (typeof row.storage_path === "string" ? row.storage_path : null);
   if (bucket !== BSM_CONTENT_APPROVALS_BUCKET || !path) {
     throw new ReviewWorkspaceInputError(404, "Review document file not found");
   }
@@ -1740,6 +1900,35 @@ export async function submitGuestReviewRound(
     throw new ReviewWorkspaceInputError(409, "This review round was already submitted. Reopen it before sending a revised response.");
   }
 
+  const { data: requiredDocuments, error: requiredDocumentsError } = await client
+    .from("bsm_content_review_round_documents")
+    .select("review_item_id, version_id")
+    .eq("round_id", access.roundId)
+    .eq("project_id", access.projectId)
+    .eq("shop_id", access.shopId)
+    .eq("decision_required", true);
+  if (requiredDocumentsError) throw new Error(`Could not load required review documents: ${requiredDocumentsError.message}`);
+  const requiredKeys = new Set(((requiredDocuments ?? []) as Array<Record<string, unknown>>).map(
+    (row) => `${row.review_item_id}:${row.version_id}`,
+  ));
+  const submittedKeys = new Set<string>();
+  for (const decision of input.decisions) {
+    if (decision.decision !== "approved" && decision.decision !== "changes_requested") {
+      throw new ReviewWorkspaceInputError(400, "Each document requires an Approved or Changes requested decision");
+    }
+    const key = `${assertUuid("reviewItemId", decision.reviewItemId)}:${assertUuid("versionId", decision.versionId)}`;
+    if (!requiredKeys.has(key)) {
+      throw new ReviewWorkspaceInputError(400, "This review document is not part of the active round");
+    }
+    if (submittedKeys.has(key)) {
+      throw new ReviewWorkspaceInputError(400, "Submit exactly one decision for every required document");
+    }
+    submittedKeys.add(key);
+  }
+  if (submittedKeys.size !== requiredKeys.size) {
+    throw new ReviewWorkspaceInputError(400, "Submit exactly one decision for every required document");
+  }
+
   const submissionRevision = await nextSubmissionRevision(client, access.roundId, access.invitationId);
 
   for (const decision of input.decisions) {
@@ -1757,7 +1946,7 @@ export async function submitGuestReviewRound(
         .limit(1);
       if (draftError) throw new Error(`Could not check reviewer comments: ${draftError.message}`);
       if (!draftComments || draftComments.length === 0) {
-        throw new ReviewWorkspaceInputError(400, "Changes requested requires at least one pin comment");
+        throw new ReviewWorkspaceInputError(400, "Changes requested requires at least one pinned or highlighted comment");
       }
     }
 
@@ -1907,6 +2096,30 @@ export async function closeReviewWorkspaceRoundEarly(
   const roundId = (project as Record<string, unknown>).current_round_id as string | null;
   if (!roundId) throw new ReviewWorkspaceInputError(409, "This review workspace does not have an open round");
 
+  const { data: round, error: roundError } = await client
+    .from("bsm_content_review_rounds")
+    .select("id, status")
+    .eq("id", roundId)
+    .eq("project_id", projectId)
+    .eq("shop_id", access.shopId)
+    .single();
+  if (roundError || !round) throw new Error(`Could not load review workspace round: ${roundError?.message ?? "not found"}`);
+  if (round.status !== "active" && round.status !== "inviting") {
+    throw new ReviewWorkspaceInputError(409, "This review round is no longer open");
+  }
+
+  const { data: invitations, error: invitationsError } = await client
+    .from("bsm_content_review_invitations")
+    .select("id, reviewer_email, reviewer_name, status, submitted_at, revoked_at")
+    .eq("round_id", roundId)
+    .eq("project_id", projectId)
+    .eq("shop_id", access.shopId);
+  if (invitationsError) throw new Error(`Could not load review invitations: ${invitationsError.message}`);
+  const nonresponders = ((invitations ?? []) as Array<Record<string, unknown>>).filter(
+    (row) => !row.revoked_at && row.status !== "submitted" && !row.submitted_at,
+  );
+  const pendingInvitationIds = nonresponders.map((row) => row.id as string);
+
   const { error: roundUpdateError } = await client
     .from("bsm_content_review_rounds")
     .update({
@@ -1926,12 +2139,39 @@ export async function closeReviewWorkspaceRoundEarly(
     .eq("id", projectId);
   if (projectUpdateError) throw new Error(`Could not close review workspace project: ${projectUpdateError.message}`);
 
+  if (pendingInvitationIds.length > 0) {
+    const { error: invitationUpdateError } = await client
+      .from("bsm_content_review_invitations")
+      .update({
+        status: "revoked",
+        revoked_by_profile_id: actorProfileId,
+        revoked_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .in("id", pendingInvitationIds);
+    if (invitationUpdateError) throw new Error(`Could not revoke pending review invitations: ${invitationUpdateError.message}`);
+
+    const { error: sessionUpdateError } = await client
+      .from("bsm_content_review_sessions")
+      .update({ revoked_at: now.toISOString() })
+      .in("invitation_id", pendingInvitationIds);
+    if (sessionUpdateError) throw new Error(`Could not revoke pending reviewer sessions: ${sessionUpdateError.message}`);
+  }
+
   await insertEvent(client, {
     shop_id: access.shopId,
     review_item_id: null,
     event_type: "review_workspace_round_closed_early",
     actor_profile_id: actorProfileId,
-    payload_jsonb: { projectId, roundId, reason },
+    payload_jsonb: {
+      projectId,
+      roundId,
+      reason,
+      nonresponders: nonresponders.map((row) => ({
+        email: row.reviewer_email,
+        name: row.reviewer_name ?? null,
+      })),
+    },
   });
 
   return {
@@ -1939,6 +2179,104 @@ export async function closeReviewWorkspaceRoundEarly(
     roundId,
     status: "closed_early",
     outcome: "closed_early",
+    nonresponders: nonresponders.map((row) => ({
+      email: row.reviewer_email as string,
+      name: (row.reviewer_name as string | null) ?? null,
+    })),
+  };
+}
+
+export async function revokeReviewWorkspaceInvitation(
+  input: RevokeReviewWorkspaceInvitationInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+) {
+  const projectId = assertUuid("projectId", input.projectId);
+  const invitationId = assertUuid("invitationId", input.invitationId);
+  const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
+  const reason = cleanText("reason", input.reason, 1000);
+  const client = resolveClient(deps.client);
+  const nowIso = (deps.now ?? new Date()).toISOString();
+  const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, input.actorRole);
+
+  const { data: invitation, error: invitationError } = await client
+    .from("bsm_content_review_invitations")
+    .select("id, project_id, round_id, shop_id, reviewer_email, reviewer_name, revoked_at")
+    .eq("id", invitationId)
+    .eq("project_id", projectId)
+    .eq("shop_id", access.shopId)
+    .maybeSingle();
+  if (invitationError || !invitation) {
+    throw new ReviewWorkspaceInputError(404, "Review invitation not found");
+  }
+  if (invitation.revoked_at) throw new ReviewWorkspaceInputError(409, "This review invitation was already revoked");
+
+  const roundId = invitation.round_id as string;
+  const { data: round, error: roundError } = await client
+    .from("bsm_content_review_rounds")
+    .select("id, status")
+    .eq("id", roundId)
+    .eq("project_id", projectId)
+    .eq("shop_id", access.shopId)
+    .single();
+  if (roundError || !round) throw new Error(`Could not load review workspace round: ${roundError?.message ?? "not found"}`);
+  if (round.status !== "active" && round.status !== "inviting") {
+    throw new ReviewWorkspaceInputError(409, "This review round is no longer open");
+  }
+
+  const { error: revokeError } = await client
+    .from("bsm_content_review_invitations")
+    .update({
+      status: "revoked",
+      revoked_by_profile_id: actorProfileId,
+      revoked_at: nowIso,
+      updated_at: nowIso,
+    })
+    .eq("id", invitationId);
+  if (revokeError) throw new Error(`Could not revoke review invitation: ${revokeError.message}`);
+
+  const { error: sessionError } = await client
+    .from("bsm_content_review_sessions")
+    .update({ revoked_at: nowIso })
+    .eq("invitation_id", invitationId);
+  if (sessionError) throw new Error(`Could not revoke reviewer sessions: ${sessionError.message}`);
+
+  const { error: reviewerError } = await client
+    .from("bsm_content_review_reviewers")
+    .update({ submission_status: "revoked", removed_at: nowIso })
+    .eq("round_id", roundId)
+    .eq("invitation_id", invitationId);
+  if (reviewerError) throw new Error(`Could not revoke reviewer assignment: ${reviewerError.message}`);
+
+  const completion = await updateRoundCompletionAfterSubmission(client, {
+    projectId,
+    roundId,
+    shopId: access.shopId,
+    nowIso,
+  });
+  await insertEvent(client, {
+    shop_id: access.shopId,
+    review_item_id: null,
+    event_type: "review_workspace_invitation_revoked",
+    actor_profile_id: actorProfileId,
+    payload_jsonb: {
+      projectId,
+      roundId,
+      invitationId,
+      reviewerEmail: invitation.reviewer_email,
+      reviewerName: invitation.reviewer_name ?? null,
+      reason,
+      roundCompleted: completion.completed,
+      outcome: completion.outcome,
+    },
+  });
+
+  return {
+    projectId,
+    roundId,
+    invitationId,
+    status: "revoked",
+    roundCompleted: completion.completed,
+    outcome: completion.outcome,
   };
 }
 

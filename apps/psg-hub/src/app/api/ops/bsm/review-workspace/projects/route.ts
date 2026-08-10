@@ -2,8 +2,11 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { requireOpsFn } from "@/lib/auth/ops-access";
+import { sendEmail } from "@/lib/mail/sendgrid";
+import { createServiceClient } from "@/lib/supabase/service";
 import {
   ReviewWorkspaceInputError,
+  bsmReviewWorkspaceInternalEnabled,
   createReviewWorkspaceProject,
   createInternalReviewWorkspaceSlice,
   listStaffReviewWorkspaces,
@@ -46,6 +49,9 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     if (payload.action === "start_review") {
+      if (!bsmReviewWorkspaceInternalEnabled()) {
+        return NextResponse.json({ error: "The reviewer workspace is disabled in this environment." }, { status: 409 });
+      }
       const review = await startReviewWorkspaceRound({
         projectId: payload.projectId as string,
         actorProfileId: gate.userId,
@@ -54,7 +60,43 @@ export async function POST(request: Request): Promise<Response> {
           ? payload.reviewers.map((reviewer) => reviewer as { email: string; name?: string | null })
           : [],
       });
-      return NextResponse.json({ review }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
+      const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin).replace(/\/+$/, "");
+      const deliveryResults = await Promise.allSettled(review.invitations.map((invitation) =>
+        sendEmail({
+          to: invitation.reviewerName
+            ? { name: invitation.reviewerName, email: invitation.reviewerEmail }
+            : invitation.reviewerEmail,
+          subject: "Your PSG content review is ready",
+          text: [
+            "PSG has shared content for your review.",
+            `Open: ${baseUrl}/review-workspace?invite=${encodeURIComponent(invitation.inviteToken)}`,
+            `One-time code: ${invitation.inviteCode}`,
+            "This private invitation expires in 14 days.",
+          ].join("\n\n"),
+          html: `<p>PSG has shared content for your review.</p><p><a href="${baseUrl}/review-workspace?invite=${encodeURIComponent(invitation.inviteToken)}">Open the private review workspace</a></p><p>One-time code: <strong>${invitation.inviteCode}</strong></p><p>This private invitation expires in 14 days.</p>`,
+          clickTracking: false,
+        }),
+      ));
+      const service = createServiceClient();
+      await Promise.all(review.invitations.map((invitation, index) =>
+        service
+          .from("bsm_content_review_invitations")
+          .update({
+            status: "sent",
+            last_code_sent_at: deliveryResults[index]?.status === "fulfilled" ? new Date().toISOString() : null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", invitation.invitationId),
+      ));
+      const invitations = review.invitations.map((invitation, index) => ({
+        ...invitation,
+        deliveryStatus: deliveryResults[index]?.status === "fulfilled" ? "sent" as const : "failed" as const,
+      }));
+      const failedDeliveryCount = invitations.filter((invitation) => invitation.deliveryStatus === "failed").length;
+      return NextResponse.json(
+        { review: { ...review, invitations }, failedDeliveryCount },
+        { status: failedDeliveryCount ? 207 : 201, headers: { "Cache-Control": "private, no-store" } },
+      );
     }
 
     const slice = await createInternalReviewWorkspaceSlice({

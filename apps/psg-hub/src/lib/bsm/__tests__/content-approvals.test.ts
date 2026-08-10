@@ -549,7 +549,7 @@ describe("BSM content approval upload helpers", () => {
     expect(createSignedUploadUrl).toHaveBeenCalledOnce();
   });
 
-  it("attaches an uploaded document to the selected Review Workspace current round without sending customer email", async () => {
+  it("queues an uploaded document in the selected Review Workspace without mutating its current round", async () => {
     const { client, inserts } = createWorkspaceFakeClient();
     const createSignedUploadUrl = vi.fn(async (path: string) => ({
       data: { path, signedUrl: "https://upload.example", token: "token-1" },
@@ -576,51 +576,29 @@ describe("BSM content approval upload helpers", () => {
 
     expect(result.item.reviewWorkspace).toMatchObject({
       projectId: PROJECT_ID,
-      roundId: ROUND_ID,
+      roundId: null,
       projectTitle: "July customer review",
     });
     expect(inserts.find((entry) => entry.table === "bsm_content_review_items")?.payload).toMatchObject({
       project_id: PROJECT_ID,
-      status: "in_review",
-      processing_status: "ready",
+      status: "draft",
+      processing_status: "pending",
       position: 3,
     });
-    expect(inserts.find((entry) => entry.table === "bsm_content_review_round_documents")?.payload).toMatchObject({
-      project_id: PROJECT_ID,
-      round_id: ROUND_ID,
-      review_item_id: result.item.id,
-      version_id: result.item.currentVersion?.id,
-    });
-    expect(inserts.find((entry) => entry.table === "bsm_content_review_reviewers")?.payload).toEqual([
-      expect.objectContaining({
-        review_item_id: result.item.id,
-        shop_id: SHOP_ID,
-        profile_id: PROFILE_ID,
-        invitation_id: "88888888-8888-4888-8888-888888888888",
-        round_id: ROUND_ID,
-        reviewer_email: "owner@example.com",
-        reviewer_name: "Shop Owner",
-        submission_status: "not_started",
-      }),
-    ]);
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_round_documents")).toBeUndefined();
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_reviewers")).toBeUndefined();
     expect(inserts.map((entry) => entry.table)).not.toContain("bsm_content_review_invitations");
     const version = inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload;
-    const expectedPath = approvalStoragePath({
-      shopId: SHOP_ID,
-      itemId: result.item.id,
-      versionId: result.item.currentVersion?.id ?? "",
-      fileName: "proof.pdf",
-    });
     const expectedOriginalPath = `${SHOP_ID}/${PROJECT_ID}/${result.item.id}/${result.item.currentVersion?.id}/original/proof.pdf`;
     expect(version).toMatchObject({
-      storage_path: expectedPath,
+      storage_path: expectedOriginalPath,
       original_storage_bucket: BSM_CONTENT_APPROVALS_BUCKET,
       original_storage_path: expectedOriginalPath,
       processed_storage_path: null,
       processed_storage_bucket: null,
     });
-    expect(result.upload.path).toBe(expectedPath);
-    expect(result.item.currentVersion?.storagePath).toBe(expectedPath);
+    expect(result.upload.path).toBe(expectedOriginalPath);
+    expect(result.item.currentVersion?.storagePath).toBe(expectedOriginalPath);
     expect(createSignedUploadUrl).toHaveBeenCalledOnce();
   });
 
@@ -686,15 +664,12 @@ describe("BSM content approval upload helpers", () => {
     );
 
     expect(result.item.reviewWorkspace?.projectId).toBe(PROJECT_ID);
-    expect(inserts.find((entry) => entry.table === "bsm_content_review_round_documents")?.payload).toMatchObject({
-      project_id: PROJECT_ID,
-      round_id: ROUND_ID,
-      review_item_id: result.item.id,
-    });
+    expect(result.item.reviewWorkspace?.roundId).toBeNull();
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_round_documents")).toBeUndefined();
     expect(createSignedUploadUrl).toHaveBeenCalledOnce();
   });
 
-  it("starts a Review Workspace upload with no customer reviewer when reviewer columns are stale in the schema cache", async () => {
+  it("starts a Review Workspace upload with no customer reviewer", async () => {
     const { client, inserts } = createWorkspaceFakeClient({
       collaborator: null,
       missingSchemaCacheColumnsByTable: {
@@ -728,19 +703,7 @@ describe("BSM content approval upload helpers", () => {
     expect(result.item.reviewWorkspace?.projectId).toBe(PROJECT_ID);
     expect(createSignedUploadUrl).toHaveBeenCalledOnce();
 
-    const reviewerAttempts = inserts.filter((entry) => entry.table === "bsm_content_review_reviewers");
-    expect(reviewerAttempts.length).toBeGreaterThan(1);
-    const finalReviewerPayload = reviewerAttempts.at(-1)?.payload as Array<Record<string, unknown>>;
-    expect(finalReviewerPayload).toEqual([
-      expect.objectContaining({
-        review_item_id: result.item.id,
-        shop_id: SHOP_ID,
-        profile_id: PROFILE_ID,
-        reviewer_role: "reviewer",
-        notification_preference: "email",
-      }),
-    ]);
-    expect(finalReviewerPayload[0]).not.toHaveProperty("invitation_id");
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_reviewers")).toBeUndefined();
   });
 
   it("still requires non-superadmin staff to be Review Workspace collaborators", async () => {
@@ -927,7 +890,7 @@ describe("BSM content approval upload helpers", () => {
     ]);
   });
 
-  it("saves an edit as a new usable version in the selected Review Workspace round", async () => {
+  it("saves an edit as a new usable version for the next Review Workspace round", async () => {
     const { client, inserts, updates } = createWorkspaceFakeClient();
     const createSignedUploadUrl = vi.fn(async (path: string) => ({
       data: { path, signedUrl: "https://upload.example", token: "token-2" },
@@ -955,39 +918,31 @@ describe("BSM content approval upload helpers", () => {
     expect(inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload).toMatchObject({
       review_item_id: ITEM_ID,
       project_id: PROJECT_ID,
-      round_id: ROUND_ID,
+      round_id: null,
       version_number: 2,
       status: "current",
     });
     const version = inserts.find((entry) => entry.table === "bsm_content_review_versions")?.payload;
-    const expectedPath = approvalStoragePath({
-      shopId: SHOP_ID,
-      itemId: ITEM_ID,
-      versionId: result.item.currentVersion?.id ?? "",
-      fileName: "proof-v2.pdf",
-    });
     const expectedOriginalPath = `${SHOP_ID}/${PROJECT_ID}/${ITEM_ID}/${result.item.currentVersion?.id}/original/proof-v2.pdf`;
     expect(version).toMatchObject({
-      storage_path: expectedPath,
+      storage_path: expectedOriginalPath,
       original_storage_bucket: BSM_CONTENT_APPROVALS_BUCKET,
       original_storage_path: expectedOriginalPath,
       processed_storage_path: null,
       processed_storage_bucket: null,
     });
-    expect(result.upload?.path).toBe(expectedPath);
-    expect(updates.find((entry) => entry.table === "bsm_content_review_round_documents")?.payload).toMatchObject({
-      version_id: result.item.currentVersion?.id,
-    });
+    expect(result.upload?.path).toBe(expectedOriginalPath);
+    expect(updates.find((entry) => entry.table === "bsm_content_review_round_documents")).toBeUndefined();
     expect(updates.find((entry) => entry.table === "bsm_content_review_items")?.payload).toMatchObject({
       title: "Updated proof",
       admin_context_note: "Use this updated offer.",
       current_version_id: result.item.currentVersion?.id,
-      processing_status: "ready",
+      processing_status: "pending",
     });
     expect(inserts.map((entry) => entry.table)).not.toContain("bsm_content_review_invitations");
   });
 
-  it("attaches an existing uploaded library item to the selected Review Workspace round", async () => {
+  it("attaches an existing uploaded library item for the next Review Workspace round", async () => {
     const { client, inserts, updates } = createWorkspaceFakeClient({
       existingItemProjectId: null,
       existingReviewers: [
@@ -1010,26 +965,21 @@ describe("BSM content approval upload helpers", () => {
 
     expect(result.item.reviewWorkspace).toMatchObject({
       projectId: PROJECT_ID,
-      roundId: ROUND_ID,
+      roundId: null,
       projectTitle: "July customer review",
     });
     expect(updates.find((entry) => entry.table === "bsm_content_review_items")?.payload).toMatchObject({
       project_id: PROJECT_ID,
-      status: "in_review",
-      processing_status: "ready",
+      status: "draft",
+      processing_status: "pending",
       position: 3,
     });
     expect(updates.find((entry) => entry.table === "bsm_content_review_versions")?.payload).toMatchObject({
       project_id: PROJECT_ID,
-      round_id: ROUND_ID,
-      introduced_by_round_id: ROUND_ID,
+      round_id: null,
+      introduced_by_round_id: null,
     });
-    expect(inserts.find((entry) => entry.table === "bsm_content_review_round_documents")?.payload).toMatchObject({
-      project_id: PROJECT_ID,
-      round_id: ROUND_ID,
-      review_item_id: ITEM_ID,
-      version_id: VERSION_ID,
-    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_round_documents")).toBeUndefined();
     expect(inserts.find((entry) => entry.table === "bsm_content_review_reviewers")).toBeUndefined();
     expect(inserts.find((entry) => entry.table === "bsm_content_review_events")?.payload).toMatchObject({
       review_item_id: ITEM_ID,

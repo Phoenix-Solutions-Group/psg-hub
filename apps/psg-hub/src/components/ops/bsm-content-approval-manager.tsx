@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Eye, FilePenLine, FileText, FileUp, ImageIcon, Link, Monitor, Play, RefreshCw, Trash2, UserPlus } from "lucide-react";
+import { CircleStop, Copy, ExternalLink, Eye, FilePenLine, FileText, FileUp, Highlighter, ImageIcon, Link, MapPin, Monitor, Play, RefreshCw, Trash2, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -32,9 +32,9 @@ type Phase =
   | { kind: "error"; message: string };
 
 export const BSM_CONTENT_APPROVAL_FILE_ACCEPT =
-  ".pdf,.md,.markdown,.html,.htm,.png,.jpg,.jpeg,.webp,.docx,.txt,application/pdf,text/markdown,text/html,image/png,image/jpeg,image/webp,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
+  ".pdf,.html,.htm,.doc,.docx,application/pdf,text/html,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 export const BSM_CONTENT_APPROVAL_UNSUPPORTED_FILE_MESSAGE =
-  "This file type is not supported. Upload a PDF, MD, HTML, image, Word document, or text file.";
+  "This file type is not supported. Upload a PDF, HTML, DOC, or DOCX file.";
 
 export type BsmContentApprovalShopOption = { id: string; name: string };
 export type BsmContentApprovalReviewerContact = { email: string; name: string | null };
@@ -50,8 +50,10 @@ type ReviewStartResponse =
           reviewerName: string | null;
           inviteToken: string;
           inviteCode: string;
+          deliveryStatus?: "sent" | "failed";
         }>;
       };
+      failedDeliveryCount?: number;
     }
   | { error?: string };
 
@@ -62,14 +64,48 @@ type WorkspaceCreateResponse =
 type WorkspacePreviewResponse =
   | {
       result: {
-        project: { id: string; title: string; status: string };
+        project: { id: string; title: string; status: string; currentRoundId: string | null };
+        round: { id: string; status: string; outcome: string | null; completedAt: string | null } | null;
         documents: WorkspacePreviewDocument[];
+        reviewers: Array<{
+          invitationId: string;
+          email: string;
+          name: string | null;
+          status: string;
+          submittedAt: string | null;
+          revokedAt: string | null;
+        }>;
+        submittedComments: Array<{
+          id: string;
+          invitationId: string | null;
+          reviewItemId: string;
+          body: string;
+          commentKind: "pin" | "highlight";
+          pinNumber: number | null;
+          selection: { text: string } | null;
+        }>;
+        decisions: Array<{
+          id: string;
+          invitationId: string | null;
+          reviewItemId: string;
+          decision: string;
+          message: string | null;
+          submittedAt: string | null;
+        }>;
       };
     }
   | { error?: string };
 
 type WorkspaceUpdateResponse =
   | { workspace: { id: string; shopId: string; title: string; status: string } }
+  | { error?: string };
+
+type WorkspaceCloseResponse =
+  | { closure: { status: string; outcome: string; nonresponders: Array<{ email: string; name: string | null }> } }
+  | { error?: string };
+
+type InvitationRevokeResponse =
+  | { revocation: { status: string; roundCompleted: boolean; outcome: string | null } }
   | { error?: string };
 
 export type WorkspacePreviewDocument = {
@@ -95,10 +131,14 @@ export type WorkspacePreviewDocument = {
 
 export function getBsmReviewWorkspaceStartBlocker(input: {
   workspaceId: string;
+  workspaceStatus?: string | null;
   documents: Array<{ processingStatus: string }>;
   reviewers: Array<{ email: string }>;
 }) {
   if (!input.workspaceId) return "Create or select a Review Workspace first.";
+  if (input.workspaceStatus === "active" || input.workspaceStatus === "inviting") {
+    return "This review round is open. Wait for all reviewers or close the round before starting another.";
+  }
   if (input.documents.length === 0) return "Add at least one document before starting review.";
   if (input.documents.some((document) => document.processingStatus !== "ready")) {
     return "Start review is available after every document finishes processing successfully.";
@@ -111,7 +151,13 @@ export function getBsmReviewWorkspaceStartBlocker(input: {
 
 export function getBsmContentApprovalFileValidationError(selectedFile: File | null) {
   if (!selectedFile) return null;
-  if (!normalizeApprovalMimeType(selectedFile.name, selectedFile.type)) {
+  const contentType = normalizeApprovalMimeType(selectedFile.name, selectedFile.type);
+  if (!contentType || ![
+    "application/pdf",
+    "text/html",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ].includes(contentType)) {
     return BSM_CONTENT_APPROVAL_UNSUPPORTED_FILE_MESSAGE;
   }
   if (selectedFile.size <= 0) return "The selected file is empty.";
@@ -125,6 +171,24 @@ export function getBsmContentApprovalStorageContentType(selectedFile: File) {
     return "text/plain";
   }
   return normalizedContentType ?? selectedFile.type;
+}
+
+async function prepareUploadedReviewCopy(item: BsmContentApprovalListItem): Promise<BsmContentApprovalListItem> {
+  if (item.sourceKind !== "uploaded_file" || !item.reviewWorkspace?.projectId || !item.currentVersion?.id) return item;
+  const response = await fetch("/api/ops/bsm/content-approvals", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectId: item.reviewWorkspace.projectId,
+      reviewItemId: item.id,
+      versionId: item.currentVersion.id,
+    }),
+  });
+  const body = (await response.json().catch(() => ({}))) as { processingStatus?: string; error?: string };
+  if (!response.ok || body.processingStatus !== "ready") {
+    throw new Error(body.error ?? "The file was uploaded, but its private review copy could not be prepared.");
+  }
+  return { ...item, processingStatus: "ready" };
 }
 
 function isPreviewImageProof(document: WorkspacePreviewDocument): boolean {
@@ -444,8 +508,12 @@ export function BsmContentApprovalManager({
   const [workspaceEditInstructions, setWorkspaceEditInstructions] = useState("");
   const [savingWorkspace, setSavingWorkspace] = useState(false);
   const [removingWorkspaceId, setRemovingWorkspaceId] = useState<string | null>(null);
+  const [closeReason, setCloseReason] = useState("");
+  const [closingRound, setClosingRound] = useState(false);
+  const [revokingInvitationId, setRevokingInvitationId] = useState<string | null>(null);
   const startBlocker = getBsmReviewWorkspaceStartBlocker({
     workspaceId: reviewWorkspaceProjectId,
+    workspaceStatus: selectedWorkspace?.status,
     documents: workspaceDocuments,
     reviewers: selectedReviewers,
   });
@@ -518,6 +586,16 @@ export function BsmContentApprovalManager({
     setStartedReview(null);
   }
 
+  async function copyInvitation(invitation: NonNullable<typeof startedReview>["invitations"][number]) {
+    const url = `${window.location.origin}/review-workspace?invite=${encodeURIComponent(invitation.inviteToken)}`;
+    try {
+      await navigator.clipboard.writeText(`${url}\nOne-time code: ${invitation.inviteCode}`);
+      setPhase({ kind: "success", message: `Copied the private link and code for ${invitation.reviewerName ?? invitation.reviewerEmail}.` });
+    } catch {
+      setPhase({ kind: "error", message: "Clipboard access was denied. Select the link and code below to copy them manually." });
+    }
+  }
+
   async function loadWorkspacePreview() {
     if (!reviewWorkspaceProjectId) return;
     setPreviewingWorkspace(true);
@@ -531,6 +609,11 @@ export function BsmContentApprovalManager({
         throw new Error("error" in body && body.error ? body.error : "The Review Workspace preview could not be loaded.");
       }
       setWorkspacePreview(body.result);
+      setWorkspaceOptions((current) => current.map((workspace) =>
+        workspace.id === body.result.project.id
+          ? { ...workspace, status: body.result.project.status, currentRoundId: body.result.project.currentRoundId }
+          : workspace,
+      ));
       setSelectedPreviewDocumentKey(
         body.result.documents[0] ? workspacePreviewDocumentKey(body.result.documents[0]) : null,
       );
@@ -580,7 +663,12 @@ export function BsmContentApprovalManager({
             : item,
         ),
       );
-      setPhase({ kind: "success", message: "The review has started. Share the reviewer URL and code with each reviewer." });
+      setPhase({
+        kind: body.failedDeliveryCount ? "error" : "success",
+        message: body.failedDeliveryCount
+          ? `The review started, but ${body.failedDeliveryCount} invitation email${body.failedDeliveryCount === 1 ? "" : "s"} could not be sent. Share the private link and code shown below.`
+          : "The review has started and each reviewer was emailed. You can also copy their private link and code below.",
+      });
     } catch (error) {
       setPhase({
         kind: "error",
@@ -588,6 +676,74 @@ export function BsmContentApprovalManager({
       });
     } finally {
       setStartingReview(false);
+    }
+  }
+
+  async function closeWorkspaceRound() {
+    if (!selectedWorkspace || !closeReason.trim()) {
+      setPhase({ kind: "error", message: "Enter a reason before closing the round." });
+      return;
+    }
+    setClosingRound(true);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch(`/api/ops/bsm/review-workspace/projects/${selectedWorkspace.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "close_early", reason: closeReason.trim() }),
+      });
+      const body = (await response.json().catch(() => ({}))) as WorkspaceCloseResponse;
+      if (!response.ok || !("closure" in body)) {
+        throw new Error("error" in body && body.error ? body.error : "The review round could not be closed.");
+      }
+      setWorkspaceOptions((current) => current.map((workspace) =>
+        workspace.id === selectedWorkspace.id ? { ...workspace, status: "closed_early" } : workspace,
+      ));
+      setCloseReason("");
+      await loadWorkspacePreview();
+      const count = body.closure.nonresponders.length;
+      setPhase({
+        kind: "success",
+        message: count
+          ? `The round was closed. ${count} pending reviewer invitation${count === 1 ? " was" : "s were"} revoked.`
+          : "The round was closed early and the submitted feedback remains available.",
+      });
+    } catch (error) {
+      setPhase({ kind: "error", message: error instanceof Error ? error.message : "The review round could not be closed." });
+    } finally {
+      setClosingRound(false);
+    }
+  }
+
+  async function revokeReviewerInvitation(reviewer: Extract<WorkspacePreviewResponse, { result: unknown }>["result"]["reviewers"][number]) {
+    if (!selectedWorkspace || !confirm(`Revoke ${reviewer.name ?? reviewer.email} from this review round?`)) return;
+    setRevokingInvitationId(reviewer.invitationId);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch(`/api/ops/bsm/review-workspace/projects/${selectedWorkspace.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "revoke_invitation",
+          invitationId: reviewer.invitationId,
+          reason: `Removed ${reviewer.email} from the active review round by an administrator.`,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as InvitationRevokeResponse;
+      if (!response.ok || !("revocation" in body)) {
+        throw new Error("error" in body && body.error ? body.error : "The reviewer invitation could not be revoked.");
+      }
+      await loadWorkspacePreview();
+      setPhase({
+        kind: "success",
+        message: body.revocation.roundCompleted
+          ? `The reviewer was revoked and the round completed as ${body.revocation.outcome?.replaceAll("_", " ")}.`
+          : "The reviewer was revoked and no longer counts toward round completion.",
+      });
+    } catch (error) {
+      setPhase({ kind: "error", message: error instanceof Error ? error.message : "The reviewer invitation could not be revoked." });
+    } finally {
+      setRevokingInvitationId(null);
     }
   }
 
@@ -777,11 +933,24 @@ export function BsmContentApprovalManager({
       }
     }
 
-    setApprovals((current) => [body.item, ...current]);
-    if (body.item.reviewWorkspace?.projectId) {
+    let savedItem = body.item;
+    try {
+      savedItem = await prepareUploadedReviewCopy(savedItem);
+    } catch (error) {
+      const failedItem = { ...savedItem, processingStatus: "failed" };
+      setApprovals((current) => [failedItem, ...current]);
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The private review copy could not be prepared.",
+      });
+      return;
+    }
+
+    setApprovals((current) => [savedItem, ...current]);
+    if (savedItem.reviewWorkspace?.projectId) {
       setWorkspaceOptions((current) =>
         current.map((workspace) =>
-          workspace.id === body.item.reviewWorkspace?.projectId
+          workspace.id === savedItem.reviewWorkspace?.projectId
             ? { ...workspace, documentCount: workspace.documentCount + 1 }
             : workspace,
         ),
@@ -795,14 +964,14 @@ export function BsmContentApprovalManager({
     setPreviewUrl("");
     setSourceContentItemId("");
     if (fileRef.current) fileRef.current.value = "";
-    setEditingItemId(body.item.id);
-    setEditTitle(body.item.title);
-    setEditContextNote(body.item.contextNote ?? "");
+    setEditingItemId(savedItem.id);
+    setEditTitle(savedItem.title);
+    setEditContextNote(savedItem.contextNote ?? "");
     setEditFile(null);
     setPhase({
       kind: "success",
-      message: body.item.reviewWorkspace
-        ? "The item is attached to the selected Review Workspace. You can edit it before reviewer submission."
+      message: savedItem.reviewWorkspace
+        ? "The file is processed and ready in the selected Review Workspace. You can preview it before sending."
         : "The item is in the customer review library. You can edit it before reviewer submission.",
     });
   }
@@ -825,15 +994,12 @@ export function BsmContentApprovalManager({
       setPhase({ kind: "error", message: "Context note is required." });
       return;
     }
-    if (editFile && !normalizeApprovalMimeType(editFile.name, editFile.type)) {
+    const editFileError = getBsmContentApprovalFileValidationError(editFile);
+    if (editFileError) {
       setPhase({
         kind: "error",
-        message: "This file type is not supported. Upload a PDF, MD, HTML, image, Word document, or text file.",
+        message: editFileError,
       });
-      return;
-    }
-    if (editFile && editFile.size > MAX_APPROVAL_FILE_BYTES) {
-      setPhase({ kind: "error", message: "The file is too large. Upload a file under 25 MB." });
       return;
     }
 
@@ -871,7 +1037,16 @@ export function BsmContentApprovalManager({
         if (error) throw new Error(`Upload failed: ${error.message}`);
       }
 
-      setApprovals((current) => current.map((entry) => (entry.id === item.id ? body.item : entry)));
+      let savedItem = body.item;
+      try {
+        savedItem = await prepareUploadedReviewCopy(savedItem);
+      } catch (error) {
+        setApprovals((current) => current.map((entry) => (
+          entry.id === item.id ? { ...savedItem, processingStatus: "failed" } : entry
+        )));
+        throw error;
+      }
+      setApprovals((current) => current.map((entry) => (entry.id === item.id ? savedItem : entry)));
       setEditingItemId(null);
       setEditFile(null);
       setPhase({ kind: "success", message: "The review item edits were saved as the usable version." });
@@ -914,8 +1089,17 @@ export function BsmContentApprovalManager({
         throw new Error("error" in body && body.error ? body.error : "The review item could not be attached.");
       }
 
-      setApprovals((current) => current.map((entry) => (entry.id === item.id ? body.item : entry)));
-      setPhase({ kind: "success", message: "The item is attached to the selected Review Workspace." });
+      let savedItem = body.item;
+      try {
+        savedItem = await prepareUploadedReviewCopy(savedItem);
+      } catch (error) {
+        setApprovals((current) => current.map((entry) => (
+          entry.id === item.id ? { ...savedItem, processingStatus: "failed" } : entry
+        )));
+        throw error;
+      }
+      setApprovals((current) => current.map((entry) => (entry.id === item.id ? savedItem : entry)));
+      setPhase({ kind: "success", message: "The item is processed and ready in the selected Review Workspace." });
     } catch (error) {
       setPhase({
         kind: "error",
@@ -1589,9 +1773,9 @@ export function BsmContentApprovalManager({
 
       <section className="space-y-4 border-b border-border pb-8">
         <div>
-          <h2 className="font-heading text-lg font-semibold">Preview or start review</h2>
+          <h2 className="font-heading text-lg font-semibold">Preview, send, and monitor</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Preview is optional and read-only. Starting review freezes the round and creates reviewer invitations.
+            Preview before sending, start a locked round, and monitor every reviewer from this workspace.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 rounded-md border border-border p-3">
@@ -1603,13 +1787,16 @@ export function BsmContentApprovalManager({
             onClick={loadWorkspacePreview}
             disabled={previewingWorkspace || !reviewWorkspaceProjectId}
             className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
+            style={{ backgroundColor: "#f8fafc", borderColor: "#64748b", color: "#334155" }}
           >
             {previewingWorkspace ? (
               <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
             ) : (
               <Eye className="size-4" aria-hidden="true" />
             )}
-            Preview read-only
+            {selectedWorkspace?.status === "active" || selectedWorkspace?.status === "completed" || selectedWorkspace?.status === "closed_early"
+              ? "Refresh status"
+              : "Preview read-only"}
           </button>
           <button
             type="button"
@@ -1622,15 +1809,70 @@ export function BsmContentApprovalManager({
             ) : (
               <Play className="size-4" aria-hidden="true" />
             )}
-            Start review
+            {selectedWorkspace?.status === "completed" || selectedWorkspace?.status === "closed_early" ? "Start next round" : "Start review"}
           </button>
         </div>
+        {selectedWorkspace?.status === "active" ? (
+          <div className="grid gap-3 rounded-md border border-warning/40 bg-warning/10 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <div className="space-y-1.5">
+              <Label htmlFor="bsm-close-round-reason">Close this round before every reviewer submits</Label>
+              <Input
+                id="bsm-close-round-reason"
+                value={closeReason}
+                onChange={(event) => setCloseReason(event.target.value)}
+                disabled={closingRound}
+                maxLength={1000}
+                placeholder="Reason for closing early"
+              />
+              <p className="text-xs text-muted-foreground">Pending invitations will be revoked. Submitted feedback stays available.</p>
+            </div>
+            <button
+              type="button"
+              onClick={closeWorkspaceRound}
+              disabled={closingRound || !closeReason.trim()}
+              className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
+            >
+              {closingRound ? <RefreshCw className="size-4 animate-spin" aria-hidden="true" /> : <CircleStop className="size-4" aria-hidden="true" />}
+              Close round early
+            </button>
+          </div>
+        ) : null}
         {workspacePreview ? (
           <div className="rounded-md border border-border bg-muted/30 p-4 text-sm">
-            <div className="font-heading font-semibold">Preview mode · no comments or decisions are saved here</div>
-            <div className="mt-1 text-muted-foreground">
-              {workspacePreview.project.title} · {workspacePreview.project.status.replaceAll("_", " ")}
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="font-heading font-semibold">Workspace status and proof</div>
+                <div className="mt-1 text-muted-foreground">
+                  {workspacePreview.project.title} · {(workspacePreview.round?.outcome ?? workspacePreview.round?.status ?? workspacePreview.project.status).replaceAll("_", " ")}
+                </div>
+              </div>
+              {workspacePreview.reviewers.length > 0 ? (
+                <div className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium">
+                  {workspacePreview.reviewers.filter((reviewer) => reviewer.status === "submitted").length} of {workspacePreview.reviewers.filter((reviewer) => !reviewer.revokedAt).length} submitted
+                </div>
+              ) : null}
             </div>
+            {workspacePreview.reviewers.length > 0 ? (
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {workspacePreview.reviewers.map((reviewer) => (
+                  <div key={reviewer.invitationId} className="rounded-md border border-border bg-background p-3">
+                    <div className="font-medium">{reviewer.name ?? reviewer.email}</div>
+                    {reviewer.name ? <div className="mt-0.5 text-xs text-muted-foreground">{reviewer.email}</div> : null}
+                    <div className="mt-2 text-xs font-medium capitalize">{reviewer.status.replaceAll("_", " ")}</div>
+                    {(workspacePreview.round?.status === "active" || workspacePreview.round?.status === "inviting") && !reviewer.revokedAt ? (
+                      <button
+                        type="button"
+                        onClick={() => revokeReviewerInvitation(reviewer)}
+                        disabled={revokingInvitationId === reviewer.invitationId}
+                        className="mt-2 text-xs font-medium text-destructive hover:underline disabled:opacity-50"
+                      >
+                        {revokingInvitationId === reviewer.invitationId ? "Revoking" : "Revoke reviewer"}
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <div className="mt-3 space-y-2">
               {workspacePreview.documents.length === 0 ? (
                 <div className="text-muted-foreground">No documents are attached yet.</div>
@@ -1642,6 +1884,39 @@ export function BsmContentApprovalManager({
                 selectedDocumentKey={selectedPreviewDocumentKey}
                 onSelectDocument={setSelectedPreviewDocumentKey}
               />
+            ) : null}
+            {workspacePreview.decisions.length > 0 || workspacePreview.submittedComments.length > 0 ? (
+              <div className="mt-6 space-y-3 border-t border-border pt-5">
+                <div className="font-heading font-semibold">Submitted feedback</div>
+                {workspacePreview.decisions.map((decision) => {
+                  const reviewer = workspacePreview.reviewers.find((entry) => entry.invitationId === decision.invitationId);
+                  const document = workspacePreview.documents.find((entry) => entry.itemId === decision.reviewItemId);
+                  return (
+                    <div key={decision.id} className="rounded-md border border-border bg-background p-3">
+                      <div className="font-medium capitalize">{decision.decision.replaceAll("_", " ")} · {document?.title ?? "Document"}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{reviewer?.name ?? reviewer?.email ?? "Reviewer"}</div>
+                      {decision.message ? <p className="mt-2">{decision.message}</p> : null}
+                    </div>
+                  );
+                })}
+                {workspacePreview.submittedComments.map((comment) => {
+                  const reviewer = workspacePreview.reviewers.find((entry) => entry.invitationId === comment.invitationId);
+                  const document = workspacePreview.documents.find((entry) => entry.itemId === comment.reviewItemId);
+                  return (
+                    <div key={comment.id} className="rounded-md border border-border bg-background p-3">
+                      <div className="flex items-center gap-2 font-medium">
+                        {comment.commentKind === "highlight" ? <Highlighter className="size-4 text-warning" aria-hidden="true" /> : <MapPin className="size-4 text-ember" aria-hidden="true" />}
+                        {comment.commentKind === "highlight" ? "Highlight" : `Pin ${comment.pinNumber ?? "-"}`} · {document?.title ?? "Document"}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">{reviewer?.name ?? reviewer?.email ?? "Reviewer"}</div>
+                      {comment.selection ? <p className="mt-2 border-l-2 border-warning pl-2 text-xs italic text-muted-foreground">“{comment.selection.text}”</p> : null}
+                      <p className="mt-2">{comment.body}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : workspacePreview.round ? (
+              <p className="mt-5 border-t border-border pt-4 text-muted-foreground">No reviewer feedback has been submitted yet.</p>
             ) : null}
           </div>
         ) : null}
@@ -1655,10 +1930,19 @@ export function BsmContentApprovalManager({
               {startedReview.invitations.map((invitation) => (
                 <div key={invitation.invitationId} className="rounded-md border border-border bg-background p-3">
                   <div className="font-medium">{invitation.reviewerName ?? invitation.reviewerEmail}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {invitation.deliveryStatus === "failed" ? "Email failed · share manually" : "Invitation email sent"}
+                  </div>
                   <a className="break-all text-ember" href={`/review-workspace?invite=${encodeURIComponent(invitation.inviteToken)}`}>
                     /review-workspace?invite={invitation.inviteToken}
                   </a>
-                  <div className="mt-1 font-mono text-lg tracking-widest">{invitation.inviteCode}</div>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-mono text-lg tracking-widest">{invitation.inviteCode}</div>
+                    <button type="button" onClick={() => copyInvitation(invitation)} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}>
+                      <Copy className="size-3.5" aria-hidden="true" />
+                      Copy link and code
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

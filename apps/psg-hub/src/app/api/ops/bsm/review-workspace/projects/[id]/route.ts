@@ -7,6 +7,8 @@ import {
   closeReviewWorkspaceRoundEarly,
   getStaffReviewWorkspaceResult,
   removeReviewWorkspaceProject,
+  revokeReviewWorkspaceInvitation,
+  updateReviewWorkspaceProject,
 } from "@/lib/bsm/review-workspace";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
@@ -58,11 +60,30 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  if (payload?.action !== "close_early") {
-    return NextResponse.json({ error: "action must be close_early" }, { status: 400 });
-  }
-
   try {
+    if (payload?.action === "update_workspace") {
+      const workspace = await updateReviewWorkspaceProject({
+        projectId: id,
+        title: payload.title as string,
+        description: payload.description as string | null | undefined,
+        actorProfileId: gate.userId,
+        actorRole: gate.access.role,
+      });
+      return NextResponse.json({ workspace }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (payload?.action === "revoke_invitation") {
+      const revocation = await revokeReviewWorkspaceInvitation({
+        projectId: id,
+        invitationId: payload.invitationId as string,
+        actorProfileId: gate.userId,
+        actorRole: gate.access.role,
+        reason: typeof payload.reason === "string" ? payload.reason : "",
+      });
+      return NextResponse.json({ revocation }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (payload?.action !== "close_early") {
+      return NextResponse.json({ error: "action must be update_workspace, revoke_invitation, or close_early" }, { status: 400 });
+    }
     const closure = await closeReviewWorkspaceRoundEarly({
       projectId: id,
       actorProfileId: gate.userId,
