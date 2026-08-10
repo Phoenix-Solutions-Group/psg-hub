@@ -17,7 +17,7 @@ import {
   type AdminTier,
   type ShopMemberRole,
 } from "@/lib/ops/user-management";
-import { filterInternalDemoUsers } from "@/lib/ops/demo-user-filter";
+import { filterCleanDemoUsers } from "@/lib/ops/demo-user-filter";
 
 function cleanRole(role: unknown): AdminAppRole | null {
   return (ADMIN_APP_ROLES as readonly string[]).includes(role as string)
@@ -137,7 +137,7 @@ export default async function UsersAdminPage() {
     ...(memberships ?? []).map((m) => m.user_id as string),
   ]);
 
-  const users: ManagedUser[] = filterInternalDemoUsers(
+  const users: ManagedUser[] = filterCleanDemoUsers(
     [...profileIds]
       .map((profileId) => {
         const authUser = authUsersById.get(profileId);
@@ -156,7 +156,8 @@ export default async function UsersAdminPage() {
           memberships: membershipsByUserId.get(profileId) ?? [],
         };
       })
-      .sort((a, b) => a.displayName.localeCompare(b.displayName))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    user.email
   );
 
   return (

@@ -20,7 +20,7 @@ test.describe("clean BSM demo admin walkthrough", () => {
     await expect(page.getByRole("heading", { name: "Internal Operations" })).toBeVisible();
     await expect(page.getByRole("link", { name: /Companies & ROs/ })).toBeVisible();
     await expect(page.getByRole("link", { name: "Production", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "BSM Content Approvals", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Content Approvals", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Superadmin/ })).toBeVisible();
     await shoot(page, "focused-bsm-ops-home");
 
@@ -37,10 +37,10 @@ test.describe("clean BSM demo admin walkthrough", () => {
     await shoot(page, "focused-bsm-ops-production");
 
     await page.goto("/ops/bsm-content-approvals", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "BSM Content Approvals" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Content Approvals" })).toBeVisible();
     await expect(page.getByLabel("Shop", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Review title")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Review library" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Workspace documents" })).toBeVisible();
     await shoot(page, "focused-bsm-ops-bsm-content-approvals");
 
     await page.goto("/ops/admin/users", { waitUntil: "domcontentloaded" });
@@ -48,7 +48,7 @@ test.describe("clean BSM demo admin walkthrough", () => {
     await expect(page.getByRole("heading", { name: "Invite user" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Send invite" })).toBeVisible();
     await expect(page.getByText("Users and shop access")).toBeVisible();
-    await expect(page.getByPlaceholder("Search users")).toBeVisible();
+    await page.getByPlaceholder("Search users").fill(operatorEmail);
     await expect(page.getByRole("link", { name: /Create it in Companies first/ })).toBeVisible();
     const demoAdminCard = page.locator("article").filter({
       hasText: BSM_DEMO_ADMIN.displayName,

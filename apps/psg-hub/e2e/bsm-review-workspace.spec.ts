@@ -32,12 +32,22 @@ function adminClient() {
 
 async function ensureContentApprovalsShopOption() {
   const admin = adminClient();
-  const { data: shop, error: shopError } = await admin
+  let { data: shop, error: shopError } = await admin
     .from("shops")
     .select("id")
     .eq("slug", "riverside-collision")
-    .single();
+    .maybeSingle();
   expect(shopError, shopError?.message).toBeNull();
+  if (!shop) {
+    const fallback = await admin
+      .from("shops")
+      .select("id")
+      .eq("name", OWNER.shopName)
+      .limit(1)
+      .maybeSingle();
+    expect(fallback.error, fallback.error?.message).toBeNull();
+    shop = fallback.data;
+  }
   expect(shop?.id, "seeded Riverside shop id").toBeTruthy();
 
   const { data: existing, error: existingError } = await admin

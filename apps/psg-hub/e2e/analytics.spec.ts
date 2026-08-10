@@ -46,9 +46,9 @@ test.describe("analytics — per-shop (OWNER)", () => {
 
     const mail = directMailSection(page);
     await expect(mail).toContainText("Letters mailed");
-    await expect(mail.getByText("3", { exact: true }).first()).toBeVisible();
+    await expect(mail.getByText("30", { exact: true }).first()).toBeVisible();
     await expect(mail).toContainText("Households reached");
-    await expect(mail.getByRole("paragraph").filter({ hasText: /^2$/ })).toBeVisible();
+    await expect(mail.getByRole("paragraph").filter({ hasText: /^29$/ })).toBeVisible();
     await expect(mail).toContainText("Customer response signals");
     await expect(mail.getByText("9", { exact: true }).first()).toBeVisible();
     await expect(mail).toContainText("Response signal rate");
@@ -107,7 +107,7 @@ test.describe("analytics — MSO aggregate (MULTI)", () => {
 
     const mail = directMailSection(page);
     await expect(mail).toContainText("Letters mailed");
-    await expect(mail.getByText("6", { exact: true }).first()).toBeVisible();
+    await expect(mail.getByText("70", { exact: true }).first()).toBeVisible();
     await expect(mail).toContainText("Customer response signals");
     await expect(mail.getByText("14", { exact: true }).first()).toBeVisible();
     await expect(mail).toContainText("20.0%");

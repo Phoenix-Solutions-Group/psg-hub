@@ -8,6 +8,7 @@ import {
   MULTI,
   MEGA,
   OPS_STAFF,
+  BSM_DEMO_ADMIN,
   PROD_OPS,
   SNAPSHOT_END_DATE,
   SNAPSHOT_SYNCED_AT,
@@ -364,6 +365,8 @@ async function seedDirectMailMetrics(
 
   const { error: pErr } = await admin.from("mail_send_priors").upsert(
     {
+      company_id: company.id,
+      shop_name: shopName,
       segment_key: `e2e-${opts.segment}`,
       piece_code: "07",
       trigger: "survey_followup_warranty",
@@ -386,19 +389,22 @@ async function seedBsmContentApprovalReview(
   const oldVersionId = opts.itemId.replace(/1111$|2222$/, "0001");
   const currentVersionId = opts.itemId.replace(/1111$|2222$/, "0002");
 
-  const { error: itemErr } = await admin.from("bsm_content_review_items").insert({
-    id: opts.itemId,
-    shop_id: shopId,
-    customer_profile_id: ownerId,
-    title: opts.title,
-    content_type: "generated_page",
-    source_kind: "generated_page",
-    status: "in_review",
-    admin_context_note: "Please review this BSM page before PSG uses it.",
-    current_version_id: null,
-    created_by_profile_id: ownerId,
-    metadata_jsonb: { sourceKind: "generated_page", fixture: true },
-  });
+  const { error: itemErr } = await admin.from("bsm_content_review_items").upsert(
+    {
+      id: opts.itemId,
+      shop_id: shopId,
+      customer_profile_id: ownerId,
+      title: opts.title,
+      content_type: "generated_page",
+      source_kind: "generated_page",
+      status: "in_review",
+      admin_context_note: "Please review this BSM page before PSG uses it.",
+      current_version_id: null,
+      created_by_profile_id: ownerId,
+      metadata_jsonb: { sourceKind: "generated_page", fixture: true },
+    },
+    { onConflict: "id" }
+  );
   if (itemErr) throw new Error(`[e2e] BSM content review item seed failed: ${itemErr.message}`);
 
   const versions = [
@@ -442,7 +448,9 @@ async function seedBsmContentApprovalReview(
     },
   ];
 
-  const { error: versionsErr } = await admin.from("bsm_content_review_versions").insert(versions);
+  const { error: versionsErr } = await admin
+    .from("bsm_content_review_versions")
+    .upsert(versions, { onConflict: "id" });
   if (versionsErr) throw new Error(`[e2e] BSM content review versions seed failed: ${versionsErr.message}`);
 
   const { error: updateErr } = await admin
@@ -451,13 +459,16 @@ async function seedBsmContentApprovalReview(
     .eq("id", opts.itemId);
   if (updateErr) throw new Error(`[e2e] BSM content current version seed failed: ${updateErr.message}`);
 
-  const { error: reviewerErr } = await admin.from("bsm_content_review_reviewers").insert({
-    review_item_id: opts.itemId,
-    shop_id: shopId,
-    profile_id: ownerId,
-    reviewer_role: "reviewer",
-    notification_preference: "email",
-  });
+  const { error: reviewerErr } = await admin.from("bsm_content_review_reviewers").upsert(
+    {
+      review_item_id: opts.itemId,
+      shop_id: shopId,
+      profile_id: ownerId,
+      reviewer_role: "reviewer",
+      notification_preference: "email",
+    },
+    { onConflict: "review_item_id,profile_id" }
+  );
   if (reviewerErr) throw new Error(`[e2e] BSM content reviewer seed failed: ${reviewerErr.message}`);
 }
 
@@ -583,7 +594,7 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
   // creates its own company at runtime through the /ops UI + manage_companies
   // API, so nothing else is seeded for this role.
   const opsStaffId = await createUser(OPS_STAFF.email);
-  await seedProfile(opsStaffId, "E2E Ops Staff");
+  await seedProfile(opsStaffId, BSM_DEMO_ADMIN.displayName);
   await setSuperadminRole(opsStaffId);
 
   // 09-02: deterministic analytics snapshots (charts + MSO aggregate data).
@@ -642,19 +653,19 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
   });
 
   await seedDirectMailMetrics(ownerShopId, OWNER.shopName, {
-    sends: 3,
+    sends: 30,
     priorSent: 30,
     priorOutcomes: 9,
     segment: "owner",
   });
   await seedDirectMailMetrics(shopAId, MULTI.shopA, {
-    sends: 2,
+    sends: 30,
     priorSent: 30,
     priorOutcomes: 6,
     segment: "multi-a",
   });
   await seedDirectMailMetrics(shopBId, MULTI.shopB, {
-    sends: 4,
+    sends: 40,
     priorSent: 40,
     priorOutcomes: 8,
     segment: "multi-b",
