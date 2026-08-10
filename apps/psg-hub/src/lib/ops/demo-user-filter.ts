@@ -30,6 +30,8 @@ const LOCAL_CLEAN_DEMO_OPERATOR_EMAIL = "ops-staff@e2e.test";
 const LOCAL_CLEAN_DEMO_SHOP_EMAIL = "owner@e2e.test";
 const CLEAN_DEMO_SHOP_NAME = "Riverside Collision";
 const CLEAN_DEMO_SHOP_SLUG = "riverside-collision";
+const LOCAL_CLEAN_DEMO_SHOP_NAME = "BSM Demo Collision Center";
+const LOCAL_CLEAN_DEMO_SHOP_SLUG = "bsm-demo-collision-center";
 
 const TEST_EMAIL_PATTERNS = [
   /^qa-test-/i,
@@ -133,12 +135,13 @@ export function filterCleanDemoUsers<T extends DemoUserCandidate>(
   return users.filter((user) => demoEmails.has(normalizeEmail(user.email)));
 }
 
-function isCleanDemoShop(shop: DemoShopCandidate) {
+function isCleanDemoShop(shop: DemoShopCandidate, env: CleanDemoEnv) {
   const name = shop.name.trim().toLowerCase();
   const slug = (shop.slug ?? "").trim().toLowerCase();
+  const local = isLocalSupabaseUrl(env.NEXT_PUBLIC_SUPABASE_URL);
   return (
-    name === CLEAN_DEMO_SHOP_NAME.toLowerCase() ||
-    slug === CLEAN_DEMO_SHOP_SLUG
+    name === (local ? LOCAL_CLEAN_DEMO_SHOP_NAME : CLEAN_DEMO_SHOP_NAME).toLowerCase() ||
+    slug === (local ? LOCAL_CLEAN_DEMO_SHOP_SLUG : CLEAN_DEMO_SHOP_SLUG)
   );
 }
 
@@ -148,7 +151,7 @@ export function filterCleanDemoShops<T extends DemoShopCandidate>(
   env: CleanDemoEnv = defaultCleanDemoEnv()
 ): T[] {
   if (!shouldUseCleanDemoVisibility(currentUserEmail, env)) return shops;
-  return shops.filter(isCleanDemoShop);
+  return shops.filter((shop) => isCleanDemoShop(shop, env));
 }
 
 export function filterCleanDemoShopMemberships<T extends DemoShopMembershipCandidate>(
@@ -160,7 +163,7 @@ export function filterCleanDemoShopMemberships<T extends DemoShopMembershipCandi
   if (!shouldUseCleanDemoVisibility(currentUserEmail, env)) return memberships;
   const visibleShopIds = new Set(
     visibleShops
-      .filter(isCleanDemoShop)
+      .filter((shop) => isCleanDemoShop(shop, env))
       .map((shop) => "id" in shop && typeof shop.id === "string" ? shop.id : null)
       .filter((shopId): shopId is string => shopId !== null)
   );
@@ -173,7 +176,10 @@ export function filterCleanDemoCompanies<T extends DemoCompanyCandidate>(
   env: CleanDemoEnv = defaultCleanDemoEnv()
 ): T[] {
   if (!shouldUseCleanDemoVisibility(currentUserEmail, env)) return companies;
+  const demoShopName = isLocalSupabaseUrl(env.NEXT_PUBLIC_SUPABASE_URL)
+    ? LOCAL_CLEAN_DEMO_SHOP_NAME
+    : CLEAN_DEMO_SHOP_NAME;
   return companies.filter(
-    (company) => company.name.trim().toLowerCase() === CLEAN_DEMO_SHOP_NAME.toLowerCase()
+    (company) => company.name.trim().toLowerCase() === demoShopName.toLowerCase()
   );
 }
