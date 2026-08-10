@@ -36,6 +36,7 @@ describe("staff review workspace file route", () => {
     expect(response.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
     expect(response.headers.get("Content-Disposition")).toBe('inline; filename="landing-page.html"');
     expect(response.headers.get("Content-Security-Policy")).toContain("sandbox");
+    expect(response.headers.get("Content-Security-Policy")).toContain("img-src https:");
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
     await expect(response.text()).resolves.toContain("<h1>Visual proof</h1>");
   });

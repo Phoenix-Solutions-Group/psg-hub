@@ -199,6 +199,16 @@ describe("review workspace processing contract", () => {
     expect(stopped).toBe(true);
   });
 
+  it("allows email-style HTML with HTTPS images and links", () => {
+    expect(inspectHtmlSafety(`
+      <img src="https://images.example.com/team.jpg" alt="Team">
+      <a href="https://www.example.com">Visit our website</a>
+    `)).toEqual({
+      ok: true,
+      warnings: ["HTTPS images and links are rendered inside the restricted review frame."],
+    });
+  });
+
   it("rejects active HTML before provisioning a sandbox", async () => {
     let created = false;
     await expect(processReviewFileInSandbox(
@@ -207,7 +217,7 @@ describe("review workspace processing contract", () => {
         created = true;
         throw new Error("should not create");
       } },
-    )).rejects.toThrow("active or external content");
+    )).rejects.toThrow("active or unsafe content");
     expect(created).toBe(false);
   });
 

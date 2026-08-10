@@ -460,6 +460,7 @@ export function BsmContentApprovalManager({
   const [editContextNote, setEditContextNote] = useState("");
   const [editFile, setEditFile] = useState<File | null>(null);
   const [savingEditItemId, setSavingEditItemId] = useState<string | null>(null);
+  const [retryingItemId, setRetryingItemId] = useState<string | null>(null);
   const [attachingItemId, setAttachingItemId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -615,6 +616,12 @@ export function BsmContentApprovalManager({
         throw new Error("error" in body && body.error ? body.error : "The Review Workspace preview could not be loaded.");
       }
       setWorkspacePreview(body.result);
+      const reusableReviewers = body.result.reviewers
+        .filter((reviewer) => !reviewer.revokedAt)
+        .map((reviewer) => ({ email: reviewer.email, name: reviewer.name }));
+      if (reusableReviewers.length > 0) {
+        setSelectedReviewers((current) => current.length > 0 ? current : reusableReviewers);
+      }
       setWorkspaceOptions((current) => current.map((workspace) =>
         workspace.id === body.result.project.id
           ? { ...workspace, status: body.result.project.status, currentRoundId: body.result.project.currentRoundId }
@@ -1113,6 +1120,24 @@ export function BsmContentApprovalManager({
       });
     } finally {
       setAttachingItemId(null);
+    }
+  }
+
+  async function retryReviewItemProcessing(item: BsmContentApprovalListItem) {
+    setRetryingItemId(item.id);
+    setPhase({ kind: "idle" });
+    try {
+      const savedItem = await prepareUploadedReviewCopy(item);
+      setApprovals((current) => current.map((entry) => entry.id === item.id ? savedItem : entry));
+      await loadWorkspacePreview();
+      setPhase({ kind: "success", message: `${item.title} is processed and ready for review.` });
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The document could not be processed again.",
+      });
+    } finally {
+      setRetryingItemId(null);
     }
   }
 
@@ -1647,6 +1672,18 @@ export function BsmContentApprovalManager({
                           </div>
                         ) : (
                           <div className="flex flex-wrap items-center justify-end gap-2">
+                            {item.sourceKind === "uploaded_file" && item.processingStatus === "failed" ? (
+                              <button
+                                type="button"
+                                onClick={() => retryReviewItemProcessing(item)}
+                                disabled={retryingItemId === item.id}
+                                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1")}
+                                aria-label={`Retry processing ${item.title}`}
+                              >
+                                <RefreshCw className={cn("size-4", retryingItemId === item.id && "animate-spin")} aria-hidden="true" />
+                                {retryingItemId === item.id ? "Retrying" : "Retry processing"}
+                              </button>
+                            ) : null}
                             {!item.reviewWorkspace && reviewWorkspaceProjectId ? (
                               <button
                                 type="button"
@@ -1786,7 +1823,7 @@ export function BsmContentApprovalManager({
         </div>
         <div className="flex flex-wrap items-center gap-3 rounded-md border border-border p-3">
           <div className="min-w-56 flex-1 text-sm text-muted-foreground">
-            {startBlocker ?? `${workspaceDocuments.length} ready document${workspaceDocuments.length === 1 ? "" : "s"} can be sent.`}
+            {startBlocker ?? `${workspaceDocuments.length} ready document${workspaceDocuments.length === 1 ? "" : "s"} can be sent. Private links and access codes appear here immediately after the round starts.`}
           </div>
           <button
             type="button"

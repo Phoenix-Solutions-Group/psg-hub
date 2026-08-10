@@ -224,6 +224,7 @@ export function reviewWorkspaceStoragePath(input: {
 export function inspectHtmlSafety(html: string): UnsafeFileGateResult {
   const findings: HtmlSafetyFinding[] = [];
   const text = html.toLowerCase();
+  const hasExternalReferences = /(href|src|srcset)\s*=\s*["']?\s*https?:\/\//i.test(html);
   if (/<\s*script\b/i.test(html)) findings.push({ code: "script", detail: "script tag" });
   if (/\son[a-z]+\s*=/i.test(html)) findings.push({ code: "event_handler", detail: "inline event handler" });
   if (/<\s*form\b/i.test(html)) findings.push({ code: "form", detail: "form element" });
@@ -233,13 +234,18 @@ export function inspectHtmlSafety(html: string): UnsafeFileGateResult {
   if (/(href|src|srcset|action)\s*=\s*["']?\s*(javascript:|data:|vbscript:)/i.test(html)) {
     findings.push({ code: "unsafe_url", detail: "unsafe URL protocol" });
   }
-  if (/(href|src|srcset|action)\s*=\s*["']?\s*https?:\/\//i.test(html) || text.includes("@import url(")) {
-    findings.push({ code: "external_url", detail: "external network reference" });
+  if (/action\s*=\s*["']?\s*https?:\/\//i.test(html) || text.includes("@import url(")) {
+    findings.push({ code: "external_url", detail: "active external network reference" });
   }
   if (findings.length > 0) {
-    return { ok: false, code: "unsafe_html", message: "HTML contains active or external content", findings };
+    return { ok: false, code: "unsafe_html", message: "HTML contains active or unsafe content", findings };
   }
-  return { ok: true, warnings: [] };
+  return {
+    ok: true,
+    warnings: hasExternalReferences
+      ? ["HTTPS images and links are rendered inside the restricted review frame."]
+      : [],
+  };
 }
 
 export function inspectHtmlZipManifest(entries: HtmlZipEntry[]): UnsafeFileGateResult {

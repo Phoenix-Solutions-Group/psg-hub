@@ -39,6 +39,7 @@ describe("guest review workspace file route", () => {
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(response.headers.get("Content-Security-Policy")).toContain("sandbox");
+    expect(response.headers.get("Content-Security-Policy")).toContain("img-src https:");
     await expect(response.text()).resolves.toContain("<h1>Visual proof</h1>");
   });
 });
