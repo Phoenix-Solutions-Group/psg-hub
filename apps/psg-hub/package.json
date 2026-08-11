@@ -10,7 +10,7 @@
     "audit:pipedrive-won-billing": "node scripts/pipedrive-won-billing-audit.mjs",
     "check:route-ownership": "node scripts/check-route-ownership.mjs",
     "check:pipedrive-won-billing-coverage": "node scripts/pipedrive-won-billing-coverage-check.mjs",
-    "seed:bsm-demo": "node scripts/seed-bsm-governance-demo.mjs",
+    "seed:bsm-demo": "node scripts/seed-superadmin-qa-env.mjs",
     "seed:superadmin-qa": "node scripts/seed-superadmin-qa-env.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test",

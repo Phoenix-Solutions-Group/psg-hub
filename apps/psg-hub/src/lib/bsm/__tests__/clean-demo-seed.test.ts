@@ -59,6 +59,13 @@ describe("clean BSM demo seed", () => {
       priorOutcomes: 11,
       segmentKey: "demo-riverside-direct-mail",
     });
+    expect(CLEAN_DEMO_SEED.googleAds).toMatchObject({
+      accountCustomerId: "1234567890",
+      searchCampaignExternalId: "demo-riverside-search",
+      pmaxCampaignExternalId: "demo-riverside-pmax",
+    });
+    expect(CLEAN_DEMO_SEED.gtm.containerPublicId).toBe("GTM-BSMDEMO");
+    expect(CLEAN_DEMO_SEED.yext.entityId).toBe("riverside-collision-san-francisco");
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.previousShopSlug);
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.legacyShopSlug);
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.previousPilotShopSlug);
