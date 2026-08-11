@@ -82,13 +82,29 @@ function isPreviewRuntime(
 
 export function shouldUseRiversideAnalyticsPreviewFallback({
   userEmail,
-  activeShopName,
   requestHost,
   env,
 }: ShouldUseRiversideAnalyticsPreviewFallbackArgs): boolean {
   const runtimeEnv = env ?? process.env;
   if (!isPreviewRuntime(runtimeEnv, requestHost)) return false;
-  if (activeShopName === RIVERSIDE_ANALYTICS_DEMO_SHOP.name) return false;
+
+  const normalizedUserEmail = normalizeEmail(userEmail);
+  return (
+    normalizedUserEmail.length > 0 &&
+    configuredDemoEmails(runtimeEnv).has(normalizedUserEmail)
+  );
+}
+
+export function shouldShowRiversideAnalyticsPreviewMetrics({
+  userEmail,
+  requestHost,
+  env,
+}: Omit<
+  ShouldUseRiversideAnalyticsPreviewFallbackArgs,
+  "activeShopName"
+>): boolean {
+  const runtimeEnv = env ?? process.env;
+  if (!isPreviewRuntime(runtimeEnv, requestHost)) return false;
 
   const normalizedUserEmail = normalizeEmail(userEmail);
   return (

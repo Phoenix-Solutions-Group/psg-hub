@@ -93,7 +93,7 @@ describe("Riverside Analytics preview demo fallback", () => {
     ).toBe(false);
   });
 
-  it("does not activate for other users or when Riverside is already selected", () => {
+  it("does not activate for other users", () => {
     expect(
       shouldUseRiversideAnalyticsPreviewFallback({
         userEmail: "customer@example.test",
@@ -101,13 +101,16 @@ describe("Riverside Analytics preview demo fallback", () => {
         env: previewEnv,
       })
     ).toBe(false);
+  });
+
+  it("still activates for preview reviewers when Riverside is already selected", () => {
     expect(
       shouldUseRiversideAnalyticsPreviewFallback({
         userEmail: previewEnv.DEMO_SHOP_EMAIL,
         activeShopName: RIVERSIDE_ANALYTICS_DEMO_SHOP.name,
         env: previewEnv,
       })
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("still activates when the preview user has a stale non-Riverside active shop", () => {
