@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getActiveShopContext } from "@/lib/shop/context";
@@ -23,7 +24,10 @@ import {
   type FirstLoginValueState,
 } from "@/lib/bsm/first-login-value";
 import { recordBsmPilotEvent } from "@/lib/bsm/pilot-events";
-import { getRiversideAnalyticsPreviewShop } from "@/lib/bsm/riverside-analytics-demo";
+import {
+  getRiversideAnalyticsPreviewShop,
+  shouldShowRiversideAnalyticsPreviewMetrics,
+} from "@/lib/bsm/riverside-analytics-demo";
 
 type DashboardStat = {
   label: string;
@@ -79,11 +83,19 @@ export default async function DashboardPage() {
     const activeShopName =
       shops.find((shop) => shop.id === resolvedActiveShopId)?.name ?? null;
     const service = createServiceClient();
+    const requestHost = (await headers()).get("host");
     const previewShop = await getRiversideAnalyticsPreviewShop(service, {
       userEmail: user.email,
       activeShopName,
+      requestHost,
     });
     const activeShopId = previewShop?.id ?? resolvedActiveShopId;
+    const useRiversidePreviewMetrics =
+      previewShop !== null ||
+      shouldShowRiversideAnalyticsPreviewMetrics({
+        userEmail: user.email,
+        requestHost,
+      });
     if (activeShopId) {
       const countFor = (status?: string) => {
         let q = service
@@ -105,7 +117,7 @@ export default async function DashboardPage() {
       firstLoginValue = buildFirstLoginValueState(latestAudit?.report ?? null);
       marketingVisibility = await getMarketingVisibilitySummary(service, {
         shopId: activeShopId,
-        usePreviewDemoMetrics: previewShop !== null,
+        usePreviewDemoMetrics: useRiversidePreviewMetrics,
       });
       await recordBsmPilotEvent(service, {
         eventName: "first_login_card_viewed",

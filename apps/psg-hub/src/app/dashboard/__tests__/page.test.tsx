@@ -32,6 +32,13 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
+vi.mock("next/headers", () => ({
+  headers: vi.fn(async () => ({
+    get: (name: string) =>
+      name === "host" ? "psg-private-preview.vercel.app" : null,
+  })),
+}));
+
 class CountQuery {
   private status: string | null = null;
 
@@ -69,7 +76,15 @@ vi.mock("@/lib/supabase/service", () => ({
 vi.mock("@/lib/shop/context", () => ({
   getActiveShopContext: vi.fn(async () => ({
     shops: mockActiveShopId
-      ? [{ id: mockActiveShopId, name: "Tracy's Collision" }]
+      ? [
+          {
+            id: mockActiveShopId,
+            name:
+              mockActiveShopId === "riverside_shop"
+                ? "Riverside Collision"
+                : "Tracy's Collision",
+          },
+        ]
       : [],
     activeShopId: mockActiveShopId,
   })),
@@ -112,7 +127,16 @@ vi.mock("@/components/analytics/charts", () => ({
 }));
 
 vi.mock("@/lib/bsm/riverside-analytics-demo", () => ({
+  RIVERSIDE_ANALYTICS_DEMO_SHOP: {
+    name: "Riverside Collision",
+    slug: "riverside-collision",
+  },
   getRiversideAnalyticsPreviewShop: vi.fn(async () => mockPreviewShop),
+  shouldShowRiversideAnalyticsPreviewMetrics: vi.fn(
+    ({ userEmail, requestHost }) =>
+      userEmail === "test@psghub.me" &&
+      requestHost === "psg-private-preview.vercel.app",
+  ),
 }));
 
 vi.mock("@/lib/bsm/pilot-events", () => ({
@@ -280,6 +304,7 @@ describe("DashboardPage first-login trust state", () => {
 
   it("shows gated Riverside private preview value without live account data", async () => {
     mockPreviewShop = { id: "riverside_shop", name: "Riverside Collision" };
+    mockUser = { id: "user_1", email: "test@psghub.me" };
 
     const html = renderToStaticMarkup(await DashboardPage());
 
@@ -297,5 +322,20 @@ describe("DashboardPage first-login trust state", () => {
     expect(html).toContain("Open Analytics connection");
     expect(html).toContain("Open Search Console connection");
     expect(html).toContain("Open Business Profile connection");
+  });
+
+  it("keeps preview metrics visible when the demo user is already on Riverside", async () => {
+    mockUser = { id: "user_1", email: "test@psghub.me" };
+    mockActiveShopId = "riverside_shop";
+
+    const html = renderToStaticMarkup(await DashboardPage());
+
+    expect(html).toContain("Private preview note");
+    expect(html).toContain("41.8%");
+    expect(html).toContain("4.7 rating");
+    expect(html).toContain("58 clicks");
+    expect(html).toContain("392 sessions");
+    expect(html).toContain("$1,480 spend");
+    expect(html).not.toContain("Waiting on first scan");
   });
 });
