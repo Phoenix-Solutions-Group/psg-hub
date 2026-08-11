@@ -31,14 +31,6 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  // Customer-id gate (Phase 6 / 06-03): staff bypass; non-staff need a shop membership.
-  // No-shop non-staff get self-serve onboarding (Phase 7 / 07-01) instead of a dead-end
-  // notice — the wizard POSTs the service-role /api/onboarding bootstrap route.
-  const access = await getDashboardAccess(user.id);
-  if (decideDashboardAccess(access) === "no-shop") {
-    return <OnboardingScreen email={user.email} />;
-  }
-
   // Active-shop context for the switcher (additive; the gate above is unchanged).
   const { shops, activeShopId: resolvedActiveShopId } =
     await getActiveShopContext(user.id);
@@ -50,12 +42,26 @@ export default async function DashboardLayout({
   const riversideDemoShop = shops.find(
     (shop) => shop.name === RIVERSIDE_ANALYTICS_DEMO_SHOP.name
   );
-  if (
+  const useRiversidePreviewFallback =
     shouldUseRiversideAnalyticsPreviewFallback({
       userEmail: user.email,
       activeShopName,
       requestHost,
-    })
+    });
+
+  // Customer-id gate (Phase 6 / 06-03): staff bypass; non-staff need a shop membership.
+  // No-shop non-staff get self-serve onboarding (Phase 7 / 07-01), except the private
+  // board-review preview path where a seeded Riverside shop is intentionally injected.
+  const access = await getDashboardAccess(user.id);
+  if (
+    decideDashboardAccess(access) === "no-shop" &&
+    !useRiversidePreviewFallback
+  ) {
+    return <OnboardingScreen email={user.email} />;
+  }
+
+  if (
+    useRiversidePreviewFallback
   ) {
     const service = createServiceClient() as unknown as SupabaseShopLookup;
     const previewShop = await getRiversideAnalyticsPreviewShop(
