@@ -133,25 +133,17 @@ const PRESENCE_STATUS_LABELS: Record<string, string> = {
   CLOSED_TEMPORARILY: "Temporarily closed",
 };
 
-function GoogleDemoNote({ source }: { source: string }) {
+const RIVERSIDE_PREVIEW_SYNCED_AT = "2026-08-05T14:00:00.000Z";
+
+type PreviewSource = "semrush" | "google_ads" | "ga4" | "gsc" | "gbp";
+type SnapshotLike = DatedMetrics & { synced_at?: string };
+
+function GooglePreviewNotice({ source }: { source: string }) {
   return (
     <p className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-      Board demo note: this panel will light up when the shop connects its own
-      Google account. For this demo, {source} is not connected yet.
+      Private preview note: these {source} numbers are seeded demo data so the
+      dashboard can be reviewed before a real customer account is connected.
     </p>
-  );
-}
-
-function GoogleConnectionCard({ source }: { source: string }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{source} connection</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <GoogleDemoNote source={source} />
-      </CardContent>
-    </Card>
   );
 }
 
@@ -192,10 +184,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   // The scope toggle exists ONLY for multi-shop (MSO) users.
   const scopeAll = params.scope === "all" && shops.length > 1;
   const riversideDemoShop = shops.find(
-    (s) => s.name === RIVERSIDE_ANALYTICS_DEMO_SHOP.name
+    (s) => s.name === RIVERSIDE_ANALYTICS_DEMO_SHOP.name,
   );
-  let activeShopName =
-    shops.find((s) => s.id === activeShopId)?.name ?? null;
+  let activeShopName = shops.find((s) => s.id === activeShopId)?.name ?? null;
   const useRiversidePreviewFallback =
     !scopeAll &&
     shouldUseRiversideAnalyticsPreviewFallback({
@@ -279,11 +270,14 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             to,
           }),
     [],
-    readWarnings
+    readWarnings,
   );
 
   // Per-shop rows pass through; the MSO view sums numeric metrics per date.
-  const rows: DatedMetrics[] = scopeAll ? aggregateByDate(snapshots) : snapshots;
+  let rows: SnapshotLike[] = scopeAll ? aggregateByDate(snapshots) : snapshots;
+  if (showGoogleDemoCards && rows.length === 0) {
+    rows = previewRows("semrush");
+  }
   const latest = latestSnapshot(rows);
   const kpis = scopeAll ? AGGREGATE_KPIS : PER_SHOP_KPIS;
 
@@ -317,9 +311,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             to,
           }),
     [],
-    readWarnings
+    readWarnings,
   );
-  const paidRows: DatedMetrics[] = scopeAll
+  let paidRows: SnapshotLike[] = scopeAll
     ? aggregateByDate(paidSnapshots)
     : paidSnapshots;
 
@@ -342,11 +336,15 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             to: priorPaidWindow.to,
           }),
     [],
-    readWarnings
+    readWarnings,
   );
-  const priorPaidRows: DatedMetrics[] = scopeAll
+  let priorPaidRows: DatedMetrics[] = scopeAll
     ? aggregateByDate(priorPaidSnapshots)
     : priorPaidSnapshots;
+  if (showGoogleDemoCards && paidRows.length === 0) {
+    paidRows = previewRows("google_ads");
+    priorPaidRows = previewPriorRows("google_ads");
+  }
   const recentGoogleAdsChanges = await readAnalyticsSection(
     "recent Google Ads changes",
     () =>
@@ -354,7 +352,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         authorizedShopIds: scopeAll ? shops.map((s) => s.id) : [activeShopId],
       }),
     [],
-    readWarnings
+    readWarnings,
   );
   const googleAdsDashboard = buildGoogleAdsDashboard({
     currentRows: paidRows,
@@ -383,11 +381,14 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             to,
           }),
     [],
-    readWarnings
+    readWarnings,
   );
-  const gaRows: DatedMetrics[] = scopeAll
+  let gaRows: SnapshotLike[] = scopeAll
     ? aggregateByDate(gaSnapshots)
     : gaSnapshots;
+  if (showGoogleDemoCards && gaRows.length === 0) {
+    gaRows = previewRows("ga4");
+  }
   const gaLatest = latestSnapshot(gaRows);
   const gaKpis = scopeAll ? GA4_AGGREGATE_KPIS : GA4_KPIS;
   const sessionsSeries = toSeries(gaRows, "sessions").map((p) => ({
@@ -420,11 +421,14 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             to,
           }),
     [],
-    readWarnings
+    readWarnings,
   );
-  const gscRows: DatedMetrics[] = scopeAll
+  let gscRows: SnapshotLike[] = scopeAll
     ? aggregateByDate(gscSnapshots)
     : gscSnapshots;
+  if (showGoogleDemoCards && gscRows.length === 0) {
+    gscRows = previewRows("gsc");
+  }
   const gscLatest = latestSnapshot(gscRows);
   const gscKpis = scopeAll ? GSC_AGGREGATE_KPIS : GSC_KPIS;
   const clicksSeries = toSeries(gscRows, "clicks").map((p) => ({
@@ -457,11 +461,14 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             to,
           }),
     [],
-    readWarnings
+    readWarnings,
   );
-  const gbpRows: DatedMetrics[] = scopeAll
+  let gbpRows: SnapshotLike[] = scopeAll
     ? aggregateByDate(gbpSnapshots)
     : gbpSnapshots;
+  if (showGoogleDemoCards && gbpRows.length === 0) {
+    gbpRows = previewRows("gbp");
+  }
   const gbpLatest = latestSnapshot(gbpRows);
   const gbpKpis = scopeAll ? GBP_AGGREGATE_KPIS : GBP_KPIS;
   const callsSeries = toSeries(gbpRows, "call_clicks").map((p) => ({
@@ -487,19 +494,35 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             source: "gbp_presence",
           }),
         null,
-        readWarnings
+        readWarnings,
       );
-  const presence = presenceRow
+  const displayPresenceRow =
+    presenceRow ??
+    (showGoogleDemoCards
+      ? {
+          metrics: {
+            average_rating: 4.7,
+            total_review_count: 186,
+            open_status: "OPEN",
+            completeness_score: 92,
+          },
+        }
+      : null);
+  const presence = displayPresenceRow
     ? (() => {
-        const m = presenceRow.metrics as Record<string, unknown>;
+        const m = displayPresenceRow.metrics as Record<string, unknown>;
         const rating =
           typeof m.average_rating === "number" ? m.average_rating : null;
         const reviews =
-          typeof m.total_review_count === "number" ? m.total_review_count : null;
+          typeof m.total_review_count === "number"
+            ? m.total_review_count
+            : null;
         const openStatus =
           typeof m.open_status === "string" ? m.open_status : "";
         const completeness =
-          typeof m.completeness_score === "number" ? m.completeness_score : null;
+          typeof m.completeness_score === "number"
+            ? m.completeness_score
+            : null;
         const statusLabel =
           PRESENCE_STATUS_LABELS[openStatus] ?? (openStatus || null);
         return { rating, reviews, statusLabel, completeness };
@@ -508,7 +531,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   // Local Falcon visibility (PSG-1079) — per-shop only. Share of Local Voice and
   // average rank are point-in-time scan metrics, so an MSO aggregate would mislead.
-  const localFalcon = scopeAll
+  const localFalconResult = scopeAll
     ? null
     : await readAnalyticsSection(
         "Local Falcon",
@@ -517,8 +540,24 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             shopId: activeShopId,
           }),
         null,
-        readWarnings
+        readWarnings,
       );
+  const localFalcon =
+    localFalconResult ??
+    (showGoogleDemoCards
+      ? {
+          capturedAt: "2026-08-05",
+          sourceFileName: "private-preview-local-falcon.csv",
+          campaignName: "Riverside Collision board preview",
+          gridSize: "7x7",
+          shareOfLocalVoice: 41.8,
+          averageRank: 5.4,
+          priorityNotes: [
+            "Strongest visibility within 3 miles; edge ZIPs need more review velocity.",
+          ],
+          keywordSummaries: [],
+        }
+      : null);
 
   // Review sentiment summary (14-03b) — per-shop only (same MSO rule as presence). Reads
   // review_sentiment (the shop's full classified history), not a snapshot. null in all-shops
@@ -533,7 +572,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               shopId: activeShopId,
             }),
           null,
-          readWarnings
+          readWarnings,
         );
 
   const directMailShopIds = scopeAll
@@ -551,18 +590,19 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         from,
       }),
     EMPTY_DIRECT_MAIL_METRICS,
-    readWarnings
+    readWarnings,
   );
 
   // Header status reflects the most recent sync across ALL sources, not just
   // organic. A shop with only GA4/GSC/GBP linked is "Last synced", not "Awaiting".
-  const syncedAt = latestSyncedAt([
-    ...snapshots,
-    ...paidSnapshots,
-    ...gaSnapshots,
-    ...gscSnapshots,
-    ...gbpSnapshots,
-  ]);
+  const syncedAt =
+    latestSyncedAt([
+      ...snapshots,
+      ...paidSnapshots,
+      ...gaSnapshots,
+      ...gscSnapshots,
+      ...gbpSnapshots,
+    ]) ?? (showGoogleDemoCards ? RIVERSIDE_PREVIEW_SYNCED_AT : null);
 
   return (
     <div className="space-y-6">
@@ -634,8 +674,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               after the next sync. Nothing to set up on your end.
             </p>
             <p className="text-sm text-muted-foreground">
-              Organic search performance arrives first; paid and traffic
-              sources follow as they are connected for your shop.
+              Organic search performance arrives first; paid and traffic sources
+              follow as they are connected for your shop.
             </p>
           </CardContent>
         </Card>
@@ -700,9 +740,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           Paid advertising
         </h2>
 
-        {showGoogleDemoCards ? (
-          <GoogleConnectionCard source="Google Ads account" />
-        ) : googleAdsDashboard.status === "empty" ? (
+        {googleAdsDashboard.status === "empty" ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Ads account linked</CardTitle>
@@ -712,7 +750,6 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 Connect a Google Ads account to see spend, clicks, conversions,
                 and cost per lead alongside your organic performance.
               </p>
-              <GoogleDemoNote source="Google Ads account" />
               <Link
                 href="/dashboard/ads"
                 className="inline-block font-heading text-sm font-medium text-primary hover:underline"
@@ -723,6 +760,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </Card>
         ) : (
           <>
+            {showGoogleDemoCards ? (
+              <GooglePreviewNotice source="Google Ads" />
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
               {googleAdsDashboard.tiles.map((tile) => (
                 <Card key={tile.key}>
@@ -825,9 +865,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           Website traffic
         </h2>
 
-        {showGoogleDemoCards ? (
-          <GoogleConnectionCard source="Google Analytics property" />
-        ) : gaRows.length === 0 ? (
+        {gaRows.length === 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Analytics property linked</CardTitle>
@@ -835,9 +873,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             <CardContent className="space-y-2">
               <p className="text-muted-foreground">
                 Connect a Google Analytics property to see sessions, users, key
-                events, and engagement alongside your search and paid performance.
+                events, and engagement alongside your search and paid
+                performance.
               </p>
-              <GoogleDemoNote source="Google Analytics property" />
               <Link
                 href="/dashboard/analytics"
                 className="inline-block font-heading text-sm font-medium text-primary hover:underline"
@@ -848,6 +886,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </Card>
         ) : (
           <>
+            {showGoogleDemoCards ? (
+              <GooglePreviewNotice source="Google Analytics" />
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {gaKpis.map((kpi) => {
                 const raw = gaLatest?.metrics[kpi.key];
@@ -908,9 +949,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           Search performance
         </h2>
 
-        {showGoogleDemoCards ? (
-          <GoogleConnectionCard source="Google Search Console site" />
-        ) : gscRows.length === 0 ? (
+        {gscRows.length === 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Search Console site linked</CardTitle>
@@ -920,7 +959,6 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 Connect a Google Search Console site to see clicks, impressions,
                 click-through rate, and average position from organic search.
               </p>
-              <GoogleDemoNote source="Google Search Console site" />
               <Link
                 href="/dashboard/analytics"
                 className="inline-block font-heading text-sm font-medium text-primary hover:underline"
@@ -931,6 +969,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </Card>
         ) : (
           <>
+            {showGoogleDemoCards ? (
+              <GooglePreviewNotice source="Search Console" />
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {gscKpis.map((kpi) => {
                 const raw = gscLatest?.metrics[kpi.key];
@@ -991,7 +1032,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           Local presence
         </h2>
 
-        {presence && !showGoogleDemoCards ? (
+        {presence ? (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -1035,19 +1076,17 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </Card>
         ) : null}
 
-        {showGoogleDemoCards ? (
-          <GoogleConnectionCard source="Google Business Profile" />
-        ) : gbpRows.length === 0 ? (
+        {gbpRows.length === 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>No Google Business Profile linked</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <p className="text-muted-foreground">
-                Connect a Google Business Profile to see calls, direction requests,
-                website clicks, and how often your profile appears in Maps and Search.
+                Connect a Google Business Profile to see calls, direction
+                requests, website clicks, and how often your profile appears in
+                Maps and Search.
               </p>
-              <GoogleDemoNote source="Google Business Profile" />
               <Link
                 href="/dashboard/analytics"
                 className="inline-block font-heading text-sm font-medium text-primary hover:underline"
@@ -1058,6 +1097,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </Card>
         ) : (
           <>
+            {showGoogleDemoCards ? (
+              <GooglePreviewNotice source="Google Business Profile" />
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {gbpKpis.map((kpi) => {
                 const raw = gbpLatest?.metrics[kpi.key];
@@ -1151,9 +1193,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                     <p className="text-base font-medium">
                       {formatShortDate(localFalcon.capturedAt)}
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      Scan date
-                    </p>
+                    <p className="text-sm text-muted-foreground">Scan date</p>
                   </div>
                 </div>
                 {localFalcon.priorityNotes.length > 0 ? (
@@ -1198,7 +1238,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
                   <div>
                     <p className="text-2xl font-bold tracking-tight">
-                      {Math.round((sentiment.positive / sentiment.total) * 100)}%
+                      {Math.round((sentiment.positive / sentiment.total) * 100)}
+                      %
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {formatNumber(sentiment.positive)} positive
@@ -1206,7 +1247,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                   </div>
                   <div>
                     <p className="text-2xl font-bold tracking-tight">
-                      {Math.round((sentiment.negative / sentiment.total) * 100)}%
+                      {Math.round((sentiment.negative / sentiment.total) * 100)}
+                      %
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {formatNumber(sentiment.negative)} negative
@@ -1240,8 +1282,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground">
-                  Sentiment is generated from your Google reviews. Once reviews are
-                  ingested and classified, polarity, themes, and actionable
+                  Sentiment is generated from your Google reviews. Once reviews
+                  are ingested and classified, polarity, themes, and actionable
                   complaints appear here.
                 </p>
               </CardContent>
@@ -1250,7 +1292,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         </section>
       ) : null}
 
-      {activeRole === "owner" && !showGoogleDemoCards ? (
+      {activeRole === "owner" ? (
         <section aria-labelledby="connect-google-heading" className="space-y-4">
           <h2
             id="connect-google-heading"
@@ -1264,11 +1306,20 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-muted-foreground">
-                Link this shop&rsquo;s Google account once to add organic traffic,
-                engagement, and search performance to your analytics. One sign-in
-                covers both Google Analytics and Search Console.
+                Link this shop&rsquo;s Google account once to add organic
+                traffic, engagement, and search performance to your analytics.
+                One sign-in covers both Google Analytics and Search Console.
               </p>
-              <LinkGoogleButton shopId={activeShopId} userRole={activeRole} />
+              {showGoogleDemoCards ? (
+                <p className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                  Private preview next action: use the seeded numbers above for
+                  review. In a real shop account, the owner clicks this button
+                  and chooses the Google Analytics property and Search Console
+                  site to connect.
+                </p>
+              ) : (
+                <LinkGoogleButton shopId={activeShopId} userRole={activeRole} />
+              )}
             </CardContent>
           </Card>
           <Card>
@@ -1277,15 +1328,234 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-muted-foreground">
-                Link this shop&rsquo;s Google Business Profile to add presence and
-                profile insights (calls, direction requests, website clicks, and
-                search visibility) to your analytics.
+                Link this shop&rsquo;s Google Business Profile to add presence
+                and profile insights (calls, direction requests, website clicks,
+                and search visibility) to your analytics.
               </p>
-              <LinkGbpButton shopId={activeShopId} userRole={activeRole} />
+              {showGoogleDemoCards ? (
+                <p className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                  Private preview next action: use the seeded profile metrics
+                  above for review. In a real shop account, the owner clicks
+                  this button and chooses the Google Business Profile location
+                  to connect.
+                </p>
+              ) : (
+                <LinkGbpButton shopId={activeShopId} userRole={activeRole} />
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Google Ads</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-muted-foreground">
+                Google Ads connects from the paid advertising workspace so PSG
+                can select the correct ad account, sync campaigns, and verify
+                conversion tracking before showing live lead totals.
+              </p>
+              <Link
+                href="/dashboard/ads"
+                className="inline-block font-heading text-sm font-medium text-primary hover:underline"
+              >
+                Open Google Ads connection
+              </Link>
             </CardContent>
           </Card>
         </section>
       ) : null}
     </div>
   );
+}
+
+function previewRows(source: PreviewSource): SnapshotLike[] {
+  const dates = [
+    "2026-08-01",
+    "2026-08-02",
+    "2026-08-03",
+    "2026-08-04",
+    "2026-08-05",
+  ];
+  const metricsBySource: Record<
+    PreviewSource,
+    Array<Record<string, number | boolean>>
+  > = {
+    semrush: [
+      {
+        organic_traffic: 720,
+        organic_keywords: 88,
+        authority_score: 28,
+        backlinks: 420,
+        organic_traffic_cost: 5400,
+      },
+      {
+        organic_traffic: 744,
+        organic_keywords: 91,
+        authority_score: 28,
+        backlinks: 428,
+        organic_traffic_cost: 5520,
+      },
+      {
+        organic_traffic: 768,
+        organic_keywords: 95,
+        authority_score: 29,
+        backlinks: 431,
+        organic_traffic_cost: 5610,
+      },
+      {
+        organic_traffic: 793,
+        organic_keywords: 97,
+        authority_score: 29,
+        backlinks: 438,
+        organic_traffic_cost: 5750,
+      },
+      {
+        organic_traffic: 826,
+        organic_keywords: 102,
+        authority_score: 30,
+        backlinks: 446,
+        organic_traffic_cost: 5900,
+      },
+    ],
+    google_ads: [
+      {
+        spend: 260,
+        conversions: 6,
+        clicks: 118,
+        impressions: 4200,
+        conversion_tracking_verified: true,
+      },
+      {
+        spend: 278,
+        conversions: 7,
+        clicks: 126,
+        impressions: 4380,
+        conversion_tracking_verified: true,
+      },
+      {
+        spend: 291,
+        conversions: 7,
+        clicks: 131,
+        impressions: 4510,
+        conversion_tracking_verified: true,
+      },
+      {
+        spend: 312,
+        conversions: 8,
+        clicks: 139,
+        impressions: 4680,
+        conversion_tracking_verified: true,
+      },
+      {
+        spend: 339,
+        conversions: 9,
+        clicks: 147,
+        impressions: 4890,
+        conversion_tracking_verified: true,
+      },
+    ],
+    ga4: [
+      {
+        sessions: 318,
+        total_users: 244,
+        key_events: 19,
+        engagement_rate: 0.63,
+      },
+      {
+        sessions: 331,
+        total_users: 258,
+        key_events: 21,
+        engagement_rate: 0.64,
+      },
+      {
+        sessions: 349,
+        total_users: 271,
+        key_events: 23,
+        engagement_rate: 0.65,
+      },
+      {
+        sessions: 371,
+        total_users: 289,
+        key_events: 25,
+        engagement_rate: 0.66,
+      },
+      {
+        sessions: 392,
+        total_users: 311,
+        key_events: 27,
+        engagement_rate: 0.67,
+      },
+    ],
+    gsc: [
+      { clicks: 44, impressions: 1840, ctr: 0.024, position: 8.6 },
+      { clicks: 47, impressions: 1920, ctr: 0.0245, position: 8.4 },
+      { clicks: 51, impressions: 2010, ctr: 0.0254, position: 8.1 },
+      { clicks: 55, impressions: 2080, ctr: 0.0264, position: 7.9 },
+      { clicks: 58, impressions: 2140, ctr: 0.0271, position: 7.6 },
+    ],
+    gbp: [
+      {
+        call_clicks: 18,
+        website_clicks: 34,
+        direction_requests: 21,
+        impressions_total: 1850,
+      },
+      {
+        call_clicks: 21,
+        website_clicks: 37,
+        direction_requests: 22,
+        impressions_total: 1920,
+      },
+      {
+        call_clicks: 23,
+        website_clicks: 40,
+        direction_requests: 25,
+        impressions_total: 2015,
+      },
+      {
+        call_clicks: 24,
+        website_clicks: 43,
+        direction_requests: 27,
+        impressions_total: 2110,
+      },
+      {
+        call_clicks: 27,
+        website_clicks: 46,
+        direction_requests: 30,
+        impressions_total: 2240,
+      },
+    ],
+  };
+
+  return dates.map((date, index) => ({
+    date,
+    metrics: metricsBySource[source][index] ?? {},
+    synced_at: RIVERSIDE_PREVIEW_SYNCED_AT,
+  }));
+}
+
+function previewPriorRows(source: "google_ads"): DatedMetrics[] {
+  if (source !== "google_ads") return [];
+  return [
+    {
+      date: "2026-07-27",
+      metrics: { spend: 240, conversions: 5, clicks: 105, impressions: 3900 },
+    },
+    {
+      date: "2026-07-28",
+      metrics: { spend: 251, conversions: 6, clicks: 111, impressions: 4020 },
+    },
+    {
+      date: "2026-07-29",
+      metrics: { spend: 259, conversions: 6, clicks: 116, impressions: 4140 },
+    },
+    {
+      date: "2026-07-30",
+      metrics: { spend: 267, conversions: 6, clicks: 119, impressions: 4260 },
+    },
+    {
+      date: "2026-07-31",
+      metrics: { spend: 274, conversions: 7, clicks: 122, impressions: 4320 },
+    },
+  ];
 }

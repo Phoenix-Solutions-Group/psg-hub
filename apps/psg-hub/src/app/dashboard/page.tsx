@@ -38,6 +38,7 @@ type VisibilityCard = {
 };
 
 const WINDOW_DAYS = 30;
+const RIVERSIDE_PREVIEW_SYNC_DATE = "2026-08-05";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -58,22 +59,32 @@ export default async function DashboardPage() {
     {
       title: "Local map visibility",
       value: "Waiting on first scan",
-      helper: "Map ranking appears after PSG imports a Local Falcon scan for this shop.",
+      helper:
+        "Map ranking appears after PSG imports a Local Falcon scan for this shop.",
     },
     {
       title: "Local presence",
       value: "Waiting on profile data",
-      helper: "Google Business Profile health appears after the shop connects its profile.",
+      helper:
+        "Google Business Profile health appears after the shop connects its profile.",
     },
     {
       title: "Search performance",
       value: "Waiting on search data",
-      helper: "Search clicks and impressions appear after Search Console is connected.",
+      helper:
+        "Search clicks and impressions appear after Search Console is connected.",
     },
     {
       title: "Google Analytics property connection",
       value: "Not connected yet",
-      helper: "Website sessions appear after the shop connects its Google Analytics property.",
+      helper:
+        "Website sessions appear after the shop connects its Google Analytics property.",
+    },
+    {
+      title: "Paid advertising",
+      value: "Not connected yet",
+      helper:
+        "Google Ads spend and leads appear after the shop connects its ad account.",
     },
   ];
 
@@ -107,10 +118,10 @@ export default async function DashboardPage() {
       published = pub.count ?? 0;
       const latestAudit = await getLatestShopAudit(service, activeShopId);
       firstLoginValue = buildFirstLoginValueState(latestAudit?.report ?? null);
-      marketingVisibility = await getMarketingVisibilityCards(
-        service,
-        activeShopId,
-      );
+      marketingVisibility = await getMarketingVisibilityCards(service, {
+        shopId: activeShopId,
+        usePreviewDemoMetrics: previewShop !== null,
+      });
       await recordBsmPilotEvent(service, {
         eventName: "first_login_card_viewed",
         shopId: activeShopId,
@@ -127,13 +138,15 @@ export default async function DashboardPage() {
       label: "Content Items",
       value: total,
       emptyLabel: "Not started yet",
-      helper: "Drafts will appear after BSM has enough shop signals to create them.",
+      helper:
+        "Drafts will appear after BSM has enough shop signals to create them.",
     },
     {
       label: "Pending Review",
       value: pendingReview,
       emptyLabel: "None waiting",
-      helper: "New content will land here for approval before anything is published.",
+      helper:
+        "New content will land here for approval before anything is published.",
     },
     {
       label: "Published",
@@ -149,9 +162,7 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Welcome, {displayName}.
-        </p>
+        <p className="text-muted-foreground">Welcome, {displayName}.</p>
       </div>
 
       {firstLoginValue && (
@@ -214,8 +225,8 @@ export default async function DashboardPage() {
               Marketing visibility
             </h2>
             <p className="text-sm text-muted-foreground">
-              The core signals a shop owner needs to see whether local
-              marketing is working.
+              The core signals a shop owner needs to see whether local marketing
+              is working.
             </p>
           </div>
           <Link
@@ -225,7 +236,7 @@ export default async function DashboardPage() {
             View full analytics
           </Link>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {marketingVisibility.map((item) => (
             <Card key={item.title}>
               <CardHeader className="pb-2">
@@ -234,7 +245,9 @@ export default async function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <p className="text-2xl font-bold tracking-tight">{item.value}</p>
+                <p className="text-2xl font-bold tracking-tight">
+                  {item.value}
+                </p>
                 <p className="text-sm leading-5 text-muted-foreground">
                   {item.helper}
                 </p>
@@ -249,12 +262,21 @@ export default async function DashboardPage() {
 
 async function getMarketingVisibilityCards(
   service: ReturnType<typeof createServiceClient>,
-  shopId: string,
+  {
+    shopId,
+    usePreviewDemoMetrics,
+  }: { shopId: string; usePreviewDemoMetrics: boolean },
 ): Promise<VisibilityCard[]> {
   const { from, to } = trailingWindow(WINDOW_DAYS);
   const readWarnings: { section: string; message: string }[] = [];
 
-  const [localFalcon, presenceRow, gscRows, gaRows] = await Promise.all([
+  const [
+    localFalconResult,
+    presenceRowResult,
+    gscRowsResult,
+    gaRowsResult,
+    paidRowsResult,
+  ] = await Promise.all([
     readAnalyticsSection(
       "dashboard Local Falcon",
       () => getLatestLocalFalconSnapshot(service, { shopId }),
@@ -297,10 +319,78 @@ async function getMarketingVisibilityCards(
       [],
       readWarnings,
     ),
+    readAnalyticsSection(
+      "dashboard Google Ads",
+      () =>
+        getSnapshots(service, {
+          shopId,
+          source: "google_ads",
+          period: "daily",
+          from,
+          to,
+        }),
+      [],
+      readWarnings,
+    ),
   ]);
+
+  const localFalcon =
+    localFalconResult ??
+    (usePreviewDemoMetrics
+      ? {
+          capturedAt: RIVERSIDE_PREVIEW_SYNC_DATE,
+          sourceFileName: "private-preview-local-falcon.csv",
+          campaignName: "Riverside Collision board preview",
+          gridSize: "7x7",
+          shareOfLocalVoice: 41.8,
+          averageRank: 5.4,
+          priorityNotes: [
+            "Strongest visibility within 3 miles; edge ZIPs need more review velocity.",
+          ],
+          keywordSummaries: [],
+        }
+      : null);
+  const presenceRow =
+    presenceRowResult ??
+    (usePreviewDemoMetrics
+      ? {
+          metrics: {
+            average_rating: 4.7,
+            total_review_count: 186,
+          },
+        }
+      : null);
+  const gscRows =
+    gscRowsResult.length > 0
+      ? gscRowsResult
+      : usePreviewDemoMetrics
+        ? previewDashboardRows({
+            clicks: 58,
+            impressions: 2140,
+          })
+        : [];
+  const gaRows =
+    gaRowsResult.length > 0
+      ? gaRowsResult
+      : usePreviewDemoMetrics
+        ? previewDashboardRows({
+            sessions: 392,
+            total_users: 311,
+          })
+        : [];
+  const paidRows =
+    paidRowsResult.length > 0
+      ? paidRowsResult
+      : usePreviewDemoMetrics
+        ? previewDashboardRows({
+            spend: 1480,
+            conversions: 37,
+          })
+        : [];
 
   const latestGsc = latestMetrics(gscRows);
   const latestGa = latestMetrics(gaRows);
+  const latestPaid = latestMetrics(paidRows);
   const presenceMetrics = presenceRow?.metrics as
     | Record<string, unknown>
     | undefined;
@@ -328,6 +418,8 @@ async function getMarketingVisibilityCards(
   const impressions = metricNumber(latestGsc, "impressions");
   const sessions = metricNumber(latestGa, "sessions");
   const users = metricNumber(latestGa, "total_users");
+  const spend = metricNumber(latestPaid, "spend");
+  const leads = metricNumber(latestPaid, "conversions");
 
   return [
     {
@@ -368,7 +460,22 @@ async function getMarketingVisibilityCards(
           ? "Website sessions appear after the shop connects its Google Analytics property."
           : `${formatNumber(users)} website users in the latest synced day.`,
     },
+    {
+      title: "Paid advertising",
+      value:
+        spend === null
+          ? "Not connected yet"
+          : `$${formatNumber(Math.round(spend))} spend`,
+      helper:
+        leads === null
+          ? "Google Ads spend and leads appear after the shop connects its ad account."
+          : `${formatNumber(leads)} paid leads in the latest synced day.`,
+    },
   ];
+}
+
+function previewDashboardRows(metrics: Record<string, number>): DatedMetrics[] {
+  return [{ date: RIVERSIDE_PREVIEW_SYNC_DATE, metrics }];
 }
 
 function latestMetrics(rows: DatedMetrics[]): Record<string, unknown> | null {
