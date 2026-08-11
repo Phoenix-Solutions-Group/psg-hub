@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { getDirectMailMetrics } from "@/lib/analytics/direct-mail";
+import { createServiceClient } from "@/lib/supabase/service";
+import {
+  getDirectMailMetrics,
+  getRiversidePreviewDirectMailMetrics,
+  isDirectMailMetricsEmpty,
+} from "@/lib/analytics/direct-mail";
+import { getRiversideAnalyticsPreviewShop } from "@/lib/bsm/riverside-analytics-demo";
 
 export const runtime = "nodejs";
 
@@ -43,13 +50,45 @@ export async function GET(
       from,
       to,
     });
-    return NextResponse.json(metrics, {
+    const fallbackMetrics = await resolvePreviewFallbackMetrics({
+      metrics,
+      shopId,
+      from,
+      to,
+      userEmail: user.email,
+    });
+    return NextResponse.json(fallbackMetrics, {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (err) {
     console.error("[direct-mail/metrics] load failed:", (err as Error).message);
     return NextResponse.json({ error: "Query failed" }, { status: 500 });
   }
+}
+
+async function resolvePreviewFallbackMetrics({
+  metrics,
+  shopId,
+  from,
+  to,
+  userEmail,
+}: {
+  metrics: Awaited<ReturnType<typeof getDirectMailMetrics>>;
+  shopId: string;
+  from: string;
+  to: string | null;
+  userEmail?: string | null;
+}) {
+  if (!isDirectMailMetricsEmpty(metrics)) return metrics;
+
+  const requestHost = (await headers()).get("host");
+  const fallbackShop = await getRiversideAnalyticsPreviewShop(createServiceClient(), {
+    userEmail,
+    requestHost,
+  });
+  if (fallbackShop?.id !== shopId) return metrics;
+
+  return getRiversidePreviewDirectMailMetrics({ shopId, from, to });
 }
 
 function dateRangeFromUrl(url: URL): { from: string; to: string | null } {

@@ -69,17 +69,24 @@ vi.mock("@/lib/reviews/sentiment-summary", () => ({
 
 vi.mock("@/lib/analytics/direct-mail", () => ({
   EMPTY_DIRECT_MAIL_METRICS: {
-    totalPieces: 0,
-    totalSpendCents: 0,
-    latestSentAt: null,
-    byPieceType: [],
+    activity: { lettersMailedLifetime: 0 },
+    sources: { sendHistoryRows: 0, productionRows: 0, resultRows: 0 },
   },
   getDirectMailMetrics: vi.fn(async () => ({
-    totalPieces: 0,
-    totalSpendCents: 0,
-    latestSentAt: null,
-    byPieceType: [],
+    activity: { lettersMailedLifetime: 0 },
+    sources: { sendHistoryRows: 0, productionRows: 0, resultRows: 0 },
   })),
+  getRiversidePreviewDirectMailMetrics: vi.fn(() => ({
+    activity: { lettersMailedLifetime: 5 },
+    sources: { sendHistoryRows: 4, productionRows: 1, resultRows: 2 },
+    privacy: { rawRecipientFieldsIncluded: false },
+  })),
+  isDirectMailMetricsEmpty: vi.fn(
+    (metrics: { sources?: { sendHistoryRows?: number; productionRows?: number; resultRows?: number } }) =>
+      (metrics.sources?.sendHistoryRows ?? 0) === 0 &&
+      (metrics.sources?.productionRows ?? 0) === 0 &&
+      (metrics.sources?.resultRows ?? 0) === 0,
+  ),
 }));
 
 vi.mock("@/lib/analytics/google-ads-dashboard", async (importOriginal) => {
@@ -128,7 +135,15 @@ vi.mock("@/components/analytics/charts", () => ({
 }));
 
 vi.mock("@/components/analytics/direct-mail-panel", () => ({
-  DirectMailPanel: () => <section>Direct mail</section>,
+  DirectMailPanel: ({
+    metrics,
+  }: {
+    metrics: { activity?: { lettersMailedLifetime?: number } };
+  }) => (
+    <section>
+      Direct mail {metrics.activity?.lettersMailedLifetime ?? 0} lifetime letters
+    </section>
+  ),
 }));
 
 vi.mock("../link-google-button", () => ({
@@ -163,6 +178,7 @@ describe("AnalyticsPage private preview", () => {
     expect(html).toContain("Google Analytics &amp; Search Console");
     expect(html).toContain("Google Ads");
     expect(html).toContain("Open Google Ads connection");
+    expect(html).toContain("Direct mail 5 lifetime letters");
     expect(html).not.toContain("Google Ads account connection");
   });
 });
