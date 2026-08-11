@@ -19,6 +19,8 @@ import {
 import {
   EMPTY_DIRECT_MAIL_METRICS,
   getDirectMailMetrics,
+  getRiversidePreviewDirectMailMetrics,
+  isDirectMailMetricsEmpty,
 } from "@/lib/analytics/direct-mail";
 import {
   aggregateByDate,
@@ -485,7 +487,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const directMailShopNames = scopeAll
     ? shops.map((shop) => shop.name)
     : [activeShopName];
-  const directMail = await readAnalyticsSection(
+  const directMailResult = await readAnalyticsSection(
     "direct mail",
     () =>
       getDirectMailMetrics({
@@ -496,6 +498,13 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     EMPTY_DIRECT_MAIL_METRICS,
     readWarnings
   );
+  const directMail =
+    isRiversideDemoContext &&
+    !scopeAll &&
+    activeShopId &&
+    isDirectMailMetricsEmpty(directMailResult)
+      ? getRiversidePreviewDirectMailMetrics({ shopId: activeShopId, from })
+      : directMailResult;
 
   // Header status reflects the most recent sync across ALL sources, not just
   // organic. A shop with only GA4/GSC/GBP linked is "Last synced", not "Awaiting".

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getDirectMailMetrics, summarizeDirectMailMetrics } from "../direct-mail";
+import {
+  getDirectMailMetrics,
+  getRiversidePreviewDirectMailMetrics,
+  isDirectMailMetricsEmpty,
+  summarizeDirectMailMetrics,
+} from "../direct-mail";
 
 describe("summarizeDirectMailMetrics", () => {
   it("summarizes shop-scoped send volume, households, pieces, and recent activity", () => {
@@ -320,6 +325,24 @@ describe("summarizeDirectMailMetrics", () => {
     });
     expect(JSON.stringify(out)).not.toMatch(
       /\b(recipient|address|phone|email|household_key)\b|household_a|household_b/i
+    );
+  });
+
+  it("provides non-empty privacy-safe Riverside preview metrics", () => {
+    const out = getRiversidePreviewDirectMailMetrics({
+      shopId: "shop_riverside",
+      from: "2026-08-01",
+      to: "2026-08-05",
+    });
+
+    expect(isDirectMailMetricsEmpty(out)).toBe(false);
+    expect(out.shopIds).toEqual(["shop_riverside"]);
+    expect(out.activity.lettersMailed).toBeGreaterThan(0);
+    expect(out.activity.lettersMailedLifetime).toBeGreaterThan(0);
+    expect(out.results.status).toBe("ready");
+    expect(out.privacy.rawRecipientFieldsIncluded).toBe(false);
+    expect(JSON.stringify(out)).not.toMatch(
+      /\b(recipient|address|phone|email|household_key)\b/i
     );
   });
 });

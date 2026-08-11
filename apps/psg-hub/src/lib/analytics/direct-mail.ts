@@ -242,6 +242,98 @@ export const EMPTY_DIRECT_MAIL_METRICS: DirectMailMetrics = {
   bestPiece: null,
 };
 
+const RIVERSIDE_PREVIEW_DIRECT_MAIL_SYNC_DATE = "2026-08-05";
+
+export function isDirectMailMetricsEmpty(metrics: DirectMailMetrics): boolean {
+  return (
+    metrics.activity.lettersMailedLifetime === 0 &&
+    metrics.sources.sendHistoryRows === 0 &&
+    metrics.sources.productionRows === 0 &&
+    metrics.sources.resultRows === 0
+  );
+}
+
+export function getRiversidePreviewDirectMailMetrics({
+  shopId,
+  from,
+  to = null,
+}: {
+  shopId: string;
+  from: string;
+  to?: string | null;
+}): DirectMailMetrics {
+  return summarizeDirectMailMetrics({
+    shopIds: [shopId],
+    from,
+    to,
+    today: to ?? RIVERSIDE_PREVIEW_DIRECT_MAIL_SYNC_DATE,
+    sendHistoryRows: [
+      {
+        piece_code: "07",
+        piece_variant: "letter",
+        sent_date: "2026-08-05",
+        household_key: "riverside_preview_001",
+        updated_at: `${RIVERSIDE_PREVIEW_DIRECT_MAIL_SYNC_DATE}T14:00:00.000Z`,
+      },
+      {
+        piece_code: "07",
+        piece_variant: "letter",
+        sent_date: "2026-08-05",
+        household_key: "riverside_preview_002",
+        updated_at: `${RIVERSIDE_PREVIEW_DIRECT_MAIL_SYNC_DATE}T14:00:00.000Z`,
+      },
+      {
+        piece_code: "10",
+        piece_variant: "letter",
+        sent_date: "2026-08-04",
+        household_key: "riverside_preview_003",
+        updated_at: `${RIVERSIDE_PREVIEW_DIRECT_MAIL_SYNC_DATE}T14:00:00.000Z`,
+      },
+      {
+        piece_code: "14",
+        piece_variant: "letter",
+        sent_date: "2026-08-01",
+        household_key: "riverside_preview_004",
+        updated_at: `${RIVERSIDE_PREVIEW_DIRECT_MAIL_SYNC_DATE}T14:00:00.000Z`,
+      },
+    ],
+    productionRows: [
+      {
+        piece_type: "postcard",
+        status: "mailed",
+        created_at: "2026-08-03T12:00:00.000Z",
+        updated_at: `${RIVERSIDE_PREVIEW_DIRECT_MAIL_SYNC_DATE}T14:00:00.000Z`,
+      },
+    ],
+    priorRows: [
+      {
+        piece_code: "07",
+        ab_variant: "A",
+        n_sent: 52,
+        n_outcome: 11,
+        outcome_rate: 11 / 52,
+        computed_at: `${RIVERSIDE_PREVIEW_DIRECT_MAIL_SYNC_DATE}T14:00:00.000Z`,
+      },
+      {
+        piece_code: "10",
+        ab_variant: "B",
+        n_sent: 44,
+        n_outcome: 7,
+        outcome_rate: 7 / 44,
+        computed_at: `${RIVERSIDE_PREVIEW_DIRECT_MAIL_SYNC_DATE}T14:00:00.000Z`,
+      },
+    ],
+    repairOrderAmountRows: [
+      { repair_amount_cents: 428_000 },
+      { repair_amount_cents: 386_000 },
+      { repair_amount_cents: 512_000 },
+    ],
+    companyProgramAmountRows: [
+      { quantity: 1, unit_price_cents: 3_200_000 },
+    ],
+  });
+}
+
 export function summarizeDirectMailMetrics({
   shopIds = [],
   from,
