@@ -20,6 +20,8 @@ let mockLocalFalcon: {
 let mockPresenceRow: { metrics: Record<string, unknown> } | null = null;
 let mockGscRows: { date: string; metrics: Record<string, unknown> }[] = [];
 let mockGaRows: { date: string; metrics: Record<string, unknown> }[] = [];
+let mockPaidRows: { date: string; metrics: Record<string, unknown> }[] = [];
+let mockPreviewShop: { id: string; name: string } | null = null;
 const recordBsmPilotEvent = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -66,7 +68,9 @@ vi.mock("@/lib/supabase/service", () => ({
 
 vi.mock("@/lib/shop/context", () => ({
   getActiveShopContext: vi.fn(async () => ({
-    shops: mockActiveShopId ? [{ id: mockActiveShopId }] : [],
+    shops: mockActiveShopId
+      ? [{ id: mockActiveShopId, name: "Tracy's Collision" }]
+      : [],
     activeShopId: mockActiveShopId,
   })),
 }));
@@ -82,8 +86,33 @@ vi.mock("@/lib/local-falcon/store", () => ({
 vi.mock("@/lib/analytics/snapshots", () => ({
   getLatestMonthlySnapshot: vi.fn(async () => mockPresenceRow),
   getSnapshots: vi.fn(async (_service, args: { source: string }) =>
-    args.source === "gsc" ? mockGscRows : mockGaRows,
+    args.source === "gsc"
+      ? mockGscRows
+      : args.source === "google_ads"
+        ? mockPaidRows
+        : mockGaRows,
   ),
+}));
+
+vi.mock("@/components/analytics/charts", () => ({
+  LineChartCard: ({
+    title,
+    caption,
+    ariaLabel,
+  }: {
+    title: string;
+    caption?: string;
+    ariaLabel: string;
+  }) => (
+    <section aria-label={ariaLabel}>
+      <h3>{title}</h3>
+      {caption ? <p>{caption}</p> : null}
+    </section>
+  ),
+}));
+
+vi.mock("@/lib/bsm/riverside-analytics-demo", () => ({
+  getRiversideAnalyticsPreviewShop: vi.fn(async () => mockPreviewShop),
 }));
 
 vi.mock("@/lib/bsm/pilot-events", () => ({
@@ -130,6 +159,8 @@ beforeEach(() => {
   mockPresenceRow = null;
   mockGscRows = [];
   mockGaRows = [];
+  mockPaidRows = [];
+  mockPreviewShop = null;
   recordBsmPilotEvent.mockReset();
 });
 
@@ -157,8 +188,16 @@ describe("DashboardPage first-login trust state", () => {
     expect(html).toContain("Waiting on profile data");
     expect(html).toContain("Search performance");
     expect(html).toContain("Waiting on search data");
-    expect(html).toContain("Google Analytics property connection");
+    expect(html).toContain("Google Analytics");
     expect(html).toContain("Not connected yet");
+    expect(html).toContain("Google Ads");
+    expect(html).toContain("Open Google Ads connection");
+    expect(html).toContain("Google Analytics");
+    expect(html).toContain("Open Analytics connection");
+    expect(html).toContain("Search Console");
+    expect(html).toContain("Open Search Console connection");
+    expect(html).toContain("Business Profile");
+    expect(html).toContain("Open Business Profile connection");
     expect(html).toContain("View full analytics");
     expect(html.indexOf("Your first check has not run yet.")).toBeLessThan(
       html.indexOf("Content Items"),
@@ -209,6 +248,15 @@ describe("DashboardPage first-login trust state", () => {
         },
       },
     ];
+    mockPaidRows = [
+      {
+        date: "2026-08-02",
+        metrics: {
+          spend: 1480,
+          conversions: 37,
+        },
+      },
+    ];
 
     const html = renderToStaticMarkup(await DashboardPage());
 
@@ -224,6 +272,30 @@ describe("DashboardPage first-login trust state", () => {
     expect(html).toContain("1,420 search impressions");
     expect(html).toContain("214 sessions");
     expect(html).toContain("177 website users");
+    expect(html).toContain("$1,480 spend");
+    expect(html).toContain("37 paid leads");
+    expect(html).toContain("Website visits trend");
     expect(html).not.toContain("Not started yet");
+  });
+
+  it("shows gated Riverside private preview value without live account data", async () => {
+    mockPreviewShop = { id: "riverside_shop", name: "Riverside Collision" };
+
+    const html = renderToStaticMarkup(await DashboardPage());
+
+    expect(html).toContain("Private preview note");
+    expect(html).toContain("Riverside Collision numbers are seeded demo data");
+    expect(html).toContain("41.8%");
+    expect(html).toContain("4.7 rating");
+    expect(html).toContain("58 clicks");
+    expect(html).toContain("392 sessions");
+    expect(html).toContain("$1,480 spend");
+    expect(html).toContain("37 paid leads");
+    expect(html).toContain("Website visits trend");
+    expect(html).toContain("Private preview demo trend for Riverside Collision");
+    expect(html).toContain("Open Google Ads connection");
+    expect(html).toContain("Open Analytics connection");
+    expect(html).toContain("Open Search Console connection");
+    expect(html).toContain("Open Business Profile connection");
   });
 });
