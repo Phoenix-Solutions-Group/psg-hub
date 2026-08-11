@@ -154,13 +154,20 @@ export async function PUT(request: Request): Promise<Response> {
     const reviewItemId = payload.reviewItemId as string;
     const versionId = payload.versionId as string;
     const workspace = await getStaffReviewWorkspaceResult(projectId, gate.userId, { actorRole: gate.access.role });
-    const document = workspace.documents.find((entry) => entry.itemId === reviewItemId && entry.versionId === versionId);
-    if (!document) {
+    const client = createServiceClient();
+    const { data: document, error: documentError } = await client
+      .from("bsm_content_review_items")
+      .select("id, current_version_id")
+      .eq("id", reviewItemId)
+      .eq("project_id", workspace.project.id)
+      .eq("shop_id", workspace.project.shopId)
+      .maybeSingle();
+    if (documentError || !document || document.current_version_id !== versionId) {
       return NextResponse.json({ error: "This document version does not belong to the selected workspace." }, { status: 404 });
     }
     const result = await processReviewWorkspaceUploadedVersion(
       { projectId, shopId: workspace.project.shopId, reviewItemId, versionId },
-      { client: createServiceClient() },
+      { client },
     );
     return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
