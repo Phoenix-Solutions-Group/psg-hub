@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertNoSupabaseError,
   CLEAN_DEMO_SEED,
+  demoCustomerContentItemRow,
   requiredDemoEnvNames,
   shouldSeedInternalRegressionUser,
 } from "../../../../scripts/seed-superadmin-qa-env.mjs";
@@ -66,10 +67,27 @@ describe("clean BSM demo seed", () => {
     });
     expect(CLEAN_DEMO_SEED.gtm.containerPublicId).toBe("GTM-BSMDEMO");
     expect(CLEAN_DEMO_SEED.yext.entityId).toBe("riverside-collision-san-francisco");
+    expect(CLEAN_DEMO_SEED.customerContent.title).toBe("Riverside Collision July repair tips");
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.previousShopSlug);
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.legacyShopSlug);
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.previousPilotShopSlug);
     expect(CLEAN_DEMO_SEED.shopName).not.toBe(CLEAN_DEMO_SEED.previousPilotShopName);
+  });
+
+  it("seeds a customer-visible Riverside content item for the dashboard content route", () => {
+    const row = demoCustomerContentItemRow({
+      shopId: "shop-riverside",
+      locationId: "location-riverside",
+    });
+
+    expect(row).toMatchObject({
+      shop_id: "shop-riverside",
+      location_id: "location-riverside",
+      type: "blog_post",
+      title: "Riverside Collision July repair tips",
+      status: "pending_review",
+    });
+    expect(row.body).toContain("PSG prepared this customer-facing article");
   });
 
   it("fails loudly when a Supabase cleanup call fails", () => {

@@ -84,6 +84,18 @@ export const CLEAN_DEMO_SEED = {
     accountId: "demo-riverside-yext",
     entityId: "riverside-collision-san-francisco",
   },
+  customerContent: {
+    title: "Riverside Collision July repair tips",
+    type: "blog_post",
+    status: "pending_review",
+    updatedAt: "2026-08-11T16:00:00.000Z",
+    body:
+      "# Riverside Collision July repair tips\n\n" +
+      "PSG prepared this customer-facing article so Riverside can educate drivers before storm season.\n\n" +
+      "- Check lamps and sensors after any bumper impact\n" +
+      "- Schedule an estimate before small damage spreads\n" +
+      "- Keep photos and claim numbers ready for the repair team",
+  },
 };
 
 export function shouldSeedInternalRegressionUser(env = process.env) {
@@ -960,6 +972,29 @@ async function seedReviewAndApprovalSurfaces({ shopId, locationId, operatorId, s
   );
 }
 
+export function demoCustomerContentItemRow({ shopId, locationId }) {
+  return {
+    shop_id: shopId,
+    location_id: locationId,
+    type: CLEAN_DEMO_SEED.customerContent.type,
+    title: CLEAN_DEMO_SEED.customerContent.title,
+    body: CLEAN_DEMO_SEED.customerContent.body,
+    status: CLEAN_DEMO_SEED.customerContent.status,
+    updated_at: CLEAN_DEMO_SEED.customerContent.updatedAt,
+  };
+}
+
+async function seedCustomerContentSurface({ shopId, locationId }) {
+  const row = demoCustomerContentItemRow({ shopId, locationId });
+  await upsertByLookup({
+    table: "content_items",
+    filters: { shop_id: shopId, title: CLEAN_DEMO_SEED.customerContent.title },
+    insert: row,
+    update: row,
+    label: "Riverside customer content item",
+  });
+}
+
 async function seedOpsAndIntegrationSurfaces({ shopId, company, operatorId }) {
   await upsertSingleByConflict({
     table: "gtm_container_statuses",
@@ -1247,6 +1282,10 @@ async function seedSurveySurface(company) {
 async function seedFullDemoAccountSurfaces({ shop, operator, shopUser, company }) {
   const location = await seedPrimaryLocation(shop.id);
   await seedBillingAndInvoices(shop.id);
+  await seedCustomerContentSurface({
+    shopId: shop.id,
+    locationId: location.id,
+  });
   await seedGoogleAdsSurface({
     shopId: shop.id,
     operatorId: operator.id,
