@@ -184,6 +184,22 @@ async function seedCoreRows() {
     label: "Riverside thank-you product",
   });
 
+  const location = await upsertByLookup({
+    table: "locations",
+    filters: { shop_id: shop.id, slug: "primary" },
+    insert: {
+      shop_id: shop.id,
+      name: RIVERSIDE.clientName,
+      slug: "primary",
+      is_primary: true,
+    },
+    update: {
+      name: RIVERSIDE.clientName,
+      is_primary: true,
+    },
+    label: "Riverside primary location",
+  });
+
   await upsertByLookup({
     table: "company_programs",
     filters: { company_id: company.id, product_id: product.id },
@@ -234,7 +250,44 @@ async function seedCoreRows() {
     label: "Maria Alvarez repair customer",
   });
 
-  return { shop, company, product, customer };
+  return { shop, company, product, customer, location };
+}
+
+async function seedContent({ shop, location }) {
+  await upsertByLookup({
+    table: "content_items",
+    filters: {
+      shop_id: shop.id,
+      title: "Riverside Collision July repair tips",
+    },
+    insert: {
+      shop_id: shop.id,
+      location_id: location.id,
+      type: "blog_post",
+      title: "Riverside Collision July repair tips",
+      body:
+        "# Riverside Collision July repair tips\n\n" +
+        "PSG prepared this customer-facing article so Riverside can educate drivers before storm season.\n\n" +
+        "- Check lamps and sensors after any bumper impact\n" +
+        "- Schedule an estimate before small damage spreads\n" +
+        "- Keep photos and claim numbers ready for the repair team",
+      status: "pending_review",
+      updated_at: "2026-07-12T16:00:00.000Z",
+    },
+    update: {
+      location_id: location.id,
+      type: "blog_post",
+      body:
+        "# Riverside Collision July repair tips\n\n" +
+        "PSG prepared this customer-facing article so Riverside can educate drivers before storm season.\n\n" +
+        "- Check lamps and sensors after any bumper impact\n" +
+        "- Schedule an estimate before small damage spreads\n" +
+        "- Keep photos and claim numbers ready for the repair team",
+      status: "pending_review",
+      updated_at: "2026-07-12T16:00:00.000Z",
+    },
+    label: "Riverside customer content item",
+  });
 }
 
 async function seedProduction({ company, product, customer }) {
@@ -553,6 +606,7 @@ async function main() {
 
   const core = await seedCoreRows();
   await seedProduction(core);
+  await seedContent(core);
   await seedCcc(core);
   await seedAccessAudit(core);
 
@@ -560,6 +614,7 @@ async function main() {
   console.log("Recapture:");
   console.log("- /ops/production");
   console.log("- /ops/admin/integrations/ccc");
+  console.log("- /dashboard/content");
   console.log(`- ${PROOF_URL}`);
   console.log("- /ops/production/artwork (deployment status only)");
 }
