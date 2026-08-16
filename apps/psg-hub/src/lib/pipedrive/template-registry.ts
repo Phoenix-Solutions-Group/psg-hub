@@ -20,6 +20,7 @@
 
 import type { OnboardingPhase, OnboardingRole } from "./onboarding-template";
 import { WHM_ONBOARDING_TEMPLATE } from "./onboarding-template";
+import { LANDING_PAGE_TEMPLATE } from "./landing-page-template";
 import { NEW_WEBSITE_BUILD_TEMPLATE } from "./web-build-template";
 import {
   provisionOnboardingBoard,
@@ -48,6 +49,8 @@ export interface OneTimeTemplateDef {
   readonly matchSkus: readonly string[];
   /** Optional product-NAME patterns (fallback when the SKU is absent on the line item). */
   readonly matchNames?: readonly RegExp[];
+  /** Product-NAME patterns that disqualify this template even when a shared SKU matches. */
+  readonly rejectNames?: readonly RegExp[];
   /** The phase → task graph to build (same shape onboarding uses). */
   readonly phases: readonly OnboardingPhase[];
   /** Env var naming the Pipedrive board id for this template. */
@@ -83,9 +86,28 @@ export const WEB_BUILD_TEMPLATE_DEF: OneTimeTemplateDef = {
   titlePrefix: "New Website Build",
   matchSkus: ["PSG_P_026"],
   matchNames: [/\bwebsite\b[^.]*\b(design|build)\b/i],
+  rejectNames: [/\blanding\s+page\b/i, /\bcampaign\s+page\b/i],
   phases: NEW_WEBSITE_BUILD_TEMPLATE,
   boardIdEnv: "PIPEDRIVE_WEBBUILD_BOARD_ID",
   phaseIdEnv: "PIPEDRIVE_WEBBUILD_PHASE_ID",
+};
+
+/**
+ * Landing Page / Campaign Page (PSG-655). CTO sign-off on PSG-670 confirmed this is a
+ * one-page delivery variant of `PSG_P_026` rather than a separate catalog SKU, so the
+ * live selector intentionally keys it by explicit product name text. The full web-build
+ * def rejects those same names to avoid spawning both templates from one landing-page
+ * line item that carries the shared anchor SKU.
+ */
+export const LANDING_PAGE_TEMPLATE_DEF: OneTimeTemplateDef = {
+  id: "landing-page",
+  family: "Web — Landing Page / Campaign Page",
+  titlePrefix: "Landing Page",
+  matchSkus: [],
+  matchNames: [/\blanding\s+page\b/i, /\bcampaign\s+page\b/i],
+  phases: LANDING_PAGE_TEMPLATE,
+  boardIdEnv: "PIPEDRIVE_LANDING_PAGE_BOARD_ID",
+  phaseIdEnv: "PIPEDRIVE_LANDING_PAGE_PHASE_ID",
 };
 
 /**
@@ -95,6 +117,7 @@ export const WEB_BUILD_TEMPLATE_DEF: OneTimeTemplateDef = {
  */
 export const ONE_TIME_TEMPLATE_REGISTRY: readonly OneTimeTemplateDef[] = [
   WEB_BUILD_TEMPLATE_DEF,
+  LANDING_PAGE_TEMPLATE_DEF,
 ];
 
 /** True when a def's SKU/name keys match at least one of the deal's line items. */
@@ -104,9 +127,10 @@ function defMatchesProducts(
 ): boolean {
   const skus = new Set(def.matchSkus.map((s) => s.trim().toUpperCase()));
   for (const p of products) {
+    const name = (p.name ?? "").trim();
+    if (name !== "" && def.rejectNames?.some((re) => re.test(name))) continue;
     const sku = (p.sku ?? "").trim().toUpperCase();
     if (sku !== "" && skus.has(sku)) return true;
-    const name = (p.name ?? "").trim();
     if (name !== "" && def.matchNames?.some((re) => re.test(name))) return true;
   }
   return false;

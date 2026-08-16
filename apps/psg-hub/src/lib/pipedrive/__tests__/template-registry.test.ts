@@ -4,6 +4,7 @@ import {
   selectTemplates,
   provisionForDeal,
   WEB_BUILD_TEMPLATE_DEF,
+  LANDING_PAGE_TEMPLATE_DEF,
   ONBOARDING_TEMPLATE_DEF,
   ONE_TIME_TEMPLATE_REGISTRY,
   type OneTimeTemplateDef,
@@ -16,6 +17,7 @@ import {
   type WonDeal,
 } from "../projects";
 import { WHM_ONBOARDING_TEMPLATE, templateTaskCount } from "../onboarding-template";
+import { LANDING_PAGE_TEMPLATE } from "../landing-page-template";
 import { NEW_WEBSITE_BUILD_TEMPLATE } from "../web-build-template";
 
 const DEAL: WonDeal = {
@@ -65,6 +67,11 @@ const webBuildProduct: DealProduct = {
   sku: "PSG_P_026",
   productId: 26,
 };
+const landingPageProduct: DealProduct = {
+  name: "Landing Page / Campaign Page",
+  sku: "PSG_P_026",
+  productId: 26,
+};
 
 // A SECOND distinct delivery template, used to exercise multi-template routing without
 // shipping an un-signed-off template into the live registry (PSG-678). Reuses the WHM
@@ -108,6 +115,17 @@ describe("selectTemplates", () => {
       TWO_TEMPLATE_REGISTRY,
     );
     expect(got).toEqual([WEB_BUILD_TEMPLATE_DEF, SECOND_TEMPLATE_DEF]);
+  });
+
+  it("maps the signed-off landing-page variant without also matching the full website board", () => {
+    expect(selectTemplates(DEAL, [landingPageProduct])).toEqual([LANDING_PAGE_TEMPLATE_DEF]);
+  });
+
+  it("maps a full website build plus landing page to two distinct live templates", () => {
+    expect(selectTemplates(DEAL, [webBuildProduct, landingPageProduct])).toEqual([
+      WEB_BUILD_TEMPLATE_DEF,
+      LANDING_PAGE_TEMPLATE_DEF,
+    ]);
   });
 
   it("dedupes: two line items matching the SAME template yield ONE entry", () => {
@@ -174,6 +192,10 @@ describe("selectTemplate (back-compat shim)", () => {
 
   it("onboarding is NOT product-matchable (it is the implicit default, not in the registry)", () => {
     expect(ONE_TIME_TEMPLATE_REGISTRY).not.toContain(ONBOARDING_TEMPLATE_DEF);
+    expect(ONE_TIME_TEMPLATE_REGISTRY).toEqual([
+      WEB_BUILD_TEMPLATE_DEF,
+      LANDING_PAGE_TEMPLATE_DEF,
+    ]);
     expect(ONBOARDING_TEMPLATE_DEF.matchSkus).toEqual([]);
   });
 });
@@ -269,6 +291,36 @@ describe("provisionForDeal — single template + fallback (no regression)", () =
     );
   });
 
+  it("provisions the landing-page board with its own title, phases, tasks, and env override", async () => {
+    const { client, createProject } = fakeClient([landingPageProduct]);
+    const summary = await provisionForDeal({
+      client,
+      deal: DEAL,
+      defaultBoardId: 3,
+      defaultPhaseId: 9,
+      env: {
+        PIPEDRIVE_LANDING_PAGE_BOARD_ID: "177",
+        PIPEDRIVE_LANDING_PAGE_PHASE_ID: "188",
+      },
+    });
+
+    expect(summary.projects).toHaveLength(1);
+    expect(summary.templateIds).toEqual(["landing-page"]);
+    expect(summary.matchedTemplates).toBe(true);
+
+    const prov = summary.projects[0]!;
+    expect(prov.templateId).toBe("landing-page");
+    expect(prov.phaseCount).toBe(LANDING_PAGE_TEMPLATE.length);
+    expect(prov.taskCount).toBe(templateTaskCount(LANDING_PAGE_TEMPLATE));
+    expect(createProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Landing Page — Riverside Auto Body LLC (deal 5150)",
+        board_id: 177,
+        phase_id: 188,
+      }),
+    );
+  });
+
   it("uses injected products and does NOT call listDealProducts", async () => {
     const { client, listDealProducts } = fakeClient([]); // client would return [] if called
     const summary = await provisionForDeal({
@@ -285,6 +337,41 @@ describe("provisionForDeal — single template + fallback (no regression)", () =
 });
 
 describe("provisionForDeal — multi-template (PSG-678)", () => {
+  it("PSG-2814: Website Build + Landing Page → 2 live delivery projects; no duplicate web-build match", async () => {
+    const { client, createProject } = fakeClient();
+    const summary = await provisionForDeal({
+      client,
+      deal: DEAL,
+      defaultBoardId: 3,
+      defaultPhaseId: 9,
+      products: [webBuildProduct, landingPageProduct, addOnProduct],
+      env: {
+        PIPEDRIVE_WEBBUILD_BOARD_ID: "41",
+        PIPEDRIVE_WEBBUILD_PHASE_ID: "42",
+        PIPEDRIVE_LANDING_PAGE_BOARD_ID: "61",
+        PIPEDRIVE_LANDING_PAGE_PHASE_ID: "62",
+      },
+    });
+
+    expect(summary.projects).toHaveLength(2);
+    expect(summary.templateIds).toEqual(["new-website-build", "landing-page"]);
+    expect(createProject).toHaveBeenCalledTimes(2);
+    expect(createProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "New Website Build — Riverside Auto Body LLC (deal 5150)",
+        board_id: 41,
+        phase_id: 42,
+      }),
+    );
+    expect(createProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Landing Page — Riverside Auto Body LLC (deal 5150)",
+        board_id: 61,
+        phase_id: 62,
+      }),
+    );
+  });
+
   it("AC-1: 2 distinct delivery templates → 2 projects; add-ons spawn no extra project", async () => {
     const { client, createProject } = fakeClient();
     const summary = await provisionForDeal({
