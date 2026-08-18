@@ -1,5 +1,9 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { getActiveShopContext } from "@/lib/shop/context";
+import { getRiversideAnalyticsPreviewShop } from "@/lib/bsm/riverside-analytics-demo";
 import { Badge } from "@/components/ui/badge";
 import { ContentPreview } from "@/components/dashboard/content-preview";
 import { ApprovalActions } from "@/components/dashboard/approval-actions";
@@ -19,12 +23,37 @@ export default async function ContentDetailPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  const service = createServiceClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const { data: item } = await supabase
+  const { shops, activeShopId } = user
+    ? await getActiveShopContext(user.id)
+    : { shops: [], activeShopId: null };
+  const activeShopName =
+    shops.find((shop) => shop.id === activeShopId)?.name ?? null;
+  const requestHost = (await headers()).get("host");
+  const previewShop = user
+    ? await getRiversideAnalyticsPreviewShop(service, {
+        userEmail: user.email,
+        activeShopName,
+        requestHost,
+      })
+    : null;
+  const effectiveShopId = previewShop?.id ?? activeShopId;
+  const contentReader = previewShop ? service : supabase;
+
+  let query = contentReader
     .from("content_items")
     .select("*, content_type:type")
-    .eq("id", id)
-    .single();
+    .eq("id", id);
+
+  if (effectiveShopId) {
+    query = query.eq("shop_id", effectiveShopId);
+  }
+
+  const { data: item } = await query.single();
 
   if (!item) {
     notFound();

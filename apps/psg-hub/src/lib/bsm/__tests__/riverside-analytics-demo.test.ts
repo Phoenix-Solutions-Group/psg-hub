@@ -83,6 +83,17 @@ describe("Riverside Analytics preview demo fallback", () => {
     ).toBe(true);
   });
 
+  it("activates on the board demo host for configured demo reviewers", () => {
+    expect(
+      shouldUseRiversideAnalyticsPreviewFallback({
+        userEmail: "nick@phoenixsolutionsgroup.net",
+        activeShopName: "Tedesco Auto Body",
+        requestHost: "hub.psgweb.me",
+        env: { VERCEL_ENV: "production" },
+      })
+    ).toBe(true);
+  });
+
   it("does not activate outside Vercel previews", () => {
     expect(
       shouldUseRiversideAnalyticsPreviewFallback({

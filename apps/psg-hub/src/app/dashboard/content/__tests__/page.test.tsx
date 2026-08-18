@@ -15,8 +15,7 @@ let lastContentShopId: string | null = null;
 
 vi.mock("next/headers", () => ({
   headers: vi.fn(async () => ({
-    get: (name: string) =>
-      name === "host" ? "psg-private-preview.vercel.app" : null,
+    get: (name: string) => (name === "host" ? "hub.psgweb.me" : null),
   })),
 }));
 
