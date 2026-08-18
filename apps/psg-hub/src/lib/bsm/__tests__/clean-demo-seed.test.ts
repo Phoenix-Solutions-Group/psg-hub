@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertNoSupabaseError,
+  assertRequiredRiversideSeedTablesExist,
+  buildAggregateDerivedAnalyticsRows,
+  buildAggregateDerivedDirectMailPrior,
   CLEAN_DEMO_SEED,
+  deriveGoogleAdsBenchmarkMetrics,
+  REQUIRED_RIVERSIDE_PRODUCTION_TABLES,
   demoCustomerContentItemRow,
   requiredDemoEnvNames,
   shouldSeedInternalRegressionUser,
@@ -43,21 +48,7 @@ describe("clean BSM demo seed", () => {
     expect(CLEAN_DEMO_SEED.shopUserDisplayName).toBe("BSM Demo User");
     expect(CLEAN_DEMO_SEED.shopName).toBe("Riverside Collision");
     expect(CLEAN_DEMO_SEED.packageTier).toBe("performance");
-    expect(CLEAN_DEMO_SEED.riversideAnalytics).toMatchObject({
-      organicTraffic: 184,
-      organicKeywords: 57,
-      authorityScore: 41,
-      backlinks: 142,
-      adSpend: 136,
-      adConversions: 5,
-      sessions: 96,
-      searchClicks: 34,
-      profileImpressions: 710,
-    });
     expect(CLEAN_DEMO_SEED.directMail).toEqual({
-      sends: 45,
-      priorSent: 72,
-      priorOutcomes: 11,
       segmentKey: "demo-riverside-direct-mail",
     });
     expect(CLEAN_DEMO_SEED.googleAds).toMatchObject({
@@ -72,6 +63,157 @@ describe("clean BSM demo seed", () => {
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.legacyShopSlug);
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.previousPilotShopSlug);
     expect(CLEAN_DEMO_SEED.shopName).not.toBe(CLEAN_DEMO_SEED.previousPilotShopName);
+  });
+
+  it("builds Riverside analytics rows from production aggregate snapshots", () => {
+    const aggregateRows = [
+      {
+        shop_id: "source-shop-1",
+        source: "semrush",
+        date: "2026-08-01",
+        metrics: {
+          organic_traffic: 100,
+          organic_keywords: 40,
+          organic_traffic_cost: 500,
+          backlinks: 90,
+          authority_score: 30,
+        },
+      },
+      {
+        shop_id: "source-shop-2",
+        source: "semrush",
+        date: "2026-08-02",
+        metrics: {
+          organic_traffic: 200,
+          organic_keywords: 60,
+          organic_traffic_cost: 700,
+          backlinks: 110,
+          authority_score: 40,
+        },
+      },
+      {
+        shop_id: "source-shop-1",
+        source: "google_ads",
+        date: "2026-08-01",
+        metrics: { spend: 100, clicks: 20, impressions: 1000, conversions: 2, cpl: 50, cost_micros: 100_000_000 },
+      },
+      {
+        shop_id: "source-shop-2",
+        source: "google_ads",
+        date: "2026-08-02",
+        metrics: { spend: 200, clicks: 40, impressions: 3000, conversions: 4, cpl: 50, cost_micros: 200_000_000 },
+      },
+      {
+        shop_id: "source-shop-1",
+        source: "ga4",
+        date: "2026-08-01",
+        metrics: {
+          sessions: 80,
+          total_users: 60,
+          active_users: 58,
+          new_users: 20,
+          engaged_sessions: 50,
+          key_events: 5,
+          engagement_rate: 0.7,
+        },
+      },
+      {
+        shop_id: "source-shop-1",
+        source: "gsc",
+        date: "2026-08-01",
+        metrics: { clicks: 30, impressions: 1500, ctr: 0.02, position: 8 },
+      },
+      {
+        shop_id: "source-shop-1",
+        source: "gbp",
+        date: "2026-08-01",
+        metrics: {
+          impressions_desktop_maps: 10,
+          impressions_desktop_search: 20,
+          impressions_mobile_maps: 30,
+          impressions_mobile_search: 40,
+          impressions_total: 100,
+          website_clicks: 6,
+          call_clicks: 4,
+          direction_requests: 3,
+          conversations: 1,
+        },
+      },
+    ];
+
+    const rows = buildAggregateDerivedAnalyticsRows({
+      shopId: "riverside-shop",
+      aggregateRows,
+      dates: ["2026-08-17", "2026-08-18"],
+    });
+
+    expect(rows).toHaveLength(10);
+    expect(rows.find((row) => row.source === "semrush")).toMatchObject({
+      shop_id: "riverside-shop",
+      date: "2026-08-17",
+      period: "daily",
+      metrics: {
+        organic_traffic: 150,
+        organic_keywords: 50,
+        derived_from: "production_analytics_snapshots_aggregate",
+        source_row_count: 2,
+        source_shop_count: 2,
+        latest_source_date: "2026-08-02",
+      },
+    });
+    expect(deriveGoogleAdsBenchmarkMetrics(aggregateRows)).toMatchObject({
+      clicks: 30,
+      impressions: 2000,
+      conversions: 3,
+      cost_micros: 150_000_000,
+      derived_from: "production_analytics_snapshots_google_ads_aggregate",
+    });
+  });
+
+  it("builds Riverside direct-mail priors from aggregate rows instead of invented counts", () => {
+    const row = buildAggregateDerivedDirectMailPrior({
+      company: { id: "riverside-company" },
+      aggregateRows: [
+        { company_id: "company-1", n_sent: 100, n_outcome: 10 },
+        { company_id: "company-2", n_sent: 300, n_outcome: 60 },
+      ],
+    });
+
+    expect(row).toMatchObject({
+      company_id: "riverside-company",
+      shop_name: "Riverside Collision",
+      segment_key: "demo-riverside-direct-mail",
+      n_sent: 200,
+      n_outcome: 35,
+      outcome_rate: 70 / 400,
+      method_ref: "seed-superadmin-qa-env:riverside-aggregate-derived",
+    });
+  });
+
+  it("fails preflight before writes when a required production table is missing", async () => {
+    const missingTable = "mail_send_priors";
+    const client = {
+      from(table: string) {
+        return {
+          select() {
+            return {
+              limit() {
+                return Promise.resolve(
+                  table === missingTable
+                    ? { error: { message: "relation does not exist" } }
+                    : { error: null }
+                );
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await expect(assertRequiredRiversideSeedTablesExist(client)).rejects.toThrow(
+      `Required production table ${missingTable} is unavailable`
+    );
+    expect(REQUIRED_RIVERSIDE_PRODUCTION_TABLES).toContain("survey_responses");
   });
 
   it("seeds a customer-visible Riverside content item for the dashboard content route", () => {

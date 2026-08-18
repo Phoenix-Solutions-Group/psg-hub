@@ -29,6 +29,57 @@ const internalEmail = includeInternalRegressionUser ? process.env.DEMO_INTERNAL_
 const internalPassword = includeInternalRegressionUser ? process.env.DEMO_INTERNAL_PASSWORD : undefined;
 const directMailOnly = process.env.SEED_RIVERSIDE_DIRECT_MAIL_ONLY === "1";
 
+export const REQUIRED_RIVERSIDE_PRODUCTION_TABLES = [
+  "analytics_snapshots",
+  "app_user_roles",
+  "bsm_content_review_items",
+  "clients",
+  "locations",
+  "mail_send_history",
+  "mail_send_priors",
+  "module_access_grants",
+  "modules",
+  "profiles",
+  "shops",
+  "shop_users",
+  "subscriptions",
+  "survey_responses",
+];
+
+const DEMO_DERIVED_METHOD_REF = "seed-superadmin-qa-env:riverside-aggregate-derived";
+const ANALYTICS_SOURCES = ["semrush", "google_ads", "ga4", "gsc", "gbp"];
+const ANALYTICS_NUMERIC_KEYS = {
+  semrush: [
+    "organic_traffic",
+    "organic_keywords",
+    "organic_traffic_cost",
+    "backlinks",
+    "authority_score",
+  ],
+  google_ads: ["spend", "clicks", "impressions", "conversions", "cpl", "cost_micros"],
+  ga4: [
+    "sessions",
+    "total_users",
+    "active_users",
+    "new_users",
+    "engaged_sessions",
+    "key_events",
+    "engagement_rate",
+  ],
+  gsc: ["clicks", "impressions", "ctr", "position"],
+  gbp: [
+    "impressions_desktop_maps",
+    "impressions_desktop_search",
+    "impressions_mobile_maps",
+    "impressions_mobile_search",
+    "impressions_total",
+    "website_clicks",
+    "call_clicks",
+    "direction_requests",
+    "conversations",
+  ],
+};
+
 export const CLEAN_DEMO_SEED = {
   operatorDisplayName: "BSM Demo Admin",
   shopUserDisplayName: "BSM Demo User",
@@ -47,29 +98,7 @@ export const CLEAN_DEMO_SEED = {
   legacyShopSlug: "qa-superadmin-walkthrough",
   legacyModuleSlug: "qa-superadmin-walkthrough",
   legacyInternalEmail: "qa-internal-staff@psg.test",
-  riversideAnalytics: {
-    organicTraffic: 184,
-    organicKeywords: 57,
-    authorityScore: 41,
-    backlinks: 142,
-    adSpend: 136,
-    adClicks: 42,
-    adImpressions: 1820,
-    adConversions: 5,
-    sessions: 96,
-    users: 71,
-    keyEvents: 8,
-    searchClicks: 34,
-    searchImpressions: 1640,
-    calls: 6,
-    websiteClicks: 11,
-    directionRequests: 4,
-    profileImpressions: 710,
-  },
   directMail: {
-    sends: 45,
-    priorSent: 72,
-    priorOutcomes: 11,
     segmentKey: "demo-riverside-direct-mail",
   },
   googleAds: {
@@ -121,6 +150,64 @@ let supabase;
 export function assertNoSupabaseError(result, label) {
   if (result.error) throw new Error(`${label} failed: ${result.error.message}`);
   return result;
+}
+
+function requireTableExistsError(table, error) {
+  return `Required production table ${table} is unavailable: ${error.message}`;
+}
+
+export async function assertRequiredRiversideSeedTablesExist(client) {
+  const missing = [];
+  for (const table of REQUIRED_RIVERSIDE_PRODUCTION_TABLES) {
+    const result = await client.from(table).select("*", { count: "exact", head: true }).limit(1);
+    if (result.error) missing.push(requireTableExistsError(table, result.error));
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `Riverside demo seed preflight failed before writing anything.\n${missing.join("\n")}`
+    );
+  }
+}
+
+function isDemoUrl(value) {
+  return typeof value === "string" && value.endsWith(".example");
+}
+
+export async function assertNoRealRiversideCollision(client) {
+  const clientResult = await client
+    .from("clients")
+    .select("id,name,website_url")
+    .eq("name", CLEAN_DEMO_SEED.clientName);
+  if (clientResult.error) {
+    throw new Error(`Riverside client collision preflight failed: ${clientResult.error.message}`);
+  }
+
+  const shopResult = await client
+    .from("shops")
+    .select("id,name,slug,url")
+    .or(`slug.eq.${CLEAN_DEMO_SEED.shopSlug},name.eq.${CLEAN_DEMO_SEED.shopName}`);
+  if (shopResult.error) {
+    throw new Error(`Riverside shop collision preflight failed: ${shopResult.error.message}`);
+  }
+
+  const realClient = (clientResult.data ?? []).find((client) => !isDemoUrl(client.website_url));
+  const realShop = (shopResult.data ?? []).find((shop) => !isDemoUrl(shop.url));
+  if (realClient || realShop) {
+    const collisions = [
+      realClient ? `client ${realClient.name} (${realClient.id})` : null,
+      realShop ? `shop ${realShop.name} / ${realShop.slug} (${realShop.id})` : null,
+    ].filter(Boolean);
+    throw new Error(
+      `Riverside demo seed stopped before writing: ${collisions.join(
+        " and "
+      )} already exists and does not look like the demo .example record.`
+    );
+  }
+}
+
+async function runRiversidePreflight(client) {
+  await assertRequiredRiversideSeedTablesExist(client);
+  await assertNoRealRiversideCollision(client);
 }
 
 function connectSupabase() {
@@ -345,94 +432,94 @@ function trailingDemoDates(days) {
   });
 }
 
-async function seedRiversideAnalytics(shopId) {
-  const dates = trailingDemoDates(30);
-  const latest = CLEAN_DEMO_SEED.riversideAnalytics;
+function numberOrNull(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function roundedMetric(value) {
+  if (Math.abs(value) >= 1000) return Math.round(value);
+  if (Math.abs(value) >= 10) return Math.round(value * 10) / 10;
+  return Math.round(value * 1000) / 1000;
+}
+
+export function deriveAnalyticsMetricAverages(rows, sources = ANALYTICS_SOURCES) {
+  const grouped = new Map(sources.map((source) => [source, []]));
+  for (const row of rows ?? []) {
+    if (!grouped.has(row.source) || !row.metrics || typeof row.metrics !== "object") continue;
+    grouped.get(row.source).push(row);
+  }
+
+  const derived = {};
+  for (const source of sources) {
+    const sourceRows = grouped.get(source) ?? [];
+    const keys = ANALYTICS_NUMERIC_KEYS[source] ?? [];
+    const metrics = {};
+    for (const key of keys) {
+      const values = sourceRows
+        .map((row) => numberOrNull(row.metrics[key]))
+        .filter((value) => value !== null);
+      if (values.length > 0) {
+        metrics[key] = roundedMetric(values.reduce((sum, value) => sum + value, 0) / values.length);
+      }
+    }
+    if (Object.keys(metrics).length === 0) {
+      throw new Error(
+        `Riverside demo seed cannot derive ${source} metrics because no aggregate numeric data exists in analytics_snapshots.`
+      );
+    }
+    derived[source] = {
+      metrics,
+      sourceRowCount: sourceRows.length,
+      sourceShopCount: new Set(sourceRows.map((row) => row.shop_id).filter(Boolean)).size,
+      latestSourceDate: sourceRows
+        .map((row) => row.date)
+        .filter(Boolean)
+        .sort()
+        .at(-1),
+    };
+  }
+  return derived;
+}
+
+export function buildAggregateDerivedAnalyticsRows({ shopId, aggregateRows, dates = trailingDemoDates(30) }) {
+  const averages = deriveAnalyticsMetricAverages(aggregateRows);
   const syncedAt = `${dates.at(-1)}T12:00:00Z`;
-  const rows = dates.flatMap((date, index) => {
-    const remainingDays = dates.length - 1 - index;
-    const adSpend = latest.adSpend - remainingDays * 2;
-    const adConversions = Math.max(1, latest.adConversions - Math.floor(remainingDays / 8));
-    const searchImpressions = latest.searchImpressions - remainingDays * 18;
-    return [
-      {
-        shop_id: shopId,
-        source: "semrush",
-        date,
-        period: "daily",
-        synced_at: syncedAt,
-        metrics: {
-          organic_traffic: latest.organicTraffic - remainingDays,
-          organic_keywords: latest.organicKeywords - remainingDays,
-          organic_traffic_cost: 580 + index * 11,
-          backlinks: latest.backlinks - remainingDays,
-          authority_score: latest.authorityScore,
-        },
+  return dates.flatMap((date) =>
+    ANALYTICS_SOURCES.map((source) => ({
+      shop_id: shopId,
+      source,
+      date,
+      period: "daily",
+      synced_at: syncedAt,
+      metrics: {
+        ...averages[source].metrics,
+        demo_label: "Riverside board demo",
+        derived_from: "production_analytics_snapshots_aggregate",
+        source_row_count: averages[source].sourceRowCount,
+        source_shop_count: averages[source].sourceShopCount,
+        latest_source_date: averages[source].latestSourceDate,
       },
-      {
-        shop_id: shopId,
-        source: "google_ads",
-        date,
-        period: "daily",
-        synced_at: syncedAt,
-        metrics: {
-          spend: adSpend,
-          clicks: latest.adClicks - Math.floor(remainingDays / 2),
-          impressions: latest.adImpressions - remainingDays * 24,
-          conversions: adConversions,
-          cpl: adSpend / adConversions,
-          cost_micros: adSpend * 1_000_000,
-          conversion_tracking_verified: true,
-        },
-      },
-      {
-        shop_id: shopId,
-        source: "ga4",
-        date,
-        period: "daily",
-        synced_at: syncedAt,
-        metrics: {
-          sessions: latest.sessions - remainingDays,
-          total_users: latest.users - remainingDays,
-          active_users: latest.users - Math.floor(remainingDays / 2),
-          new_users: 18 + (index % 7),
-          engaged_sessions: latest.sessions - remainingDays - 14,
-          key_events: latest.keyEvents - Math.floor(remainingDays / 8),
-          engagement_rate: 0.71,
-        },
-      },
-      {
-        shop_id: shopId,
-        source: "gsc",
-        date,
-        period: "daily",
-        synced_at: syncedAt,
-        metrics: {
-          clicks: latest.searchClicks - Math.floor(remainingDays / 3),
-          impressions: searchImpressions,
-          ctr: (latest.searchClicks - Math.floor(remainingDays / 3)) / searchImpressions,
-          position: 7.8,
-        },
-      },
-      {
-        shop_id: shopId,
-        source: "gbp",
-        date,
-        period: "daily",
-        synced_at: syncedAt,
-        metrics: {
-          impressions_desktop_maps: 88 + index,
-          impressions_desktop_search: 126 + index * 2,
-          impressions_mobile_maps: 164 + index * 2,
-          impressions_mobile_search: 226 + index * 3,
-          impressions_total: latest.profileImpressions - remainingDays * 6,
-          website_clicks: latest.websiteClicks - Math.floor(remainingDays / 8),
-          call_clicks: latest.calls - Math.floor(remainingDays / 10),
-          direction_requests: latest.directionRequests - Math.floor(remainingDays / 12),
-          conversations: 1 + (index % 2),
-        },
-      },
-    ];
+    }))
+  );
+}
+
+async function fetchAggregateAnalyticsRows(shopId) {
+  const { data, error } = await supabase
+    .from("analytics_snapshots")
+    .select("shop_id,source,date,metrics")
+    .in("source", ANALYTICS_SOURCES)
+    .neq("shop_id", shopId)
+    .order("date", { ascending: false })
+    .limit(5000);
+  if (error) throw new Error(`Riverside aggregate analytics lookup failed: ${error.message}`);
+  return data ?? [];
+}
+
+async function seedRiversideAnalytics(shopId) {
+  const rows = buildAggregateDerivedAnalyticsRows({
+    shopId,
+    aggregateRows: await fetchAggregateAnalyticsRows(shopId),
   });
 
   const { error: deleteDemoMetricsError } = await supabase
@@ -450,6 +537,67 @@ async function seedRiversideAnalytics(shopId) {
   if (error) throw new Error(`Riverside analytics seed failed: ${error.message}`);
 }
 
+export function buildAggregateDerivedDirectMailPrior({ company, aggregateRows }) {
+  const rows = (aggregateRows ?? []).filter((row) => {
+    if (row.company_id === company.id) return false;
+    const sent = Number(row.n_sent);
+    const outcomes = Number(row.n_outcome);
+    return Number.isFinite(sent) && sent > 0 && Number.isFinite(outcomes);
+  });
+  if (rows.length === 0) {
+    throw new Error(
+      "Riverside demo seed cannot derive direct-mail priors because mail_send_priors has no aggregate rows with sends."
+    );
+  }
+
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.sent += Number(row.n_sent);
+      acc.outcomes += Number(row.n_outcome);
+      return acc;
+    },
+    { sent: 0, outcomes: 0 }
+  );
+
+  return {
+    company_id: company.id,
+    shop_name: CLEAN_DEMO_SEED.shopName,
+    segment_key: CLEAN_DEMO_SEED.directMail.segmentKey,
+    piece_code: "07",
+    trigger: "survey_followup_warranty",
+    ab_variant: "A",
+    n_sent: Math.round(totals.sent / rows.length),
+    n_outcome: Math.round(totals.outcomes / rows.length),
+    outcome_rate: totals.sent > 0 ? totals.outcomes / totals.sent : 0,
+    method_ref: DEMO_DERIVED_METHOD_REF,
+  };
+}
+
+async function fetchAggregateDirectMailPriors() {
+  const { data, error } = await supabase
+    .from("mail_send_priors")
+    .select("company_id,n_sent,n_outcome,outcome_rate,piece_code,trigger,ab_variant")
+    .limit(5000);
+  if (error) throw new Error(`Riverside aggregate direct-mail lookup failed: ${error.message}`);
+  return data ?? [];
+}
+
+export function deriveGoogleAdsBenchmarkMetrics(aggregateRows) {
+  const { google_ads: aggregate } = deriveAnalyticsMetricAverages(aggregateRows, ["google_ads"]);
+  const metrics = aggregate.metrics;
+  return {
+    clicks: Math.max(0, Math.round(numberOrNull(metrics.clicks) ?? 0)),
+    impressions: Math.max(0, Math.round(numberOrNull(metrics.impressions) ?? 0)),
+    conversions: Math.max(0, roundedMetric(numberOrNull(metrics.conversions) ?? 0)),
+    cost_micros: Math.max(0, Math.round(numberOrNull(metrics.cost_micros) ?? 0)),
+    demo_label: "Riverside board demo",
+    derived_from: "production_analytics_snapshots_google_ads_aggregate",
+    source_row_count: aggregate.sourceRowCount,
+    source_shop_count: aggregate.sourceShopCount,
+    latest_source_date: aggregate.latestSourceDate,
+  };
+}
+
 async function seedRiversideDirectMail(shopId) {
   const company = await upsertByLookup({
     table: "companies",
@@ -465,18 +613,6 @@ async function seedRiversideDirectMail(shopId) {
     },
     label: "Riverside direct-mail company",
   });
-  const dates = trailingDemoDates(CLEAN_DEMO_SEED.directMail.sends);
-  const historyRows = dates.map((sentDate, index) => ({
-    company_id: company.id,
-    shop_name: CLEAN_DEMO_SEED.shopName,
-    piece_code: index % 3 === 0 ? "07" : index % 3 === 1 ? "10" : "14",
-    piece_variant: "letter",
-    sent_date: sentDate,
-    recipient_hash: `demo-riverside-recipient-${index}`,
-    household_key: `demo-riverside-household-${index % 36}`,
-    send_ref: `demo:riverside:${sentDate}:${index}`,
-    source: "demo_seed",
-  }));
 
   assertNoSupabaseError(
     await supabase
@@ -495,40 +631,37 @@ async function seedRiversideDirectMail(shopId) {
     "Delete prior Riverside direct-mail demo result priors"
   );
 
+  const aggregatePrior = buildAggregateDerivedDirectMailPrior({
+    company,
+    aggregateRows: await fetchAggregateDirectMailPriors(),
+  });
   assertNoSupabaseError(
     await supabase
-      .from("mail_send_history")
-      .upsert(historyRows, { onConflict: "send_ref" }),
-    "Seed Riverside direct-mail send history"
-  );
-  assertNoSupabaseError(
-    await supabase.from("mail_send_priors").upsert(
-      {
-        company_id: company.id,
-        shop_name: CLEAN_DEMO_SEED.shopName,
-        segment_key: CLEAN_DEMO_SEED.directMail.segmentKey,
-        piece_code: "07",
-        trigger: "survey_followup_warranty",
-        ab_variant: "A",
-        n_sent: CLEAN_DEMO_SEED.directMail.priorSent,
-        n_outcome: CLEAN_DEMO_SEED.directMail.priorOutcomes,
-        outcome_rate:
-          CLEAN_DEMO_SEED.directMail.priorOutcomes /
-          CLEAN_DEMO_SEED.directMail.priorSent,
-        method_ref: "seed-superadmin-qa-env:riverside-direct-mail",
-      },
-      { onConflict: "segment_key,piece_code,ab_variant" }
-    ),
-    "Seed Riverside direct-mail result priors"
+      .from("mail_send_priors")
+      .upsert(aggregatePrior, { onConflict: "segment_key,piece_code,ab_variant" }),
+    "Seed aggregate-derived Riverside direct-mail result prior"
   );
 
   return company;
 }
 
-async function seedBillingAndInvoices(shopId) {
+async function seedBillingTier(shopId) {
   const now = new Date();
   const currentPeriodEnd = new Date(now);
   currentPeriodEnd.setUTCMonth(currentPeriodEnd.getUTCMonth() + 1);
+  const oldDemoInvoiceIds = [
+    `in_demo_riverside_open_${shopId.slice(0, 8)}`,
+    `in_demo_riverside_paid_${shopId.slice(0, 8)}`,
+  ];
+
+  assertNoSupabaseError(
+    await supabase.from("payments").delete().in("stripe_invoice_id", oldDemoInvoiceIds),
+    "Delete old Riverside demo payment rows"
+  );
+  assertNoSupabaseError(
+    await supabase.from("invoices").delete().in("stripe_invoice_id", oldDemoInvoiceIds),
+    "Delete old Riverside demo invoice rows"
+  );
 
   assertNoSupabaseError(
     await supabase.from("subscriptions").upsert(
@@ -544,55 +677,12 @@ async function seedBillingAndInvoices(shopId) {
     ),
     "Seed Riverside performance subscription"
   );
-
-  const invoiceRows = [
-    {
-      stripe_invoice_id: `in_demo_riverside_open_${shopId.slice(0, 8)}`,
-      shop_id: shopId,
-      stripe_customer_id: `cus_demo_riverside_${shopId.slice(0, 8)}`,
-      stripe_subscription_id: `sub_demo_riverside_${shopId.slice(0, 8)}`,
-      number: "RIV-2026-0811",
-      status: "open",
-      amount_due: 99900,
-      amount_paid: 0,
-      currency: "usd",
-      hosted_invoice_url: "https://billing.stripe.com/demo/riverside-open",
-      invoice_pdf: "https://billing.stripe.com/demo/riverside-open.pdf",
-      period_start: "2026-08-01T00:00:00.000Z",
-      period_end: "2026-08-31T23:59:59.000Z",
-      created: "2026-08-01T12:00:00.000Z",
-      raw: { demoSeed: "psg-2778", surface: "invoice-open" },
-    },
-    {
-      stripe_invoice_id: `in_demo_riverside_paid_${shopId.slice(0, 8)}`,
-      shop_id: shopId,
-      stripe_customer_id: `cus_demo_riverside_${shopId.slice(0, 8)}`,
-      stripe_subscription_id: `sub_demo_riverside_${shopId.slice(0, 8)}`,
-      number: "RIV-2026-0711",
-      status: "paid",
-      amount_due: 99900,
-      amount_paid: 99900,
-      currency: "usd",
-      hosted_invoice_url: "https://billing.stripe.com/demo/riverside-paid",
-      invoice_pdf: "https://billing.stripe.com/demo/riverside-paid.pdf",
-      period_start: "2026-07-01T00:00:00.000Z",
-      period_end: "2026-07-31T23:59:59.000Z",
-      created: "2026-07-01T12:00:00.000Z",
-      raw: { demoSeed: "psg-2778", surface: "invoice-paid" },
-    },
-  ];
-
-  for (const row of invoiceRows) {
-    await upsertSingleByConflict({
-      table: "invoices",
-      payload: row,
-      onConflict: "stripe_invoice_id",
-      label: `Riverside invoice ${row.number}`,
-    });
-  }
 }
 
 async function seedGoogleAdsSurface({ shopId, operatorId, shopUserId }) {
+  const benchmarkMetrics = deriveGoogleAdsBenchmarkMetrics(
+    await fetchAggregateAnalyticsRows(shopId)
+  );
   const account = await upsertByLookup({
     table: "google_ads_accounts",
     filters: { shop_id: shopId, customer_id: CLEAN_DEMO_SEED.googleAds.accountCustomerId },
@@ -628,12 +718,7 @@ async function seedGoogleAdsSurface({ shopId, operatorId, shopUserId }) {
       name: "Collision Repair Near Me - Search",
       campaignType: "search",
       budgetMicros: 125000000,
-      metrics: {
-        clicks: 42,
-        impressions: 1820,
-        conversions: 5,
-        cost_micros: 136000000,
-      },
+      metrics: benchmarkMetrics,
     },
     {
       externalId: CLEAN_DEMO_SEED.googleAds.pmaxCampaignExternalId,
@@ -641,12 +726,7 @@ async function seedGoogleAdsSurface({ shopId, operatorId, shopUserId }) {
       name: "Riverside Brand Protection - Performance Max",
       campaignType: "performance_max",
       budgetMicros: 65000000,
-      metrics: {
-        clicks: 28,
-        impressions: 2450,
-        conversions: 3,
-        cost_micros: 84000000,
-      },
+      metrics: benchmarkMetrics,
     },
   ];
 
@@ -693,7 +773,7 @@ async function seedGoogleAdsSurface({ shopId, operatorId, shopUserId }) {
       campaign_type: "search",
       status: "enabled",
       daily_budget_micros: 125000000,
-      metrics: { clicks: 42, impressions: 1820, conversions: 5, cost_micros: 136000000 },
+      metrics: benchmarkMetrics,
       metrics_synced_at: "2026-08-11T12:00:00.000Z",
     },
   });
@@ -1270,7 +1350,7 @@ async function seedSurveySurface(company) {
 
 async function seedFullDemoAccountSurfaces({ shop, operator, shopUser, company }) {
   const location = await seedPrimaryLocation(shop.id);
-  await seedBillingAndInvoices(shop.id);
+  await seedBillingTier(shop.id);
   await seedCustomerContentSurface({
     shopId: shop.id,
     locationId: location.id,
@@ -1296,6 +1376,7 @@ async function seedFullDemoAccountSurfaces({ shop, operator, shopUser, company }
 
 async function main() {
   supabase = connectSupabase();
+  await runRiversidePreflight(supabase);
   if (directMailOnly) {
     const { data: shop, error } = await supabase
       .from("shops")
