@@ -153,8 +153,8 @@ describe("ContentDetailPage Riverside demo fallback", () => {
     expect(html).toContain("pending review");
   });
 
-  it("opens the private Riverside demo article when the seed row is missing", async () => {
-    mockUserEmail = "nick@phoenixsolutionsgroup.net";
+  it("opens the private Riverside demo article for the demo shop customer when the seed row is missing", async () => {
+    mockUserEmail = "owner@e2e.test";
     mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
     mockActiveShopId = "stale_shop";
     mockServiceRiversideShop = {

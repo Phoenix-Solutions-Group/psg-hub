@@ -4,6 +4,7 @@ export const RIVERSIDE_ANALYTICS_DEMO_SHOP = {
 } as const;
 
 const RIVERSIDE_ANALYTICS_DEMO_EMAILS = [
+  "owner@e2e.test",
   "test@psghub.me",
   "nick@phoenixsolutionsgroup.net",
 ] as const;
