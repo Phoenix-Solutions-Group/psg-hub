@@ -12,6 +12,25 @@ const contentItem = {
 };
 
 let contentFilters: Array<[string, string]> = [];
+let mockUserEmail = "nick@phoenixsolutionsgroup.net";
+let mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
+let mockActiveShopId = "stale_shop";
+let mockServiceRiversideShop: { id: string; name: string } | null = {
+  id: "riverside_shop",
+  name: "Riverside Collision",
+};
+
+function contentItemQuery() {
+  const query = {
+    select: vi.fn(() => query),
+    eq: vi.fn((column: string, value: string) => {
+      contentFilters.push([column, value]);
+      return query;
+    }),
+    single: vi.fn(async () => ({ data: contentItem })),
+  };
+  return query;
+}
 
 vi.mock("next/headers", () => ({
   headers: vi.fn(async () => ({
@@ -30,12 +49,16 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: {
-          user: { id: "user_1", email: "nick@phoenixsolutionsgroup.net" },
+          user: { id: "user_1", email: mockUserEmail },
         },
       }),
     },
-    from: vi.fn(() => {
-      throw new Error("customer reader should not be used for preview fallback");
+    from: vi.fn((table: string) => {
+      if (table === "content_items") {
+        return contentItemQuery();
+      }
+
+      throw new Error(`unexpected customer table:${table}`);
     }),
   })),
 }));
@@ -48,10 +71,7 @@ vi.mock("@/lib/supabase/service", () => ({
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
               maybeSingle: vi.fn(async () => ({
-                data: {
-                  id: "riverside_shop",
-                  name: "Riverside Collision",
-                },
+                data: mockServiceRiversideShop,
               })),
             })),
           })),
@@ -59,15 +79,7 @@ vi.mock("@/lib/supabase/service", () => ({
       }
 
       if (table === "content_items") {
-        const query = {
-          select: vi.fn(() => query),
-          eq: vi.fn((column: string, value: string) => {
-            contentFilters.push([column, value]);
-            return query;
-          }),
-          single: vi.fn(async () => ({ data: contentItem })),
-        };
-        return query;
+        return contentItemQuery();
       }
 
       throw new Error(`unexpected table:${table}`);
@@ -77,8 +89,8 @@ vi.mock("@/lib/supabase/service", () => ({
 
 vi.mock("@/lib/shop/context", () => ({
   getActiveShopContext: vi.fn(async () => ({
-    shops: [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }],
-    activeShopId: "stale_shop",
+    shops: mockShops,
+    activeShopId: mockActiveShopId,
   })),
 }));
 
@@ -97,6 +109,13 @@ const ContentDetailPage = (await import("@/app/dashboard/content/[id]/page"))
 
 describe("ContentDetailPage Riverside demo fallback", () => {
   it("opens seeded Riverside content through the demo host with shop-scoped lookup", async () => {
+    mockUserEmail = "nick@phoenixsolutionsgroup.net";
+    mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
+    mockActiveShopId = "stale_shop";
+    mockServiceRiversideShop = {
+      id: "riverside_shop",
+      name: "Riverside Collision",
+    };
     contentFilters = [];
 
     const html = renderToStaticMarkup(
@@ -109,5 +128,25 @@ describe("ContentDetailPage Riverside demo fallback", () => {
     expect(html).toContain("pending review");
     expect(html).toContain("Review-ready body.");
     expect(html).toContain("approval actions for article_1");
+  });
+
+  it("opens Riverside member content when the active-shop cookie points elsewhere", async () => {
+    mockUserEmail = "customer@example.test";
+    mockShops = [
+      { id: "stale_shop", name: "Old Demo Shop", role: "owner" },
+      { id: "riverside_shop", name: "Riverside Collision", role: "owner" },
+    ];
+    mockActiveShopId = "stale_shop";
+    mockServiceRiversideShop = null;
+    contentFilters = [];
+
+    const html = renderToStaticMarkup(
+      await ContentDetailPage({ params: Promise.resolve({ id: "article_1" }) })
+    );
+
+    expect(contentFilters).toContainEqual(["id", "article_1"]);
+    expect(contentFilters).toContainEqual(["shop_id", "riverside_shop"]);
+    expect(html).toContain("Riverside Collision July repair tips");
+    expect(html).toContain("pending review");
   });
 });

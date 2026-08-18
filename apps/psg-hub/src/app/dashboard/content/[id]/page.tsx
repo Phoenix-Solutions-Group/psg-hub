@@ -3,7 +3,10 @@ import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getActiveShopContext } from "@/lib/shop/context";
-import { getRiversideAnalyticsPreviewShop } from "@/lib/bsm/riverside-analytics-demo";
+import {
+  RIVERSIDE_ANALYTICS_DEMO_SHOP,
+  getRiversideAnalyticsPreviewShop,
+} from "@/lib/bsm/riverside-analytics-demo";
 import { Badge } from "@/components/ui/badge";
 import { ContentPreview } from "@/components/dashboard/content-preview";
 import { ApprovalActions } from "@/components/dashboard/approval-actions";
@@ -41,7 +44,11 @@ export default async function ContentDetailPage({
         requestHost,
       })
     : null;
-  const effectiveShopId = previewShop?.id ?? activeShopId;
+  const riversideDemoShop = shops.find(
+    (shop) => shop.name === RIVERSIDE_ANALYTICS_DEMO_SHOP.name
+  );
+  const effectiveShopId =
+    previewShop?.id ?? riversideDemoShop?.id ?? activeShopId;
   const contentReader = previewShop ? service : supabase;
 
   let query = contentReader

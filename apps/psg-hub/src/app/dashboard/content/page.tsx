@@ -3,7 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { ContentTable } from "@/components/dashboard/content-table";
-import { getRiversideAnalyticsPreviewShop } from "@/lib/bsm/riverside-analytics-demo";
+import {
+  RIVERSIDE_ANALYTICS_DEMO_SHOP,
+  getRiversideAnalyticsPreviewShop,
+} from "@/lib/bsm/riverside-analytics-demo";
 
 export default async function ContentPage() {
   const supabase = await createClient();
@@ -27,7 +30,11 @@ export default async function ContentPage() {
         requestHost,
       })
     : null;
-  const effectiveShopId = previewShop?.id ?? activeShopId;
+  const riversideDemoShop = shops.find(
+    (shop) => shop.name === RIVERSIDE_ANALYTICS_DEMO_SHOP.name
+  );
+  const effectiveShopId =
+    previewShop?.id ?? riversideDemoShop?.id ?? activeShopId;
   const contentReader = previewShop ? service : supabase;
 
   const { data: items } = effectiveShopId

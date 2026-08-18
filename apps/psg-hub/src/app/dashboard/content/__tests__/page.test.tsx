@@ -12,6 +12,26 @@ const contentItems = [
 ];
 
 let lastContentShopId: string | null = null;
+let mockUserEmail = "nick@phoenixsolutionsgroup.net";
+let mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
+let mockActiveShopId = "stale_shop";
+let mockServiceRiversideShop: { id: string; name: string } | null = {
+  id: "riverside_shop",
+  name: "Riverside Collision",
+};
+
+function contentItemsQuery() {
+  return {
+    select: vi.fn(() => ({
+      eq: vi.fn((_column: string, value: string) => {
+        lastContentShopId = value;
+        return {
+          order: vi.fn(async () => ({ data: contentItems })),
+        };
+      }),
+    })),
+  };
+}
 
 vi.mock("next/headers", () => ({
   headers: vi.fn(async () => ({
@@ -24,12 +44,16 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: {
-          user: { id: "user_1", email: "nick@phoenixsolutionsgroup.net" },
+          user: { id: "user_1", email: mockUserEmail },
         },
       }),
     },
-    from: vi.fn(() => {
-      throw new Error("customer reader should not be used for preview fallback");
+    from: vi.fn((table: string) => {
+      if (table === "content_items") {
+        return contentItemsQuery();
+      }
+
+      throw new Error(`unexpected customer table:${table}`);
     }),
   })),
 }));
@@ -42,10 +66,7 @@ vi.mock("@/lib/supabase/service", () => ({
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
               maybeSingle: vi.fn(async () => ({
-                data: {
-                  id: "riverside_shop",
-                  name: "Riverside Collision",
-                },
+                data: mockServiceRiversideShop,
               })),
             })),
           })),
@@ -53,16 +74,7 @@ vi.mock("@/lib/supabase/service", () => ({
       }
 
       if (table === "content_items") {
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn((_column: string, value: string) => {
-              lastContentShopId = value;
-              return {
-                order: vi.fn(async () => ({ data: contentItems })),
-              };
-            }),
-          })),
-        };
+        return contentItemsQuery();
       }
 
       throw new Error(`unexpected table:${table}`);
@@ -72,8 +84,8 @@ vi.mock("@/lib/supabase/service", () => ({
 
 vi.mock("@/lib/shop/context", () => ({
   getActiveShopContext: vi.fn(async () => ({
-    shops: [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }],
-    activeShopId: "stale_shop",
+    shops: mockShops,
+    activeShopId: mockActiveShopId,
   })),
 }));
 
@@ -97,6 +109,32 @@ const ContentPage = (await import("@/app/dashboard/content/page")).default;
 
 describe("ContentPage Riverside preview fallback", () => {
   it("loads seeded Riverside content when the demo account has stale shop context", async () => {
+    mockUserEmail = "nick@phoenixsolutionsgroup.net";
+    mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
+    mockActiveShopId = "stale_shop";
+    mockServiceRiversideShop = {
+      id: "riverside_shop",
+      name: "Riverside Collision",
+    };
+    lastContentShopId = null;
+
+    const html = renderToStaticMarkup(await ContentPage());
+
+    expect(lastContentShopId).toBe("riverside_shop");
+    expect(html).toContain("Riverside Collision July repair tips");
+    expect(html).toContain("pending_review");
+  });
+
+  it("uses the Riverside membership when the demo active-shop cookie is stale", async () => {
+    mockUserEmail = "customer@example.test";
+    mockShops = [
+      { id: "stale_shop", name: "Old Demo Shop", role: "owner" },
+      { id: "riverside_shop", name: "Riverside Collision", role: "owner" },
+    ];
+    mockActiveShopId = "stale_shop";
+    mockServiceRiversideShop = null;
+    lastContentShopId = null;
+
     const html = renderToStaticMarkup(await ContentPage());
 
     expect(lastContentShopId).toBe("riverside_shop");
