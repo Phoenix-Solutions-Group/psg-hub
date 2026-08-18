@@ -1,18 +1,19 @@
 #!/usr/bin/env node
-import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
+import {
+  assertSupabaseSeedEnvNotCrossWired,
+  loadSeedEnvFiles,
+} from "./supabase-seed-env-guard.mjs";
 
 const root = process.cwd();
-for (const file of [
-  ".env.preview.local",
-  ".env.local",
-  ".env.test.local",
-]) {
-  loadEnvFile(path.join(root, file));
-}
+const seedEnvSources = loadSeedEnvFiles([
+  path.join(root, ".env.preview.local"),
+  path.join(root, ".env.local"),
+  path.join(root, ".env.test.local"),
+]);
 
 const isCliInvocation = process.argv[1]
   ? import.meta.url === pathToFileURL(process.argv[1]).href
@@ -126,22 +127,10 @@ function connectSupabase() {
   if (!url || !serviceKey) {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
   }
+  assertSupabaseSeedEnvNotCrossWired(seedEnvSources);
   return createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-}
-
-function loadEnvFile(filePath) {
-  if (!fs.existsSync(filePath)) return;
-  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(trimmed);
-    if (!match) continue;
-    const [, key, rawValue] = match;
-    if (process.env[key] !== undefined) continue;
-    process.env[key] = rawValue.replace(/^['"]|['"]$/g, "");
-  }
 }
 
 async function findAuthUserByEmail(email) {

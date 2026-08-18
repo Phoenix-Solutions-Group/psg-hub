@@ -1,15 +1,20 @@
 #!/usr/bin/env node
-import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { createClient } from "@supabase/supabase-js";
+import {
+  assertSupabaseSeedEnvNotCrossWired,
+  loadSeedEnvFiles,
+} from "./supabase-seed-env-guard.mjs";
 
 const APPLY = process.argv.includes("--apply");
 const root = process.cwd();
 const DRY_RUN_UUID = "00000000-0000-4000-8000-000000000000";
 
-loadEnvFile(path.join(root, ".env.local"));
-loadEnvFile(path.join(root, "apps/psg-hub/.env.local"));
+const seedEnvSources = loadSeedEnvFiles([
+  path.join(root, ".env.local"),
+  path.join(root, "apps/psg-hub/.env.local"),
+]);
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -47,24 +52,11 @@ if (!url || !serviceKey) {
     "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Run from an environment configured for the demo host."
   );
 }
+assertSupabaseSeedEnvNotCrossWired(seedEnvSources);
 
 const supabase = createClient(url, serviceKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
-
-function loadEnvFile(filePath) {
-  if (!fs.existsSync(filePath)) return;
-  const text = fs.readFileSync(filePath, "utf8");
-  for (const line of text.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(trimmed);
-    if (!match) continue;
-    const [, key, rawValue] = match;
-    if (process.env[key] !== undefined) continue;
-    process.env[key] = rawValue.replace(/^['"]|['"]$/g, "");
-  }
-}
 
 function logStep(message) {
   console.log(`${APPLY ? "apply" : "dry-run"}: ${message}`);
