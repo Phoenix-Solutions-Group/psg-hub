@@ -43,6 +43,17 @@ describe("Riverside Analytics preview demo fallback", () => {
     ).toBe(true);
   });
 
+  it("activates for the production Riverside demo owner login", () => {
+    expect(
+      shouldUseRiversideAnalyticsPreviewFallback({
+        userEmail: " Owner@RiversideCollision.Example ",
+        activeShopName: "Old Demo Shop",
+        requestHost: "hub.psgweb.me",
+        env: { VERCEL_ENV: "production" },
+      })
+    ).toBe(true);
+  });
+
   it("activates for Nick's board-review account in preview", () => {
     expect(
       shouldUseRiversideAnalyticsPreviewFallback({

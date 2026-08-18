@@ -154,7 +154,7 @@ describe("ContentDetailPage Riverside demo fallback", () => {
   });
 
   it("opens the private Riverside demo article for the demo shop customer when the seed row is missing", async () => {
-    mockUserEmail = "owner@e2e.test";
+    mockUserEmail = "owner@riversidecollision.example";
     mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
     mockActiveShopId = "stale_shop";
     mockServiceRiversideShop = {
