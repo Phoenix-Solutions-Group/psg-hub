@@ -22,7 +22,7 @@ export default async function ContentDetailPage({
 
   const { data: item } = await supabase
     .from("content_items")
-    .select("*")
+    .select("*, content_type:type")
     .eq("id", id)
     .single();
 

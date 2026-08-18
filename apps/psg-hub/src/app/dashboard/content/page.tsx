@@ -1,24 +1,40 @@
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { ContentTable } from "@/components/dashboard/content-table";
+import { getRiversideAnalyticsPreviewShop } from "@/lib/bsm/riverside-analytics-demo";
 
 export default async function ContentPage() {
   const supabase = await createClient();
+  const service = createServiceClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   // Scope content to the ACTIVE shop (switcher). RLS clamps to member shops;
   // this narrows within that set. No active shop -> empty list.
-  const { activeShopId } = user
+  const { shops, activeShopId } = user
     ? await getActiveShopContext(user.id)
-    : { activeShopId: null };
+    : { shops: [], activeShopId: null };
+  const activeShopName =
+    shops.find((shop) => shop.id === activeShopId)?.name ?? null;
+  const requestHost = (await headers()).get("host");
+  const previewShop = user
+    ? await getRiversideAnalyticsPreviewShop(service, {
+        userEmail: user.email,
+        activeShopName,
+        requestHost,
+      })
+    : null;
+  const effectiveShopId = previewShop?.id ?? activeShopId;
+  const contentReader = previewShop ? service : supabase;
 
-  const { data: items } = activeShopId
-    ? await supabase
+  const { data: items } = effectiveShopId
+    ? await contentReader
         .from("content_items")
-        .select("id, title, content_type, status, updated_at")
-        .eq("shop_id", activeShopId)
+        .select("id, title, content_type:type, status, updated_at")
+        .eq("shop_id", effectiveShopId)
         .order("updated_at", { ascending: false })
     : { data: [] };
 
