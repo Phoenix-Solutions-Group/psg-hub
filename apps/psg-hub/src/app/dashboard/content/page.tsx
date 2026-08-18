@@ -6,7 +6,9 @@ import { ContentTable } from "@/components/dashboard/content-table";
 import {
   RIVERSIDE_ANALYTICS_DEMO_SHOP,
   getRiversideAnalyticsPreviewShop,
+  shouldUseRiversideAnalyticsPreviewFallback,
 } from "@/lib/bsm/riverside-analytics-demo";
+import { RIVERSIDE_DEMO_CONTENT_ITEM } from "@/lib/bsm/riverside-demo-content";
 
 export default async function ContentPage() {
   const supabase = await createClient();
@@ -30,6 +32,13 @@ export default async function ContentPage() {
         requestHost,
       })
     : null;
+  const useRiversidePreviewFallback = user
+    ? shouldUseRiversideAnalyticsPreviewFallback({
+        userEmail: user.email,
+        activeShopName,
+        requestHost,
+      })
+    : false;
   const riversideDemoShop = shops.find(
     (shop) => shop.name === RIVERSIDE_ANALYTICS_DEMO_SHOP.name
   );
@@ -37,13 +46,17 @@ export default async function ContentPage() {
     previewShop?.id ?? riversideDemoShop?.id ?? activeShopId;
   const contentReader = previewShop ? service : supabase;
 
-  const { data: items } = effectiveShopId
+  const { data: queriedItems } = effectiveShopId
     ? await contentReader
         .from("content_items")
         .select("id, title, content_type:type, status, updated_at")
         .eq("shop_id", effectiveShopId)
         .order("updated_at", { ascending: false })
     : { data: [] };
+  const items =
+    useRiversidePreviewFallback && (queriedItems ?? []).length === 0
+      ? [RIVERSIDE_DEMO_CONTENT_ITEM]
+      : queriedItems ?? [];
 
   return (
     <div className="space-y-6">
@@ -53,7 +66,7 @@ export default async function ContentPage() {
           Review and approve agent-produced content.
         </p>
       </div>
-      <ContentTable items={items || []} />
+      <ContentTable items={items} />
     </div>
   );
 }

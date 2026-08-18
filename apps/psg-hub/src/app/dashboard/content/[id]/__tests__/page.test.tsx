@@ -12,6 +12,7 @@ const contentItem = {
 };
 
 let contentFilters: Array<[string, string]> = [];
+let mockContentItem: typeof contentItem | null = contentItem;
 let mockUserEmail = "nick@phoenixsolutionsgroup.net";
 let mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
 let mockActiveShopId = "stale_shop";
@@ -27,7 +28,7 @@ function contentItemQuery() {
       contentFilters.push([column, value]);
       return query;
     }),
-    single: vi.fn(async () => ({ data: contentItem })),
+    single: vi.fn(async () => ({ data: mockContentItem })),
   };
   return query;
 }
@@ -116,6 +117,7 @@ describe("ContentDetailPage Riverside demo fallback", () => {
       id: "riverside_shop",
       name: "Riverside Collision",
     };
+    mockContentItem = contentItem;
     contentFilters = [];
 
     const html = renderToStaticMarkup(
@@ -138,6 +140,7 @@ describe("ContentDetailPage Riverside demo fallback", () => {
     ];
     mockActiveShopId = "stale_shop";
     mockServiceRiversideShop = null;
+    mockContentItem = contentItem;
     contentFilters = [];
 
     const html = renderToStaticMarkup(
@@ -148,5 +151,34 @@ describe("ContentDetailPage Riverside demo fallback", () => {
     expect(contentFilters).toContainEqual(["shop_id", "riverside_shop"]);
     expect(html).toContain("Riverside Collision July repair tips");
     expect(html).toContain("pending review");
+  });
+
+  it("opens the private Riverside demo article when the seed row is missing", async () => {
+    mockUserEmail = "nick@phoenixsolutionsgroup.net";
+    mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
+    mockActiveShopId = "stale_shop";
+    mockServiceRiversideShop = {
+      id: "riverside_shop",
+      name: "Riverside Collision",
+    };
+    mockContentItem = null;
+    contentFilters = [];
+
+    const html = renderToStaticMarkup(
+      await ContentDetailPage({
+        params: Promise.resolve({
+          id: "11111111-cccc-4ccc-8ccc-111111111111",
+        }),
+      })
+    );
+
+    expect(contentFilters).toContainEqual([
+      "id",
+      "11111111-cccc-4ccc-8ccc-111111111111",
+    ]);
+    expect(contentFilters).toContainEqual(["shop_id", "riverside_shop"]);
+    expect(html).toContain("Riverside Collision July repair tips");
+    expect(html).toContain("pending review");
+    expect(html).toContain("PSG prepared this customer-facing article");
   });
 });

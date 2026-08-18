@@ -12,6 +12,7 @@ const contentItems = [
 ];
 
 let lastContentShopId: string | null = null;
+let mockContentItems = contentItems;
 let mockUserEmail = "nick@phoenixsolutionsgroup.net";
 let mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
 let mockActiveShopId = "stale_shop";
@@ -26,7 +27,7 @@ function contentItemsQuery() {
       eq: vi.fn((_column: string, value: string) => {
         lastContentShopId = value;
         return {
-          order: vi.fn(async () => ({ data: contentItems })),
+          order: vi.fn(async () => ({ data: mockContentItems })),
         };
       }),
     })),
@@ -116,6 +117,7 @@ describe("ContentPage Riverside preview fallback", () => {
       id: "riverside_shop",
       name: "Riverside Collision",
     };
+    mockContentItems = contentItems;
     lastContentShopId = null;
 
     const html = renderToStaticMarkup(await ContentPage());
@@ -133,6 +135,7 @@ describe("ContentPage Riverside preview fallback", () => {
     ];
     mockActiveShopId = "stale_shop";
     mockServiceRiversideShop = null;
+    mockContentItems = contentItems;
     lastContentShopId = null;
 
     const html = renderToStaticMarkup(await ContentPage());
@@ -140,5 +143,24 @@ describe("ContentPage Riverside preview fallback", () => {
     expect(lastContentShopId).toBe("riverside_shop");
     expect(html).toContain("Riverside Collision July repair tips");
     expect(html).toContain("pending_review");
+  });
+
+  it("shows the private Riverside demo article when the seed row is missing", async () => {
+    mockUserEmail = "nick@phoenixsolutionsgroup.net";
+    mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
+    mockActiveShopId = "stale_shop";
+    mockServiceRiversideShop = {
+      id: "riverside_shop",
+      name: "Riverside Collision",
+    };
+    mockContentItems = [];
+    lastContentShopId = null;
+
+    const html = renderToStaticMarkup(await ContentPage());
+
+    expect(lastContentShopId).toBe("riverside_shop");
+    expect(html).toContain("Riverside Collision July repair tips");
+    expect(html).toContain("pending_review");
+    expect(html).not.toContain("No content yet");
   });
 });

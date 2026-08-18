@@ -6,7 +6,12 @@ import { getActiveShopContext } from "@/lib/shop/context";
 import {
   RIVERSIDE_ANALYTICS_DEMO_SHOP,
   getRiversideAnalyticsPreviewShop,
+  shouldUseRiversideAnalyticsPreviewFallback,
 } from "@/lib/bsm/riverside-analytics-demo";
+import {
+  RIVERSIDE_DEMO_CONTENT_ITEM,
+  RIVERSIDE_DEMO_CONTENT_ITEM_ID,
+} from "@/lib/bsm/riverside-demo-content";
 import { Badge } from "@/components/ui/badge";
 import { ContentPreview } from "@/components/dashboard/content-preview";
 import { ApprovalActions } from "@/components/dashboard/approval-actions";
@@ -44,6 +49,13 @@ export default async function ContentDetailPage({
         requestHost,
       })
     : null;
+  const useRiversidePreviewFallback = user
+    ? shouldUseRiversideAnalyticsPreviewFallback({
+        userEmail: user.email,
+        activeShopName,
+        requestHost,
+      })
+    : false;
   const riversideDemoShop = shops.find(
     (shop) => shop.name === RIVERSIDE_ANALYTICS_DEMO_SHOP.name
   );
@@ -60,7 +72,12 @@ export default async function ContentDetailPage({
     query = query.eq("shop_id", effectiveShopId);
   }
 
-  const { data: item } = await query.single();
+  const { data: queriedItem } = await query.single();
+  const item =
+    queriedItem ??
+    (useRiversidePreviewFallback && id === RIVERSIDE_DEMO_CONTENT_ITEM_ID
+      ? RIVERSIDE_DEMO_CONTENT_ITEM
+      : null);
 
   if (!item) {
     notFound();
