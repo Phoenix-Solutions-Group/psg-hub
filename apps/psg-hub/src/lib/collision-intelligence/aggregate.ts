@@ -1,0 +1,539 @@
+export type Numeric = number | string | null;
+
+export type CollisionWeeklyRow = {
+  company_name: string;
+  week_start: string;
+  repair_orders: Numeric;
+  insured_repair_orders: Numeric;
+  repair_value_cents: Numeric;
+  average_cycle_days: Numeric;
+  cycle_time_observations: Numeric;
+};
+
+export type CollisionWeatherRow = {
+  month: string;
+  weather_coverage_pct: Numeric;
+  weighted_hail_events: Numeric;
+  weighted_wind_events: Numeric;
+  weighted_tornado_events: Numeric;
+  weighted_storm_demand_score: Numeric;
+  weather_refreshed_at: string | null;
+};
+
+export type CollisionForecastRow = {
+  week_start: string;
+  repair_orders: Numeric;
+  repair_orders_lag_52_weeks: Numeric;
+  trailing_4_week_average: Numeric;
+};
+
+export type CollisionCrashRow = {
+  month: string;
+  customer_zip_count: Numeric;
+  crash_active_zip_count: Numeric;
+  total_crashes: Numeric;
+  fatal_crashes: Numeric;
+  injury_crashes: Numeric;
+  property_damage_crashes: Numeric;
+  rain_or_snow_crashes: Numeric;
+  weighted_crash_exposure: Numeric;
+  crash_refreshed_at: string | null;
+};
+
+export type CollisionAlertRow = {
+  zip_code: string;
+  historical_repair_orders: Numeric;
+  source_event_id: number | string;
+  event_type: string;
+  event_at: string;
+  magnitude: Numeric;
+  magnitude_unit: string | null;
+  alert_level: "high" | "review";
+  threshold_basis: string;
+  is_provisional: boolean;
+};
+
+export type CollisionForecastStatusRow = {
+  forecast_origin_week: string;
+  forecast_horizon_weeks: Numeric;
+  forecast_week: string;
+  predicted_repair_orders: Numeric;
+  lower_repair_orders: Numeric;
+  upper_repair_orders: Numeric;
+  prediction_interval_pct: Numeric;
+  source_latest_arrival_date: string | null;
+  source_age_days: Numeric;
+  status: "published" | "stale_source" | "insufficient_history";
+  status_reason: string;
+  generated_at: string;
+};
+
+export type CollisionSpcSourceRow = {
+  cycle: string;
+  row_count: Numeric;
+  status: string;
+  imported_at: string;
+};
+
+export type CollisionRepairFeedRow = {
+  file_modified_at: string;
+  imported_at: string;
+  status: string;
+  source_age_hours: Numeric;
+  is_stale: boolean;
+  repair_orders: Numeric;
+  latest_arrival_date: string | null;
+};
+
+export type CollisionInsurerRow = {
+  insurance_company_name: string | null;
+  insurance_company_normalized: string;
+  alias_review_status: "candidate" | "approved" | "rejected";
+  repair_orders: Numeric;
+  repair_value_cents: Numeric;
+};
+
+export type CollisionZipRow = {
+  customer_zip: string;
+  customer_state: string | null;
+  repair_orders: Numeric;
+  insured_repair_orders: Numeric;
+  repair_value_cents: Numeric;
+};
+
+export type CollisionVehicleRow = {
+  vehicle_make: string | null;
+  vehicle_model: string | null;
+  repair_orders: Numeric;
+  repair_value_cents: Numeric;
+};
+
+export type CollisionQualityRow = {
+  quality_issue: string;
+  affected_repairs: Numeric;
+  repair_orders: Numeric;
+  affected_percent: Numeric;
+};
+
+export type CollisionModelRegistryRow = {
+  model_key: string;
+  promotion_status: "review" | "approved" | "retired";
+  seasonal_baseline_mae: Numeric;
+  model_mae: Numeric;
+  mae_improvement_pct: Numeric;
+  interval_multiplier: Numeric;
+  interval_half_width: Numeric;
+  interval_validation_coverage_pct: Numeric;
+};
+
+export type CollisionForecastMonitoringRow = {
+  forecast_horizon_weeks: Numeric;
+  model_key: string;
+  observation_count: Numeric;
+  monitoring_window_weeks: Numeric;
+  monitoring_start_week: string | null;
+  monitoring_end_week: string | null;
+  live_mae: Numeric;
+  live_wape_pct: Numeric;
+  live_interval_coverage_pct: Numeric;
+  monitoring_status:
+    | "awaiting_actuals"
+    | "review_accuracy"
+    | "review_interval"
+    | "within_policy";
+  monitoring_reason: string;
+};
+
+function numberOf(value: Numeric): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function modelError(actual: number[], predicted: number[]) {
+  const absoluteErrors = actual.map((value, index) =>
+    Math.abs(value - predicted[index]),
+  );
+  const squaredErrors = actual.map(
+    (value, index) => (value - predicted[index]) ** 2,
+  );
+  const total = actual.reduce((sum, value) => sum + value, 0);
+  return {
+    mae: absoluteErrors.reduce((sum, value) => sum + value, 0) / actual.length,
+    rmse: Math.sqrt(
+      squaredErrors.reduce((sum, value) => sum + value, 0) / actual.length,
+    ),
+    wapePct:
+      (100 * absoluteErrors.reduce((sum, value) => sum + value, 0)) /
+      Math.max(total, 1),
+  };
+}
+
+export function evaluateCollisionBaseline(rows: CollisionForecastRow[]) {
+  const eligible = rows
+    .filter(
+      (row) =>
+        row.repair_orders_lag_52_weeks !== null &&
+        row.trailing_4_week_average !== null,
+    )
+    .sort((a, b) => a.week_start.localeCompare(b.week_start));
+  if (eligible.length < 52) return null;
+
+  const holdout = eligible.slice(-52);
+  const actual = holdout.map((row) => numberOf(row.repair_orders));
+  const seasonal = holdout.map((row) =>
+    numberOf(row.repair_orders_lag_52_weeks),
+  );
+  const recent = holdout.map((row) => numberOf(row.trailing_4_week_average));
+  const blend = seasonal.map((value, index) => (value + recent[index]) / 2);
+  const models = {
+    seasonal52: modelError(actual, seasonal),
+    trailing4: modelError(actual, recent),
+    blend: modelError(actual, blend),
+  };
+  const champion = (Object.keys(models) as Array<keyof typeof models>).reduce<
+    keyof typeof models
+  >(
+    (best, candidate) =>
+      models[candidate].mae < models[best].mae ? candidate : best,
+    "seasonal52",
+  );
+
+  return {
+    holdoutStart: holdout[0].week_start,
+    holdoutEnd: holdout.at(-1)!.week_start,
+    holdoutRepairs: actual.reduce((sum, value) => sum + value, 0),
+    models,
+    champion,
+    beatsSeasonal:
+      champion !== "seasonal52" && models[champion].mae < models.seasonal52.mae,
+    maeImprovementPct:
+      models.seasonal52.mae === 0
+        ? 0
+        : (100 * (models.seasonal52.mae - models[champion].mae)) /
+          models.seasonal52.mae,
+  };
+}
+
+export function buildCollisionDashboard(
+  weeklyRows: CollisionWeeklyRow[],
+  weatherRows: CollisionWeatherRow[],
+  forecastRows: CollisionForecastRow[],
+  crashRows: CollisionCrashRow[],
+  alertRows: CollisionAlertRow[],
+  forecastStatusRows: CollisionForecastStatusRow[],
+  spcSourceRows: CollisionSpcSourceRow[],
+  insurerRows: CollisionInsurerRow[],
+  zipRows: CollisionZipRow[],
+  vehicleRows: CollisionVehicleRow[],
+  qualityRows: CollisionQualityRow[],
+  modelRegistryRows: CollisionModelRegistryRow[],
+  forecastMonitoringRows: CollisionForecastMonitoringRow[],
+  repairFeedRows: CollisionRepairFeedRow[],
+) {
+  const weekly = [...weeklyRows].sort((a, b) =>
+    a.week_start.localeCompare(b.week_start),
+  );
+  const repairOrders = weekly.reduce(
+    (sum, row) => sum + numberOf(row.repair_orders),
+    0,
+  );
+  const insuredRepairOrders = weekly.reduce(
+    (sum, row) => sum + numberOf(row.insured_repair_orders),
+    0,
+  );
+  const repairValueCents = weekly.reduce(
+    (sum, row) => sum + numberOf(row.repair_value_cents),
+    0,
+  );
+  const cycleObservations = weekly.reduce(
+    (sum, row) => sum + numberOf(row.cycle_time_observations),
+    0,
+  );
+  const weightedCycleDays = weekly.reduce(
+    (sum, row) =>
+      sum +
+      numberOf(row.average_cycle_days) * numberOf(row.cycle_time_observations),
+    0,
+  );
+  const weather = [...weatherRows].sort((a, b) =>
+    a.month.localeCompare(b.month),
+  );
+  const crashes = [...crashRows].sort((a, b) => a.month.localeCompare(b.month));
+  const latestCrash = crashes.at(-1);
+  const latestForecastOrigin = forecastStatusRows.reduce(
+    (latest, row) =>
+      row.forecast_origin_week > latest ? row.forecast_origin_week : latest,
+    "",
+  );
+  const operationalForecasts = forecastStatusRows
+    .filter((row) => row.forecast_origin_week === latestForecastOrigin)
+    .sort(
+      (a, b) =>
+        numberOf(a.forecast_horizon_weeks) - numberOf(b.forecast_horizon_weeks),
+    )
+    .map((forecast) => ({
+      originWeek: forecast.forecast_origin_week,
+      horizonWeeks: numberOf(forecast.forecast_horizon_weeks),
+      week: forecast.forecast_week,
+      predicted:
+        forecast.predicted_repair_orders === null
+          ? null
+          : numberOf(forecast.predicted_repair_orders),
+      lower:
+        forecast.lower_repair_orders === null
+          ? null
+          : numberOf(forecast.lower_repair_orders),
+      upper:
+        forecast.upper_repair_orders === null
+          ? null
+          : numberOf(forecast.upper_repair_orders),
+      intervalPct: numberOf(forecast.prediction_interval_pct),
+      sourceLatestArrivalDate: forecast.source_latest_arrival_date,
+      sourceAgeDays: numberOf(forecast.source_age_days),
+      status: forecast.status,
+      reason: forecast.status_reason,
+      generatedAt: forecast.generated_at,
+    }));
+  const publishedForecasts = operationalForecasts.filter(
+    (forecast) =>
+      forecast.status === "published" && forecast.predicted !== null,
+  );
+  const peakForecast = publishedForecasts.reduce<
+    (typeof publishedForecasts)[number] | null
+  >(
+    (peak, forecast) =>
+      !peak || (forecast.upper ?? 0) > (peak.upper ?? 0) ? forecast : peak,
+    null,
+  );
+  const lowForecast = publishedForecasts.reduce<
+    (typeof publishedForecasts)[number] | null
+  >(
+    (lowest, forecast) =>
+      !lowest || (forecast.predicted ?? 0) < (lowest.predicted ?? 0)
+        ? forecast
+        : lowest,
+    null,
+  );
+  const highWeatherSignals = alertRows.filter(
+    (alert) => alert.alert_level === "high",
+  ).length;
+  const topVehicle = vehicleRows[0];
+  const topInsurer = insurerRows[0];
+  const latestSpcSource = spcSourceRows[0];
+  const repairFeed = repairFeedRows[0];
+  const modelRegistry = modelRegistryRows[0];
+
+  return {
+    companyName: weekly[0]?.company_name ?? null,
+    summary: {
+      repairOrders,
+      insuredRepairOrders,
+      insuredSharePct: repairOrders
+        ? (100 * insuredRepairOrders) / repairOrders
+        : 0,
+      repairValue: repairValueCents / 100,
+      averageRepairAmount: repairOrders
+        ? repairValueCents / 100 / repairOrders
+        : 0,
+      averageCycleDays: cycleObservations
+        ? weightedCycleDays / cycleObservations
+        : null,
+      firstWeek: weekly[0]?.week_start ?? null,
+      latestWeek: weekly.at(-1)?.week_start ?? null,
+    },
+    weeklySeries: weekly.slice(-52).map((row) => ({
+      week: row.week_start.slice(5),
+      orders: numberOf(row.repair_orders),
+    })),
+    weatherSeries: weather.slice(-12).map((row) => ({
+      month: row.month.slice(0, 7),
+      score: numberOf(row.weighted_storm_demand_score),
+    })),
+    crashSeries: crashes.slice(-12).map((row) => ({
+      month: row.month.slice(0, 7),
+      crashes: numberOf(row.total_crashes),
+    })),
+    crashes: {
+      latestMonth: latestCrash?.month ?? null,
+      latestTotal: numberOf(latestCrash?.total_crashes ?? 0),
+      latestRainOrSnow: numberOf(latestCrash?.rain_or_snow_crashes ?? 0),
+      customerZipCount: numberOf(latestCrash?.customer_zip_count ?? 0),
+      activeZipCount: numberOf(latestCrash?.crash_active_zip_count ?? 0),
+      refreshedAt: latestCrash?.crash_refreshed_at ?? null,
+    },
+    weather: {
+      latestMonth: weather.at(-1)?.month ?? null,
+      latestCoveragePct: numberOf(weather.at(-1)?.weather_coverage_pct ?? 0),
+      refreshedAt: weather.at(-1)?.weather_refreshed_at ?? null,
+    },
+    alerts: [...alertRows]
+      .sort((a, b) => b.event_at.localeCompare(a.event_at))
+      .slice(0, 6)
+      .map((row) => ({
+        zipCode: row.zip_code,
+        historicalRepairOrders: numberOf(row.historical_repair_orders),
+        sourceEventId: String(row.source_event_id),
+        eventType: row.event_type,
+        eventAt: row.event_at,
+        magnitude: row.magnitude === null ? null : numberOf(row.magnitude),
+        magnitudeUnit: row.magnitude_unit,
+        alertLevel: row.alert_level,
+        thresholdBasis: row.threshold_basis,
+        isProvisional: row.is_provisional,
+      })),
+    operationalForecasts,
+    operationalForecast: operationalForecasts[0] ?? null,
+    planningGuidance: [
+      peakForecast
+        ? {
+            area: "Staffing & scheduling",
+            status: "ready" as const,
+            title: `Capacity check for week ${peakForecast.horizonWeeks}`,
+            week: peakForecast.week,
+            detail: `The ${peakForecast.intervalPct}% upper range reaches ${peakForecast.upper} repairs. Compare that with booked slots and technician capacity before changing shifts or intake.`,
+          }
+        : {
+            area: "Staffing & scheduling",
+            status: "blocked" as const,
+            title: "Forecast decisions paused",
+            week: null,
+            detail:
+              operationalForecasts[0]?.reason ??
+              "No governed operating forecast is available.",
+          },
+      lowForecast
+        ? {
+            area: "Marketing",
+            status: "ready" as const,
+            title: `Demand checkpoint for week ${lowForecast.horizonWeeks}`,
+            week: lowForecast.week,
+            detail: `The point forecast is ${lowForecast.predicted?.toFixed(1)} repairs (${lowForecast.lower}–${lowForecast.upper}). Confirm booked work before changing campaign timing or spend.`,
+          }
+        : {
+            area: "Marketing",
+            status: "blocked" as const,
+            title: "Forecast trigger unavailable",
+            week: null,
+            detail:
+              "Use observed repair history only; do not change campaign timing from a stale or unpublished forecast.",
+          },
+      topVehicle
+        ? {
+            area: "Parts & training",
+            status: "review" as const,
+            title:
+              [topVehicle.vehicle_make, topVehicle.vehicle_model]
+                .filter(Boolean)
+                .join(" ") || "Vehicle mix review",
+            week: null,
+            detail: `${numberOf(topVehicle.repair_orders).toLocaleString()} historical repairs. Use this mix for certification and parts planning, then confirm the scheduled estimate mix before ordering.`,
+          }
+        : null,
+      topInsurer
+        ? {
+            area: "Insurance mix",
+            status: "review" as const,
+            title:
+              topInsurer.insurance_company_name ??
+              topInsurer.insurance_company_normalized,
+            week: null,
+            detail: `${numberOf(topInsurer.repair_orders).toLocaleString()} historical carrier-labeled repairs. Use this for DRP and service planning, not as insurer claim volume.`,
+          }
+        : null,
+      {
+        area: "Weather response",
+        status: highWeatherSignals ? ("review" as const) : ("ready" as const),
+        title: highWeatherSignals
+          ? `${highWeatherSignals} high preliminary signal${highWeatherSignals === 1 ? "" : "s"}`
+          : "No high preliminary signals",
+        week: null,
+        detail: highWeatherSignals
+          ? "Review the affected customer ZIPs for intake readiness. A weather report is not evidence of vehicle damage or a claim."
+          : "Continue monitoring the 72-hour customer-ZIP queue; notifications remain disabled.",
+      },
+    ].filter((guidance) => guidance !== null),
+    alertFeed: latestSpcSource
+      ? {
+          cycle: latestSpcSource.cycle,
+          rowCount: numberOf(latestSpcSource.row_count),
+          status: latestSpcSource.status,
+          refreshedAt: latestSpcSource.imported_at,
+        }
+      : null,
+    repairFeed: repairFeed
+      ? {
+          fileModifiedAt: repairFeed.file_modified_at,
+          importedAt: repairFeed.imported_at,
+          status: repairFeed.status,
+          sourceAgeHours: numberOf(repairFeed.source_age_hours),
+          isStale: repairFeed.is_stale,
+          repairOrders: numberOf(repairFeed.repair_orders),
+          latestArrivalDate: repairFeed.latest_arrival_date,
+        }
+      : null,
+    topInsurers: insurerRows.slice(0, 5).map((row) => ({
+      name: row.insurance_company_name ?? row.insurance_company_normalized,
+      aliasStatus: row.alias_review_status,
+      repairOrders: numberOf(row.repair_orders),
+      repairValue: numberOf(row.repair_value_cents) / 100,
+    })),
+    topCustomerZips: zipRows.slice(0, 5).map((row) => ({
+      zipCode: row.customer_zip,
+      state: row.customer_state,
+      repairOrders: numberOf(row.repair_orders),
+      insuredRepairOrders: numberOf(row.insured_repair_orders),
+      repairValue: numberOf(row.repair_value_cents) / 100,
+    })),
+    topVehicles: vehicleRows.slice(0, 5).map((row) => ({
+      label:
+        [row.vehicle_make, row.vehicle_model].filter(Boolean).join(" ") ||
+        "Unknown vehicle",
+      repairOrders: numberOf(row.repair_orders),
+      repairValue: numberOf(row.repair_value_cents) / 100,
+    })),
+    dataQuality: qualityRows.slice(0, 5).map((row) => ({
+      issue: row.quality_issue,
+      affectedRepairs: numberOf(row.affected_repairs),
+      totalRepairs: numberOf(row.repair_orders),
+      affectedPercent: numberOf(row.affected_percent),
+    })),
+    modelEvidence: modelRegistry
+      ? {
+          modelKey: modelRegistry.model_key,
+          status: modelRegistry.promotion_status,
+          seasonalMae: numberOf(modelRegistry.seasonal_baseline_mae),
+          modelMae: numberOf(modelRegistry.model_mae),
+          maeImprovementPct: numberOf(modelRegistry.mae_improvement_pct),
+          intervalMultiplier: numberOf(modelRegistry.interval_multiplier),
+          intervalHalfWidth: numberOf(modelRegistry.interval_half_width),
+          validationCoveragePct: numberOf(
+            modelRegistry.interval_validation_coverage_pct,
+          ),
+        }
+      : null,
+    forecastMonitoring: [...forecastMonitoringRows]
+      .sort(
+        (a, b) =>
+          numberOf(a.forecast_horizon_weeks) -
+          numberOf(b.forecast_horizon_weeks),
+      )
+      .map((row) => ({
+        horizonWeeks: numberOf(row.forecast_horizon_weeks),
+        modelKey: row.model_key,
+        observations: numberOf(row.observation_count),
+        windowWeeks: numberOf(row.monitoring_window_weeks),
+        startWeek: row.monitoring_start_week,
+        endWeek: row.monitoring_end_week,
+        liveMae: row.live_mae === null ? null : numberOf(row.live_mae),
+        liveWapePct:
+          row.live_wape_pct === null ? null : numberOf(row.live_wape_pct),
+        liveCoveragePct:
+          row.live_interval_coverage_pct === null
+            ? null
+            : numberOf(row.live_interval_coverage_pct),
+        status: row.monitoring_status,
+        reason: row.monitoring_reason,
+      })),
+    baseline: evaluateCollisionBaseline(forecastRows),
+  };
+}

@@ -15,6 +15,7 @@ function dashboardNav(activeShopId: string | null) {
   return [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/dashboard/analytics", label: "Analytics" },
+  { href: "/dashboard/collision-intelligence", label: "Collision Intelligence" },
   { href: "/dashboard/audit", label: "SEO Audit" },
   { href: "/dashboard/content", label: "Content" },
   { href: "/dashboard/approvals", label: "Approvals" },
