@@ -11,6 +11,7 @@ import {
   REQUIRED_RIVERSIDE_PRODUCTION_TABLES,
   demoCustomerContentItemRow,
   requiredDemoEnvNames,
+  QA_ISOLATION_SEED,
   shouldSeedInternalRegressionUser,
 } from "../../../../scripts/seed-superadmin-qa-env.mjs";
 
@@ -89,6 +90,21 @@ describe("clean BSM demo seed", () => {
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.legacyShopSlug);
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.previousPilotShopSlug);
     expect(CLEAN_DEMO_SEED.shopName).not.toBe(CLEAN_DEMO_SEED.previousPilotShopName);
+  });
+
+  it("provides a deterministic, visibly test-only second-shop isolation fixture", () => {
+    expect(QA_ISOLATION_SEED).toEqual({
+      clientId: "29200000-0000-4000-8000-000000000001",
+      clientName: "BSM Customer Isolation QA",
+      shopId: "29200000-0000-4000-8000-000000000002",
+      shopName: "BSM Isolation QA Shop B",
+      shopSlug: "bsm-isolation-qa-shop-b",
+      reviewItemId: "29200000-0000-4000-8000-000000000003",
+      reviewVersionId: "29200000-0000-4000-8000-000000000004",
+      reviewTitle: "QA Shop B customer-isolation proof",
+    });
+    expect(QA_ISOLATION_SEED.shopName).toContain("QA");
+    expect(QA_ISOLATION_SEED.reviewTitle).toContain("isolation");
   });
 
   it("builds Riverside analytics rows from production aggregate snapshots", () => {

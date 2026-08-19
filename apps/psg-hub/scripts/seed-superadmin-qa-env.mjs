@@ -128,6 +128,17 @@ export const CLEAN_DEMO_SEED = {
   },
 };
 
+export const QA_ISOLATION_SEED = {
+  clientId: "29200000-0000-4000-8000-000000000001",
+  clientName: "BSM Customer Isolation QA",
+  shopId: "29200000-0000-4000-8000-000000000002",
+  shopName: "BSM Isolation QA Shop B",
+  shopSlug: "bsm-isolation-qa-shop-b",
+  reviewItemId: "29200000-0000-4000-8000-000000000003",
+  reviewVersionId: "29200000-0000-4000-8000-000000000004",
+  reviewTitle: "QA Shop B customer-isolation proof",
+};
+
 export function shouldSeedInternalRegressionUser(env = process.env) {
   return env.DEMO_INCLUDE_INTERNAL_REGRESSION_USER === "1";
 }
@@ -1385,6 +1396,122 @@ async function seedFullDemoAccountSurfaces({ shop, operator, shopUser, company }
   await seedSurveySurface(company);
 }
 
+async function seedCustomerIsolationQaFixture(operatorId) {
+  const client = await upsertByLookup({
+    table: "clients",
+    filters: { id: QA_ISOLATION_SEED.clientId },
+    insert: {
+      id: QA_ISOLATION_SEED.clientId,
+      name: QA_ISOLATION_SEED.clientName,
+      website_url: "https://bsm-isolation-qa.example",
+      primary_market: "Test data only",
+      zip_code: "00000",
+    },
+    update: {
+      name: QA_ISOLATION_SEED.clientName,
+      website_url: "https://bsm-isolation-qa.example",
+      primary_market: "Test data only",
+      zip_code: "00000",
+    },
+    label: "customer-isolation QA client",
+  });
+
+  const shop = await upsertByLookup({
+    table: "shops",
+    filters: { id: QA_ISOLATION_SEED.shopId },
+    insert: {
+      id: QA_ISOLATION_SEED.shopId,
+      client_id: client.id,
+      name: QA_ISOLATION_SEED.shopName,
+      slug: QA_ISOLATION_SEED.shopSlug,
+      url: "https://bsm-isolation-qa-shop-b.example",
+      telephone: "(555) 010-2920",
+      address_locality: "Test City",
+      address_region: "CA",
+      address_postal_code: "00000",
+      address_country: "US",
+    },
+    update: {
+      client_id: client.id,
+      name: QA_ISOLATION_SEED.shopName,
+      slug: QA_ISOLATION_SEED.shopSlug,
+      url: "https://bsm-isolation-qa-shop-b.example",
+      telephone: "(555) 010-2920",
+      address_locality: "Test City",
+      address_region: "CA",
+      address_postal_code: "00000",
+      address_country: "US",
+    },
+    label: "customer-isolation QA shop B",
+  });
+
+  const reviewItem = await upsertByLookup({
+    table: "bsm_content_review_items",
+    filters: { id: QA_ISOLATION_SEED.reviewItemId },
+    insert: {
+      id: QA_ISOLATION_SEED.reviewItemId,
+      shop_id: shop.id,
+      title: QA_ISOLATION_SEED.reviewTitle,
+      content_type: "generated_page",
+      status: "in_review",
+      admin_context_note: "Test-only record for proving that one customer cannot open another shop's approval.",
+      created_by_profile_id: operatorId,
+      metadata_jsonb: { demoSeed: "psg-2920", testOnly: true },
+    },
+    update: {
+      shop_id: shop.id,
+      title: QA_ISOLATION_SEED.reviewTitle,
+      content_type: "generated_page",
+      status: "in_review",
+      admin_context_note: "Test-only record for proving that one customer cannot open another shop's approval.",
+      created_by_profile_id: operatorId,
+      metadata_jsonb: { demoSeed: "psg-2920", testOnly: true },
+    },
+    label: "customer-isolation QA review item",
+  });
+
+  const version = await upsertByLookup({
+    table: "bsm_content_review_versions",
+    filters: { id: QA_ISOLATION_SEED.reviewVersionId },
+    insert: {
+      id: QA_ISOLATION_SEED.reviewVersionId,
+      review_item_id: reviewItem.id,
+      shop_id: shop.id,
+      version_number: 1,
+      status: "current",
+      original_filename: "qa-shop-b-isolation-proof.html",
+      content_type: "text/html",
+      byte_size: 1,
+      preview_type: "generated_page",
+      source_metadata_jsonb: { demoSeed: "psg-2920", testOnly: true },
+      created_by_profile_id: operatorId,
+    },
+    update: {
+      review_item_id: reviewItem.id,
+      shop_id: shop.id,
+      version_number: 1,
+      status: "current",
+      original_filename: "qa-shop-b-isolation-proof.html",
+      content_type: "text/html",
+      byte_size: 1,
+      preview_type: "generated_page",
+      source_metadata_jsonb: { demoSeed: "psg-2920", testOnly: true },
+      created_by_profile_id: operatorId,
+    },
+    label: "customer-isolation QA review version",
+  });
+
+  assertNoSupabaseError(
+    await supabase
+      .from("bsm_content_review_items")
+      .update({ current_version_id: version.id })
+      .eq("id", reviewItem.id),
+    "Attach customer-isolation QA review version"
+  );
+
+  return { shopId: shop.id, reviewItemId: reviewItem.id };
+}
+
 async function main() {
   supabase = connectSupabase();
   await runRiversidePreflight(supabase);
@@ -1507,6 +1634,7 @@ async function main() {
   await seedRiversideAnalytics(shop.id);
   const company = await seedRiversideDirectMail(shop.id);
   await seedFullDemoAccountSurfaces({ shop, operator, shopUser, company });
+  const isolationFixture = await seedCustomerIsolationQaFixture(operator.id);
 
   await upsertByLookup({
     table: "modules",
@@ -1534,6 +1662,8 @@ async function main() {
     console.log(`Regression-only internal staff: ${internalEmail}`);
   }
   console.log(`Shop: ${shop.id}`);
+  console.log(`Customer-isolation QA shop: ${isolationFixture.shopId}`);
+  console.log(`Customer-isolation QA approval: ${isolationFixture.reviewItemId}`);
   console.log("Full demo surfaces: analytics, ads, billing, reviews, approvals, direct mail, production, CCC, GTM, Yext, and surveys.");
 }
 
