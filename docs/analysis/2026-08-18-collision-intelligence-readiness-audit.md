@@ -40,7 +40,7 @@
 | ------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Clean, documented, privacy-safe data                                | Live preflight passed; first refresh pending       | 327,313 FileMaker facts reconcile to the current source ledger; direct PII and raw identifiers are absent; the restricted live OData probe reports 330,530 rows and exactly 15 approved fields; hardened service is staged with timer disabled                                | Approve and reconcile the first full refresh; resolve the duplicate backup schedule; apply storm provenance reconciliation; connect failures to an owner |
 | Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; governed review workflow implemented  | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; carrier aliases and source-shop mappings require explicit superadmin approval and atomic audit evidence; 411,208 KDOT rows count-verified; 99.93% ZIP match                             | Review the highest-volume insurer candidates and approve additional shop mappings only after identity confirmation                                       |
-| Operational dashboard                                               | Preview deployed; authenticated product QA pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build and unauthenticated preview checks pass | Run authenticated desktop/mobile preview QA, complete product approval, deploy, and smoke test                                                           |
+| Operational dashboard                                               | Local authenticated QA passed; deployed approval pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build plus authenticated desktop/mobile Chromium checks pass | Review the captures, deploy after the matching migrations are approved, and run an authenticated smoke test                                             |
 | ZIP-level weather and market alerts                                 | Review queue built                                 | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; daily cron configured locally; notifications explicitly off                                                                                                                                    | Deploy/smoke-test the cron, approve owner and lifecycle, and measure false positives before authorizing notifications                                    |
 | Weekly forecasts outperform a seasonal baseline                     | Multi-shop historical evidence; publication gated  | Trailing four-week beats seasonal across four horizons in the current-shop segment; independently promoted shop/horizon policies; current run correctly writes four `stale_source` rows with no prediction; 13-observation live scorecard is active                           | Restore current repair ingest, accrue observed forecasts, review live error/coverage, and approve models per mapped shop                                 |
 | Clear confidence and limitations                                    | Implemented for pilot                              | Dashboard freshness, promotion evidence, interval coverage, model scope, metric contract, and evaluation reports                                                                                                                                                              | Add the same disclosures to exports and scheduled alerts                                                                                                 |
@@ -180,9 +180,11 @@
 - Weekly cycle denominator reconciles to 3,420 observations and 14.8 days.
 - Unit test, TypeScript, targeted ESLint, Python self-check, and production Next.js
   build pass.
-- A deterministic zero-PII fixture exercises the populated dashboard through the
-  real local login flow. Desktop and mobile Chromium assertions, WCAG
-  serious/critical checks, and screenshots pass. Browser review also fixed a
+- A deterministic zero-PII fixture exercises 460 repair orders across 120 source
+  weeks through the real local login flow. Nine required dashboard-section
+  assertions, desktop and mobile Chromium captures, and WCAG A/AA checks pass with
+  zero serious or critical violations. Temporary local schema alignment and its
+  synthetic company row were removed after capture. Browser review also fixed a
   borderline forecast-text contrast failure and a stale company-first disclosure.
 - The FileMaker DDR confirms Repair Customer `FMTID:131`, `fmrest`/`fmodata`
   capability, and that the legacy export script is interactive and PII-heavy. A new
@@ -226,6 +228,6 @@
 4. After 13 observed forecasts accrue per horizon, review the live monitoring status.
    Manual review is requested when rolling MAE loses to seasonal or 80% interval
    coverage falls below 70%; the scorecard never changes promotion automatically.
-5. Complete product/navigation review using the verified desktop and mobile captures.
+5. Review and approve product/navigation using the verified desktop and mobile captures.
 6. Deploy separately, then smoke-test the Vercel cron and keep notifications disabled
    until an owner, acknowledgement lifecycle, and false-positive review are approved.
