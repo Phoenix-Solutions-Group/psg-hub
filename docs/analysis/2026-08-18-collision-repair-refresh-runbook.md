@@ -131,6 +131,53 @@ python3 /opt/psg/psg-hub/apps/psg-hub/scripts/import-filemaker-collision-facts.p
 The import remains hidden while loading, reconciles parsed/accepted/rejected counts,
 atomically supersedes the previous loaded snapshot, and skips an identical file.
 
+## Production database release gate
+
+A linked read-only check found that the shared Supabase migration ledger cannot use a
+normal `db push`. Five already-applied collision migrations have different timestamps
+locally and remotely. Their recorded SQL is byte-identical; the first differs only by
+the local file's final newline.
+
+| Local version  | Remote version | Migration name                      |
+| -------------- | -------------- | ----------------------------------- |
+| 20260818212107 | 20260818212317 | `collision_repair_feed_freshness`   |
+| 20260818220330 | 20260818220842 | `collision_multiweek_forecasts`     |
+| 20260818220953 | 20260818221002 | `index_collision_horizon_company`   |
+| 20260818221806 | 20260818221905 | `collision_forecast_monitoring`     |
+| 20260818222352 | 20260818222601 | `collision_insurer_alias_review`    |
+
+Do not run broad `db push`, `migration repair`, or `db pull` during this release. A
+future scoped history repair requires its own approval and coordination with the other
+applications sharing this project.
+
+After the first governed FileMaker import is reconciled, apply these reviewed files in
+order through the migration runner:
+
+1. `20260819195103_collision_storm_source_reconciliation.sql`
+2. `20260819201319_collision_forecast_readiness.sql`
+3. `20260819210842_harden_collision_example_functions.sql`
+
+The current production preconditions are: 3,986 provisional events and no matching
+source-ledger row for `noaa_spc_preliminary-20260801-20260817`; neither new view exists;
+and both legacy example RPCs have mutable search paths and browser-role execution.
+
+Postflight must prove:
+
+1. the provisional batch has one source-ledger row reporting 3,986 rows and the storm
+   reconciliation view reports it reconciled;
+2. forecast readiness returns four rows per mapped shop, one for each horizon, with an
+   explainable readiness state;
+3. both views use `security_invoker=true`, deny `anon` and `authenticated`, and allow
+   only `service_role` reads;
+4. both example RPCs have `search_path=pg_catalog, public`, deny execution to `public`,
+   `anon`, and `authenticated`, and allow `service_role`; and
+5. the Supabase security advisor no longer reports the two collision example-function
+   search-path warnings.
+
+The three-file release was applied together in a local transaction and rolled back.
+Both views passed their grant checks and the readiness view returned the four expected
+pilot horizons. The local database ledger itself remains intentionally unrepaired.
+
 ## Schedule and monitoring
 
 - The server's midnight backup and 12:30–1:40 AM FileMaker script window were verified
