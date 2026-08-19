@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the PSG collision repair refresh after FileMaker nightly work
+
+[Timer]
+OnCalendar=*-*-* 04:30:00 America/Chicago
+RandomizedDelaySec=10m
+Persistent=true
+Unit=psg-collision-refresh.service
+
+[Install]
+WantedBy=timers.target
+

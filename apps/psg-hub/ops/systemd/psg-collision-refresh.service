@@ -1,0 +1,40 @@
+[Unit]
+Description=PSG collision repair FileMaker refresh
+After=network-online.target fmshelper.service
+Wants=network-online.target
+ConditionPathExists=/opt/psg/secrets/collision-refresh.env
+
+[Service]
+Type=oneshot
+User=psg-refresh
+Group=psg-refresh
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=4h
+ExecStartPre=/usr/bin/test -r /opt/psg/secrets/collision-refresh.env
+ExecStart=/usr/bin/python3 /opt/psg/psg-hub/apps/psg-hub/scripts/export-filemaker-collision-odata.py --env-file /opt/psg/secrets/collision-refresh.env --output-file /opt/psg/runtime/filemaker-collision.csv
+ExecStart=/usr/bin/python3 /opt/psg/psg-hub/apps/psg-hub/scripts/import-filemaker-collision-facts.py --env-file /opt/psg/secrets/collision-refresh.env --input-file /opt/psg/runtime/filemaker-collision.csv --project-id gylkkzmcmbdftxieyabw --max-file-age-hours 2
+CapabilityBoundingSet=
+LockPersonality=true
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+ProtectSystem=strict
+ProcSubset=pid
+ReadOnlyPaths=/opt/psg/psg-hub /opt/psg/secrets
+ReadWritePaths=/opt/psg/runtime
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native

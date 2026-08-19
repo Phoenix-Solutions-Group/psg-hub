@@ -105,7 +105,15 @@ atomically supersedes the previous loaded snapshot, and skips an identical file.
 
 ## Schedule and monitoring
 
-- Run once daily after the FileMaker backup window; assign a named operational owner.
+- The server's midnight backup and 12:30–1:40 AM FileMaker script window were verified
+  on 2026-08-19. The staged systemd timer runs at 4:30 AM America/Chicago with up to
+  ten minutes of jitter, leaving a buffer after the separate 3:00 AM backup schedule.
+- Install `apps/psg-hub/ops/systemd/psg-collision-refresh.{service,timer}` under
+  `/etc/systemd/system/`. Keep the timer disabled until the first manual service run
+  passes every acceptance check and a named operational owner receives failures.
+- The service runs as the non-login `psg-refresh` account, reads only the mode-0600
+  operations secret, writes only `/opt/psg/runtime`, lowers CPU and I/O priority, and
+  applies systemd filesystem and privilege hardening.
 - Alert on exporter failure, row-count bounds, importer failure, or a loaded source older
   than 36 hours.
 - The dashboard cron already logs and returns HTTP 500 with `repairFeed: stale` when
