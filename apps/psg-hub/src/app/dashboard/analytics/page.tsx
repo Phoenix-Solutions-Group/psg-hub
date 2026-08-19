@@ -61,6 +61,8 @@ const SOURCE = "semrush" as const;
 const PAID_SOURCE = "google_ads" as const;
 const PERIOD = "daily" as const;
 
+export const dynamic = "force-dynamic";
+
 /** KPI definitions. Aggregate view drops authority_score — a summed score lies. */
 const PER_SHOP_KPIS = [
   { key: "organic_traffic", label: "Organic traffic" },
@@ -638,7 +640,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             aria-label="Analytics scope"
             className="flex rounded-md border border-border p-0.5"
           >
-            <Link
+            <a
               href="/dashboard/analytics"
               aria-current={!scopeAll ? "page" : undefined}
               className={`rounded px-3 py-1.5 font-heading text-sm font-medium transition-colors ${
@@ -648,8 +650,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               }`}
             >
               This shop
-            </Link>
-            <Link
+            </a>
+            <a
               href="/dashboard/analytics?scope=all"
               aria-current={scopeAll ? "page" : undefined}
               className={`rounded px-3 py-1.5 font-heading text-sm font-medium transition-colors ${
@@ -659,7 +661,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               }`}
             >
               All shops
-            </Link>
+            </a>
           </nav>
         ) : null}
       </div>
