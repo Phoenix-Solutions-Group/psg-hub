@@ -6,8 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   RIVERSIDE_ANALYTICS_DEMO_SHOP,
-  isRiversideDemoUser,
-  shouldShowRiversideAnalyticsPreviewMetrics,
+  shouldUseRiversideAnalyticsPreviewFallback,
 } from "@/lib/bsm/riverside-analytics-demo";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { shopHasTier } from "@/lib/tier/gate";
@@ -85,7 +84,7 @@ export default async function AdsPage({ searchParams }: Props) {
   }
 
   const requestHost = (await headers()).get("host");
-  const useRiversideDemo = shouldShowRiversideAnalyticsPreviewMetrics({
+  const useRiversideDemo = shouldUseRiversideAnalyticsPreviewFallback({
     userEmail: user.email,
     requestHost,
   });
