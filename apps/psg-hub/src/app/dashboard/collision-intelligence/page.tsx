@@ -190,11 +190,16 @@ export default async function CollisionIntelligencePage() {
                   potentially partial source week is excluded.
                 </p>
               </div>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <MetricCard
                   label="Workload"
                   value={`${dashboard.recentPerformance.workload.current.toLocaleString()} ROs`}
                   detail={`${formatChange(dashboard.recentPerformance.workload.changePct)} · ${dashboard.recentPerformance.workload.prior.toLocaleString()} prior`}
+                />
+                <MetricCard
+                  label="Insurance-paid workload"
+                  value={`${dashboard.recentPerformance.insuredWorkload.current.toLocaleString()} ROs`}
+                  detail={`${formatChange(dashboard.recentPerformance.insuredWorkload.changePct)} · ${dashboard.recentPerformance.insuredWorkload.prior.toLocaleString()} prior`}
                 />
                 <MetricCard
                   label="Repair value"
@@ -231,7 +236,7 @@ export default async function CollisionIntelligencePage() {
               caption="Historical customer markets for repair demand and weather exposure."
               items={dashboard.topCustomerZips.map((market) => ({
                 label: `ZIP ${market.zipCode}${market.state ? ` · ${market.state}` : ""}`,
-                detail: `${market.insuredRepairOrders.toLocaleString()} insurance-paid`,
+                detail: `${currency.format(market.repairValue)} repair value · ${market.insuredRepairOrders.toLocaleString()} insurance-paid`,
                 value: `${market.repairOrders.toLocaleString()} ROs`,
               }))}
             />
@@ -254,6 +259,45 @@ export default async function CollisionIntelligencePage() {
               }))}
             />
           </div>
+
+          {dashboard.seasonality ? (
+            <section
+              aria-labelledby="seasonality-heading"
+              className="space-y-3"
+            >
+              <div>
+                <h2 id="seasonality-heading" className="text-lg font-semibold">
+                  Seasonal demand and revenue
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Average calendar-month performance across{" "}
+                  {dashboard.seasonality.yearCount} complete source years (
+                  {dashboard.seasonality.firstYear}–
+                  {dashboard.seasonality.latestYear}). Partial boundary years
+                  are excluded.
+                </p>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <BarChartCard
+                  title="Average repairs by month"
+                  caption="Average monthly repair arrivals across the complete-year comparison window."
+                  data={dashboard.seasonality.series}
+                  dataKey="averageRepairOrders"
+                  xKey="month"
+                  ariaLabel={`Average monthly repair arrivals from ${dashboard.seasonality.firstYear} through ${dashboard.seasonality.latestYear}`}
+                />
+                <InsightListCard
+                  title="Seasonal revenue leaders"
+                  caption="Average repair value by calendar month across the same complete years."
+                  items={dashboard.seasonality.revenueLeaders.map((month) => ({
+                    label: month.month,
+                    detail: `${month.averageRepairOrders.toFixed(1)} average ROs · ${month.insuredSharePct.toFixed(1)}% insurance-paid`,
+                    value: `${currency.format(month.averageRepairValue)} avg`,
+                  }))}
+                />
+              </div>
+            </section>
+          ) : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <LineChartCard

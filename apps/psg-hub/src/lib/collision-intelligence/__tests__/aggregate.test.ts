@@ -328,6 +328,7 @@ describe("collision intelligence aggregation", () => {
       priorStart: "2025-01-06",
       priorEnd: "2025-04-06",
       workload: { current: 156, prior: 130, changePct: 20 },
+      insuredWorkload: { current: 130, prior: 104, changePct: 25 },
       repairValue: { current: 19_500, prior: 13_000, changePct: 50 },
       cycleTime: {
         current: 8,
@@ -336,6 +337,58 @@ describe("collision intelligence aggregation", () => {
         priorObservations: 130,
         changePct: -20,
       },
+    });
+  });
+
+  it("compares seasonality only across complete source years", () => {
+    const seasonalityRows = [2019, 2020, 2021, 2022].flatMap((year) =>
+      Array.from({ length: 12 }, (_, index) => {
+        const month = index + 1;
+        return {
+          arrival_year: year,
+          arrival_month: month,
+          repair_orders: month === 6 ? 20 : 10,
+          insured_repair_orders: month === 6 ? 18 : 8,
+          repair_value_cents:
+            month === 10 ? 300_000 : month === 6 ? 200_000 : 100_000,
+        };
+      }),
+    );
+
+    const dashboard = buildCollisionDashboard(
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      seasonalityRows,
+    );
+
+    expect(dashboard.seasonality).toMatchObject({
+      firstYear: 2020,
+      latestYear: 2021,
+      yearCount: 2,
+    });
+    expect(dashboard.seasonality?.revenueLeaders[0]).toMatchObject({
+      month: "Oct",
+      averageRepairOrders: 10,
+      averageRepairValue: 3_000,
+      insuredSharePct: 80,
+    });
+    expect(dashboard.seasonality?.series[5]).toMatchObject({
+      month: "Jun",
+      averageRepairOrders: 20,
+      averageRepairValue: 2_000,
+      insuredSharePct: 90,
     });
   });
 });

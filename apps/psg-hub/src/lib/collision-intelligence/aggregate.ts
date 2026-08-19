@@ -108,6 +108,14 @@ export type CollisionVehicleRow = {
   repair_value_cents: Numeric;
 };
 
+export type CollisionSeasonalityRow = {
+  arrival_year: Numeric;
+  arrival_month: Numeric;
+  repair_orders: Numeric;
+  insured_repair_orders: Numeric;
+  repair_value_cents: Numeric;
+};
+
 export type CollisionQualityRow = {
   quality_issue: string;
   affected_repairs: Numeric;
@@ -173,6 +181,10 @@ function summarizePeriod(
     (sum, row) => sum + numberOf(row.repair_orders),
     0,
   );
+  const insuredRepairOrders = period.reduce(
+    (sum, row) => sum + numberOf(row.insured_repair_orders),
+    0,
+  );
   const repairValue =
     period.reduce((sum, row) => sum + numberOf(row.repair_value_cents), 0) /
     100;
@@ -189,6 +201,7 @@ function summarizePeriod(
 
   return {
     repairOrders,
+    insuredRepairOrders,
     repairValue,
     cycleObservations,
     averageCycleDays: cycleObservations ? cycleDays / cycleObservations : null,
@@ -217,6 +230,14 @@ function recentPerformance(rows: CollisionWeeklyRow[]) {
       prior: prior.repairOrders,
       changePct: percentChange(current.repairOrders, prior.repairOrders),
     },
+    insuredWorkload: {
+      current: current.insuredRepairOrders,
+      prior: prior.insuredRepairOrders,
+      changePct: percentChange(
+        current.insuredRepairOrders,
+        prior.insuredRepairOrders,
+      ),
+    },
     repairValue: {
       current: current.repairValue,
       prior: prior.repairValue,
@@ -232,6 +253,81 @@ function recentPerformance(rows: CollisionWeeklyRow[]) {
         prior.averageCycleDays,
       ),
     },
+  };
+}
+
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+function seasonality(rows: CollisionSeasonalityRow[]) {
+  const years = [
+    ...new Set(rows.map((row) => numberOf(row.arrival_year))),
+  ].sort((a, b) => a - b);
+  const completeYears = years
+    .slice(1, -1)
+    .filter(
+      (year) =>
+        new Set(
+          rows
+            .filter((row) => numberOf(row.arrival_year) === year)
+            .map((row) => numberOf(row.arrival_month)),
+        ).size === 12,
+    )
+    .slice(-5);
+  if (!completeYears.length) return null;
+
+  const includedYears = new Set(completeYears);
+  const series = MONTHS.map((month, index) => {
+    const monthRows = rows.filter(
+      (row) =>
+        includedYears.has(numberOf(row.arrival_year)) &&
+        numberOf(row.arrival_month) === index + 1,
+    );
+    const repairOrders = monthRows.reduce(
+      (sum, row) => sum + numberOf(row.repair_orders),
+      0,
+    );
+    const insuredRepairOrders = monthRows.reduce(
+      (sum, row) => sum + numberOf(row.insured_repair_orders),
+      0,
+    );
+
+    return {
+      month,
+      averageRepairOrders: repairOrders / completeYears.length,
+      averageRepairValue:
+        monthRows.reduce(
+          (sum, row) => sum + numberOf(row.repair_value_cents),
+          0,
+        ) /
+        completeYears.length /
+        100,
+      insuredSharePct: repairOrders
+        ? (100 * insuredRepairOrders) / repairOrders
+        : 0,
+    };
+  });
+
+  return {
+    firstYear: completeYears[0],
+    latestYear: completeYears.at(-1)!,
+    yearCount: completeYears.length,
+    series,
+    revenueLeaders: [...series]
+      .sort((a, b) => b.averageRepairValue - a.averageRepairValue)
+      .slice(0, 5),
   };
 }
 
@@ -315,6 +411,7 @@ export function buildCollisionDashboard(
   modelRegistryRows: CollisionModelRegistryRow[],
   forecastMonitoringRows: CollisionForecastMonitoringRow[],
   repairFeedRows: CollisionRepairFeedRow[],
+  seasonalityRows: CollisionSeasonalityRow[] = [],
 ) {
   const weekly = [...weeklyRows].sort((a, b) =>
     a.week_start.localeCompare(b.week_start),
@@ -428,6 +525,7 @@ export function buildCollisionDashboard(
       latestWeek: weekly.at(-1)?.week_start ?? null,
     },
     recentPerformance: recentPerformance(weekly),
+    seasonality: seasonality(seasonalityRows),
     weeklySeries: [...forecastRows]
       .sort((a, b) => a.week_start.localeCompare(b.week_start))
       .slice(-52)

@@ -61,7 +61,12 @@ the authenticated user's membership before the service client is called.
 
 The recent operating trend compares the latest 13 completed source weeks with the
 preceding 13. It excludes the newest potentially partial source week, treats missing
-weeks as zero demand and value, and weights cycle time by completed-cycle observations.
+weeks as zero demand and value, reports insurance-paid arrivals under the same window,
+and weights cycle time by completed-cycle observations.
+
+Dashboard seasonality averages each calendar month across the latest five complete
+interior source years. The first and latest source years are excluded as potentially
+partial, and a year must contain all 12 monthly rows to enter the comparison.
 
 FileMaker carrier labels are available as trimmed raw labels plus lowercase
 alphanumeric-normalized labels. They support carrier-tagged repair volume and value,

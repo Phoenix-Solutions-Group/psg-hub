@@ -12,6 +12,7 @@ import {
   type CollisionModelRegistryRow,
   type CollisionQualityRow,
   type CollisionRepairFeedRow,
+  type CollisionSeasonalityRow,
   type CollisionSpcSourceRow,
   type CollisionVehicleRow,
   type CollisionWeatherRow,
@@ -42,6 +43,7 @@ export async function getCollisionDashboard(shopId: string) {
     modelRegistry,
     forecastMonitoring,
     repairFeed,
+    seasonality,
   ] = await Promise.all([
     service
       .from("v_collision_weekly_demand")
@@ -145,6 +147,14 @@ export async function getCollisionDashboard(shopId: string) {
       )
       .eq("shop_id", shopId)
       .limit(1),
+    service
+      .from("v_collision_filemaker_seasonality")
+      .select(
+        "arrival_year,arrival_month,repair_orders,insured_repair_orders,repair_value_cents",
+      )
+      .eq("shop_id", shopId)
+      .order("arrival_year", { ascending: true })
+      .order("arrival_month", { ascending: true }),
   ]);
 
   const error =
@@ -161,7 +171,8 @@ export async function getCollisionDashboard(shopId: string) {
     quality.error ??
     modelRegistry.error ??
     forecastMonitoring.error ??
-    repairFeed.error;
+    repairFeed.error ??
+    seasonality.error;
   if (error)
     throw new Error(`Collision dashboard query failed: ${error.message}`);
 
@@ -180,5 +191,6 @@ export async function getCollisionDashboard(shopId: string) {
     (modelRegistry.data ?? []) as CollisionModelRegistryRow[],
     (forecastMonitoring.data ?? []) as CollisionForecastMonitoringRow[],
     (repairFeed.data ?? []) as CollisionRepairFeedRow[],
+    (seasonality.data ?? []) as CollisionSeasonalityRow[],
   );
 }
