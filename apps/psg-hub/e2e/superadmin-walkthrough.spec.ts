@@ -20,7 +20,7 @@ test.describe("clean BSM demo admin walkthrough", () => {
     await expect(page.getByRole("heading", { name: "Internal Operations" })).toBeVisible();
     await expect(page.getByRole("link", { name: /Companies & ROs/ })).toBeVisible();
     await expect(page.getByRole("link", { name: "Production", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Content Approvals", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "BSM Content Approvals", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Superadmin/ })).toBeVisible();
     await shoot(page, "focused-bsm-ops-home");
 
@@ -57,7 +57,7 @@ test.describe("clean BSM demo admin walkthrough", () => {
     await expect(page.getByRole("button", { name: "Save role" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Add shop access" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Save tier" }).first()).toBeVisible();
-    await expect(demoAdminCard.getByText("Current shop access")).toBeVisible();
+    await expect(demoAdminCard.getByText("Current shop access").first()).toBeVisible();
     await expect(page.getByRole("option", { name: /Growth/ }).first()).toBeAttached();
     await expect(page.getByRole("option", { name: /Performance/ }).first()).toBeAttached();
     await shoot(page, "focused-bsm-ops-admin-users");

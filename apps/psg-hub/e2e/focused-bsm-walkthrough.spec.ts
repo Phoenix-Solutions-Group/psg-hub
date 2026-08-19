@@ -10,9 +10,10 @@ test.describe("clean BSM demo user walkthrough", () => {
   }) => {
     await page.goto("/dashboard");
     await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Analytics" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Billing" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Invoices" })).toBeVisible();
+    const customerNav = page.locator("aside nav");
+    await expect(customerNav.getByRole("link", { name: "Analytics", exact: true })).toBeVisible();
+    await expect(customerNav.getByRole("link", { name: "Billing", exact: true })).toBeVisible();
+    await expect(customerNav.getByRole("link", { name: "Invoices", exact: true })).toBeVisible();
   });
 
   test("analytics is visible and useful", async ({ page }) => {
