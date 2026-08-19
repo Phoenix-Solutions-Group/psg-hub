@@ -60,12 +60,17 @@ export class InHouseAdapter implements MailAdapter {
 
   /**
    * Queue a print-ready piece for the in-house facility / print partner. Requires a
-   * rendered asset (postcard `front` or letter `file`) — without it there is nothing
-   * to print, which is a caller bug (non-retryable), not a transient failure.
+   * rendered asset (postcard `front`, letter `file`, or self-mailer `inside` /
+   * `outside`) — without it there is nothing to print, which is a caller bug
+   * (non-retryable), not a transient failure.
    */
   async submit(document: MailDocument): Promise<MailSubmissionResult> {
     const asset =
-      document.pieceType === "postcard" ? document.front : document.file;
+      document.pieceType === "postcard"
+        ? document.front
+        : document.pieceType === "self_mailer"
+          ? document.inside ?? document.outside
+          : document.file;
     if (!asset) {
       throw new MailProductionError(
         `In-house submit: ${document.pieceType} ${document.documentId} has no rendered asset`,

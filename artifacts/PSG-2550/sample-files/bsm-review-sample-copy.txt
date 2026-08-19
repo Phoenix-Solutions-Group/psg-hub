@@ -1,0 +1,13 @@
+BSM Review Sample: Plain Text Copy
+
+This is demo-safe plain text for testing the Body Shop Marketer content reviewer.
+
+Review checks:
+- Confirm the text file opens in the browser review view.
+- Add a reviewer comment.
+- Submit a review decision.
+
+Sample customer-facing copy:
+Phoenix Demo Collision helps drivers understand repair timelines after a minor collision. Please review this draft before PSG turns it into a landing page or email.
+
+Demo content only. Do not publish.

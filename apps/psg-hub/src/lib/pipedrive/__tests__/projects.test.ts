@@ -412,8 +412,15 @@ describe("createProjectsClient — transport (PSG-588: /api/ base path + v1/v2 p
 
   it("listDealProducts reads /api/v1/deals/{id}/products and normalizes name + sku (PSG-668)", async () => {
     const { fetchImpl, calls } = recordingFetch([
-      { product_id: 26, name: "Website Design & Build", sku: "psg_p_026 " },
-      { product_id: 5, name: "Legacy line", product: { code: "OLD_CODE" } },
+      {
+        product_id: 26,
+        name: "Website Design & Build",
+        sku: "psg_p_026 ",
+        quantity: "1",
+        sum: "6500",
+        billing_frequency: "one-time",
+      },
+      { product_id: 5, name: "Legacy line", product: { code: "OLD_CODE" }, sum: 250 },
       { product_id: 9, name: "No sku item" },
     ]);
     const rows = await client(fetchImpl).listDealProducts!(3915);
@@ -422,9 +429,30 @@ describe("createProjectsClient — transport (PSG-588: /api/ base path + v1/v2 p
     expect(u.pathname).toBe("/api/v1/deals/3915/products");
     expect(u.searchParams.get("api_token")).toBe(TOKEN);
     expect(rows).toEqual([
-      { name: "Website Design & Build", sku: "psg_p_026", productId: 26 },
-      { name: "Legacy line", sku: "OLD_CODE", productId: 5 }, // falls back to product.code
-      { name: "No sku item", sku: null, productId: 9 },
+      {
+        name: "Website Design & Build",
+        sku: "psg_p_026",
+        productId: 26,
+        quantity: 1,
+        sum: 6500,
+        billingFrequency: "one-time",
+      },
+      {
+        name: "Legacy line",
+        sku: "OLD_CODE",
+        productId: 5,
+        quantity: null,
+        sum: 250,
+        billingFrequency: null,
+      }, // falls back to product.code
+      {
+        name: "No sku item",
+        sku: null,
+        productId: 9,
+        quantity: null,
+        sum: null,
+        billingFrequency: null,
+      },
     ]);
   });
 
@@ -525,6 +553,117 @@ describe("createProjectsClient — PSG-642 thin v2-Tasks adapter (updateTask + a
     expect(form.get("project_id")).toBe("42");
     expect(form.has("file")).toBe(true);
     expect(form.get("file")).toBeInstanceOf(Blob);
+  });
+
+  it("updateDeal PUTs /api/v1/deals/{id} with only the changed fields, token in query", async () => {
+    const { fetchImpl, calls } = recordingFetch({ id: 42 });
+    const res = await client(fetchImpl).updateDeal!(42, {
+      first_contact_date: "2026-07-15",
+    });
+    expect(res.id).toBe(42);
+
+    const u = new URL(calls[0].url);
+    expect(calls[0].method).toBe("PUT");
+    expect(`${u.origin}${u.pathname}`).toBe("https://psg.pipedrive.com/api/v1/deals/42");
+    expect(u.searchParams.get("api_token")).toBe(TOKEN);
+    expect(JSON.parse(String(calls[0].body))).toEqual({
+      first_contact_date: "2026-07-15",
+    });
+  });
+
+  it("updateOrganization PUTs /api/v1/organizations/{id} with only the changed fields", async () => {
+    const { fetchImpl, calls } = recordingFetch({ id: 9 });
+    const res = await client(fetchImpl).updateOrganization!(9, {
+      address: "123 Main St, Phoenix, AZ 85001",
+      org_phone_key: "(602) 555-0100",
+    });
+    expect(res.id).toBe(9);
+
+    const u = new URL(calls[0].url);
+    expect(calls[0].method).toBe("PUT");
+    expect(`${u.origin}${u.pathname}`).toBe("https://psg.pipedrive.com/api/v1/organizations/9");
+    expect(u.searchParams.get("api_token")).toBe(TOKEN);
+    expect(JSON.parse(String(calls[0].body))).toEqual({
+      address: "123 Main St, Phoenix, AZ 85001",
+      org_phone_key: "(602) 555-0100",
+    });
+  });
+
+  it("rejects Handoff Complete=Yes when a required handoff field is blank", async () => {
+    const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        method: String(init?.method ?? "GET"),
+        body: init?.body,
+      });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: {
+            id: 42,
+            "12553": "https://billing.example/customer/42",
+            "12557": "",
+            "12558": 101,
+            "12559": 102,
+            "12560": "https://psg.pipedrive.com/project/900",
+          },
+        }),
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    await expect(
+      client(fetchImpl).updateDeal!(42, {
+        handoff_complete: "Yes",
+      }),
+    ).rejects.toThrow(
+      "Cannot mark Handoff Complete as Yes until these fields are filled: Google Shared Drive Folder Link.",
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.method).toBe("GET");
+    expect(new URL(calls[0]!.url).pathname).toBe("/api/v1/deals/42");
+  });
+
+  it("allows Handoff Complete=Yes when all required handoff fields are present", async () => {
+    const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        method: String(init?.method ?? "GET"),
+        body: init?.body,
+      });
+      const method = String(init?.method ?? "GET");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: method === "GET" ? { id: 42 } : { id: 42 },
+        }),
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    const res = await client(fetchImpl).updateDeal!(42, {
+      handoff_complete: "Yes",
+      "12553": "https://billing.example/customer/42",
+      "12557": "https://drive.google.com/drive/folders/abc",
+      "12558": 101,
+      "12559": 102,
+      "12560": "https://psg.pipedrive.com/project/900",
+    });
+
+    expect(res.id).toBe(42);
+    expect(calls.map((call) => call.method)).toEqual(["GET", "PUT"]);
+    expect(JSON.parse(String(calls[1]?.body))).toEqual({
+      handoff_complete: "Yes",
+      "12553": "https://billing.example/customer/42",
+      "12557": "https://drive.google.com/drive/folders/abc",
+      "12558": 101,
+      "12559": 102,
+      "12560": "https://psg.pipedrive.com/project/900",
+    });
   });
 
   it("updateTask surfaces a secret-free error on non-2xx (path + status only)", async () => {

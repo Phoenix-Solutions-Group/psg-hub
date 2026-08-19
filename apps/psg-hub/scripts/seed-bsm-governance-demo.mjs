@@ -1,0 +1,617 @@
+#!/usr/bin/env node
+import path from "node:path";
+import process from "node:process";
+import { createClient } from "@supabase/supabase-js";
+import {
+  assertSupabaseSeedEnvNotCrossWired,
+  loadSeedEnvFiles,
+} from "./supabase-seed-env-guard.mjs";
+
+const APPLY = process.argv.includes("--apply");
+const root = process.cwd();
+const DRY_RUN_UUID = "00000000-0000-4000-8000-000000000000";
+
+const seedEnvSources = loadSeedEnvFiles([
+  path.join(root, ".env.local"),
+  path.join(root, "apps/psg-hub/.env.local"),
+]);
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const RIVERSIDE = {
+  clientName: "Riverside Collision",
+  shopSlug: "riverside-collision",
+  companyName: "Riverside Collision",
+  productName: "Demo Thank-You Letter Program",
+  customer: {
+    firstName: "Maria",
+    lastName: "Alvarez",
+    email: "maria.alvarez@example.invalid",
+    phone: "555-014-4821",
+    address: {
+      line1: "185 Berry St Ste 6100",
+      city: "San Francisco",
+      state: "CA",
+      postal_code: "94107",
+    },
+  },
+  companyAddress: {
+    line1: "2400 Harbor Drive",
+    city: "San Francisco",
+    state: "CA",
+    postal_code: "94107",
+  },
+};
+
+const PROOF_URL =
+  "/api/ops/production/templates/thank_you/proof?format=html&seed=riverside";
+
+if (!url || !serviceKey) {
+  throw new Error(
+    "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Run from an environment configured for the demo host."
+  );
+}
+assertSupabaseSeedEnvNotCrossWired(seedEnvSources);
+
+const supabase = createClient(url, serviceKey, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+
+function logStep(message) {
+  console.log(`${APPLY ? "apply" : "dry-run"}: ${message}`);
+}
+
+async function findFirst(table, select, filters) {
+  let query = supabase.from(table).select(select).limit(1);
+  for (const [column, value] of Object.entries(filters)) query = query.eq(column, value);
+  const { data, error } = await query;
+  if (error) throw new Error(`${table} lookup failed: ${error.message}`);
+  return data?.[0] ?? null;
+}
+
+async function upsertByLookup({ table, select = "id", filters, insert, update, label }) {
+  const existing = await findFirst(table, select, filters);
+  if (!APPLY) {
+    logStep(`${existing ? "would update" : "would insert"} ${label}`);
+    return { id: existing?.id ?? DRY_RUN_UUID };
+  }
+  if (existing) {
+    const { data, error } = await supabase
+      .from(table)
+      .update(update ?? insert)
+      .eq("id", existing.id)
+      .select(select)
+      .single();
+    if (error) throw new Error(`${label} update failed: ${error.message}`);
+    logStep(`updated ${label}`);
+    return data;
+  }
+  const { data, error } = await supabase.from(table).insert(insert).select(select).single();
+  if (error) throw new Error(`${label} insert failed: ${error.message}`);
+  logStep(`inserted ${label}`);
+  return data;
+}
+
+async function seedCoreRows() {
+  const client = await upsertByLookup({
+    table: "clients",
+    filters: { name: RIVERSIDE.clientName },
+    insert: {
+      name: RIVERSIDE.clientName,
+      website_url: "https://riversidecollision.example",
+      primary_market: "San Francisco, CA",
+      zip_code: "94107",
+    },
+    update: {
+      website_url: "https://riversidecollision.example",
+      primary_market: "San Francisco, CA",
+      zip_code: "94107",
+    },
+    label: "Riverside client",
+  });
+
+  const shop = await upsertByLookup({
+    table: "shops",
+    filters: { name: RIVERSIDE.clientName },
+    insert: {
+      client_id: client.id,
+      name: RIVERSIDE.clientName,
+      slug: RIVERSIDE.shopSlug,
+      url: "https://riversidecollision.example",
+      telephone: "(555) 014-7821",
+      address_street: RIVERSIDE.companyAddress.line1,
+      address_locality: RIVERSIDE.companyAddress.city,
+      address_region: RIVERSIDE.companyAddress.state,
+      address_postal_code: RIVERSIDE.companyAddress.postal_code,
+      address_country: "US",
+    },
+    update: {
+      client_id: client.id,
+      slug: RIVERSIDE.shopSlug,
+      url: "https://riversidecollision.example",
+      telephone: "(555) 014-7821",
+      address_street: RIVERSIDE.companyAddress.line1,
+      address_locality: RIVERSIDE.companyAddress.city,
+      address_region: RIVERSIDE.companyAddress.state,
+      address_postal_code: RIVERSIDE.companyAddress.postal_code,
+      address_country: "US",
+    },
+    label: "Riverside shop",
+  });
+
+  const company = await upsertByLookup({
+    table: "companies",
+    filters: { name: RIVERSIDE.companyName },
+    insert: {
+      shop_id: shop.id,
+      name: RIVERSIDE.companyName,
+      address: RIVERSIDE.companyAddress,
+      phone: "(555) 014-7821",
+      contact: "Pat Morgan",
+      status: "active",
+    },
+    update: {
+      shop_id: shop.id,
+      address: RIVERSIDE.companyAddress,
+      phone: "(555) 014-7821",
+      contact: "Pat Morgan",
+      status: "active",
+    },
+    label: "Riverside company",
+  });
+
+  const product = await upsertByLookup({
+    table: "products",
+    filters: { name: RIVERSIDE.productName },
+    insert: {
+      name: RIVERSIDE.productName,
+      description: "Demo-only thank-you mail program for governance screenshots.",
+      selling_price_cents: 0,
+    },
+    update: {
+      description: "Demo-only thank-you mail program for governance screenshots.",
+      selling_price_cents: 0,
+    },
+    label: "Riverside thank-you product",
+  });
+
+  const location = await upsertByLookup({
+    table: "locations",
+    filters: { shop_id: shop.id, slug: "primary" },
+    insert: {
+      shop_id: shop.id,
+      name: RIVERSIDE.clientName,
+      slug: "primary",
+      is_primary: true,
+    },
+    update: {
+      name: RIVERSIDE.clientName,
+      is_primary: true,
+    },
+    label: "Riverside primary location",
+  });
+
+  await upsertByLookup({
+    table: "company_programs",
+    filters: { company_id: company.id, product_id: product.id },
+    insert: {
+      company_id: company.id,
+      product_id: product.id,
+      quantity: 1,
+      unit_price_cents: 0,
+      customizations_jsonb: {
+        greeting: "We truly appreciate your business.",
+        footer: "Riverside Collision ·",
+        addressLine1: RIVERSIDE.companyAddress.line1,
+        addressLine2: `${RIVERSIDE.companyAddress.city}, ${RIVERSIDE.companyAddress.state} ${RIVERSIDE.companyAddress.postal_code}`,
+        ownerName: "Pat Morgan",
+        ownerFirstName: "Pat",
+        ownerTitle: "Owner",
+        ownerDirectLine: "(555) 014-7822",
+        surveyUrl: "www.theacrb.com",
+        pieceCode: "PS682",
+        jobNumber: "RIV-1042.07",
+        hasWarranty: "true",
+        warrantyTerm: "for as long as you own the vehicle",
+      },
+    },
+    label: "Riverside company program",
+  });
+
+  const customer = await upsertByLookup({
+    table: "repair_customers",
+    filters: {
+      company_id: company.id,
+      first_name: RIVERSIDE.customer.firstName,
+      last_name: RIVERSIDE.customer.lastName,
+    },
+    insert: {
+      company_id: company.id,
+      first_name: RIVERSIDE.customer.firstName,
+      last_name: RIVERSIDE.customer.lastName,
+      email: RIVERSIDE.customer.email,
+      phone: RIVERSIDE.customer.phone,
+      address: RIVERSIDE.customer.address,
+    },
+    update: {
+      email: RIVERSIDE.customer.email,
+      phone: RIVERSIDE.customer.phone,
+      address: RIVERSIDE.customer.address,
+    },
+    label: "Maria Alvarez repair customer",
+  });
+
+  return { shop, company, product, customer, location };
+}
+
+async function seedContent({ shop, location }) {
+  await upsertByLookup({
+    table: "content_items",
+    filters: {
+      shop_id: shop.id,
+      title: "Riverside Collision July repair tips",
+    },
+    insert: {
+      shop_id: shop.id,
+      location_id: location.id,
+      type: "blog_post",
+      title: "Riverside Collision July repair tips",
+      body:
+        "# Riverside Collision July repair tips\n\n" +
+        "PSG prepared this customer-facing article so Riverside can educate drivers before storm season.\n\n" +
+        "- Check lamps and sensors after any bumper impact\n" +
+        "- Schedule an estimate before small damage spreads\n" +
+        "- Keep photos and claim numbers ready for the repair team",
+      status: "pending_review",
+      updated_at: "2026-07-12T16:00:00.000Z",
+    },
+    update: {
+      location_id: location.id,
+      type: "blog_post",
+      body:
+        "# Riverside Collision July repair tips\n\n" +
+        "PSG prepared this customer-facing article so Riverside can educate drivers before storm season.\n\n" +
+        "- Check lamps and sensors after any bumper impact\n" +
+        "- Schedule an estimate before small damage spreads\n" +
+        "- Keep photos and claim numbers ready for the repair team",
+      status: "pending_review",
+      updated_at: "2026-07-12T16:00:00.000Z",
+    },
+    label: "Riverside customer content item",
+  });
+}
+
+async function seedProduction({ company, product, customer }) {
+  const activeBatch = await upsertByLookup({
+    table: "production_batches",
+    filters: { name: "DEMO Riverside thank-you queued" },
+    insert: {
+      name: "DEMO Riverside thank-you queued",
+      company_id: company.id,
+      product_id: product.id,
+      status: "queued",
+      vendor: "inhouse",
+      document_count: 1,
+    },
+    update: {
+      company_id: company.id,
+      product_id: product.id,
+      status: "queued",
+      vendor: "inhouse",
+      document_count: 1,
+      printed_at: null,
+    },
+    label: "queued production batch",
+  });
+
+  await upsertByLookup({
+    table: "production_documents",
+    filters: { batch_id: activeBatch.id, repair_customer_id: customer.id },
+    insert: productionDocument({
+      batchId: activeBatch.id,
+      companyId: company.id,
+      productId: product.id,
+      customerId: customer.id,
+      status: "rendered",
+      externalId: null,
+      expectedDeliveryDate: null,
+    }),
+    update: productionDocument({
+      batchId: activeBatch.id,
+      companyId: company.id,
+      productId: product.id,
+      customerId: customer.id,
+      status: "rendered",
+      externalId: null,
+      expectedDeliveryDate: null,
+    }),
+    label: "queued Maria production document",
+  });
+
+  const historicalBatch = await upsertByLookup({
+    table: "production_batches",
+    filters: { name: "DEMO Riverside thank-you mailed" },
+    insert: {
+      name: "DEMO Riverside thank-you mailed",
+      company_id: company.id,
+      product_id: product.id,
+      status: "historical",
+      vendor: "inhouse",
+      document_count: 1,
+      printed_at: "2026-07-10T15:30:00.000Z",
+    },
+    update: {
+      company_id: company.id,
+      product_id: product.id,
+      status: "historical",
+      vendor: "inhouse",
+      document_count: 1,
+      printed_at: "2026-07-10T15:30:00.000Z",
+    },
+    label: "historical production batch",
+  });
+
+  await upsertByLookup({
+    table: "production_documents",
+    filters: { batch_id: historicalBatch.id, repair_customer_id: customer.id },
+    insert: productionDocument({
+      batchId: historicalBatch.id,
+      companyId: company.id,
+      productId: product.id,
+      customerId: customer.id,
+      status: "mailed",
+      externalId: "DEMO-MAILED-RIVERSIDE-001",
+      expectedDeliveryDate: "2026-07-14",
+    }),
+    update: productionDocument({
+      batchId: historicalBatch.id,
+      companyId: company.id,
+      productId: product.id,
+      customerId: customer.id,
+      status: "mailed",
+      externalId: "DEMO-MAILED-RIVERSIDE-001",
+      expectedDeliveryDate: "2026-07-14",
+    }),
+    label: "historical Maria production document",
+  });
+}
+
+function productionDocument({
+  batchId,
+  companyId,
+  productId,
+  customerId,
+  status,
+  externalId,
+  expectedDeliveryDate,
+}) {
+  return {
+    batch_id: batchId,
+    company_id: companyId,
+    repair_customer_id: customerId,
+    product_id: productId,
+    piece_type: "letter",
+    color: true,
+    size: "8.5x11",
+    to_address: {
+      name: "Maria Alvarez",
+      ...RIVERSIDE.customer.address,
+    },
+    from_address: {
+      name: RIVERSIDE.companyName,
+      ...RIVERSIDE.companyAddress,
+    },
+    status,
+    vendor: "inhouse",
+    external_id: externalId,
+    rendered_url: PROOF_URL,
+    proof_url: PROOF_URL,
+    expected_delivery_date: expectedDeliveryDate,
+  };
+}
+
+async function seedCcc({ shop }) {
+  const rows = [
+    {
+      ccc_account_id: "BSMDEMO-CONNECTED",
+      facility_id: "RIV-CCC-001",
+      connection_status: "connected",
+      enabled_at: "2026-07-08T14:00:00.000Z",
+      last_event_at: "2026-07-11T18:45:00.000Z",
+      last_event_label: "Workfile saved",
+      error_reason: null,
+      declined_reason: null,
+    },
+    {
+      ccc_account_id: "BSMDEMO-PENDING",
+      facility_id: "RIV-CCC-002",
+      connection_status: "pending_review",
+      enabled_at: "2026-07-11T14:15:00.000Z",
+      last_event_at: "2026-07-11T14:15:00.000Z",
+      last_event_label: "Shop enabled BSM in CCC ONE",
+      error_reason: null,
+      declined_reason: null,
+    },
+    {
+      ccc_account_id: "BSMDEMO-ERROR",
+      facility_id: "RIV-CCC-003",
+      connection_status: "error",
+      enabled_at: "2026-07-07T09:00:00.000Z",
+      last_event_at: "2026-07-11T17:30:00.000Z",
+      last_event_label: "Import failed",
+      error_reason: "auth_expired",
+      declined_reason: null,
+    },
+  ];
+
+  for (const row of rows) {
+    const existing = await findFirst("ccc_accounts", "id", {
+      ccc_account_id: row.ccc_account_id,
+    });
+    const payload = {
+      shop_id: shop.id,
+      credential_kind: "unconfirmed",
+      status: row.connection_status === "error" ? "error" : "linked",
+      ...row,
+    };
+    if (!APPLY) {
+      logStep(`${existing ? "would update" : "would insert"} CCC ${row.ccc_account_id}`);
+      continue;
+    }
+    if (existing) {
+      const { error } = await supabase.from("ccc_accounts").update(payload).eq("id", existing.id);
+      if (error) throw new Error(`CCC ${row.ccc_account_id} update failed: ${error.message}`);
+      logStep(`updated CCC ${row.ccc_account_id}`);
+    } else {
+      const { error } = await supabase.from("ccc_accounts").insert(payload);
+      if (error) throw new Error(`CCC ${row.ccc_account_id} insert failed: ${error.message}`);
+      logStep(`inserted CCC ${row.ccc_account_id}`);
+    }
+  }
+}
+
+async function findProfileByEmail(email) {
+  if (!email) return null;
+  const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) throw new Error(`auth user lookup failed: ${error.message}`);
+  const user = data?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+  if (!user) return null;
+  const profile = await findFirst("profiles", "id, display_name", { id: user.id });
+  return profile ?? { id: user.id, display_name: email };
+}
+
+async function findDemoActor() {
+  const fromEnv = await findProfileByEmail(process.env.DEMO_OPERATOR_EMAIL);
+  if (fromEnv) return fromEnv;
+
+  const roleRows = await supabase
+    .from("app_user_roles")
+    .select("profile_id")
+    .eq("role", "psg_superadmin")
+    .limit(1);
+  if (roleRows.error) throw new Error(`superadmin role lookup failed: ${roleRows.error.message}`);
+  const profileId = roleRows.data?.[0]?.profile_id;
+  if (!profileId) throw new Error("No psg_superadmin profile found for demo audit seed.");
+  return (await findFirst("profiles", "id, display_name", { id: profileId })) ?? { id: profileId };
+}
+
+async function findTargetProfile(actorId) {
+  const shopUser = await supabase
+    .from("shop_users")
+    .select("user_id")
+    .neq("user_id", actorId)
+    .limit(1);
+  if (shopUser.error) throw new Error(`shop user lookup failed: ${shopUser.error.message}`);
+  const targetId = shopUser.data?.[0]?.user_id;
+  if (!targetId) return null;
+  return (await findFirst("profiles", "id, display_name", { id: targetId })) ?? { id: targetId };
+}
+
+async function insertAuditIfMissing(row) {
+  const existing = await supabase
+    .from("access_audit")
+    .select("id")
+    .eq("actor_profile_id", row.actor_profile_id)
+    .eq("action", row.action)
+    .eq("payload_jsonb->>demoSeed", "psg-1198")
+    .eq("payload_jsonb->>demoKey", row.payload_jsonb.demoKey)
+    .limit(1);
+  if (existing.error) throw new Error(`audit lookup failed: ${existing.error.message}`);
+
+  if (!APPLY) {
+    logStep(`${existing.data?.length ? "would keep" : "would insert"} access audit ${row.payload_jsonb.demoKey}`);
+    return;
+  }
+  if (existing.data?.length) {
+    logStep(`kept access audit ${row.payload_jsonb.demoKey}`);
+    return;
+  }
+
+  const { error } = await supabase.from("access_audit").insert(row);
+  if (error) throw new Error(`access audit ${row.payload_jsonb.demoKey} insert failed: ${error.message}`);
+  logStep(`inserted access audit ${row.payload_jsonb.demoKey}`);
+}
+
+async function seedAccessAudit({ shop }) {
+  const actor = await findDemoActor();
+  const targetProfile = await findTargetProfile(actor.id);
+  const base = {
+    actor_profile_id: actor.id,
+    target_shop_id: shop.id,
+  };
+
+  const rows = [
+    {
+      ...base,
+      target_profile_id: targetProfile?.id ?? null,
+      action: "role.grant",
+      payload_jsonb: {
+        demoSeed: "psg-1198",
+        demoKey: "role-grant-demo-manager",
+        name: targetProfile?.display_name || "Demo shop manager",
+        role: "shop_admin",
+        fromRole: "viewer",
+        toRole: "shop_admin",
+        reason: "Prepared demo manager access for Body Shop Marketer walkthrough.",
+      },
+      ts: "2026-07-11T20:44:00.000Z",
+    },
+    {
+      ...base,
+      target_profile_id: targetProfile?.id ?? null,
+      action: "module_access.grant",
+      payload_jsonb: {
+        demoSeed: "psg-1198",
+        demoKey: "module-grant-analytics",
+        slug: "analytics",
+        effect: "allow",
+        name: targetProfile?.display_name || "Demo shop manager",
+        reason: "Enabled analytics module for demo account.",
+      },
+      ts: "2026-07-11T20:46:00.000Z",
+    },
+    {
+      ...base,
+      target_profile_id: null,
+      action: "production.template.release",
+      payload_jsonb: {
+        demoSeed: "psg-1198",
+        demoKey: "template-release-thank-you",
+        slug: "thank_you",
+        name: "Demo Thank-You Letter Program",
+        status: "released",
+        reason: "Released demo mail template after proof review.",
+      },
+      ts: "2026-07-11T20:48:00.000Z",
+    },
+  ];
+
+  for (const row of rows) await insertAuditIfMissing(row);
+}
+
+async function main() {
+  console.log(`Target Supabase host: ${new URL(url).host}`);
+  if (!APPLY) {
+    console.log("Dry run only. Re-run with --apply to write the demo seed rows.");
+  }
+
+  const core = await seedCoreRows();
+  await seedProduction(core);
+  await seedContent(core);
+  await seedCcc(core);
+  await seedAccessAudit(core);
+
+  console.log("Done.");
+  console.log("Recapture:");
+  console.log("- /ops/production");
+  console.log("- /ops/admin/integrations/ccc");
+  console.log("- /dashboard/content");
+  console.log(`- ${PROOF_URL}`);
+  console.log("- /ops/production/artwork (deployment status only)");
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exitCode = 1;
+});

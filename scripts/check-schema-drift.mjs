@@ -74,9 +74,10 @@ function loadManifest() {
 
 // Accept either the raw json_build_object row, or a {tables, storageBuckets} object.
 function normalizeObjects(parsed) {
-  const obj = Array.isArray(parsed)
-    ? (parsed[0]?.json_build_object ?? parsed[0] ?? {})
-    : (parsed.json_build_object ?? parsed);
+  const source = parsed?.rows ?? parsed?.data ?? parsed;
+  const obj = Array.isArray(source)
+    ? (source[0]?.json_build_object ?? source[0] ?? {})
+    : (source.json_build_object ?? source);
   return {
     tables: (obj.tables ?? []).map(String),
     buckets: (obj.storageBuckets ?? obj.buckets ?? []).map(String),

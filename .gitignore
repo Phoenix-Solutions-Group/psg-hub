@@ -4,6 +4,7 @@
 .env
 .env.*
 !.env.example
+setup.env
 *.pem
 *.key
 *credential*.json
@@ -19,12 +20,31 @@ out/
 build/
 dist/
 coverage/
+.cache/
+.corepack/
+.corepack-cache/
+.local/
+.ms-playwright/
+.npm-cache/
+.paperclip-home/
+.pnpm-home/
+.supabase/
+artifacts/
+apps/psg-hub/.cache/
+apps/psg-hub/.corepack/
+apps/psg-hub/.corepack-cache/
+apps/psg-hub/.local/
+apps/psg-hub/.paperclip-home/
+apps/psg-hub/.pw-browsers/
+apps/psg-hub/.supabase/
+apps/psg-hub/artifacts/
 *.tsbuildinfo
 next-env.d.ts
 __pycache__/
 .pytest_cache/
 .venv/
 *.pyc
+apps/psg-hub/.playwright-browsers/
 
 # pnpm
 .pnpm-store/

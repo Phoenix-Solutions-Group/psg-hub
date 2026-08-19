@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { decideDashboardAccess, getDashboardAccess } from "@/lib/auth/shop-access";
+import { decideDashboardAccess, getDashboardAccess, postLoginPathFor } from "@/lib/auth/shop-access";
 
 // Mutable mock state (names must start with `mock` to satisfy vi.mock hoisting).
 let mockRoleRow: { role: string } | null = null;
@@ -47,6 +47,18 @@ describe("decideDashboardAccess", () => {
 
   it("null role WITH a shop passes (membership is sufficient)", () => {
     expect(decideDashboardAccess({ role: null, shopIds: ["shop-1"] })).toBe("pass");
+  });
+});
+
+describe("postLoginPathFor", () => {
+  it("sends PSG admins and internal staff directly to Ops after login", () => {
+    expect(postLoginPathFor({ role: "psg_superadmin" })).toBe("/ops");
+    expect(postLoginPathFor({ role: "psg_internal" })).toBe("/ops");
+  });
+
+  it("keeps customer users on the client dashboard after login", () => {
+    expect(postLoginPathFor({ role: "customer" })).toBe("/dashboard");
+    expect(postLoginPathFor({ role: null })).toBe("/dashboard");
   });
 });
 

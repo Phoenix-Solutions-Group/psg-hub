@@ -1,0 +1,95 @@
+{
+  "generatedAt": "2026-07-17T15:38:23.909Z",
+  "dryRunOnly": true,
+  "liveWrites": 0,
+  "fieldKeyMap": {
+    "psgId": "f9036ab08f3060c05153ff91d2085270a935a8b4",
+    "status": "d951c5339056146e633711ba1451baa420b60aa0",
+    "phone": "04b2473348bdf2df769dcc3d40323bd319465965",
+    "portalCustomer": "5368733239b9b8f92c83b4ebc2fd2c083bfc0977",
+    "databaseName": "e1ef5b453f53bd9df792f5145a5a8fd80d20a5aa",
+    "displayName": "d6dfb1cfee548ef9e680962ddcbce413a3fda68d",
+    "quickBooksCustomerId": "921b3b004023b2835a58ac99f31c1704df773974",
+    "msoNumber": "d75f2d24f4b1c2c1eb0bba235a116723ec40d7ed"
+  },
+  "counts": {
+    "pipedriveOrganizations": 2493,
+    "fileMakerRows": 280,
+    "supabaseRows": 38386,
+    "totalSourceRows": 37003,
+    "matchedRows": 7788,
+    "unmatchedRows": 29215,
+    "proposedActionRows": 21276,
+    "safeBlankFills": 33,
+    "alreadyCurrent": 5868,
+    "existingConflicts": 14350,
+    "reviewHolds": 15375
+  },
+  "byClassification": {
+    "already_current": 5868,
+    "name_review": 1025,
+    "safe_fill": 33,
+    "existing_conflict": 14350
+  },
+  "byTargetField": {
+    "PSG ID": 379,
+    "Phone": 7361,
+    "Address": 7404,
+    "Website": 6132
+  },
+  "inventoryByMatchStrategy": {
+    "exact_psg_id": 353,
+    "unmatched": 29215,
+    "exact_name_only": 2222,
+    "fuzzy_name": 90,
+    "exact_name_state": 91,
+    "exact_website_domain": 4201,
+    "exact_phone": 831
+  },
+  "inventoryByAddressCheck": {
+    "source_missing_address": 377,
+    "unmatched": 29215,
+    "both_missing_address": 7,
+    "address_conflict_or_stale": 6597,
+    "pipedrive_missing_address": 84,
+    "address_matches": 723
+  },
+  "topReviewHoldReasons": [
+    {
+      "key": "Pipedrive already has a different value. Do not overwrite automatically.",
+      "count": 7753
+    },
+    {
+      "key": "Pipedrive and source address differ. This may be stale data, duplicate locations, or a name collision.",
+      "count": 6597
+    },
+    {
+      "key": "Match needs human review before any blank field can be filled.",
+      "count": 1025
+    }
+  ],
+  "outputFiles": [
+    "psg2059_customer_inventory_all.csv",
+    "psg2059_pipedrive_standardization_actions.csv",
+    "psg2059_safe_blank_fills.csv",
+    "psg2059_review_holds.csv",
+    "psg2059_customer_inventory_summary.json",
+    "psg2059_customer_inventory_report.md"
+  ],
+  "websiteTrackingGuard": {
+    "safeFillPolicy": "Website values are stripped of campaign/referral tracking before they can remain in safe_fill.",
+    "blockedPatterns": [
+      "utm_*",
+      "gclid",
+      "fbclid",
+      "gbraid",
+      "wbraid",
+      "msclkid",
+      "mc_cid",
+      "mc_eid",
+      "mcmid",
+      "y_source",
+      "google.com/url"
+    ]
+  }
+}

@@ -33,7 +33,9 @@ export function LoginForm({ notice }: { notice?: string | null }) {
       return;
     }
 
-    router.push("/dashboard");
+    const res = await fetch("/api/auth/post-login", { cache: "no-store" });
+    const data = (await res.json().catch(() => ({}))) as { redirectTo?: string };
+    router.push(data.redirectTo === "/ops" ? "/ops" : "/dashboard");
     router.refresh();
   }
 

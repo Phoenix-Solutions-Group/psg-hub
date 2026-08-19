@@ -128,6 +128,11 @@ export interface PipedriveUser {
   /** Whether the user is active (deactivated users should not be assigned work). */
   active: boolean;
 }
+export interface PipedriveDealPerson {
+  id: number;
+  name: string | null;
+  email: string | null;
+}
 export interface CreateProjectInput {
   title: string;
   board_id: number;
@@ -184,6 +189,124 @@ export interface AttachProjectFileInput {
   contentType?: string;
 }
 
+/** Patch fields on an existing Pipedrive deal. Custom-field keys are allowed. */
+export type UpdateDealInput = Record<string, string | number | boolean | null>;
+
+/** Patch fields on an existing Pipedrive organization. Custom-field keys are allowed. */
+export type UpdateOrganizationInput = Record<string, string | number | boolean | null>;
+
+export const HANDOFF_COMPLETE_FIELD_KEY_ENV = "PIPEDRIVE_HANDOFF_COMPLETE_FIELD_KEY";
+
+export const HANDOFF_COMPLETE_REQUIRED_FIELDS = [
+  {
+    label: "Invoiced Customer / Billing Link",
+    fieldId: "12553",
+    env: "PIPEDRIVE_INVOICED_CUSTOMER_BILLING_LINK_FIELD_KEY",
+  },
+  {
+    label: "Google Shared Drive Folder Link",
+    fieldId: "12557",
+    env: "PIPEDRIVE_GOOGLE_SHARED_DRIVE_FOLDER_LINK_FIELD_KEY",
+  },
+  {
+    label: "Delivery Owner",
+    fieldId: "12558",
+    env: "PIPEDRIVE_DELIVERY_OWNER_FIELD_KEY",
+  },
+  {
+    label: "Backup Delivery Owner",
+    fieldId: "12559",
+    env: "PIPEDRIVE_BACKUP_DELIVERY_OWNER_FIELD_KEY",
+  },
+  {
+    label: "Pipedrive Delivery Project Link",
+    fieldId: "12560",
+    env: "PIPEDRIVE_DELIVERY_PROJECT_LINK_FIELD_KEY",
+  },
+] as const;
+
+function envValue(envName: string): string | null {
+  const raw = process.env[envName];
+  return typeof raw === "string" && raw.trim() !== "" ? raw.trim() : null;
+}
+
+function handoffCompleteFieldKeys(): string[] {
+  return [
+    envValue(HANDOFF_COMPLETE_FIELD_KEY_ENV),
+    "handoff_complete",
+    "Handoff Complete",
+  ].filter((v): v is string => Boolean(v));
+}
+
+function handoffCompleteYesValues(): string[] {
+  const configured = (process.env.PIPEDRIVE_HANDOFF_COMPLETE_YES_VALUES ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  return [...configured, "yes", "Yes", "true", "1"];
+}
+
+function requiredHandoffFieldKey(
+  field: (typeof HANDOFF_COMPLETE_REQUIRED_FIELDS)[number],
+): string {
+  return envValue(field.env) ?? field.fieldId;
+}
+
+function isBlankPipedriveValue(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0 || value.every(isBlankPipedriveValue);
+  if (typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).every(isBlankPipedriveValue);
+  }
+  return false;
+}
+
+function isHandoffCompleteYes(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return handoffCompleteYesValues().includes(String(value));
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    return handoffCompleteYesValues().some(
+      (allowed) => allowed.toLocaleLowerCase() === normalized.toLocaleLowerCase(),
+    );
+  }
+  if (value && typeof value === "object") {
+    const candidate =
+      (value as Record<string, unknown>).label ??
+      (value as Record<string, unknown>).name ??
+      (value as Record<string, unknown>).value;
+    return isHandoffCompleteYes(candidate);
+  }
+  return false;
+}
+
+export function validateHandoffCompleteDealPatch(
+  patch: UpdateDealInput,
+  currentDeal: Record<string, unknown> = {},
+): void {
+  if (!patchSetsHandoffCompleteYes(patch)) return;
+
+  const mergedDeal = { ...currentDeal, ...patch };
+  const missing = HANDOFF_COMPLETE_REQUIRED_FIELDS.filter((field) => {
+    const key = requiredHandoffFieldKey(field);
+    return isBlankPipedriveValue(mergedDeal[key]);
+  }).map((field) => field.label);
+
+  if (missing.length > 0) {
+    throw new PipedriveProjectsError(
+      `Cannot mark Handoff Complete as Yes until these fields are filled: ${missing.join(", ")}.`,
+      400,
+    );
+  }
+}
+
+export function patchSetsHandoffCompleteYes(patch: UpdateDealInput): boolean {
+  return Object.entries(patch).some(([key, value]) =>
+    handoffCompleteFieldKeys().includes(key) && isHandoffCompleteYes(value),
+  );
+}
+
 /**
  * PSG-668 — one line item on a won deal, as needed by the template selector. The SKU is
  * how a deal is mapped to a net-new one-time template (e.g. Website Design & Build →
@@ -196,6 +319,45 @@ export interface DealProduct {
   sku: string | null;
   /** Pipedrive product id, when present (diagnostic only). */
   productId: number | null;
+  /** Quantity sold on this line item, when Pipedrive returns it. */
+  quantity?: number | null;
+  /** Line total from Pipedrive (`sum`), used for Won-gate fee autofill. */
+  sum?: number | null;
+  /** Pipedrive billing cadence for the line item (`one-time`, `monthly`, etc.). */
+  billingFrequency?: string | null;
+}
+
+export interface PipedriveUserConnections {
+  /** Pipedrive currently returns `{ google: "email@domain" }` for Nick's connected Google account. */
+  google?: unknown;
+  [key: string]: unknown;
+}
+
+export interface DealActivitySummary {
+  id: number;
+  subject: string;
+  type: string | null;
+  dueDate: string | null;
+  dueTime?: string | null;
+  addTime?: string | null;
+  updateTime?: string | null;
+  markedAsDoneTime?: string | null;
+  done: boolean;
+}
+
+export interface CreateActivityInput extends Record<string, unknown> {
+  subject: string;
+  type: string;
+  owner_id?: number;
+  deal_id?: number;
+  person_id?: number;
+  org_id?: number;
+  due_date?: string;
+  due_time?: string;
+  duration?: string;
+  busy?: boolean;
+  done?: boolean;
+  note?: string;
 }
 
 export interface PipedriveProjectsClient {
@@ -209,6 +371,18 @@ export interface PipedriveProjectsClient {
    * interface so existing test fakes stay valid; the concrete client always implements it.
    */
   listDealProducts?(dealId: number): Promise<DealProduct[]>;
+  /** Deal-linked people with primary email addresses, used for proposal draft recipients. */
+  listDealPersons?(dealId: number): Promise<PipedriveDealPerson[]>;
+  /** Read connected account state before calendar/mail automations write anything. */
+  listUserConnections?(): Promise<PipedriveUserConnections>;
+  /** Lightweight mailbox probe, used to confirm Nick's Pipedrive mailbox drafts folder is reachable. */
+  listMailboxThreads?(folder: "drafts", limit?: number): Promise<Array<{ id: number }>>;
+  /** Deal-linked open activities, used as the replay/idempotency guard for webhook-created work. */
+  listDealActivities?(dealId: number): Promise<DealActivitySummary[]>;
+  /** Create a deal-linked activity. Activities sync to calendar when the user has calendar sync enabled. */
+  createActivity?(input: CreateActivityInput): Promise<{ id: number }>;
+  /** Delete an activity when a proposal follow-up sequence should stop. */
+  deleteActivity?(activityId: number): Promise<void>;
   createProject(input: CreateProjectInput): Promise<{ id: number }>;
   createTask(input: CreateTaskInput): Promise<{ id: number }>;
   /** Find an existing project whose title matches (idempotency guard). */
@@ -220,6 +394,19 @@ export interface PipedriveProjectsClient {
   updateTask?(taskId: number, patch: UpdateTaskInput): Promise<{ id: number }>;
   /** Attach a file at PROJECT level (v1 `POST /files`) for the rare true-file case. */
   attachProjectFile?(input: AttachProjectFileInput): Promise<{ id: number }>;
+  /**
+   * PSG-1472 — patch a deal-level field, primarily the First Contact Date custom field.
+   * Optional so older test fakes stay valid; the concrete client always implements it.
+   */
+  updateDeal?(dealId: number, patch: UpdateDealInput): Promise<{ id: number }>;
+  /**
+   * Patch organization fields when an external source has better contact data.
+   * Optional so older test fakes stay valid; the concrete client always implements it.
+   */
+  updateOrganization?(
+    organizationId: number,
+    patch: UpdateOrganizationInput,
+  ): Promise<{ id: number }>;
   /**
    * PSG-644 — list a project's tasks (v2 `GET /tasks?project_id`). Optional so existing
    * test fakes stay valid. Backs the Asana-import marker-guard: a re-run reads the tasks
@@ -323,7 +510,7 @@ export function createProjectsClient(
   }
 
   async function call<T>(
-    method: "GET" | "POST" | "PATCH" | "PUT",
+    method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
     version: ApiVersion,
     path: string,
     params: Record<string, string> = {},
@@ -389,6 +576,9 @@ export function createProjectsClient(
           name?: string | null;
           sku?: string | null;
           code?: string | null;
+          quantity?: number | string | null;
+          sum?: number | string | null;
+          billing_frequency?: string | null;
           product?: { code?: string | null; name?: string | null } | null;
         }>
       >("GET", "v1", `deals/${dealId}/products`);
@@ -403,8 +593,86 @@ export function createProjectsClient(
           name: String(p.name ?? p.product?.name ?? ""),
           sku,
           productId: p.product_id != null ? Number(p.product_id) : null,
+          quantity:
+            p.quantity != null && Number.isFinite(Number(p.quantity))
+              ? Number(p.quantity)
+              : null,
+          sum: p.sum != null && Number.isFinite(Number(p.sum)) ? Number(p.sum) : null,
+          billingFrequency:
+            typeof p.billing_frequency === "string" && p.billing_frequency.trim() !== ""
+              ? p.billing_frequency.trim()
+              : null,
         };
       });
+    },
+    async listDealPersons(dealId) {
+      const data = await call<
+        Array<{
+          id?: number | null;
+          name?: string | null;
+          email?: string | Array<{ value?: string | null; primary?: boolean | null }> | null;
+        }>
+      >("GET", "v2", "persons", { deal_id: String(dealId), limit: "500" });
+      return (data ?? []).map((person) => {
+        const email =
+          typeof person.email === "string"
+            ? person.email
+            : Array.isArray(person.email)
+              ? ((person.email.find((e) => e.primary)?.value ?? person.email[0]?.value) ?? null)
+              : null;
+        return {
+          id: Number(person.id),
+          name: typeof person.name === "string" && person.name.trim() !== "" ? person.name : null,
+          email: typeof email === "string" && email.trim() !== "" ? email.trim() : null,
+        };
+      });
+    },
+    async listUserConnections() {
+      const data = await call<PipedriveUserConnections>("GET", "v1", "userConnections");
+      return data ?? {};
+    },
+    async listMailboxThreads(folder, limit = 1) {
+      const data = await call<Array<{ id?: number }>>(
+        "GET",
+        "v1",
+        "mailbox/mailThreads",
+        { folder, start: "0", limit: String(limit) },
+      );
+      return (data ?? []).map((thread) => ({ id: Number(thread.id) }));
+    },
+    async listDealActivities(dealId) {
+      const data = await call<
+        Array<{
+          id?: number;
+          subject?: string | null;
+          type?: string | null;
+          due_date?: string | null;
+          due_time?: string | null;
+          add_time?: string | null;
+          update_time?: string | null;
+          marked_as_done_time?: string | null;
+          done?: boolean | number | null;
+        }>
+      >("GET", "v2", "activities", { deal_id: String(dealId), limit: "100" });
+      return (data ?? []).map((activity) => ({
+        id: Number(activity.id),
+        subject: String(activity.subject ?? ""),
+        type: typeof activity.type === "string" ? activity.type : null,
+        dueDate: typeof activity.due_date === "string" ? activity.due_date : null,
+        dueTime: typeof activity.due_time === "string" ? activity.due_time : null,
+        addTime: typeof activity.add_time === "string" ? activity.add_time : null,
+        updateTime: typeof activity.update_time === "string" ? activity.update_time : null,
+        markedAsDoneTime:
+          typeof activity.marked_as_done_time === "string" ? activity.marked_as_done_time : null,
+        done: activity.done === true || activity.done === 1,
+      }));
+    },
+    async createActivity(input) {
+      const activity = await call<{ id: number }>("POST", "v2", "activities", {}, input);
+      return { id: Number(activity.id) };
+    },
+    async deleteActivity(activityId) {
+      await call<unknown>("DELETE", "v2", `activities/${activityId}`);
     },
     async createProject(input) {
       const proj = await call<{ id: number }>("POST", "v2", "projects", {}, {
@@ -466,6 +734,31 @@ export function createProjectsClient(
         );
       }
       return { id: Number(payload.data?.id) };
+    },
+    async updateDeal(dealId, patch) {
+      // v1 `PUT /deals/{id}` is the stable deal-update endpoint already used by our
+      // Pipedrive smoke path. Patch carries only the changed custom field.
+      if (patchSetsHandoffCompleteYes(patch)) {
+        const currentDeal = await call<Record<string, unknown>>(
+          "GET",
+          "v1",
+          `deals/${dealId}`,
+        );
+        validateHandoffCompleteDealPatch(patch, currentDeal ?? {});
+      }
+      const deal = await call<{ id: number }>("PUT", "v1", `deals/${dealId}`, {}, patch);
+      return { id: Number(deal.id) };
+    },
+    async updateOrganization(organizationId, patch) {
+      // v1 `PUT /organizations/{id}` is the stable organization-update endpoint.
+      const organization = await call<{ id: number }>(
+        "PUT",
+        "v1",
+        `organizations/${organizationId}`,
+        {},
+        patch,
+      );
+      return { id: Number(organization.id) };
     },
     async createPhase(boardId, name, orderNr) {
       // v2 `POST /phases` (PSG-722). Board phases double as the project-card kanban columns

@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "sourceIssue": "PSG-2473",
+  "sourceDocument": "route-manifest",
+  "lastReviewed": "2026-07-30",
+  "activeProductApp": "apps/psg-hub",
+  "legacyPortal": {
+    "path": "psg-advantage-portal",
+    "status": "reference-only",
+    "recommendation": "Archive after parity, traffic, DNS, Vercel, cron, and customer-link checks confirm no production dependency remains.",
+    "doNotUseForNewWork": true
+  },
+  "allowedLegacyOverlaps": [
+    {
+      "route": "/",
+      "reason": "Both apps have an app-router root route. PSG-2473 says apps/psg-hub is the active product root."
+    },
+    {
+      "route": "/api/health",
+      "reason": "Health checks are intentionally shared system routes."
+    },
+    {
+      "route": "/auth/callback",
+      "reason": "Supabase auth callback exists in both apps while the hub remains the active app."
+    },
+    {
+      "route": "/login",
+      "reason": "Auth page overlap is already migrated to the hub; old portal login stays reference-only until archival."
+    }
+  ],
+  "routeFamilies": [
+    {
+      "id": "root",
+      "label": "public redirect",
+      "owner": "public/system",
+      "accessBoundary": "Redirects signed-in users to the customer dashboard and unsigned users to login.",
+      "status": "keep-active",
+      "patterns": ["/"]
+    },
+    {
+      "id": "auth",
+      "label": "public/auth",
+      "owner": "public/auth",
+      "accessBoundary": "Public authentication pages plus Supabase authentication callbacks.",
+      "status": "keep-active",
+      "patterns": ["/login", "/signup", "/forgot-password", "/auth/*"]
+    },
+    {
+      "id": "customer-dashboard",
+      "label": "customer",
+      "owner": "customer portal",
+      "accessBoundary": "Requires login; shop data must stay scoped to the active customer shop.",
+      "status": "keep-active",
+      "patterns": ["/dashboard", "/dashboard/*"]
+    },
+    {
+      "id": "ops-pages",
+      "label": "internal ops/admin",
+      "owner": "PSG internal operations",
+      "accessBoundary": "Requires PSG staff access, with narrower checks on admin and security-sensitive screens.",
+      "status": "keep-active",
+      "patterns": ["/ops", "/ops/*", "/review-workspace", "/reports/*/print", "/bsm-sdd-pilot"]
+    },
+    {
+      "id": "public-content-pages",
+      "label": "public",
+      "owner": "public lead and research surfaces",
+      "accessBoundary": "Public pages; changes require public-review approval before going live.",
+      "status": "keep-active",
+      "patterns": ["/ai-visibility-check", "/research/*"]
+    },
+    {
+      "id": "system-health",
+      "label": "public/system",
+      "owner": "platform system",
+      "accessBoundary": "System health surface.",
+      "status": "keep-active",
+      "patterns": ["/api/health"]
+    },
+    {
+      "id": "customer-apis",
+      "label": "customer",
+      "owner": "customer portal APIs",
+      "accessBoundary": "Customer/session APIs must enforce shop membership and shop-scoped database access.",
+      "status": "keep-active",
+      "patterns": [
+        "/api/ads/*",
+        "/api/analytics/google/*",
+        "/api/approvals",
+        "/api/approvals/*",
+        "/api/billing/*",
+        "/api/bsm/*",
+        "/api/content/*",
+        "/api/gbp/*",
+        "/api/google-ads/audit-reports/*",
+        "/api/onboarding",
+        "/api/onboarding/*",
+        "/api/reports/*",
+        "/api/reviews/*",
+        "/api/shop/*",
+        "/api/shops/*"
+      ]
+    },
+    {
+      "id": "ops-apis",
+      "label": "internal ops/admin",
+      "owner": "PSG internal operations APIs",
+      "accessBoundary": "Operational data APIs must enforce staff/admin gates and database access policies.",
+      "status": "keep-active",
+      "patterns": [
+        "/api/ads-mutations/*",
+        "/api/companies",
+        "/api/companies/*",
+        "/api/estimates",
+        "/api/estimates/*",
+        "/api/ops/*",
+        "/api/production/*",
+        "/api/repair-customers",
+        "/api/repair-customers/*",
+        "/api/repair-orders",
+        "/api/repair-orders/*",
+        "/api/surveys",
+        "/api/surveys/*",
+        "/api/sys-config/*"
+      ]
+    },
+    {
+      "id": "cron-apis",
+      "label": "cron",
+      "owner": "scheduled jobs",
+      "accessBoundary": "Scheduled routes must be protected by their cron secret or equivalent guard and remain idempotent.",
+      "status": "keep-active",
+      "patterns": ["/api/cron/*"]
+    },
+    {
+      "id": "webhook-apis",
+      "label": "webhook",
+      "owner": "external provider callbacks",
+      "accessBoundary": "Provider callback routes must keep signature, authentication, and idempotency checks.",
+      "status": "keep-active",
+      "patterns": ["/api/webhooks/*", "/api/sms/webhook"]
+    },
+    {
+      "id": "public-system-apis",
+      "label": "public/system",
+      "owner": "public lead and system APIs",
+      "accessBoundary": "Public/system endpoints need explicit abuse, unsubscribe, or send controls as applicable.",
+      "status": "keep-active",
+      "patterns": ["/api/auth/*", "/api/board-briefing/*", "/api/leads/*", "/api/unsubscribe"]
+    }
+  ]
+}

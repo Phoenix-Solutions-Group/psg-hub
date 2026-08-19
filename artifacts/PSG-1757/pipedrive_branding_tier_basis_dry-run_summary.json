@@ -1,0 +1,477 @@
+{
+  "issue": "PSG-1757",
+  "includes": [
+    "PSG-1757 Tier Basis fields and audit filter",
+    "PSG-1805 Cost Basis fields, audit filter, and rejected-lines counter",
+    "PSG-1810 T3 named-vendors Tier Basis field",
+    "PSG-1779 actual-hours capture fields"
+  ],
+  "mode": "dry-run",
+  "generatedAt": "2026-07-18T14:18:10.567Z",
+  "sourceEndpoints": [
+    "GET /api/v1/dealFields",
+    "GET /api/v2/dealFields?include_fields=ui_visibility,required_fields",
+    "GET /api/v1/filters?type=deals",
+    "GET /api/v2/pipelines",
+    "GET /api/v2/stages"
+  ],
+  "target": {
+    "pipeline": {
+      "id": 10,
+      "name": "Branding",
+      "proposalSentStageId": 68
+    },
+    "quoteStage": {
+      "id": 68,
+      "name": "Proposal Sent"
+    }
+  },
+  "counts": {
+    "plannedActions": 0,
+    "appliedActions": 0,
+    "fieldsExpected": 19,
+    "costBasisFieldsExpected": 3,
+    "costBasisRejectionFieldsExpected": 1,
+    "auditFilterSampleDealCount": 0
+  },
+  "decisions": {
+    "brandingPipelineGap": "Nick chose the dedicated Branding path. This run creates or reuses the Branding pipeline and targets its Proposal Sent stage.",
+    "nativeEnforcement": "Pipedrive deal-field required_fields supports stage-based web UI enforcement. This run requires Tier Basis fields at Branding / Proposal Sent.",
+    "auditFilter": "The saved filter lists Branding deals in Proposal Sent where any Tier Basis field is empty. Pipedrive rejected the conditional saved-filter shape for Tier 3-only vendors, so this catches Tier 3 missing vendors but may also show Tier 1/2 deals where the vendor field is blank.",
+    "costBasisAuditFilter": "The saved filter lists PSG Sales deals in Proposal Sent where Cost basis, Cost basis source, or Cost basis date is empty.",
+    "rejectedLines": "A numeric deal field named Cost basis rejected lines makes turned-away lines queryable in Pipedrive and exports. Pipedrive rejected saved-filter API operators for this numeric counter, so the durable control is the queryable field, not a saved filter.",
+    "actualHours": "Ten optional numeric deal fields capture Phase 1-4 design/project-management hours plus separate paid change-order design/project-management hours. Run this script with --actual-hours-report after branding job #3 closes to compare fixed-scope actuals with the approved tier baseline."
+  },
+  "applied": [],
+  "remainingActions": [],
+  "unresolved": [],
+  "notices": [],
+  "verification": {
+    "fields": [
+      {
+        "id": 12577,
+        "key": "84e14e8cb040d0e2c51259dc3ad10c2f15ead914",
+        "name": "Tier Basis - Q1 What's driving this",
+        "type": "enum",
+        "options": [
+          "New ownership or name change",
+          "Refresh - current look is dated",
+          "Other"
+        ],
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [
+            68
+          ],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12578,
+        "key": "6f59e2a321bfa9468584b430264234c269fa86dc",
+        "name": "Tier Basis - Q2 Surfaces carrying the mark today",
+        "type": "double",
+        "options": [],
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [
+            68
+          ],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12579,
+        "key": "7b954906065b0cd555ab3eb530cb77a133674c6b",
+        "name": "Tier Basis - Q3 Locations / vehicles",
+        "type": "varchar",
+        "options": [],
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [
+            68
+          ],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12580,
+        "key": "9460824449aa2973fb0c1b1a2a9007d9bd26c463",
+        "name": "Tier Basis - Q4 Vendor specs needed",
+        "type": "enum",
+        "options": [
+          "PSG specs and coordinates vendors",
+          "Client has a vendor - files only"
+        ],
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [
+            68
+          ],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12581,
+        "key": "4db2baa34a09027ec52051ae0270be22067ab42d",
+        "name": "Tier Basis - Q5 Brand guide needed",
+        "type": "enum",
+        "options": [
+          "Full brand guide",
+          "1-page usage sheet",
+          "Logo files only"
+        ],
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [
+            68
+          ],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12582,
+        "key": "cfd4e7760876a0a165f3d11638faf870c89e1622",
+        "name": "Tier Basis - Tier selected",
+        "type": "enum",
+        "options": [
+          "T1 Brand Mark",
+          "T2 Brand Identity System",
+          "T3 Identity + Rollout"
+        ],
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [
+            68
+          ],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12583,
+        "key": "8144a5c1ded54b946100cab37575f6d821a8eca0",
+        "name": "Tier Basis - Date asked",
+        "type": "date",
+        "options": [],
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [
+            68
+          ],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12584,
+        "key": "c081a41c77da7ec82ced22575cffd672de9c2229",
+        "name": "Tier Basis - Answered by",
+        "type": "varchar",
+        "options": [],
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [
+            68
+          ],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12597,
+        "key": "0382e90fe815eb62314ad43c06a54e72eb3803ce",
+        "name": "Tier Basis - T3 Named vendors",
+        "type": "text",
+        "options": [],
+        "required_fields": {
+          "enabled": true,
+          "stage_ids": [
+            68
+          ],
+          "statuses": {}
+        }
+      }
+    ],
+    "costBasisFields": [
+      {
+        "id": 12598,
+        "key": "d761704a127490bf1035da9d7303b0e3ddbaf146",
+        "name": "Cost basis",
+        "type": "text",
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12599,
+        "key": "7a0f1b9c5f23e191b1243c8879e79274bb498fc8",
+        "name": "Cost basis source",
+        "type": "text",
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12600,
+        "key": "1628d9bf2a05ec5081dc918ec499d56196d00adc",
+        "name": "Cost basis date",
+        "type": "date",
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      }
+    ],
+    "costBasisRejectionField": {
+      "id": 12601,
+      "key": "4385ed131e2caf5e9ab5aeaacb3a47927ba502f3",
+      "name": "Cost basis rejected lines",
+      "type": "double",
+      "required_fields": {
+        "enabled": false,
+        "stage_ids": [],
+        "statuses": {}
+      }
+    },
+    "actualHoursFields": [
+      {
+        "id": 12587,
+        "key": "1a16e10c76f004c856287edc75718e00a79c683b",
+        "name": "phase1_design_hours_actual",
+        "type": "double",
+        "ui_visibility": {
+          "add_visible_flag": true,
+          "details_visible_flag": true,
+          "projects_detail_visible_flag": true,
+          "show_in_pipelines": {
+            "show_in_all": false,
+            "pipeline_ids": [
+              8
+            ]
+          }
+        },
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12588,
+        "key": "d0f576ce23e5276c4658b354be4f82c958500872",
+        "name": "phase1_pm_hours_actual",
+        "type": "double",
+        "ui_visibility": {
+          "add_visible_flag": true,
+          "details_visible_flag": true,
+          "projects_detail_visible_flag": true,
+          "show_in_pipelines": {
+            "show_in_all": false,
+            "pipeline_ids": [
+              8
+            ]
+          }
+        },
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12589,
+        "key": "dc9f43cbf6e376aeb3fd904879f1be28b2b42586",
+        "name": "phase2_design_hours_actual",
+        "type": "double",
+        "ui_visibility": {
+          "add_visible_flag": true,
+          "details_visible_flag": true,
+          "projects_detail_visible_flag": true,
+          "show_in_pipelines": {
+            "show_in_all": false,
+            "pipeline_ids": [
+              8
+            ]
+          }
+        },
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12590,
+        "key": "4b5b34257cd3867f0bfe556caed0524d2a61b871",
+        "name": "phase2_pm_hours_actual",
+        "type": "double",
+        "ui_visibility": {
+          "add_visible_flag": true,
+          "details_visible_flag": true,
+          "projects_detail_visible_flag": true,
+          "show_in_pipelines": {
+            "show_in_all": false,
+            "pipeline_ids": [
+              8
+            ]
+          }
+        },
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12591,
+        "key": "a8a9b6f278881b720f96b1740375f07195f560c6",
+        "name": "phase3_design_hours_actual",
+        "type": "double",
+        "ui_visibility": {
+          "add_visible_flag": true,
+          "details_visible_flag": true,
+          "projects_detail_visible_flag": true,
+          "show_in_pipelines": {
+            "show_in_all": false,
+            "pipeline_ids": [
+              8
+            ]
+          }
+        },
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12592,
+        "key": "88a2227887e1d805c64f37fa91589fc3765f2ba2",
+        "name": "phase3_pm_hours_actual",
+        "type": "double",
+        "ui_visibility": {
+          "add_visible_flag": true,
+          "details_visible_flag": true,
+          "projects_detail_visible_flag": true,
+          "show_in_pipelines": {
+            "show_in_all": false,
+            "pipeline_ids": [
+              8
+            ]
+          }
+        },
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12593,
+        "key": "cc7342f4a1c8be7349b364b37a51eac3e1d162e6",
+        "name": "phase4_design_hours_actual",
+        "type": "double",
+        "ui_visibility": {
+          "add_visible_flag": true,
+          "details_visible_flag": true,
+          "projects_detail_visible_flag": true,
+          "show_in_pipelines": {
+            "show_in_all": false,
+            "pipeline_ids": [
+              8
+            ]
+          }
+        },
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12594,
+        "key": "290652eace19830e0ae228761ac903540d0a4f85",
+        "name": "phase4_pm_hours_actual",
+        "type": "double",
+        "ui_visibility": {
+          "add_visible_flag": true,
+          "details_visible_flag": true,
+          "projects_detail_visible_flag": true,
+          "show_in_pipelines": {
+            "show_in_all": false,
+            "pipeline_ids": [
+              8
+            ]
+          }
+        },
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12595,
+        "key": "1111fe7b7a8117b0fc108639dcab716fdd30b9e4",
+        "name": "change_order_design_hours",
+        "type": "double",
+        "ui_visibility": {
+          "add_visible_flag": true,
+          "details_visible_flag": true,
+          "projects_detail_visible_flag": true,
+          "show_in_pipelines": {
+            "show_in_all": false,
+            "pipeline_ids": [
+              8
+            ]
+          }
+        },
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      },
+      {
+        "id": 12596,
+        "key": "6f2a8420c2e6ef3424dac36e9bbdd692d16ccc0b",
+        "name": "change_order_pm_hours",
+        "type": "double",
+        "ui_visibility": {
+          "add_visible_flag": true,
+          "details_visible_flag": true,
+          "projects_detail_visible_flag": true,
+          "show_in_pipelines": {
+            "show_in_all": false,
+            "pipeline_ids": [
+              8
+            ]
+          }
+        },
+        "required_fields": {
+          "enabled": false,
+          "stage_ids": [],
+          "statuses": {}
+        }
+      }
+    ],
+    "filter": {
+      "id": 1237,
+      "name": "Branding audit - Proposal Sent missing Tier Basis"
+    },
+    "costBasisFilter": {
+      "id": 1238,
+      "name": "Cost basis audit - Proposal Sent missing Cost Basis"
+    },
+    "pipeline": {
+      "id": 10,
+      "name": "Branding",
+      "proposalSentStageId": 68
+    },
+    "enforcement": "Configured as required at Branding / Proposal Sent. This avoids blocking unrelated PSG Sales quotes.",
+    "auditFilterSampleDeals": []
+  }
+}

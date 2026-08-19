@@ -6,6 +6,15 @@ import {
   generateBatchSchema,
   type GenerateCustomer,
 } from "@/lib/ops/production";
+import {
+  dateOnly,
+  evaluateEligibilityBatch,
+  extractRoCompletedAt,
+  letterKindForProduct,
+  type EligibilityCustomer,
+  type EligibilityDecision,
+  type SurveyAlert,
+} from "@/lib/ops/mail/eligibility";
 import { supabaseApprovalStore } from "@/lib/ops/template-approvals";
 import {
   currentTemplateHash,
@@ -95,6 +104,118 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const customerIds = (customers as GenerateCustomer[]).map((c) => c.id);
+  const { data: repairOrders, error: repairOrdersError } = await service
+    .from("repair_orders")
+    .select("repair_customer_id, dates_json, created_at")
+    .eq("company_id", company_id)
+    .in("repair_customer_id", customerIds)
+    .order("created_at", { ascending: false });
+  if (repairOrdersError) {
+    return NextResponse.json({ error: "Failed to load repair-order eligibility dates" }, { status: 500 });
+  }
+
+  const asOf = dateOnly(new Date());
+  const alertWindowStart = dateOnly(
+    new Date(Date.now() - 120 * 86_400_000)
+  );
+  const { data: surveyAlertsResult, error: surveyAlertsError } = await service
+    .from("survey_responses")
+    .select("repair_customer_id, alert_class, alert_posted_at")
+    .in("repair_customer_id", customerIds)
+    .neq("alert_class", "none")
+    .gte("alert_posted_at", alertWindowStart);
+  if (surveyAlertsError) {
+    console.warn(
+      "[production/generate] survey-alert suppression unavailable; continuing without alert rows:",
+      surveyAlertsError.message
+    );
+  }
+  const surveyAlerts = surveyAlertsError ? [] : surveyAlertsResult;
+
+  const roCompletedByCustomer = new Map<string, string>();
+  for (const ro of repairOrders ?? []) {
+    const row = ro as { repair_customer_id?: string | null; dates_json?: unknown; created_at?: string | null };
+    if (!row.repair_customer_id || roCompletedByCustomer.has(row.repair_customer_id)) continue;
+    const completed = extractRoCompletedAt(row.dates_json) ?? (row.created_at ? dateOnly(row.created_at) : null);
+    if (completed) roCompletedByCustomer.set(row.repair_customer_id, completed);
+  }
+
+  const alertsByCustomer = new Map<string, SurveyAlert[]>();
+  for (const alert of surveyAlerts ?? []) {
+    const row = alert as {
+      repair_customer_id?: string | null;
+      alert_class?: string | null;
+      alert_posted_at?: string | null;
+    };
+    if (!row.repair_customer_id) continue;
+    const bucket = alertsByCustomer.get(row.repair_customer_id) ?? [];
+    bucket.push({ alertClass: row.alert_class ?? null, alertPostedAt: row.alert_posted_at ?? null });
+    alertsByCustomer.set(row.repair_customer_id, bucket);
+  }
+
+  const letterKind = letterKindForProduct(product);
+  const eligibilityInputs: EligibilityCustomer[] = (customers as GenerateCustomer[]).map((customer) => ({
+    id: customer.id,
+    firstName: customer.first_name,
+    lastName: customer.last_name,
+    address: customer.address,
+    roCompletedAt: roCompletedByCustomer.get(customer.id) ?? null,
+    surveyAlerts: alertsByCustomer.get(customer.id) ?? [],
+  }));
+  const eligibility = evaluateEligibilityBatch(eligibilityInputs, { letterKind, asOf });
+
+  const upsertRows = eligibility.decisions.map((decision) => ({
+    repair_customer_id: decision.repairCustomerId,
+    letter_kind: decision.letterKind,
+    period_key: decision.periodKey,
+    eligible: decision.eligible,
+    printable: decision.printable,
+    suppressed_by_alert: decision.suppressedByAlert,
+    reasons: decision.reasons,
+    computed_at: new Date().toISOString(),
+  }));
+  const { data: eligibilityRowsResult, error: eligibilityError } = await service
+    .from("letter_eligibility")
+    .upsert(upsertRows, { onConflict: "repair_customer_id,letter_kind,period_key" })
+    .select("id, repair_customer_id");
+  if (eligibilityError) {
+    if (!isMissingEligibilityStore(eligibilityError)) {
+      console.error("[production/generate] eligibility upsert:", eligibilityError.message);
+      return NextResponse.json({ error: "Failed to save direct-mail eligibility decisions" }, { status: 500 });
+    }
+    console.warn(
+      "[production/generate] eligibility store unavailable; continuing without eligibility row links:",
+      eligibilityError.message
+    );
+  }
+  const eligibilityRows = eligibilityError ? [] : eligibilityRowsResult;
+
+  const eligibilityIdByCustomer = new Map<string, string>();
+  for (const row of eligibilityRows ?? []) {
+    const r = row as { id?: string; repair_customer_id?: string };
+    if (r.id && r.repair_customer_id) eligibilityIdByCustomer.set(r.repair_customer_id, r.id);
+  }
+
+  const eligibleCustomerIds = new Set(eligibility.eligibleIds);
+  const eligibleCustomers = (customers as GenerateCustomer[])
+    .filter((customer) => eligibleCustomerIds.has(customer.id))
+    .map((customer) => ({
+      ...customer,
+      service_date: roCompletedByCustomer.get(customer.id) ?? customer.service_date ?? null,
+      letter_eligibility_id: eligibilityIdByCustomer.get(customer.id) ?? null,
+    }));
+
+  if (eligibleCustomers.length === 0) {
+    return NextResponse.json(
+      {
+        error: "No eligible, printable repair customers for this direct-mail batch",
+        eligibility: summarizeEligibility(eligibility.decisions),
+      },
+      { status: 422 }
+    );
+  }
+
   // Optional per-shop customizations (greeting/footer/logo) for this program.
   let program: Record<string, string> | null = null;
   if (product_id) {
@@ -123,7 +244,7 @@ export async function POST(request: NextRequest) {
       address: company.address as GenerateCustomer["address"],
       program,
     },
-    (customers as GenerateCustomer[]),
+    eligibleCustomers,
     { product, productId: product_id ?? null, vendor: vendor ?? null, letterDate }
   );
 
@@ -162,7 +283,34 @@ export async function POST(request: NextRequest) {
       documents: built.documentCount,
       vendor: built.vendor,
       missing: built.missingByCustomer,
+      eligibility: summarizeEligibility(eligibility.decisions),
     },
     { status: 201 }
+  );
+}
+
+function summarizeEligibility(decisions: EligibilityDecision[]) {
+  return {
+    total: decisions.length,
+    eligible: decisions.filter((d) => d.eligible).length,
+    nonPrintable: decisions.filter((d) => !d.printable).map(toEligibilitySummary),
+    suppressed: decisions.filter((d) => d.suppressedByAlert).map(toEligibilitySummary),
+    ineligible: decisions.filter((d) => !d.eligible).map(toEligibilitySummary),
+  };
+}
+
+function toEligibilitySummary(decision: EligibilityDecision) {
+  return {
+    repairCustomerId: decision.repairCustomerId,
+    letterKind: decision.letterKind,
+    periodKey: decision.periodKey,
+    reasons: decision.reasons,
+  };
+}
+
+function isMissingEligibilityStore(error: { code?: string; message?: string }) {
+  return (
+    error.code === "PGRST205" ||
+    error.message?.includes("letter_eligibility") === true
   );
 }

@@ -1,0 +1,11 @@
+{
+  "name": "@psg/brand",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test scripts/*.test.mjs",
+    "vector:check": "node scripts/check-vector-clean.mjs"
+  },
+  "license": "UNLICENSED"
+}

@@ -9,6 +9,7 @@ let shopUsersInsertPayload: Record<string, unknown> | null = null;
 let roleInsertPayload: Record<string, unknown> | null = null;
 let shopInsertError: { message: string } | null = null;
 let memberInsertError: { message: string } | null = null;
+let existingMembership: { shop_id: string } | null = null;
 let existingRole: { profile_id: string } | null = null;
 const clientsDelete = vi.fn();
 const shopsDelete = vi.fn();
@@ -67,6 +68,15 @@ function serviceClient() {
       }
       if (table === "shop_users") {
         return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              limit: vi.fn().mockReturnValue({
+                maybeSingle: vi
+                  .fn()
+                  .mockResolvedValue({ data: existingMembership, error: null }),
+              }),
+            }),
+          }),
           insert: vi.fn((payload: Record<string, unknown>) => {
             shopUsersInsertPayload = payload;
             return Promise.resolve({ error: memberInsertError });
@@ -118,6 +128,7 @@ beforeEach(() => {
   roleInsertPayload = null;
   shopInsertError = null;
   memberInsertError = null;
+  existingMembership = null;
   existingRole = null;
   clientsDelete.mockReset();
   shopsDelete.mockReset();
@@ -194,6 +205,26 @@ describe("POST /api/onboarding", () => {
     const res = await POST(req({ shopName: "Acme" }));
     expect(res.status).toBe(200);
     expect(roleInsertPayload).toBeNull();
+  });
+
+  it("returns success without duplicate inserts when the owner already has a shop", async () => {
+    mockUser = { id: "u1" };
+    existingMembership = { shop_id: "shop-existing" };
+
+    const res = await POST(req({ shopName: "Acme Collision" }));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      shop_id: "shop-existing",
+      already_setup: true,
+      message: "Shop already set up",
+    });
+    expect(clientInsertPayload).toBeNull();
+    expect(shopInsertPayload).toBeNull();
+    expect(shopUsersInsertPayload).toBeNull();
+    expect(roleInsertPayload).toBeNull();
+    expect(clientsDelete).not.toHaveBeenCalled();
+    expect(shopsDelete).not.toHaveBeenCalled();
   });
 
   it("compensating: shop insert fails -> deletes client, 500", async () => {

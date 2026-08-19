@@ -18,7 +18,8 @@ export type ReportBatchId =
   | "volume-invoicing"
   | "survey-csi"
   | "customer-insurance"
-  | "individual-survey";
+  | "individual-survey"
+  | "paid-media";
 
 export type ColumnType =
   | "string"
@@ -123,4 +124,5 @@ export const BATCHES: ReportBatch[] = [
   { id: "survey-csi", label: "Survey & CSI", order: 2 },
   { id: "customer-insurance", label: "Customer & Insurance", order: 3 },
   { id: "individual-survey", label: "Individual Survey Responses", order: 4 },
+  { id: "paid-media", label: "Paid Media", order: 5 },
 ];

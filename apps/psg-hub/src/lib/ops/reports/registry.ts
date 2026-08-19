@@ -48,6 +48,7 @@ import {
   referralComparisonRun,
   referralNotedRun,
 } from "./live/individual-survey";
+import { callTrackingSummaryRun } from "./live/call-tracking";
 import {
   category,
   customerName,
@@ -842,6 +843,35 @@ const definitions: ReportDefinition[] = [
           };
         },
       ),
+  },
+
+  // ───────────────────────── Paid Media ─────────────────────────
+  {
+    slug: "call-tracking-summary",
+    title: "Call Tracking Summary",
+    batch: "paid-media",
+    description:
+      "Qualified phone leads by shop, call date, source, and campaign from first-batch call-tracking imports.",
+    params: { dateRange: true, filters: [SHOP_FILTER] },
+    columns: [
+      col("shop", "Shop", "string"),
+      col("date", "Call Date", "date"),
+      col("source", "Source", "string"),
+      col("campaign", "Campaign", "string"),
+      col("totalCalls", "Total Calls", "number"),
+      col("qualifiedCalls", "Qualified Calls", "number"),
+    ],
+    dataStatus: "available",
+    run: callTrackingSummaryRun,
+    sampleRows: (p) =>
+      build(6, (i) => ({
+        shop: shopName(i),
+        date: sampleDate(p.start, i),
+        source: pick(["Google Ads", "Organic Search", "Direct"], i),
+        campaign: pick(["Collision repair", "Estimate calls", "Brand"], i),
+        totalCalls: seeded(i + 4, 2, 18),
+        qualifiedCalls: seeded(i + 2, 1, 10),
+      })),
   },
 ];
 

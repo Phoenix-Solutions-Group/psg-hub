@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   TEMPLATE_KEYS,
+  RIVERSIDE_DEMO_MERGE_DATA,
   assertTemplateEligibleForLiveBatch,
   buildTemplateProof,
   currentTemplateHash,
@@ -48,7 +49,7 @@ describe("buildTemplateProof", () => {
       expect(proof.contentHash).toBe(currentTemplateHash(key));
       // The sample data fills every standard merge field.
       expect(proof.content.missing).toEqual([]);
-      const rendered = proof.content.front ?? proof.content.file;
+      const rendered = proof.content.front ?? proof.content.file ?? proof.content.inside;
       expect(rendered).toBeTruthy();
       // Substituted sample values appear in the rendered HTML.
       expect(rendered).toContain("Demo Body Works");
@@ -60,6 +61,17 @@ describe("buildTemplateProof", () => {
     const proof = buildTemplateProof("warranty", thin);
     expect(proof.content.missing.length).toBeGreaterThan(0);
     expect(proof.content.missing).toContain("company.name");
+  });
+
+  it("renders the Riverside/Maria governance demo proof without unresolved tokens", () => {
+    const proof = buildTemplateProof("thank_you", RIVERSIDE_DEMO_MERGE_DATA);
+    const rendered = proof.content.front ?? proof.content.file ?? proof.content.inside ?? "";
+
+    expect(proof.content.missing).toEqual([]);
+    expect(rendered).toContain("Riverside Collision");
+    expect(rendered).toContain("Maria Alvarez");
+    expect(rendered).not.toContain("Demo Body Works");
+    expect(rendered).not.toContain("Jordan Rivera");
   });
 });
 

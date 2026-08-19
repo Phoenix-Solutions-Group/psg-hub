@@ -104,6 +104,9 @@ test.describe("gsc panel — unlinked state (MEGA, no gsc)", () => {
     await expect(
       page.getByText("No Google Search Console site linked")
     ).toBeVisible();
+    await expect(
+      page.getByText("Connect a Google Search Console site to see clicks")
+    ).toBeVisible();
 
     await checkA11y(page, "analytics-gsc-unlinked");
     await shoot(page, "analytics-gsc-unlinked");

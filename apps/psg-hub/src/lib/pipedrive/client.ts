@@ -10,6 +10,10 @@
 // (`https://<company>.pipedrive.com`) and falls back to `https://api.pipedrive.com`.
 
 import type { DealStatus, PipedriveDeal, RevenueType } from "./types";
+import {
+  ORG_BILLING_FIELD_KEYS,
+  type PipedriveOrganizationBillingDetails,
+} from "./deal-billing-autofill";
 
 /** Raw Pipedrive deal payload — intentionally loose; we map defensively (v1/v2). */
 export type RawPipedriveDeal = Record<string, unknown>;
@@ -270,6 +274,13 @@ export interface PipedriveStage {
   orderNr: number | null;
 }
 
+/** Server-only contact details read from a Pipedrive person. Never log raw values. */
+export interface PipedrivePersonContact {
+  firstName: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
 /** Map a raw Pipedrive stage onto `PipedriveStage`. */
 export function mapRawStage(raw: RawPipedriveStage): PipedriveStage {
   return {
@@ -277,6 +288,72 @@ export function mapRawStage(raw: RawPipedriveStage): PipedriveStage {
     name: typeof raw.name === "string" ? raw.name : null,
     pipelineId: relId(raw.pipeline_id),
     orderNr: asNumber(raw.order_nr),
+  };
+}
+
+function firstUsableContactValue(raw: unknown): string | null {
+  if (typeof raw === "string") {
+    const value = raw.trim();
+    return value === "" ? null : value;
+  }
+  if (!Array.isArray(raw)) return null;
+
+  const candidates = raw
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as Record<string, unknown>;
+      const value = typeof row.value === "string" ? row.value.trim() : "";
+      if (!value) return null;
+      return {
+        value,
+        primary: row.primary === true,
+      };
+    })
+    .filter((entry): entry is { value: string; primary: boolean } => entry != null);
+
+  return candidates.find((entry) => entry.primary)?.value ?? candidates[0]?.value ?? null;
+}
+
+/** Map Pipedrive's v1 person shape to the minimal contact payload nurture needs. */
+export function mapRawPersonContact(raw: Record<string, unknown>): PipedrivePersonContact {
+  const name = typeof raw.name === "string" ? raw.name.trim() : "";
+  const firstName = name ? name.split(/\s+/)[0] ?? null : null;
+  return {
+    firstName,
+    email: firstUsableContactValue(raw.email),
+    phone: firstUsableContactValue(raw.phone),
+  };
+}
+
+/** Map Pipedrive's v1 organization shape to the fields used for deal billing auto-fill. */
+export function mapRawOrganizationBillingDetails(
+  raw: Record<string, unknown>,
+): PipedriveOrganizationBillingDetails {
+  return {
+    id: asNumber(raw.id) ?? 0,
+    name: typeof raw.name === "string" && raw.name.trim() !== "" ? raw.name.trim() : null,
+    displayName:
+      typeof raw[ORG_BILLING_FIELD_KEYS.displayName] === "string" &&
+      String(raw[ORG_BILLING_FIELD_KEYS.displayName]).trim() !== ""
+        ? String(raw[ORG_BILLING_FIELD_KEYS.displayName]).trim()
+        : null,
+    address:
+      typeof raw.address_formatted_address === "string" &&
+      raw.address_formatted_address.trim() !== ""
+        ? raw.address_formatted_address.trim()
+        : typeof raw.address === "string" && raw.address.trim() !== ""
+          ? raw.address.trim()
+          : null,
+    generalEmail:
+      typeof raw[ORG_BILLING_FIELD_KEYS.generalEmail] === "string" &&
+      String(raw[ORG_BILLING_FIELD_KEYS.generalEmail]).trim() !== ""
+        ? String(raw[ORG_BILLING_FIELD_KEYS.generalEmail]).trim()
+        : null,
+    paymentTerms:
+      typeof raw[ORG_BILLING_FIELD_KEYS.paymentTerms] === "string" &&
+      String(raw[ORG_BILLING_FIELD_KEYS.paymentTerms]).trim() !== ""
+        ? String(raw[ORG_BILLING_FIELD_KEYS.paymentTerms]).trim()
+        : null,
   };
 }
 
@@ -291,6 +368,12 @@ export interface PipedriveClient {
   ): Promise<PipedriveDeal[]>;
   /** All pipeline stages (cursor-paginated, mapped). PSG-622 — source of stage names. */
   fetchStages(): Promise<PipedriveStage[]>;
+  /** Contact detail for one Pipedrive person id, for server-only nurture enrollment. */
+  fetchPersonContact(personId: number): Promise<PipedrivePersonContact | null>;
+  /** Organization-level billing defaults used to pre-fill blank deal Won-gate fields. */
+  fetchOrganizationBillingDetails?(
+    organizationId: number,
+  ): Promise<PipedriveOrganizationBillingDetails | null>;
 }
 
 export function createPipedriveClient(
@@ -389,6 +472,58 @@ export function createPipedriveClient(
       cursor = nextCursor;
     }
     throw new PipedriveError(`Pipedrive stage pagination exceeded ${maxPages} pages`);
+  }
+
+  async function fetchPersonContact(personId: number): Promise<PipedrivePersonContact | null> {
+    if (!Number.isFinite(personId) || personId <= 0) return null;
+    const url = new URL(`${base}/api/v1/persons/${personId}`);
+    url.searchParams.set("api_token", apiToken);
+
+    const res = await doFetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) {
+      throw new PipedriveError(
+        `Pipedrive /persons/{id} returned HTTP ${res.status}`,
+        res.status,
+      );
+    }
+    const body = (await res.json()) as {
+      success?: boolean;
+      data?: Record<string, unknown> | null;
+    };
+    if (body.success === false) {
+      throw new PipedriveError("Pipedrive /persons/{id} returned success=false");
+    }
+    return body.data ? mapRawPersonContact(body.data) : null;
+  }
+
+  async function fetchOrganizationBillingDetails(
+    organizationId: number,
+  ): Promise<PipedriveOrganizationBillingDetails | null> {
+    if (!Number.isFinite(organizationId) || organizationId <= 0) return null;
+    const url = new URL(`${base}/api/v1/organizations/${organizationId}`);
+    url.searchParams.set("api_token", apiToken);
+
+    const res = await doFetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) {
+      throw new PipedriveError(
+        `Pipedrive /organizations/{id} returned HTTP ${res.status}`,
+        res.status,
+      );
+    }
+    const body = (await res.json()) as {
+      success?: boolean;
+      data?: Record<string, unknown> | null;
+    };
+    if (body.success === false) {
+      throw new PipedriveError("Pipedrive /organizations/{id} returned success=false");
+    }
+    return body.data ? mapRawOrganizationBillingDetails(body.data) : null;
   }
 
   // PSG-646 — one page of `/api/v2/organizations` (same cursor-pagination shape as /deals
@@ -526,5 +661,7 @@ export function createPipedriveClient(
     fetchDealsByStatus: (status, updatedSince) =>
       paginate(status, updatedSince),
     fetchStages,
+    fetchPersonContact,
+    fetchOrganizationBillingDetails,
   };
 }

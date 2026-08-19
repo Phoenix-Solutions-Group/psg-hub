@@ -7,6 +7,7 @@ import {
   PipedriveProjectsError,
 } from "@/lib/pipedrive/projects";
 import { runQaSmoke } from "@/lib/pipedrive/qa-smoke";
+import { runProposalQaSmoke } from "@/lib/pipedrive/proposal-qa-smoke";
 import { runRecurringQaSmoke } from "@/lib/pipedrive/recurring-qa-smoke";
 import { runWebBuildQaSmoke } from "@/lib/pipedrive/web-build-qa-smoke";
 import { runAssigneeAudit } from "@/lib/pipedrive/assignee-audit";
@@ -180,6 +181,16 @@ export async function POST(request: Request): Promise<NextResponse> {
         runTag,
       });
       return NextResponse.json({ ok: true, evidence });
+    }
+
+    if (body.action === "proposal-qa-smoke") {
+      // PSG-2448 — live fake-deal QA for proposal automations. Creates exactly one
+      // clearly-marked sales deal, walks it through Qualified → Proposal Sent → Lost,
+      // returns draft/activity evidence, and removes the throwaway Pipedrive records.
+      const runTag =
+        (typeof body.runTag === "string" && body.runTag.trim()) || `run-${Date.now()}`;
+      const evidence = await runProposalQaSmoke({ companyDomain, runTag });
+      return NextResponse.json({ ok: evidence.allChecksPass, evidence });
     }
 
     if (body.action === "recurring-run") {

@@ -29,13 +29,16 @@ describe("validateFileName (pure)", () => {
   it("accepts a single safe segment", () => {
     expect(validateFileName("export.csv")).toBeNull();
     expect(validateFileName("RO_2026-06-29.xml")).toBeNull();
+    expect(validateFileName("RO Export 2026-06-29 (Final).xml")).toBeNull();
+    expect(validateFileName("Shop.Name - RO Export #42.csv")).toBeNull();
   });
 
-  it("rejects empty, traversal, slashes, and spaces", () => {
+  it("rejects empty, path segments, slashes, and control characters", () => {
     expect(validateFileName("")).toBe("A file is required");
-    expect(validateFileName("../secret")).toMatch(/single safe segment/);
+    expect(validateFileName("..")).toMatch(/single safe segment/);
     expect(validateFileName("a/b.csv")).toMatch(/single safe segment/);
-    expect(validateFileName("my export.csv")).toMatch(/single safe segment/);
+    expect(validateFileName("a\\b.csv")).toMatch(/single safe segment/);
+    expect(validateFileName("bad\u0000.csv")).toMatch(/single safe segment/);
     expect(validateFileName("x".repeat(101))).toBe("File name is too long");
   });
 });

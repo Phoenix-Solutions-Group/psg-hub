@@ -1,0 +1,41 @@
+{
+  "generatedAt": "2026-07-15T16:35:00.819Z",
+  "dryRunOnly": true,
+  "pipedriveOrganizations": 2492,
+  "bodyShopRows": 36285,
+  "companyRows": 4,
+  "missing": {
+    "address": 171,
+    "phone": 230,
+    "website": 1028
+  },
+  "matchedOrganizations": 1200,
+  "unmatchedOrganizations": 1292,
+  "safeFillRows": 1,
+  "reviewFillRows": 87,
+  "nameReviewRows": 437,
+  "conflictRows": 244,
+  "reviewRowsTotal": 2060,
+  "matchPolicy": {
+    "proposedUpdates": [
+      "exact display-name match plus one safe source strategy: exact_phone, exact_name_zip, or exact_name_street"
+    ],
+    "nameReview": "any display-name difference between the Pipedrive organization and the selected source row is held for manual review",
+    "safe": [
+      "exact_phone",
+      "exact_name_zip",
+      "exact_name_street"
+    ],
+    "review": [
+      "exact_name_state",
+      "exact_name_only"
+    ],
+    "conflict": "multiple candidates, weak phone/name evidence, unverified postal evidence, existing Pipedrive value differs, or display names differ",
+    "postalCodeEvidence": "ZIP matching only uses structured postal-code fields or a postal-code ending in a city/state/postal address line; street numbers are ignored."
+  },
+  "fieldKeys": {
+    "pipedrivePhone": "04b2473348bdf2df769dcc3d40323bd319465965",
+    "pipedriveCustomWebsite": "6ea223d17fb76811dc47ae73d35610559621cf39",
+    "pipedriveAddress": "address"
+  }
+}

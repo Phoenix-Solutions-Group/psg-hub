@@ -108,6 +108,9 @@ test.describe("gbp panel — unlinked state (MEGA, no gbp)", () => {
     await expect(
       page.getByText("No Google Business Profile linked")
     ).toBeVisible();
+    await expect(
+      page.getByText("Connect a Google Business Profile to see calls")
+    ).toBeVisible();
 
     await checkA11y(page, "analytics-gbp-unlinked");
     await shoot(page, "analytics-gbp-unlinked");
