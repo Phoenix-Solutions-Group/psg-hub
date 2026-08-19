@@ -40,9 +40,14 @@ export async function getUserShops(userId: string): Promise<UserShop[]> {
  */
 export function resolveActiveShop(
   shops: UserShop[],
-  cookieValue: string | null | undefined
+  cookieValue: string | null | undefined,
+  preferredShopName?: string | null,
 ): string | null {
   if (shops.length === 0) return null;
+  const preferredShop = preferredShopName
+    ? shops.find((shop) => shop.name === preferredShopName)
+    : null;
+  if (preferredShop) return preferredShop.id;
   if (cookieValue && shops.some((s) => s.id === cookieValue)) {
     return cookieValue;
   }
@@ -55,9 +60,13 @@ export function resolveActiveShop(
  * cookie, resolves it against current membership, returns the shops + active id.
  */
 export async function getActiveShopContext(
-  userId: string
+  userId: string,
+  preferredShopName?: string | null,
 ): Promise<{ shops: UserShop[]; activeShopId: string | null }> {
   const shops = await getUserShops(userId);
   const cookieValue = (await cookies()).get(ACTIVE_SHOP_COOKIE)?.value;
-  return { shops, activeShopId: resolveActiveShop(shops, cookieValue) };
+  return {
+    shops,
+    activeShopId: resolveActiveShop(shops, cookieValue, preferredShopName),
+  };
 }

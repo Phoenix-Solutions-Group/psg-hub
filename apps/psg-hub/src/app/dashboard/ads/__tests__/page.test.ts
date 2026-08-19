@@ -6,12 +6,16 @@ const redirect = vi.fn((url: string) => {
 });
 vi.mock("next/navigation", () => ({ redirect }));
 
-type User = { id: string } | null;
+type User = { id: string; email?: string } | null;
 let mockUser: User = null;
 let mockActiveShopId: string | null = null;
 // maybeSingle() result for the explicit-param membership re-validation
 let mockExplicitMembership: { role: string } | null = null;
 let mockTierMeets = false;
+const getActiveShopContext = vi.fn(async () => ({
+  shops: [],
+  activeShopId: mockActiveShopId,
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -41,10 +45,7 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 
 vi.mock("@/lib/shop/context", () => ({
-  getActiveShopContext: vi.fn(async () => ({
-    shops: [],
-    activeShopId: mockActiveShopId,
-  })),
+  getActiveShopContext,
 }));
 
 vi.mock("@/lib/tier/gate", () => ({
@@ -59,6 +60,7 @@ function run(shop_id?: string) {
 
 beforeEach(() => {
   redirect.mockClear();
+  getActiveShopContext.mockClear();
   mockUser = { id: "u1" };
   mockActiveShopId = null;
   mockExplicitMembership = null;
@@ -69,6 +71,17 @@ describe("AdsPage shop resolution", () => {
   it("AC-1: no param + active-shop cookie -> redirects to that shop", async () => {
     mockActiveShopId = "shopB";
     await expect(run()).rejects.toThrow("REDIRECT:/dashboard/ads?shop_id=shopB");
+  });
+
+  it("prefers the authorized Riverside membership for the approved demo login", async () => {
+    mockUser = { id: "u1", email: "test@psghub.me" };
+    mockActiveShopId = "riverside";
+
+    await expect(run()).rejects.toThrow("REDIRECT:/dashboard/ads?shop_id=riverside");
+    expect(getActiveShopContext).toHaveBeenCalledWith(
+      "u1",
+      "Riverside Collision",
+    );
   });
 
   it("AC-1: no param + no memberships -> redirects to /dashboard", async () => {

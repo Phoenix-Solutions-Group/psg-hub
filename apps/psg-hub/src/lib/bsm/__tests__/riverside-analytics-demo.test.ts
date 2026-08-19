@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   RIVERSIDE_ANALYTICS_DEMO_SHOP,
   getRiversideAnalyticsPreviewShop,
+  isRiversideDemoUser,
   shouldUseRiversideAnalyticsPreviewFallback,
 } from "@/lib/bsm/riverside-analytics-demo";
 
@@ -12,6 +13,10 @@ const previewEnv = {
 };
 
 describe("Riverside Analytics preview demo fallback", () => {
+  it("recognizes only the configured demo accounts for tenant preference", () => {
+    expect(isRiversideDemoUser(" TEST@PSGHUB.ME ", previewEnv)).toBe(true);
+    expect(isRiversideDemoUser("customer@example.com", previewEnv)).toBe(false);
+  });
   it("activates for the configured preview demo shop login when Riverside is missing", () => {
     expect(
       shouldUseRiversideAnalyticsPreviewFallback({

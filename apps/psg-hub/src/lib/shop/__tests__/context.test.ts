@@ -15,6 +15,25 @@ describe("resolveActiveShop", () => {
     expect(resolveActiveShop(shops, "b")).toBe("b");
   });
 
+  it("selects an authorized preferred demo shop ahead of a stale customer cookie", () => {
+    const shops = [
+      { id: "tedesco", name: "Tedesco Auto Body", role: "owner" },
+      { id: "riverside", name: "Riverside Collision", role: "owner" },
+    ];
+
+    expect(resolveActiveShop(shops, "tedesco", "Riverside Collision")).toBe(
+      "riverside",
+    );
+  });
+
+  it("never selects a preferred shop outside the user's memberships", () => {
+    const shops = [{ id: "tedesco", name: "Tedesco Auto Body", role: "owner" }];
+
+    expect(resolveActiveShop(shops, "tedesco", "Riverside Collision")).toBe(
+      "tedesco",
+    );
+  });
+
   it("ignores a stale cookie (shop not in membership) and falls back", () => {
     const shops = [viewer("a"), owner("b")];
     // cookie "zzz" is not a member shop → must NOT select it; owner-first fallback

@@ -20,6 +20,7 @@ import {
 import {
   RIVERSIDE_ANALYTICS_DEMO_SHOP,
   getRiversideAnalyticsPreviewShop,
+  isRiversideDemoUser,
   shouldUseRiversideAnalyticsPreviewFallback,
 } from "@/lib/bsm/riverside-analytics-demo";
 import {
@@ -180,7 +181,10 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   }
 
   const { shops, activeShopId: resolvedActiveShopId } =
-    await getActiveShopContext(user.id);
+    await getActiveShopContext(
+      user.id,
+      isRiversideDemoUser(user.email) ? RIVERSIDE_ANALYTICS_DEMO_SHOP.name : null,
+    );
   let activeShopId = resolvedActiveShopId;
   let analyticsReader = supabase;
   const requestHost = (await headers()).get("host");

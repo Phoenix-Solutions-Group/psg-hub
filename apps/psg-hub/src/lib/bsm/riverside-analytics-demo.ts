@@ -59,6 +59,17 @@ function configuredDemoEmails(env: RiversideAnalyticsDemoEnv | NodeJS.ProcessEnv
   ]);
 }
 
+export function isRiversideDemoUser(
+  userEmail?: string | null,
+  env: RiversideAnalyticsDemoEnv | NodeJS.ProcessEnv = process.env,
+): boolean {
+  const normalizedUserEmail = normalizeEmail(userEmail);
+  return (
+    normalizedUserEmail.length > 0 &&
+    configuredDemoEmails(env).has(normalizedUserEmail)
+  );
+}
+
 function normalizeHost(host?: string | null): string {
   return (host ?? "")
     .trim()
@@ -99,11 +110,7 @@ export function shouldUseRiversideAnalyticsPreviewFallback({
   const runtimeEnv = env ?? process.env;
   if (!isPreviewRuntime(runtimeEnv, requestHost)) return false;
 
-  const normalizedUserEmail = normalizeEmail(userEmail);
-  return (
-    normalizedUserEmail.length > 0 &&
-    configuredDemoEmails(runtimeEnv).has(normalizedUserEmail)
-  );
+  return isRiversideDemoUser(userEmail, runtimeEnv);
 }
 
 export function shouldShowRiversideAnalyticsPreviewMetrics({
@@ -117,11 +124,7 @@ export function shouldShowRiversideAnalyticsPreviewMetrics({
   const runtimeEnv = env ?? process.env;
   if (!isPreviewRuntime(runtimeEnv, requestHost)) return false;
 
-  const normalizedUserEmail = normalizeEmail(userEmail);
-  return (
-    normalizedUserEmail.length > 0 &&
-    configuredDemoEmails(runtimeEnv).has(normalizedUserEmail)
-  );
+  return isRiversideDemoUser(userEmail, runtimeEnv);
 }
 
 export async function getRiversideAnalyticsPreviewShop(

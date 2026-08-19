@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  RIVERSIDE_ANALYTICS_DEMO_SHOP,
+  isRiversideDemoUser,
+} from "@/lib/bsm/riverside-analytics-demo";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { shopHasTier } from "@/lib/tier/gate";
 import { TierGateCard } from "./tier-gate-card";
@@ -22,20 +26,18 @@ export default async function AdsPage({ searchParams }: Props) {
     redirect("/login");
   }
 
-  // Resolve shop_id: an explicit param wins (and is membership-validated below);
-  // otherwise default to the active-shop context (07-03) so a switched shop is
-  // honored here instead of reverting to owner-first. The cookie only SELECTS
-  // among authorized shops — it never authorizes.
   const shopId = params.shop_id;
   if (!shopId) {
-    const { activeShopId } = await getActiveShopContext(user.id);
+    const { activeShopId } = await getActiveShopContext(
+      user.id,
+      isRiversideDemoUser(user.email) ? RIVERSIDE_ANALYTICS_DEMO_SHOP.name : null,
+    );
     if (!activeShopId) {
       redirect("/dashboard");
     }
     redirect(`/dashboard/ads?shop_id=${activeShopId}`);
   }
 
-  // Load role for this shop
   const { data: membership } = await supabase
     .from("shop_users")
     .select("role")
