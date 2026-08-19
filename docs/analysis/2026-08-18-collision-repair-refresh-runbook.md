@@ -188,6 +188,10 @@ pilot horizons. The local database ledger itself remains intentionally unrepaire
   AM, retains three, and has failed daily with FileMaker error 809 (`Disk full`). The
   root filesystem currently has about 23 GB free; the healthy backup root contains two
   snapshots totaling about 19 GB.
+- A read-only 2026-08-19 16:16 CT recheck confirmed the latest midnight snapshot is
+  9.4 GB and contains all five hosted database files. The Advantage and Survey backup
+  entries both report `Normal`. The 3:00 AM schedule still aborts for insufficient
+  destination space. Backup existence is proven; a restore drill is not.
 - A separate persistent ext4 volume at `/mnt/HC_Volume_105029819` has about 75 GB free.
   No backup configuration or files were changed. The FileMaker owner must either confirm
   the 3:00 AM schedule is redundant and disable it, or move it to a FileMaker-owned
