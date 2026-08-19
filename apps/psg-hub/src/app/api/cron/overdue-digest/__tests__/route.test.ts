@@ -43,6 +43,8 @@ function req(opts: { auth?: string; qa?: string; asOf?: string } = {}): Request 
 }
 
 beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-07-07T09:00:00Z"));
   listAllTasks.mockReset().mockResolvedValue(TASKS);
   listAllProjects.mockReset().mockResolvedValue(PROJECTS);
   sendEmail.mockReset();
@@ -52,7 +54,10 @@ beforeEach(() => {
   vi.stubEnv("OVERDUE_DIGEST_QA_SECRET", "qa-secret");
   vi.stubEnv("OVERDUE_DIGEST_RECIPIENTS", ""); // log-only, no email
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 
 describe("overdue-digest auth gate", () => {
   it("401 with no credentials — Pipedrive never read", async () => {
