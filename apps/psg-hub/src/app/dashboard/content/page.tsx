@@ -39,6 +39,30 @@ function mergeRiversideDemoItems(items: DashboardContentItem[]) {
   ];
 }
 
+function mergeCustomerContentItems(
+  reviewItems: DashboardContentItem[],
+  contentItems: DashboardContentItem[]
+) {
+  const merged: DashboardContentItem[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const item of [...reviewItems, ...contentItems]) {
+    const key = item.id || item.title.trim().toLowerCase();
+    const titleKey = item.title.trim().toLowerCase();
+
+    if (seenKeys.has(key) || seenKeys.has(titleKey)) continue;
+
+    seenKeys.add(key);
+    seenKeys.add(titleKey);
+    merged.push(item);
+  }
+
+  return merged.sort(
+    (a, b) =>
+      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  );
+}
+
 export default async function ContentPage() {
   const supabase = await createClient();
   const service = createServiceClient();
@@ -95,9 +119,12 @@ export default async function ContentPage() {
         .eq("shop_id", effectiveShopId)
         .order("updated_at", { ascending: false })
     : { data: [] };
-  const items = (reviewItems?.length ? reviewItems : queriedItems ?? []) as DashboardContentItem[];
+  const items = mergeCustomerContentItems(
+    (reviewItems ?? []) as DashboardContentItem[],
+    (queriedItems ?? []) as DashboardContentItem[]
+  );
   const displayItems =
-    (useRiversidePreviewFallback || isRiversideShopContext) && items.length < RIVERSIDE_DEMO_CONTENT_ITEMS.length
+    useRiversidePreviewFallback || isRiversideShopContext
       ? mergeRiversideDemoItems(items)
       : items;
 
