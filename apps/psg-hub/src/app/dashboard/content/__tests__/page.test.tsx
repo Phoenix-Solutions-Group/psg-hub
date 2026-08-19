@@ -160,7 +160,10 @@ describe("ContentPage Riverside preview fallback", () => {
 
     expect(lastContentShopId).toBe("riverside_shop");
     expect(html).toContain("Riverside Collision July repair tips");
+    expect(html).toContain("Post-repair sensor check reminder");
+    expect(html).toContain("Google review reply for finished repair");
     expect(html).toContain("pending_review");
+    expect(html).toContain("approved");
     expect(html).not.toContain("No content yet");
   });
 });

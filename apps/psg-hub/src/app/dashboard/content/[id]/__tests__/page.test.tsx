@@ -181,4 +181,33 @@ describe("ContentDetailPage Riverside demo fallback", () => {
     expect(html).toContain("pending review");
     expect(html).toContain("PSG prepared this customer-facing article");
   });
+
+  it("opens the private Riverside demo email item when the seed row is missing", async () => {
+    mockUserEmail = "owner@riversidecollision.example";
+    mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
+    mockActiveShopId = "stale_shop";
+    mockServiceRiversideShop = {
+      id: "riverside_shop",
+      name: "Riverside Collision",
+    };
+    mockContentItem = null;
+    contentFilters = [];
+
+    const html = renderToStaticMarkup(
+      await ContentDetailPage({
+        params: Promise.resolve({
+          id: "22222222-cccc-4ccc-8ccc-222222222222",
+        }),
+      })
+    );
+
+    expect(contentFilters).toContainEqual([
+      "id",
+      "22222222-cccc-4ccc-8ccc-222222222222",
+    ]);
+    expect(contentFilters).toContainEqual(["shop_id", "riverside_shop"]);
+    expect(html).toContain("Post-repair sensor check reminder");
+    expect(html).toContain("pending review");
+    expect(html).toContain("modern safety systems may need calibration");
+  });
 });

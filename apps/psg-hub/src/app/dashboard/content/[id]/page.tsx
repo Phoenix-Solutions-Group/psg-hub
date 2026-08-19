@@ -9,8 +9,7 @@ import {
   shouldUseRiversideAnalyticsPreviewFallback,
 } from "@/lib/bsm/riverside-analytics-demo";
 import {
-  RIVERSIDE_DEMO_CONTENT_ITEM,
-  RIVERSIDE_DEMO_CONTENT_ITEM_ID,
+  findRiversideDemoContentItem,
 } from "@/lib/bsm/riverside-demo-content";
 import { Badge } from "@/components/ui/badge";
 import { ContentPreview } from "@/components/dashboard/content-preview";
@@ -75,9 +74,7 @@ export default async function ContentDetailPage({
   const { data: queriedItem } = await query.single();
   const item =
     queriedItem ??
-    (useRiversidePreviewFallback && id === RIVERSIDE_DEMO_CONTENT_ITEM_ID
-      ? RIVERSIDE_DEMO_CONTENT_ITEM
-      : null);
+    (useRiversidePreviewFallback ? findRiversideDemoContentItem(id) : null);
 
   if (!item) {
     notFound();

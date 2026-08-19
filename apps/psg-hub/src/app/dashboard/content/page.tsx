@@ -8,7 +8,7 @@ import {
   getRiversideAnalyticsPreviewShop,
   shouldUseRiversideAnalyticsPreviewFallback,
 } from "@/lib/bsm/riverside-analytics-demo";
-import { RIVERSIDE_DEMO_CONTENT_ITEM } from "@/lib/bsm/riverside-demo-content";
+import { RIVERSIDE_DEMO_CONTENT_ITEMS } from "@/lib/bsm/riverside-demo-content";
 
 export default async function ContentPage() {
   const supabase = await createClient();
@@ -55,7 +55,7 @@ export default async function ContentPage() {
     : { data: [] };
   const items =
     useRiversidePreviewFallback && (queriedItems ?? []).length === 0
-      ? [RIVERSIDE_DEMO_CONTENT_ITEM]
+      ? RIVERSIDE_DEMO_CONTENT_ITEMS
       : queriedItems ?? [];
 
   return (
