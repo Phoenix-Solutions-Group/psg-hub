@@ -13,6 +13,8 @@ const contentItem = {
 
 let contentFilters: Array<[string, string]> = [];
 let mockContentItem: typeof contentItem | null = contentItem;
+let mockReviewItem: Record<string, unknown> | null = null;
+let mockReviewVersions: Array<Record<string, unknown>> = [];
 let mockUserEmail = "nick@phoenixsolutionsgroup.net";
 let mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
 let mockActiveShopId = "stale_shop";
@@ -59,6 +61,21 @@ vi.mock("@/lib/supabase/server", () => ({
         return contentItemQuery();
       }
 
+      if (table === "shop_users") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn(async () => ({
+                  data: { role: "owner" },
+                  error: null,
+                })),
+              })),
+            })),
+          })),
+        };
+      }
+
       throw new Error(`unexpected customer table:${table}`);
     }),
   })),
@@ -81,6 +98,73 @@ vi.mock("@/lib/supabase/service", () => ({
 
       if (table === "content_items") {
         return contentItemQuery();
+      }
+
+      if (table === "bsm_content_review_items") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(async () => ({
+                data: mockReviewItem,
+                error: null,
+              })),
+            })),
+          })),
+        };
+      }
+
+      if (table === "shop_users") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn(async () => ({
+                  data: { role: "owner" },
+                  error: null,
+                })),
+              })),
+            })),
+          })),
+        };
+      }
+
+      if (table === "bsm_content_review_versions") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn(async () => ({
+                data: mockReviewVersions,
+                error: null,
+              })),
+            })),
+          })),
+        };
+      }
+
+      if (
+        table === "bsm_content_review_comments" ||
+        table === "bsm_content_review_decisions" ||
+        table === "bsm_content_restore_requests"
+      ) {
+        const emptyOrderedQuery = {
+          order: vi.fn(async () => ({ data: [], error: null })),
+        };
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              is: vi.fn(() => emptyOrderedQuery),
+              order: emptyOrderedQuery.order,
+            })),
+          })),
+        };
+      }
+
+      if (table === "bsm_content_review_comment_attachments") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: [], error: null })),
+          })),
+        };
       }
 
       throw new Error(`unexpected table:${table}`);
@@ -118,6 +202,8 @@ describe("ContentDetailPage Riverside demo fallback", () => {
       name: "Riverside Collision",
     };
     mockContentItem = contentItem;
+    mockReviewItem = null;
+    mockReviewVersions = [];
     contentFilters = [];
 
     const html = renderToStaticMarkup(
@@ -141,6 +227,8 @@ describe("ContentDetailPage Riverside demo fallback", () => {
     mockActiveShopId = "stale_shop";
     mockServiceRiversideShop = null;
     mockContentItem = contentItem;
+    mockReviewItem = null;
+    mockReviewVersions = [];
     contentFilters = [];
 
     const html = renderToStaticMarkup(
@@ -162,6 +250,8 @@ describe("ContentDetailPage Riverside demo fallback", () => {
       name: "Riverside Collision",
     };
     mockContentItem = null;
+    mockReviewItem = null;
+    mockReviewVersions = [];
     contentFilters = [];
 
     const html = renderToStaticMarkup(
@@ -191,6 +281,8 @@ describe("ContentDetailPage Riverside demo fallback", () => {
       name: "Riverside Collision",
     };
     mockContentItem = null;
+    mockReviewItem = null;
+    mockReviewVersions = [];
     contentFilters = [];
 
     const html = renderToStaticMarkup(
@@ -209,5 +301,47 @@ describe("ContentDetailPage Riverside demo fallback", () => {
     expect(html).toContain("Post-repair sensor check reminder");
     expect(html).toContain("pending review");
     expect(html).toContain("modern safety systems may need calibration");
+  });
+
+  it("opens a BSM review item through the customer content detail path", async () => {
+    mockUserEmail = "customer@example.test";
+    mockShops = [{ id: "riverside_shop", name: "Riverside Collision", role: "owner" }];
+    mockActiveShopId = "riverside_shop";
+    mockServiceRiversideShop = null;
+    mockContentItem = null;
+    mockReviewItem = {
+      id: "review_1",
+      shop_id: "riverside_shop",
+      title: "Riverside Collision July repair tips",
+      status: "in_review",
+      content_type: "generated_page",
+      admin_context_note: "Customer can review this article before it goes live.",
+      current_version_id: "version_1",
+      updated_at: "2026-08-11T16:00:00.000Z",
+    };
+    mockReviewVersions = [
+      {
+        id: "version_1",
+        version_number: 1,
+        original_filename: "riverside-repair-tips.md",
+        content_type: "text/markdown",
+        storage_path: null,
+        preview_type: "file",
+        source_metadata_jsonb: {
+          body: "# Riverside Collision July repair tips\n\nReview-ready BSM body.",
+        },
+        created_at: "2026-08-11T16:00:00.000Z",
+      },
+    ];
+    contentFilters = [];
+
+    const html = renderToStaticMarkup(
+      await ContentDetailPage({ params: Promise.resolve({ id: "review_1" }) })
+    );
+
+    expect(contentFilters).toEqual([]);
+    expect(html).toContain("Riverside Collision July repair tips");
+    expect(html).toContain("in review");
+    expect(html).toContain("Review-ready BSM body.");
   });
 });

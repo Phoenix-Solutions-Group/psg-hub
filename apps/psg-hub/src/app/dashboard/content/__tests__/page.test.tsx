@@ -12,7 +12,15 @@ const contentItems = [
 ];
 
 let lastContentShopId: string | null = null;
+let lastReviewShopId: string | null = null;
 let mockContentItems = contentItems;
+let mockReviewItems: Array<{
+  id: string;
+  title: string;
+  content_type: string;
+  status: string;
+  updated_at: string;
+}> = [];
 let mockUserEmail = "nick@phoenixsolutionsgroup.net";
 let mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
 let mockActiveShopId = "stale_shop";
@@ -28,6 +36,21 @@ function contentItemsQuery() {
         lastContentShopId = value;
         return {
           order: vi.fn(async () => ({ data: mockContentItems })),
+        };
+      }),
+    })),
+  };
+}
+
+function reviewItemsQuery() {
+  return {
+    select: vi.fn(() => ({
+      eq: vi.fn((_column: string, value: string) => {
+        lastReviewShopId = value;
+        return {
+          in: vi.fn(() => ({
+            order: vi.fn(async () => ({ data: mockReviewItems })),
+          })),
         };
       }),
     })),
@@ -78,6 +101,10 @@ vi.mock("@/lib/supabase/service", () => ({
         return contentItemsQuery();
       }
 
+      if (table === "bsm_content_review_items") {
+        return reviewItemsQuery();
+      }
+
       throw new Error(`unexpected table:${table}`);
     }),
   })),
@@ -118,10 +145,13 @@ describe("ContentPage Riverside preview fallback", () => {
       name: "Riverside Collision",
     };
     mockContentItems = contentItems;
+    mockReviewItems = [];
     lastContentShopId = null;
+    lastReviewShopId = null;
 
     const html = renderToStaticMarkup(await ContentPage());
 
+    expect(lastReviewShopId).toBe("riverside_shop");
     expect(lastContentShopId).toBe("riverside_shop");
     expect(html).toContain("Riverside Collision July repair tips");
     expect(html).toContain("pending_review");
@@ -136,10 +166,13 @@ describe("ContentPage Riverside preview fallback", () => {
     mockActiveShopId = "stale_shop";
     mockServiceRiversideShop = null;
     mockContentItems = contentItems;
+    mockReviewItems = [];
     lastContentShopId = null;
+    lastReviewShopId = null;
 
     const html = renderToStaticMarkup(await ContentPage());
 
+    expect(lastReviewShopId).toBe("riverside_shop");
     expect(lastContentShopId).toBe("riverside_shop");
     expect(html).toContain("Riverside Collision July repair tips");
     expect(html).toContain("pending_review");
@@ -154,16 +187,45 @@ describe("ContentPage Riverside preview fallback", () => {
       name: "Riverside Collision",
     };
     mockContentItems = [];
+    mockReviewItems = [];
     lastContentShopId = null;
+    lastReviewShopId = null;
 
     const html = renderToStaticMarkup(await ContentPage());
 
+    expect(lastReviewShopId).toBe("riverside_shop");
     expect(lastContentShopId).toBe("riverside_shop");
     expect(html).toContain("Riverside Collision July repair tips");
     expect(html).toContain("Post-repair sensor check reminder");
     expect(html).toContain("Google review reply for finished repair");
     expect(html).toContain("pending_review");
     expect(html).toContain("approved");
+    expect(html).not.toContain("No content yet");
+  });
+
+  it("shows BSM review items on the customer content list", async () => {
+    mockUserEmail = "customer@example.test";
+    mockShops = [{ id: "riverside_shop", name: "Riverside Collision", role: "owner" }];
+    mockActiveShopId = "riverside_shop";
+    mockServiceRiversideShop = null;
+    mockContentItems = [];
+    mockReviewItems = [
+      {
+        id: "review_1",
+        title: "Riverside Collision July repair tips",
+        content_type: "generated_page",
+        status: "in_review",
+        updated_at: "2026-08-11T16:00:00.000Z",
+      },
+    ];
+    lastContentShopId = null;
+    lastReviewShopId = null;
+
+    const html = renderToStaticMarkup(await ContentPage());
+
+    expect(lastReviewShopId).toBe("riverside_shop");
+    expect(html).toContain("Riverside Collision July repair tips");
+    expect(html).toContain("in_review");
     expect(html).not.toContain("No content yet");
   });
 });

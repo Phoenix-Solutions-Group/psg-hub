@@ -166,7 +166,8 @@ async function requireCustomerAccess(
   reviewItemId: string,
   userId: string,
 ): Promise<{ item: Record<string, unknown>; membership: { role: string } }> {
-  const { data: item, error } = await client
+  const service = createServiceClient();
+  const { data: item, error } = await service
     .from("bsm_content_review_items")
     .select("id, shop_id, title, status, content_type, admin_context_note, current_version_id, updated_at")
     .eq("id", reviewItemId)
