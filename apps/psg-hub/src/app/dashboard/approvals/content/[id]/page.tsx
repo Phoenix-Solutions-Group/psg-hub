@@ -44,8 +44,10 @@ export default async function BsmContentApprovalReviewPage({
   const previewUrl =
     typeof item.currentVersion?.sourceMetadata.previewUrl === "string"
       ? item.currentVersion.sourceMetadata.previewUrl
-      : typeof item.currentVersion?.sourceMetadata.generatedPagePath === "string"
-        ? item.currentVersion.sourceMetadata.generatedPagePath
+      : item.contentType === "generated_page"
+        ? `/dashboard/content/${encodeURIComponent(item.id)}`
+        : typeof item.currentVersion?.sourceMetadata.generatedPagePath === "string"
+          ? item.currentVersion.sourceMetadata.generatedPagePath
         : null;
   const fileUrl = item.currentVersion?.storagePath
     ? `/api/bsm/content-approvals/${encodeURIComponent(item.id)}/file`
