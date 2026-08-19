@@ -1,5 +1,14 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import {
+  RIVERSIDE_ANALYTICS_DEMO_SHOP,
+  isRiversideDemoUser,
+  shouldShowRiversideAnalyticsPreviewMetrics,
+} from "@/lib/bsm/riverside-analytics-demo";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { shopHasTier } from "@/lib/tier/gate";
 import { TierGateCard } from "./tier-gate-card";
@@ -9,6 +18,29 @@ import type { ShopRole } from "@/lib/ads/view-state";
 type Props = {
   searchParams: Promise<{ shop_id?: string }>;
 };
+
+function RiversideGoogleAdsDemo() {
+  return (
+    <div className="space-y-6" data-testid="riverside-google-ads-demo">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-medium">Riverside Collision Google Ads</h2>
+          <p className="text-sm text-muted-foreground">Private review data for the approved Riverside demo.</p>
+        </div>
+        <Badge className="bg-green-100 text-green-800">Connected</Badge>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card><CardHeader><CardTitle className="text-sm">30-day spend</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">$4,860</p></CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-sm">Leads</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">54</p></CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-sm">Cost per lead</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">$90</p></CardContent></Card>
+      </div>
+      <Card>
+        <CardHeader><CardTitle>Collision Repair Search — Riverside</CardTitle></CardHeader>
+        <CardContent><p className="text-sm text-muted-foreground">Enabled · 1,284 clicks · 54 leads</p></CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export default async function AdsPage({ searchParams }: Props) {
   const supabase = await createClient();
@@ -50,6 +82,24 @@ export default async function AdsPage({ searchParams }: Props) {
   // Tier check: shared gate (Performance subscription OR override allowlist).
   if (!(await shopHasTier(shopId, "performance"))) {
     return <TierGateCard shopId={shopId} />;
+  }
+
+  const requestHost = (await headers()).get("host");
+  const useRiversideDemo = shouldShowRiversideAnalyticsPreviewMetrics({
+    userEmail: user.email,
+    requestHost,
+  });
+  if (useRiversideDemo) {
+    const service = createServiceClient();
+    const { data: riversideShop } = await service
+      .from("shops")
+      .select("id")
+      .eq("slug", RIVERSIDE_ANALYTICS_DEMO_SHOP.slug)
+      .maybeSingle();
+
+    if ((riversideShop as { id?: string } | null)?.id === shopId) {
+      return <RiversideGoogleAdsDemo />;
+    }
   }
 
   // Phase 10 / 10-01: the Google Ads tables are now provisioned (migration

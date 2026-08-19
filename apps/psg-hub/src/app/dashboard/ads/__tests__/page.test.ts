@@ -1,17 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
 
 // redirect() returns `never` in Next; emulate by throwing a sentinel we can read.
 const redirect = vi.fn((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
-vi.mock("next/navigation", () => ({ redirect }));
+vi.mock("next/navigation", () => ({
+  redirect,
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
-type User = { id: string } | null;
+type User = { id: string; email?: string } | null;
 let mockUser: User = null;
 let mockActiveShopId: string | null = null;
 // maybeSingle() result for the explicit-param membership re-validation
 let mockExplicitMembership: { role: string } | null = null;
 let mockTierMeets = false;
+let mockHost = "localhost:3000";
+let mockRiversideShopId = "riverside";
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -21,6 +27,7 @@ vi.mock("@/lib/supabase/server", () => ({
     from: vi.fn(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
       maybeSingle: vi
         .fn()
         .mockResolvedValue({ data: mockExplicitMembership, error: null }),
@@ -33,11 +40,13 @@ vi.mock("@/lib/supabase/service", () => ({
     from: vi.fn(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi
-        .fn()
-        .mockResolvedValue({ data: { id: "s1", name: "Shop" }, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: { id: mockRiversideShopId }, error: null }),
     })),
   })),
+}));
+
+vi.mock("next/headers", () => ({
+  headers: vi.fn(async () => new Headers({ host: mockHost })),
 }));
 
 vi.mock("@/lib/shop/context", () => ({
@@ -63,6 +72,8 @@ beforeEach(() => {
   mockActiveShopId = null;
   mockExplicitMembership = null;
   mockTierMeets = false;
+  mockHost = "localhost:3000";
+  mockRiversideShopId = "riverside";
 });
 
 describe("AdsPage shop resolution", () => {
@@ -92,5 +103,32 @@ describe("AdsPage shop resolution", () => {
   it("unauthenticated -> redirects to /login", async () => {
     mockUser = null;
     await expect(run()).rejects.toThrow("REDIRECT:/login");
+  });
+
+  it("shows the connected Riverside campaign and performance state to the approved QA login", async () => {
+    mockUser = { id: "u1", email: "test@psghub.me" };
+    mockExplicitMembership = { role: "owner" };
+    mockTierMeets = true;
+    mockHost = "psg-riverside-review.vercel.app";
+
+    const html = renderToStaticMarkup(await run("riverside"));
+
+    expect(html).toContain("Riverside Collision Google Ads");
+    expect(html).toContain("Connected");
+    expect(html).toContain("Collision Repair Search — Riverside");
+    expect(html).toContain("30-day spend");
+    expect(html).toContain("54 leads");
+    expect(html).not.toContain("No Google Ads account linked yet");
+  });
+
+  it("does not leak Riverside demo data to another authorized shop", async () => {
+    mockUser = { id: "u1", email: "test@psghub.me" };
+    mockExplicitMembership = { role: "owner" };
+    mockTierMeets = true;
+    mockHost = "psg-riverside-review.vercel.app";
+    mockRiversideShopId = "riverside";
+
+    const html = renderToStaticMarkup(await run("other-shop"));
+    expect(html).not.toContain("Riverside Collision Google Ads");
   });
 });
