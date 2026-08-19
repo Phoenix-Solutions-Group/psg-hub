@@ -203,6 +203,36 @@ describe("ContentPage Riverside preview fallback", () => {
     expect(html).not.toContain("No content yet");
   });
 
+  it("keeps private Riverside demo articles visible when live Riverside content already exists", async () => {
+    mockUserEmail = "owner@riversidecollision.example";
+    mockShops = [{ id: "stale_shop", name: "Old Demo Shop", role: "owner" }];
+    mockActiveShopId = "stale_shop";
+    mockServiceRiversideShop = {
+      id: "riverside_shop",
+      name: "Riverside Collision",
+    };
+    mockContentItems = Array.from({ length: 16 }, (_, index) => ({
+      id: `live_${index}`,
+      title: `Riverside live content ${index + 1}`,
+      content_type: "social_post",
+      status: "in_review",
+      updated_at: `2026-08-${String(18 - index).padStart(2, "0")}T16:00:00.000Z`,
+    }));
+    mockReviewItems = [];
+    lastContentShopId = null;
+    lastReviewShopId = null;
+
+    const html = renderToStaticMarkup(await ContentPage());
+
+    expect(lastReviewShopId).toBe("riverside_shop");
+    expect(lastContentShopId).toBe("riverside_shop");
+    expect(html).toContain("Riverside live content 1");
+    expect(html).toContain("Riverside Collision July repair tips");
+    expect(html).toContain("Post-repair sensor check reminder");
+    expect(html).toContain("Google review reply for finished repair");
+    expect(html).not.toContain("No content yet");
+  });
+
   it("shows BSM review items on the customer content list", async () => {
     mockUserEmail = "customer@example.test";
     mockShops = [{ id: "riverside_shop", name: "Riverside Collision", role: "owner" }];
@@ -225,6 +255,35 @@ describe("ContentPage Riverside preview fallback", () => {
 
     expect(lastReviewShopId).toBe("riverside_shop");
     expect(html).toContain("Riverside Collision July repair tips");
+    expect(html).toContain("in_review");
+    expect(html).not.toContain("No content yet");
+  });
+
+  it("keeps seeded customer articles visible when BSM review items also exist", async () => {
+    mockUserEmail = "customer@example.test";
+    mockShops = [{ id: "riverside_shop", name: "Riverside Collision", role: "owner" }];
+    mockActiveShopId = "riverside_shop";
+    mockServiceRiversideShop = null;
+    mockContentItems = contentItems;
+    mockReviewItems = [
+      {
+        id: "review_1",
+        title: "E2E BSM homepage approval",
+        content_type: "generated_page",
+        status: "in_review",
+        updated_at: "2026-08-12T16:00:00.000Z",
+      },
+    ];
+    lastContentShopId = null;
+    lastReviewShopId = null;
+
+    const html = renderToStaticMarkup(await ContentPage());
+
+    expect(lastReviewShopId).toBe("riverside_shop");
+    expect(lastContentShopId).toBe("riverside_shop");
+    expect(html).toContain("E2E BSM homepage approval");
+    expect(html).toContain("Riverside Collision July repair tips");
+    expect(html).toContain("pending_review");
     expect(html).toContain("in_review");
     expect(html).not.toContain("No content yet");
   });
