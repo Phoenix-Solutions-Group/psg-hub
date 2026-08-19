@@ -4,9 +4,12 @@ export const RIVERSIDE_ANALYTICS_DEMO_SHOP = {
 } as const;
 
 const RIVERSIDE_ANALYTICS_DEMO_EMAILS = [
+  "owner@e2e.test",
+  "owner@riversidecollision.example",
   "test@psghub.me",
   "nick@phoenixsolutionsgroup.net",
 ] as const;
+const RIVERSIDE_ANALYTICS_DEMO_HOSTS = ["hub.psgweb.me"] as const;
 
 type RiversideAnalyticsDemoEnv = {
   DEMO_SHOP_EMAIL?: string;
@@ -70,6 +73,13 @@ function isPsgVercelPreviewHost(host?: string | null): boolean {
   return normalized.startsWith("psg-") && normalized.endsWith(".vercel.app");
 }
 
+function isRiversideDemoHost(host?: string | null): boolean {
+  const normalized = normalizeHost(host);
+  return RIVERSIDE_ANALYTICS_DEMO_HOSTS.includes(
+    normalized as (typeof RIVERSIDE_ANALYTICS_DEMO_HOSTS)[number]
+  );
+}
+
 function isPreviewRuntime(
   env: RiversideAnalyticsDemoEnv | NodeJS.ProcessEnv,
   requestHost?: string | null
@@ -77,7 +87,8 @@ function isPreviewRuntime(
   return (
     env.VERCEL_ENV === "preview" ||
     isPsgVercelPreviewHost(env.VERCEL_URL) ||
-    isPsgVercelPreviewHost(requestHost)
+    isPsgVercelPreviewHost(requestHost) ||
+    isRiversideDemoHost(requestHost)
   );
 }
 
