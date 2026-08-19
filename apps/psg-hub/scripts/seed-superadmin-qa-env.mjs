@@ -40,6 +40,7 @@ export const REQUIRED_RIVERSIDE_PRODUCTION_TABLES = [
   "module_access_grants",
   "modules",
   "profiles",
+  "repair_orders",
   "shops",
   "shop_users",
   "subscriptions",
@@ -127,6 +128,65 @@ export const CLEAN_DEMO_SEED = {
       "- Keep photos and claim numbers ready for the repair team",
   },
 };
+
+export function buildRiversideOperationalReportRows({ companyId, customerId }) {
+  return [
+    {
+      company_id: companyId,
+      repair_customer_id: customerId,
+      ro_number: "DEMO-RIV-2026-07-01",
+      status: "closed",
+      repair_amount_cents: 725000,
+      pay_type: "insurance",
+      dates_json: { date_in: "2026-07-03", date_out: "2026-07-10" },
+      created_at: "2026-07-03T14:00:00.000Z",
+    },
+    {
+      company_id: companyId,
+      repair_customer_id: customerId,
+      ro_number: "DEMO-RIV-2026-07-02",
+      status: "closed",
+      repair_amount_cents: 480000,
+      pay_type: "customer",
+      dates_json: { date_in: "2026-07-14", date_out: "2026-07-18" },
+      created_at: "2026-07-14T14:00:00.000Z",
+    },
+    {
+      company_id: companyId,
+      repair_customer_id: customerId,
+      ro_number: "DEMO-RIV-2026-07-03",
+      status: "open",
+      repair_amount_cents: 645000,
+      pay_type: "insurance",
+      dates_json: { date_in: "2026-07-27" },
+      created_at: "2026-07-27T14:00:00.000Z",
+    },
+    {
+      company_id: companyId,
+      repair_customer_id: customerId,
+      ro_number: "DEMO-RIV-2026-08-01",
+      status: "closed",
+      repair_amount_cents: 910000,
+      pay_type: "insurance",
+      dates_json: { date_in: "2026-08-04", date_out: "2026-08-12" },
+      created_at: "2026-08-04T14:00:00.000Z",
+    },
+    {
+      company_id: companyId,
+      repair_customer_id: customerId,
+      ro_number: "DEMO-RIV-2026-08-02",
+      status: "open",
+      repair_amount_cents: 565000,
+      pay_type: "warranty",
+      dates_json: { date_in: "2026-08-21" },
+      created_at: "2026-08-21T14:00:00.000Z",
+    },
+  ].map((row) => ({
+    ...row,
+    payload_jsonb: { demoSeed: "psg-2975-operational-reports" },
+    updated_at: row.created_at,
+  }));
+}
 
 export function shouldSeedInternalRegressionUser(env = process.env) {
   return env.DEMO_INCLUDE_INTERNAL_REGRESSION_USER === "1";
@@ -1237,6 +1297,8 @@ async function seedOpsAndIntegrationSurfaces({ shopId, company, operatorId }) {
     label: "Riverside demo repair customer",
   });
 
+  await seedOperationalReportSurface(company, customer);
+
   const batch = await upsertByLookup({
     table: "production_batches",
     filters: { name: "DEMO Riverside thank-you queued" },
@@ -1357,6 +1419,17 @@ async function seedSurveySurface(company) {
     onConflict: "dispatch_ref",
     label: "Riverside survey dispatch",
   });
+}
+
+async function seedOperationalReportSurface(company, customer) {
+  const rows = buildRiversideOperationalReportRows({
+    companyId: company.id,
+    customerId: customer.id,
+  });
+  const { error } = await supabase
+    .from("repair_orders")
+    .upsert(rows, { onConflict: "company_id,ro_number" });
+  if (error) throw new Error(`Riverside operational report seed failed: ${error.message}`);
 }
 
 async function seedFullDemoAccountSurfaces({ shop, operator, shopUser, company }) {

@@ -6,6 +6,7 @@ import {
   assertRequiredRiversideSeedTablesExist,
   buildAggregateDerivedAnalyticsRows,
   buildAggregateDerivedDirectMailPrior,
+  buildRiversideOperationalReportRows,
   CLEAN_DEMO_SEED,
   deriveGoogleAdsBenchmarkMetrics,
   REQUIRED_RIVERSIDE_PRODUCTION_TABLES,
@@ -89,6 +90,36 @@ describe("clean BSM demo seed", () => {
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.legacyShopSlug);
     expect(CLEAN_DEMO_SEED.shopSlug).not.toBe(CLEAN_DEMO_SEED.previousPilotShopSlug);
     expect(CLEAN_DEMO_SEED.shopName).not.toBe(CLEAN_DEMO_SEED.previousPilotShopName);
+  });
+
+  it("builds predictable July and August Processing Recap demo rows", () => {
+    const rows = buildRiversideOperationalReportRows({
+      companyId: "riverside-company",
+      customerId: "demo-customer",
+    });
+    const summarize = (month: string) => {
+      const monthRows = rows.filter((row) => row.created_at.startsWith(month));
+      return {
+        opened: monthRows.length,
+        closed: monthRows.filter((row) => row.status === "closed").length,
+        processed:
+          monthRows.reduce((total, row) => total + row.repair_amount_cents, 0) / 100,
+      };
+    };
+
+    expect(summarize("2026-07")).toEqual({
+      opened: 3,
+      closed: 2,
+      processed: 18_500,
+    });
+    expect(summarize("2026-08")).toEqual({
+      opened: 2,
+      closed: 1,
+      processed: 14_750,
+    });
+    expect(rows.every((row) => row.company_id === "riverside-company")).toBe(true);
+    expect(rows.every((row) => row.payload_jsonb.demoSeed === "psg-2975-operational-reports"))
+      .toBe(true);
   });
 
   it("builds Riverside analytics rows from production aggregate snapshots", () => {
@@ -261,6 +292,7 @@ describe("clean BSM demo seed", () => {
       `Required production table ${missingTable} is unavailable`
     );
     expect(REQUIRED_RIVERSIDE_PRODUCTION_TABLES).toContain("survey_responses");
+    expect(REQUIRED_RIVERSIDE_PRODUCTION_TABLES).toContain("repair_orders");
   });
 
   it("allows existing Riverside records that are clearly marked as .example demos", async () => {
