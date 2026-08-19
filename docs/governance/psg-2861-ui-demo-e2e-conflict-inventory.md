@@ -3,7 +3,7 @@
 **Issue:** PSG-2861 - Recovery branch UI/demo/E2E conflict inventory  
 **Owner:** Nora  
 **Date:** 2026-08-19  
-**Branch checked:** `feat/psg-790-tedesco-lead-endpoint` at `77411766`  
+**Branch checked:** `feat/psg-790-tedesco-lead-endpoint` at `f8a1f58e`
 **Target checked:** `origin/main`  
 **Merge base:** `fc4319a898847c14237732170bc4f09f3b669bdd`
 
@@ -16,7 +16,7 @@ production/mail-artwork surfaces.
 
 This lane covers 84 files changed on the recovery branch relative to `origin/main`
 under the scoped UI/demo/E2E paths: 44 added files and 40 modified files. The scoped
-diff is about 24,656 added lines and 694 removed lines. `origin/main` also changed
+diff is about 14,207 added lines and 620 removed lines. `origin/main` also changed
 72 files in the same lane after the recovery branch split, so simple "take the
 branch" resolution would drop mainline fixes.
 
@@ -182,8 +182,12 @@ resolution depends on them for:
 
 Current checkout verification:
 
+- Current branch relationship to `origin/main` is 167 commits behind and 336
+  commits ahead.
 - `git merge-tree --write-tree --messages origin/main HEAD` produced the conflicts
   listed above without changing the working tree.
+- `rg -n '^(<<<<<<<|=======|>>>>>>>)'` found no live conflict markers in the
+  scoped UI/demo/E2E files.
 - `git diff --check origin/main...HEAD` found whitespace issues in two API files
   outside the core UI lane:
   - `apps/psg-hub/src/app/api/ads-mutations/gtm/status/__tests__/route.test.ts`
