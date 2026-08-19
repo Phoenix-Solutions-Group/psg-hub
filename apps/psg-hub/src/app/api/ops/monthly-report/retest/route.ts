@@ -33,6 +33,7 @@ const TARGET_SHOP_NAMES = [
   "Riverside Collision",
   "Demo Body Shop",
 ] as const;
+const APPROVED_RETEST_RECIPIENT = "nick@phoenixsolutionsgroup.net";
 
 function productionOnly(): boolean {
   return process.env.VERCEL_ENV === "production";
@@ -56,6 +57,15 @@ function configured(): boolean {
   );
 }
 
+function retestRecipientOverride(): string | null {
+  const raw = process.env.MONTHLY_REPORT_RETEST_RECIPIENT_EMAIL?.trim().toLowerCase();
+  if (!raw) return null;
+  if (raw !== APPROVED_RETEST_RECIPIENT) {
+    throw new Error("invalid_retest_recipient");
+  }
+  return raw;
+}
+
 function redact(raw: string | null | undefined): string {
   const redacted = sanitizeLastError(raw)
     .replace(/https?:\/\/\S+/gi, "[url]")
@@ -76,7 +86,10 @@ function publicResult(result: PerShopResult) {
   };
 }
 
-async function listRetestShops(service: SupabaseClient): Promise<MonthlyShop[]> {
+async function listRetestShops(
+  service: SupabaseClient,
+  recipientOverride: string | null
+): Promise<MonthlyShop[]> {
   const { data: shops, error: shopErr } = await service
     .from("shops")
     .select("id, name")
@@ -110,7 +123,7 @@ async function listRetestShops(service: SupabaseClient): Promise<MonthlyShop[]> 
     const { data: userRes } = await service.auth.admin.getUserById(userId);
     const email = userRes?.user?.email;
     if (!email) continue;
-    result.push({ id: shop.id as string, name, ownerEmail: email });
+    result.push({ id: shop.id as string, name, ownerEmail: recipientOverride ?? email });
   }
   return result;
 }
@@ -170,12 +183,19 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "report_not_configured" }, { status: 503 });
   }
 
+  let recipientOverride: string | null;
+  try {
+    recipientOverride = retestRecipientOverride();
+  } catch {
+    return NextResponse.json({ error: "invalid_retest_recipient" }, { status: 503 });
+  }
+
   const service = createServiceClient();
   const { start, end } = monthWindow(PERIOD);
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
 
   const result = await runMonthlyReports(PERIOD, {
-    listShops: () => listRetestShops(service),
+    listShops: () => listRetestShops(service, recipientOverride),
     assembleReportData: (shopId, p) => {
       const readSnapshots: SnapshotReader = (query) => getSnapshots(service, query);
       return assembleReportData(shopId, p, {
@@ -210,6 +230,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     period: PERIOD,
     window: { start, end },
     force: false,
+    recipientOverride: recipientOverride ? "approved_internal_retest_recipient" : "none",
     targetShops: [...TARGET_SHOP_NAMES],
     counts: result.counts,
     results: result.results.map(publicResult),
