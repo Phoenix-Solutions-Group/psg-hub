@@ -37,7 +37,7 @@ FIELDS = (
     "RC_Cust_State",
     "RC_Cust_Zip",
 )
-DEFAULT_TABLE = "FMTID:131"
+DEFAULT_TABLE = '"Master_Repair Customer"'
 DEFAULT_START_DATE = "2020-01-01"
 
 
@@ -62,6 +62,11 @@ def service_root(base_url: str, database: str) -> str:
     origin = urllib.parse.urlunsplit(
         (parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", "")
     )
+    database = database.strip()
+    if not database:
+        raise ValueError("FILEMAKER_ODATA_DATABASE cannot be empty")
+    if not database.lower().endswith(".fmp12"):
+        database = f"{database}.fmp12"
     return f"{origin}/fmi/odata/v4/{urllib.parse.quote(database, safe='')}"
 
 
@@ -76,7 +81,7 @@ def initial_url(root: str, table: str, start_date: str) -> str:
         },
         quote_via=urllib.parse.quote,
     )
-    return f"{root}/{urllib.parse.quote(table, safe=':')}?{query}"
+    return f"{root}/{urllib.parse.quote(table, safe='')}?{query}"
 
 
 def safe_page_url(root: str, current_url: str, candidate: str) -> str:
@@ -216,7 +221,7 @@ def export_snapshot(
 
 
 def self_test() -> dict[str, Any]:
-    root = "https://filemaker.example.com/fmi/odata/v4/Advantage"
+    root = service_root("https://filemaker.example.com", "Advantage")
     start = initial_url(root, DEFAULT_TABLE, DEFAULT_START_DATE)
     page_two = f"{root}/{DEFAULT_TABLE}?page=2"
     sample = {field: f"value-{field}" for field in FIELDS}
@@ -243,6 +248,8 @@ def self_test() -> dict[str, Any]:
             "RC_ClaimNum",
         )
     )
+    assert root.endswith("/Advantage.fmp12")
+    assert "/%22Master_Repair%20Customer%22?" in start
     try:
         safe_page_url(root, start, "https://attacker.example/records")
     except ValueError:

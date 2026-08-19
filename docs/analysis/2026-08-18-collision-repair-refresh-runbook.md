@@ -3,7 +3,7 @@
 **Project:** PSG collision intelligence
 **Source:** PhoenixSolutions Advantage FileMaker
 **Target:** Supabase `gylkkzmcmbdftxieyabw`
-**Status:** dedicated account created; FileMaker OData file access and schedule not configured
+**Status:** dedicated repair account and OData metadata verified; first governed export/import and schedule remain
 
 ## Source evidence
 
@@ -21,9 +21,12 @@
   serves the FileMaker Data API product endpoint and returns the expected HTTP 401
   challenge for the Advantage OData metadata endpoint. The `fm.psghub.me`,
   `fm2.psghub.me`, and `fm3.psghub.me` hosts are not valid integration endpoints.
-- An authenticated check on 2026-08-19 confirmed that `psg_odata_repairs` can discover
-  the Advantage OData database, but opening its service root or metadata returns
-  FileMaker error 802. No repair export or Supabase import occurred.
+- An authenticated check on 2026-08-19 confirmed that `psg_odata_repairs` can open
+  `PhoenixSolutions_Advantage_06.1.fmp12` metadata through OData. FileMaker error 802
+  was caused by omitting the hosted filename's `.fmp12` suffix. `FMTID:131` is the
+  stable DDR identifier, not an OData entity URL; the live OData entity is the quoted
+  `Master_Repair Customer` name. No new governed repair export or Supabase import has
+  occurred yet.
 
 ## One-time FileMaker configuration
 
@@ -55,6 +58,8 @@ The FileMaker administrator must:
    integration account. Enable only `fmodata` for the account's custom privilege set.
 5. Provide the HTTPS origin, hosted database name, account, and password through the
    operations secret store. Never place credentials in this repository or a command line.
+   Use the exact hosted filename `PhoenixSolutions_Advantage_06.1.fmp12`; the exporter
+   also appends `.fmp12` when the configured value omits it.
 
 Claris documents OData enablement, account authentication, limited-field `$select`,
 and pagination here:
