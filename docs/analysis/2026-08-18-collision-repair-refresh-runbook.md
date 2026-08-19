@@ -3,7 +3,7 @@
 **Project:** PSG collision intelligence
 **Source:** PhoenixSolutions Advantage FileMaker
 **Target:** Supabase `gylkkzmcmbdftxieyabw`
-**Status:** dedicated repair account and OData metadata verified; first governed export/import and schedule remain
+**Status:** bounded repair probe passed; first governed export/import and timer activation remain
 
 ## Source evidence
 
@@ -25,8 +25,10 @@
   `PhoenixSolutions_Advantage_06.1.fmp12` metadata through OData. FileMaker error 802
   was caused by omitting the hosted filename's `.fmp12` suffix. `FMTID:131` is the
   stable DDR identifier, not an OData entity URL; the live OData entity is the quoted
-  `Master_Repair Customer` name. No new governed repair export or Supabase import has
-  occurred yet.
+  `Master_Repair Customer` name.
+- The 2026-08-19 bounded live probe returned 330,530 records in the approved 2020+
+  scope, exactly 15 allowlisted fields, and zero direct customer or agent PII fields.
+  No new governed repair export or Supabase import has occurred yet.
 
 ## One-time FileMaker configuration
 
@@ -74,6 +76,15 @@ and pagination here:
 Store the four `FILEMAKER_ODATA_*` variables and the existing Supabase service-role
 variables in an operations-only environment file with mode `0600`.
 
+Run the bounded preflight first. It requests one record, verifies the exact 15-field
+allowlist, and checks the filtered source count without writing an export:
+
+```bash
+python3 /opt/psg/psg-hub/apps/psg-hub/scripts/export-filemaker-collision-odata.py \
+  --env-file /opt/psg/secrets/collision-refresh.env \
+  --probe
+```
+
 ```bash
 python3 /opt/psg/psg-hub/apps/psg-hub/scripts/export-filemaker-collision-odata.py \
   --env-file /opt/psg/secrets/collision-refresh.env \
@@ -83,11 +94,14 @@ python3 /opt/psg/psg-hub/apps/psg-hub/scripts/export-filemaker-collision-odata.p
 The exporter:
 
 - requests only the governed fields with OData `$select`;
+- allows up to 15 minutes for FileMaker's initial filtered count and does not retry a
+  timed-out request while the server may still be executing it;
 - filters `RC_CreationDate` from 2020-01-01 forward to reproduce the observed source
   scope rather than loading the entire 1.19-million-row table;
 - requires the reported source count to remain between 300,000 and 500,000 rows;
 - follows pagination only within the configured HTTPS OData service;
-- verifies received rows equal `@odata.count`; and
+- verifies received rows equal the OData count annotation (`@count` or
+  `@odata.count`); and
 - replaces the output atomically with mode `0600` only after all checks pass.
 
 Then run the existing idempotent importer:
@@ -130,7 +144,7 @@ Do not call the feed live until one scheduled run proves all of the following:
 
 1. OData responds through `https://psgweb.me` using the dedicated restricted account.
 2. The export reports 15 fields, zero direct customer/agent PII fields, and an in-range
-   row count equal to `@odata.count`.
+   row count equal to the OData count annotation.
 3. The importer source ledger reconciles parsed = accepted + rejected.
 4. The prior snapshot becomes superseded only after final reconciliation.
 5. Mapped-shop dashboard counts and freshness match the new source ledger.

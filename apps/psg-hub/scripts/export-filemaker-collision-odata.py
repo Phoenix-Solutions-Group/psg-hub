@@ -14,6 +14,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -39,6 +40,7 @@ FIELDS = (
 )
 DEFAULT_TABLE = '"Master_Repair Customer"'
 DEFAULT_START_DATE = "2020-01-01"
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 900
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -96,17 +98,39 @@ def safe_page_url(root: str, current_url: str, candidate: str) -> str:
 
 
 def http_error_message(status: int, body: bytes) -> str:
+    detail = ""
     try:
         error = json.loads(body).get("error", {})
         detail = ": ".join(
             str(error[key]) for key in ("code", "message") if error.get(key)
         )
     except (AttributeError, json.JSONDecodeError, UnicodeDecodeError):
-        detail = ""
+        try:
+            root = ET.fromstring(body)
+            values = {
+                node.tag.rsplit("}", 1)[-1]: (node.text or "").strip()
+                for node in root.iter()
+            }
+            detail = ": ".join(
+                values[key] for key in ("code", "message") if values.get(key)
+            )
+        except (ET.ParseError, UnicodeDecodeError):
+            pass
     return f"FileMaker OData HTTP {status}" + (f" ({detail})" if detail else "")
 
 
-def http_fetcher(account: str, password: str) -> Callable[[str], dict[str, Any]]:
+def odata_control(payload: dict[str, Any], name: str) -> Any:
+    for key in (f"@{name}", f"@odata.{name}"):
+        if key in payload:
+            return payload[key]
+    raise RuntimeError(f"FileMaker OData response omitted its {name} annotation")
+
+
+def http_fetcher(
+    account: str, password: str, timeout_seconds: int
+) -> Callable[[str], dict[str, Any]]:
+    if not 30 <= timeout_seconds <= 1800:
+        raise ValueError("request timeout must be between 30 and 1800 seconds")
     authorization = base64.b64encode(f"{account}:{password}".encode()).decode()
 
     def fetch(url: str) -> dict[str, Any]:
@@ -120,7 +144,7 @@ def http_fetcher(account: str, password: str) -> Callable[[str], dict[str, Any]]
         )
         for attempt in range(4):
             try:
-                with urllib.request.urlopen(request, timeout=180) as response:
+                with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
                     return json.loads(response.read(), parse_float=Decimal)
             except urllib.error.HTTPError as error:
                 if error.code not in {429, 502, 503, 504} or attempt == 3:
@@ -128,7 +152,11 @@ def http_fetcher(account: str, password: str) -> Callable[[str], dict[str, Any]]
                         http_error_message(error.code, error.read(4096))
                     ) from error
                 time.sleep(2**attempt)
-            except (urllib.error.URLError, TimeoutError):
+            except TimeoutError:
+                raise
+            except urllib.error.URLError as error:
+                if isinstance(error.reason, TimeoutError):
+                    raise
                 if attempt == 3:
                     raise
                 time.sleep(2**attempt)
@@ -178,9 +206,7 @@ def export_snapshot(
                 payload = fetch(url)
                 pages += 1
                 if expected is None:
-                    if "@odata.count" not in payload:
-                        raise RuntimeError("FileMaker OData response omitted @odata.count")
-                    expected = int(payload["@odata.count"])
+                    expected = int(odata_control(payload, "count"))
                     if not minimum_rows <= expected <= maximum_rows:
                         raise RuntimeError(
                             f"FileMaker scope count {expected} is outside the approved "
@@ -198,7 +224,7 @@ def export_snapshot(
                     writer.writerow({field: row[field] for field in FIELDS})
                     received += 1
                 previous_url = url
-                next_link = payload.get("@odata.nextLink")
+                next_link = payload.get("@nextLink", payload.get("@odata.nextLink"))
                 url = str(next_link) if next_link else None
 
         if expected is None or received != expected:
@@ -220,13 +246,45 @@ def export_snapshot(
             temporary.unlink()
 
 
+def probe_source(
+    start_url: str,
+    fetch: Callable[[str], dict[str, Any]],
+    minimum_rows: int,
+    maximum_rows: int,
+) -> dict[str, Any]:
+    top = urllib.parse.urlencode({"$top": "1"}, quote_via=urllib.parse.quote)
+    payload = fetch(f"{start_url}&{top}")
+    expected = int(odata_control(payload, "count"))
+    if not minimum_rows <= expected <= maximum_rows:
+        raise RuntimeError(
+            f"FileMaker scope count {expected} is outside the approved "
+            f"range {minimum_rows}-{maximum_rows}"
+        )
+    rows = payload.get("value")
+    if not isinstance(rows, list) or len(rows) != 1:
+        raise RuntimeError("FileMaker OData probe did not return exactly one record")
+    returned = {key for key in rows[0] if key != "ROWID" and not key.startswith("@")}
+    if returned != set(FIELDS):
+        missing = sorted(set(FIELDS) - returned)
+        extra = sorted(returned - set(FIELDS))
+        raise RuntimeError(
+            f"FileMaker OData probe field mismatch; missing={missing}, extra={extra}"
+        )
+    return {
+        "status": "ready",
+        "rows": expected,
+        "fields": len(returned),
+        "pii_fields": 0,
+    }
+
+
 def self_test() -> dict[str, Any]:
     root = service_root("https://filemaker.example.com", "Advantage")
     start = initial_url(root, DEFAULT_TABLE, DEFAULT_START_DATE)
     page_two = f"{root}/{DEFAULT_TABLE}?page=2"
     sample = {field: f"value-{field}" for field in FIELDS}
     pages = {
-        start: {"@odata.count": 2, "value": [sample], "@odata.nextLink": page_two},
+        start: {"@odata.count": 2, "value": [sample], "@nextLink": page_two},
         page_two: {"value": [sample]},
     }
     with tempfile.TemporaryDirectory() as directory:
@@ -259,23 +317,52 @@ def self_test() -> dict[str, Any]:
     assert http_error_message(
         400, b'{"error":{"code":"8309","message":"Invalid query"}}'
     ) == "FileMaker OData HTTP 400 (8309: Invalid query)"
+    assert http_error_message(
+        501,
+        b'<m:error xmlns:m="urn:test"><m:code>802</m:code><m:message>Unable to open file</m:message></m:error>',
+    ) == "FileMaker OData HTTP 501 (802: Unable to open file)"
+    assert odata_control({"@count": "2"}, "count") == "2"
+    assert odata_control({"@odata.count": 2}, "count") == 2
+    assert probe_source(
+        start,
+        lambda _: {
+            "@count": 2,
+            "value": [{"@etag": "opaque", "ROWID": "1", **sample}],
+        },
+        2,
+        2,
+    ) == {"status": "ready", "rows": 2, "fields": len(FIELDS), "pii_fields": 0}
+    try:
+        http_fetcher("account", "password", 29)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unsafe request timeout was accepted")
     return {"self_test": "passed", "fields": len(FIELDS), "pii_fields": 0}
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     if args.self_test:
         return self_test()
-    if not args.output_file or not args.env_file:
-        raise ValueError("--output-file and --env-file are required unless --self-test is used")
+    if not args.env_file or (not args.probe and not args.output_file):
+        raise ValueError(
+            "--env-file and either --probe or --output-file are required unless --self-test is used"
+        )
     env = load_env(Path(args.env_file))
     root = service_root(env["FILEMAKER_ODATA_BASE_URL"], env["FILEMAKER_ODATA_DATABASE"])
+    start_url = initial_url(root, args.table, args.start_date)
+    fetch = http_fetcher(
+        env["FILEMAKER_ODATA_ACCOUNT"],
+        env["FILEMAKER_ODATA_PASSWORD"],
+        args.request_timeout_seconds,
+    )
+    if args.probe:
+        return probe_source(start_url, fetch, args.minimum_rows, args.maximum_rows)
     return export_snapshot(
         Path(args.output_file),
         root,
-        initial_url(root, args.table, args.start_date),
-        http_fetcher(
-            env["FILEMAKER_ODATA_ACCOUNT"], env["FILEMAKER_ODATA_PASSWORD"]
-        ),
+        start_url,
+        fetch,
         args.minimum_rows,
         args.maximum_rows,
     )
@@ -289,6 +376,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-date", default=DEFAULT_START_DATE)
     parser.add_argument("--minimum-rows", type=int, default=300_000)
     parser.add_argument("--maximum-rows", type=int, default=500_000)
+    parser.add_argument(
+        "--request-timeout-seconds",
+        type=int,
+        default=DEFAULT_REQUEST_TIMEOUT_SECONDS,
+    )
+    parser.add_argument("--probe", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     return parser.parse_args()
 
