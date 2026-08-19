@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cleanDemoScopedShopId,
   filterCleanDemoCompanies,
   filterCleanDemoShopMemberships,
   filterCleanDemoShops,
@@ -118,6 +119,17 @@ describe("demo user filter", () => {
     expect(shouldUseCleanDemoVisibility("admin@psghub.me", env)).toBe(true);
     expect(shouldUseCleanDemoVisibility("board-admin@example.test", env)).toBe(true);
     expect(shouldUseCleanDemoVisibility("nick@phoenixsolutionsgroup.net", env)).toBe(false);
+  });
+
+  it("scopes content approval loading to the active shop only for clean demo operators", () => {
+    const env = {
+      DEMO_OPERATOR_EMAIL: "board-admin@example.test",
+      DEMO_SHOP_EMAIL: "board-shop@example.test",
+    };
+
+    expect(cleanDemoScopedShopId("board-admin@example.test", "shop-riverside", env)).toBe("shop-riverside");
+    expect(cleanDemoScopedShopId("nick@phoenixsolutionsgroup.net", "shop-riverside", env)).toBeNull();
+    expect(cleanDemoScopedShopId("board-admin@example.test", null, env)).toBeNull();
   });
 
   it("uses seeded local demo users when the app points at the local test database", () => {

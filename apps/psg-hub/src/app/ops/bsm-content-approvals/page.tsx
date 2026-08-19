@@ -9,7 +9,7 @@ import {
 import type { BsmContentApprovalListItem, BsmContentApprovalWorkspaceOption } from "@/lib/bsm/content-approvals-shared";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { filterCleanDemoShops } from "@/lib/ops/demo-user-filter";
+import { cleanDemoScopedShopId, filterCleanDemoShops } from "@/lib/ops/demo-user-filter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,7 +71,6 @@ export default async function BsmContentApprovalsPage({ searchParams }: BsmConte
   const service = createServiceClient();
 
   try {
-    approvals = await listBsmContentApprovals(service);
     workspaces = await listBsmContentApprovalWorkspaces(service, { actorProfileId: user.id });
     reviewerContacts = await listBsmContentApprovalReviewerContacts(service);
   } catch {
@@ -101,6 +100,16 @@ export default async function BsmContentApprovalsPage({ searchParams }: BsmConte
   } catch {
     loadError = true;
     shops = [];
+  }
+
+  try {
+    const scopedDemoShopId = cleanDemoScopedShopId(user.email, activeShopId);
+    approvals = await listBsmContentApprovals(
+      service,
+      scopedDemoShopId ? { shopId: scopedDemoShopId } : {},
+    );
+  } catch {
+    loadError = true;
   }
 
   return (

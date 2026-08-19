@@ -133,6 +133,15 @@ export function shouldUseCleanDemoVisibility(
   );
 }
 
+export function cleanDemoScopedShopId(
+  currentUserEmail?: string | null,
+  activeShopId?: string | null,
+  env: CleanDemoEnv = defaultCleanDemoEnv()
+): string | null {
+  if (!activeShopId || !shouldUseCleanDemoVisibility(currentUserEmail, env)) return null;
+  return activeShopId;
+}
+
 export function filterCleanDemoUsers<T extends DemoUserCandidate>(
   users: T[],
   currentUserEmail?: string | null,
