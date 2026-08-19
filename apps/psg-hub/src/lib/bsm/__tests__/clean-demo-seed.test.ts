@@ -170,6 +170,27 @@ describe("clean BSM demo seed", () => {
     });
   });
 
+  it("keeps Riverside analytics seeding alive when aggregate snapshots are empty", () => {
+    const rows = buildAggregateDerivedAnalyticsRows({
+      shopId: "riverside-shop",
+      aggregateRows: [],
+      dates: ["2026-08-18"],
+    });
+
+    expect(rows).toHaveLength(5);
+    expect(rows.every((row) => row.shop_id === "riverside-shop")).toBe(true);
+    expect(rows.every((row) => row.metrics.empty_aggregate_fallback === true)).toBe(true);
+    expect(rows.every((row) => row.metrics.source_row_count === 0)).toBe(true);
+    expect(rows.every((row) => row.metrics.source_shop_count === 0)).toBe(true);
+    expect(deriveGoogleAdsBenchmarkMetrics([])).toMatchObject({
+      clicks: 0,
+      impressions: 0,
+      conversions: 0,
+      cost_micros: 0,
+      empty_aggregate_fallback: true,
+    });
+  });
+
   it("builds Riverside direct-mail priors from aggregate rows instead of invented counts", () => {
     const row = buildAggregateDerivedDirectMailPrior({
       company: { id: "riverside-company" },

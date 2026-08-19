@@ -464,9 +464,18 @@ export function deriveAnalyticsMetricAverages(rows, sources = ANALYTICS_SOURCES)
       }
     }
     if (Object.keys(metrics).length === 0) {
-      throw new Error(
-        `Riverside demo seed cannot derive ${source} metrics because no aggregate numeric data exists in analytics_snapshots.`
-      );
+      derived[source] = {
+        metrics: {},
+        sourceRowCount: sourceRows.length,
+        sourceShopCount: new Set(sourceRows.map((row) => row.shop_id).filter(Boolean)).size,
+        latestSourceDate: sourceRows
+          .map((row) => row.date)
+          .filter(Boolean)
+          .sort()
+          .at(-1),
+        emptyAggregateFallback: true,
+      };
+      continue;
     }
     derived[source] = {
       metrics,
@@ -499,6 +508,7 @@ export function buildAggregateDerivedAnalyticsRows({ shopId, aggregateRows, date
         source_row_count: averages[source].sourceRowCount,
         source_shop_count: averages[source].sourceShopCount,
         latest_source_date: averages[source].latestSourceDate,
+        empty_aggregate_fallback: averages[source].emptyAggregateFallback === true,
       },
     }))
   );
@@ -595,6 +605,7 @@ export function deriveGoogleAdsBenchmarkMetrics(aggregateRows) {
     source_row_count: aggregate.sourceRowCount,
     source_shop_count: aggregate.sourceShopCount,
     latest_source_date: aggregate.latestSourceDate,
+    empty_aggregate_fallback: aggregate.emptyAggregateFallback === true,
   };
 }
 
