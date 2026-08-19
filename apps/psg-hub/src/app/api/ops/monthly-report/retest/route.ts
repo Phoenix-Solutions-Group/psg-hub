@@ -40,12 +40,15 @@ function productionOnly(): boolean {
 }
 
 function authorized(request: Request): boolean {
-  const secret = process.env.MONTHLY_REPORT_RETEST_SECRET;
-  if (!secret) return false;
-  const expected = `Bearer ${secret}`;
   const a = Buffer.from(request.headers.get("authorization") ?? "");
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
+  const secrets = [
+    process.env.MONTHLY_REPORT_RETEST_SECRET,
+    process.env.MONTHLY_REPORT_RETEST_RUN_SECRET,
+  ].filter((secret): secret is string => Boolean(secret));
+  return secrets.some((secret) => {
+    const b = Buffer.from(`Bearer ${secret}`);
+    return a.length === b.length && timingSafeEqual(a, b);
+  });
 }
 
 function configured(): boolean {

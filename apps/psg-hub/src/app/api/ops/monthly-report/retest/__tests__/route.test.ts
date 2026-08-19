@@ -126,6 +126,15 @@ describe("POST /api/ops/monthly-report/retest", () => {
     expect(runMonthlyReports).not.toHaveBeenCalled();
   });
 
+  it("accepts the temporary run secret without exposing the stored retest secret", async () => {
+    vi.stubEnv("MONTHLY_REPORT_RETEST_RUN_SECRET", "one-time-run-secret");
+
+    const res = await POST(req("one-time-run-secret"));
+
+    expect(res.status).toBe(200);
+    expect(runMonthlyReports).toHaveBeenCalledTimes(1);
+  });
+
   it("503s after auth when report dependencies are not configured", async () => {
     vi.stubEnv("REPORT_RENDER_URL", "");
     const res = await POST(req(SECRET));
