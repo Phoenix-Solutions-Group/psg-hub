@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { HEAD, GET } from "../route";
 
 const BASE = "https://hub.psgweb.me/api/health";
+
+afterEach(() => {
+  delete process.env.PSG_PREVIEW_SOURCE_SHA;
+});
 
 describe("GET /api/health", () => {
   it("returns a lightweight ok response for liveness checks", async () => {
@@ -29,5 +33,13 @@ describe("GET /api/health", () => {
     const res = await HEAD();
 
     expect(res.status).toBe(200);
+  });
+
+  it("reports the pinned source commit for an internal preview", async () => {
+    process.env.PSG_PREVIEW_SOURCE_SHA = "225b9e90";
+
+    const res = await GET();
+
+    await expect(res.json()).resolves.toMatchObject({ buildSha: "225b9e90" });
   });
 });
