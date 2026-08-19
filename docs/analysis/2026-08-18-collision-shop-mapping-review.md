@@ -1,7 +1,7 @@
 # Collision Source-shop Mapping Review
 
-**Reviewed:** 2026-08-18
-**Decision:** no source shop was auto-mapped
+**Reviewed:** 2026-08-19
+**Decision:** no source shop was auto-mapped; 1 mapping is active and 198 await review
 
 ## Rules
 
@@ -13,6 +13,15 @@
 - Mapping enables descriptive shop analytics. Numeric forecasts still require a
   separately approved model that beats the seasonal baseline, has a credible
   interval, and passes the 14-day freshness gate.
+
+## Approval workflow
+
+PSG superadmins review mappings at `/dashboard/collision-intelligence/review`.
+Approval requires an available PSG Hub shop, written identity evidence, and an
+explicit confirmation. The service-only database function validates the actor and
+both sides of the mapping, prevents concurrent or duplicate assignments, updates the
+mapping, and records `collision.shop_mapping.approve` in `access_audit` in one
+transaction. No candidate is approved from name similarity alone.
 
 ## Current candidates
 

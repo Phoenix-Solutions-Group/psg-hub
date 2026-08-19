@@ -126,9 +126,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         <h1 className="mt-1 text-2xl font-bold tracking-tight">Data review</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
           Approve carrier aliases only after identity review. Carrier-tagged
-          repair volume is not insurer claim volume. Shop mappings are
-          evidence-only here because approval changes tenant-visible repair
-          history.
+          repair volume is not insurer claim volume. Shop mappings require a
+          target shop, written identity evidence, and explicit confirmation;
+          approval changes tenant-visible repair history and is audited.
         </p>
       </div>
 
