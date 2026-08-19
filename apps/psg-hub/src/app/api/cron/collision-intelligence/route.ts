@@ -33,13 +33,17 @@ async function handle(request: Request): Promise<NextResponse> {
       .select("shop_id,source_age_hours")
       .eq("is_stale", true),
   ]);
-  const [stormSources] = await Promise.allSettled([
+  const [stormSources, forecastReadiness] = await Promise.allSettled([
     service
       .from("v_collision_storm_source_reconciliation")
       .select(
         "source_key,import_batch_id,event_rows,reported_rows,reconciliation_status",
       )
       .eq("is_reconciled", false),
+    service
+      .from("v_collision_forecast_readiness")
+      .select("shop_id,forecast_horizon_weeks,readiness_status")
+      .eq("is_ready", false),
   ]);
   const feedFailed =
     repairFeed.status === "rejected" ||
@@ -55,6 +59,13 @@ async function handle(request: Request): Promise<NextResponse> {
     stormSources.status === "fulfilled" && !stormSources.value.error
       ? (stormSources.value.data?.length ?? 0)
       : 0;
+  const forecastReadinessFailed =
+    forecastReadiness.status === "rejected" ||
+    (forecastReadiness.status === "fulfilled" && forecastReadiness.value.error);
+  const gatedForecasts =
+    forecastReadiness.status === "fulfilled" && !forecastReadiness.value.error
+      ? (forecastReadiness.value.data?.length ?? 0)
+      : 0;
   if (
     weather.status === "rejected" ||
     forecasts.status === "rejected" ||
@@ -62,7 +73,9 @@ async function handle(request: Request): Promise<NextResponse> {
     feedFailed ||
     staleFeeds > 0 ||
     stormSourcesFailed ||
-    unreconciledStormSources > 0
+    unreconciledStormSources > 0 ||
+    forecastReadinessFailed ||
+    gatedForecasts > 0
   ) {
     const failure =
       weather.status === "rejected"
@@ -78,9 +91,14 @@ async function handle(request: Request): Promise<NextResponse> {
               : stormSources.status === "rejected"
                 ? stormSources.reason
                 : stormSources.value.error) ||
-            new Error(
-              `${unreconciledStormSources} storm source batch(es) are unreconciled`,
-            );
+            (unreconciledStormSources > 0
+              ? new Error(
+                  `${unreconciledStormSources} storm source batch(es) are unreconciled`,
+                )
+              : forecastReadiness.status === "rejected"
+                ? forecastReadiness.reason
+                : forecastReadiness.value.error) ||
+            new Error(`${gatedForecasts} forecast horizon(s) are gated`);
     console.error("[collision-intelligence-cron]", failure);
     return NextResponse.json(
       {
@@ -96,6 +114,11 @@ async function handle(request: Request): Promise<NextResponse> {
           : unreconciledStormSources
             ? "unreconciled"
             : "current",
+        forecastReadiness: forecastReadinessFailed
+          ? "failed"
+          : gatedForecasts
+            ? "gated"
+            : "ready",
       },
       { status: 500 },
     );
@@ -106,6 +129,7 @@ async function handle(request: Request): Promise<NextResponse> {
     forecasts: forecasts.value.data,
     repairFeed: "current",
     stormSources: "current",
+    forecastReadiness: "ready",
   });
 }
 

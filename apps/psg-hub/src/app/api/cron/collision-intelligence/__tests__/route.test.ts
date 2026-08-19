@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { rpc, from, feedEq, stormEq, syncSpcReports } = vi.hoisted(() => ({
-  rpc: vi.fn(),
-  from: vi.fn(),
-  feedEq: vi.fn(),
-  stormEq: vi.fn(),
-  syncSpcReports: vi.fn(),
-}));
+const { rpc, from, feedEq, stormEq, forecastEq, syncSpcReports } = vi.hoisted(
+  () => ({
+    rpc: vi.fn(),
+    from: vi.fn(),
+    feedEq: vi.fn(),
+    stormEq: vi.fn(),
+    forecastEq: vi.fn(),
+    syncSpcReports: vi.fn(),
+  }),
+);
 
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({ rpc, from }),
@@ -32,9 +35,15 @@ beforeEach(() => {
   rpc.mockResolvedValue({ data: { published: 1 }, error: null });
   feedEq.mockResolvedValue({ data: [], error: null });
   stormEq.mockResolvedValue({ data: [], error: null });
+  forecastEq.mockResolvedValue({ data: [], error: null });
   from.mockImplementation((relation: string) => ({
     select: () => ({
-      eq: relation === "v_collision_repair_feed_status" ? feedEq : stormEq,
+      eq:
+        relation === "v_collision_repair_feed_status"
+          ? feedEq
+          : relation === "v_collision_storm_source_reconciliation"
+            ? stormEq
+            : forecastEq,
     }),
   }));
 });
@@ -56,6 +65,7 @@ describe("collision intelligence cron", () => {
     expect(from).toHaveBeenCalledWith(
       "v_collision_storm_source_reconciliation",
     );
+    expect(from).toHaveBeenCalledWith("v_collision_forecast_readiness");
   });
 
   it("runs forecast scoring even when the weather refresh fails", async () => {
@@ -109,6 +119,27 @@ describe("collision intelligence cron", () => {
     expect(await response.json()).toMatchObject({
       stormSources: "unreconciled",
       weather: "success",
+      forecasts: "success",
+    });
+  });
+
+  it("fails cron health when a mapped shop horizon is not ready", async () => {
+    forecastEq.mockResolvedValue({
+      data: [
+        {
+          shop_id: "shop-1",
+          forecast_horizon_weeks: 2,
+          readiness_status: "model_not_approved",
+        },
+      ],
+      error: null,
+    });
+
+    const response = await GET(request("Bearer cron-secret"));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({
+      forecastReadiness: "gated",
       forecasts: "success",
     });
   });

@@ -57,8 +57,9 @@ type CrashSourceHealth = {
 };
 
 type ForecastHealth = {
-  status: string;
-  generated_at: string;
+  is_ready: boolean;
+  readiness_status: string;
+  generated_at: string | null;
 };
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -156,10 +157,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       .order("imported_at", { ascending: false })
       .limit(1),
     service
-      .from("collision_demand_forecasts")
-      .select("status,generated_at")
-      .order("generated_at", { ascending: false })
-      .limit(4),
+      .from("v_collision_forecast_readiness")
+      .select("is_ready,readiness_status,generated_at")
+      .order("generated_at", { ascending: false, nullsFirst: false }),
     searchParams,
   ]);
 
@@ -211,9 +211,17 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     (total, source) => total + (source.event_rows ?? 0),
     0,
   );
-  const publishedForecasts = forecasts.filter(
-    (forecast) => forecast.status === "published",
+  const readyForecasts = forecasts.filter(
+    (forecast) => forecast.is_ready,
   ).length;
+  const forecastGateStates = [
+    ...new Set(
+      forecasts
+        .filter((forecast) => !forecast.is_ready)
+        .map((forecast) => forecast.readiness_status.replaceAll("_", " ")),
+    ),
+  ].join(", ");
+  const latestForecast = forecasts.find((forecast) => forecast.generated_at);
   const crashZipMatchPct =
     crashSource && crashSource.imported_row_count
       ? (crashSource.zip_matched_row_count / crashSource.imported_row_count) *
@@ -346,28 +354,32 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
             title="Forecast readiness"
             status={
               !forecasts.length
-                ? "No forecasts"
-                : publishedForecasts === forecasts.length
-                  ? "Published"
+                ? "No mapped shops"
+                : readyForecasts === forecasts.length
+                  ? "Ready"
                   : "Gated"
             }
             healthy={Boolean(
-              forecasts.length && publishedForecasts === forecasts.length,
+              forecasts.length && readyForecasts === forecasts.length,
             )}
           >
             <ReviewMetric
-              label="Latest forecast rows"
+              label="Shop / horizon policies"
               value={forecasts.length.toLocaleString()}
             />
             <ReviewMetric
-              label="Published"
-              value={publishedForecasts.toLocaleString()}
+              label="Ready"
+              value={readyForecasts.toLocaleString()}
+            />
+            <ReviewMetric
+              label="Gate states"
+              value={forecastGateStates || "None"}
             />
             <ReviewMetric
               label="Last generated"
               value={
-                forecasts[0]
-                  ? dateTime.format(new Date(forecasts[0].generated_at))
+                latestForecast?.generated_at
+                  ? dateTime.format(new Date(latestForecast.generated_at))
                   : "—"
               }
             />

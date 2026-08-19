@@ -23,8 +23,10 @@
 - The superadmin Data Review page supports explicit source-shop mapping approval
   with target selection, written identity evidence, confirmation, and an atomic audit
   entry. This branch also adds repair freshness, storm-ledger reconciliation, KDOT
-  coverage, and forecast publication status without exposing service-role access to
-  the browser. One mapping remains active; 198 candidates remain unapproved.
+  coverage, and multi-shop forecast readiness without exposing service-role access to
+  the browser. Forecast readiness now covers every mapped shop across all four target
+  horizons rather than sampling four rows globally. One mapping remains active; 198
+  candidates remain unapproved.
 - The review route is discoverable in dashboard navigation only for superadmins. The
   page and mutation endpoint retain independent server-side role checks.
 - The prior feature-branch revision is deployed to a Vercel preview. Unauthenticated
@@ -160,6 +162,11 @@
   Informational unused-index notices remain for newly created fact indexes before
   sustained product traffic.
 - Source ledger counts reconcile to 327,314 parsed, 327,313 accepted, and one rejected.
+- A read-only production execution of the forecast-readiness query returns all four
+  expected pilot shop/horizon rows and correctly gates all four as `stale_source`. An
+  isolated PostgreSQL fixture also verifies `published`, `model_not_approved`,
+  `not_generated`, `model_mismatch`, `forecast_outdated`, and `stale_source` states.
+  Cron health now fails when any mapped shop/horizon remains gated after scoring.
 - Unified mapped source and weekly-demand counts both reconcile to 3,420 repair orders;
   all are FileMaker rows and no legacy pilot rows are unioned.
 - Weekly cycle denominator reconciles to 3,420 observations and 14.8 days.
@@ -198,8 +205,9 @@
    until the duplicate 3:00 AM backup is disabled or moved, a backup/restore is proven,
    and a named owner receives failures. The runbook is
    `docs/analysis/2026-08-18-collision-repair-refresh-runbook.md`.
-2. Apply the storm source-reconciliation migration and deploy the matching cron health
-   check. Confirm every NCEI/SPC batch is reconciled and browser roles cannot read the
+2. Apply the storm source-reconciliation and forecast-readiness migrations, then deploy
+   the matching cron health checks. Confirm every NCEI/SPC batch is reconciled, every
+   mapped shop/horizon has an explainable state, and browser roles cannot read either
    service-only view.
 3. Use `/dashboard/collision-intelligence/review` as a superadmin to review the
    highest-volume insurer aliases and source-shop mappings. Mapping approval requires
