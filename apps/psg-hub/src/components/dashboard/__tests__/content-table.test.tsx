@@ -35,7 +35,7 @@ describe("ContentTable", () => {
 
     expect(html).toContain("bg-warning text-warning-foreground");
     expect(html).toContain("bg-success text-success-foreground");
-    expect(html).toContain("text-destructive");
+    expect(html).toContain("bg-destructive text-white");
     expect(html).not.toContain("bg-yellow-100");
     expect(html).not.toContain("text-yellow-800");
   });
