@@ -47,15 +47,18 @@ export interface MailDocument {
   from: MailAddress;
   /**
    * Print-ready content. For postcards, `front`/`back` are HTML or hosted-asset
-   * URLs. For letters, `file` is the letter PDF (HTML or hosted URL). The
-   * mail-merge render (Sanity templates → PDF) feeds these fields.
+   * URLs. For letters, `file` is the letter PDF/HTML. For self-mailers, `inside`
+   * and `outside` map to Lob's self_mailers endpoint. The mail-merge render
+   * (Sanity templates -> PDF/HTML) feeds these fields.
    */
   front?: string;
   back?: string;
   file?: string;
+  inside?: string;
+  outside?: string;
   /** Letters and self-mailers only: true = color print, false/undefined = black & white. */
   color?: boolean;
-  /** Mail size, e.g. "4x6" | "6x9" | "6x11" | "8.5x11". Defaults per vendor. */
+  /** Mail size, e.g. "4x6" | "6x9" | "6x11" | "8.5x11" | "6x18_bifold". Defaults per vendor. */
   size?: string;
   /** Human-readable description shown in the vendor dashboard. */
   description?: string;
@@ -94,7 +97,7 @@ export function isTerminalMailStatus(status: MailJobStatus): boolean {
 
 export interface MailSubmissionResult {
   vendor: MailVendor;
-  /** Vendor job id (Lob postcard `psc_...` / letter `ltr_...`). */
+  /** Vendor job id (Lob postcard `psc_...` / letter `ltr_...` / self-mailer `sfm_...`). */
   externalId: string;
   status: MailJobStatus;
   /** Vendor's expected delivery date (ISO yyyy-mm-dd) when provided. */
