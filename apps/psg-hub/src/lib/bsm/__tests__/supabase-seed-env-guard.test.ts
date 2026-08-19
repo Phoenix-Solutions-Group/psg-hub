@@ -26,7 +26,7 @@ afterEach(() => {
 
 describe("Supabase seed env guard", () => {
   it("allows the Supabase URL and service key from the same env file", () => {
-    const env: Record<string, string | undefined> = {};
+    const env: NodeJS.ProcessEnv = { NODE_ENV: "test" };
     const file = writeTempEnv(
       ".env.local",
       [
@@ -41,7 +41,7 @@ describe("Supabase seed env guard", () => {
   });
 
   it("rejects a Supabase URL and service key loaded from different env files", () => {
-    const env: Record<string, string | undefined> = {};
+    const env: NodeJS.ProcessEnv = { NODE_ENV: "test" };
     const urlFile = writeTempEnv(
       ".env.preview.local",
       "NEXT_PUBLIC_SUPABASE_URL=https://preview.supabase.co"
@@ -56,7 +56,8 @@ describe("Supabase seed env guard", () => {
   });
 
   it("supports an explicit mixed-env override for manually verified seed runs", () => {
-    const env: Record<string, string | undefined> = {
+    const env: NodeJS.ProcessEnv = {
+      NODE_ENV: "test",
       SUPABASE_SEED_ALLOW_MIXED_ENV: "1",
     };
     const urlFile = writeTempEnv(

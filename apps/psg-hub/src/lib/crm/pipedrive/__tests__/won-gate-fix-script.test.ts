@@ -20,7 +20,14 @@ const field = (id: number, name: string, extra: Record<string, unknown> = {}) =>
   ...extra,
 });
 
-const fieldV2 = (id: number, name: string, extra: Record<string, unknown> = {}) => ({
+type FieldV2Fixture = {
+  field_code: string;
+  field_name: string;
+  field_type: string;
+  required_fields: { enabled: boolean; stage_ids: number[]; statuses: Record<string, string[]> };
+};
+
+const fieldV2 = (id: number, name: string, extra: Record<string, unknown> = {}): FieldV2Fixture => ({
   field_code: `field_${id}`,
   field_name: name,
   field_type: "varchar",

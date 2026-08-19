@@ -36,6 +36,9 @@ const fieldV2 = (id: number, name: string, type = "varchar") => ({
   },
 });
 
+const specOptions = (spec: object) =>
+  "options" in spec && Array.isArray(spec.options) ? spec.options.map(String) : [];
+
 const auditFilter = (fieldIds: number[]) => ({
   id: 1237,
   name: "Branding audit - Proposal Sent missing Tier Basis",
@@ -116,10 +119,16 @@ const missingFieldsAuditFilter = (id: number, name: string, fieldIds: number[]) 
 
 function configuredFields() {
   const fieldsV1 = [
-    ...TIER_BASIS_FIELDS.map((spec, index) => field(1000 + index, spec.name, spec.type, spec.options)),
-    ...COST_BASIS_FIELDS.map((spec, index) => field(1500 + index, spec.name, spec.type, spec.options)),
+    ...TIER_BASIS_FIELDS.map((spec, index) =>
+      field(1000 + index, spec.name, spec.type, specOptions(spec)),
+    ),
+    ...COST_BASIS_FIELDS.map((spec, index) =>
+      field(1500 + index, spec.name, spec.type, specOptions(spec)),
+    ),
     field(1550, COST_BASIS_REJECTION_FIELD.name, COST_BASIS_REJECTION_FIELD.type),
-    ...ACTUAL_HOURS_FIELDS.map((spec, index) => field(2000 + index, spec.name, spec.type, spec.options)),
+    ...ACTUAL_HOURS_FIELDS.map((spec, index) =>
+      field(2000 + index, spec.name, spec.type, specOptions(spec)),
+    ),
   ];
   const fieldsV2 = fieldsV1.map((item) => fieldV2(Number(item.id), String(item.name), String(item.field_type)));
   return { fieldsV1, fieldsV2 };
@@ -304,7 +313,7 @@ describe("pipedrive-branding-tier-basis plan", () => {
     expect(ACTUAL_HOURS_REPORT_LIMIT).toBe(3);
     expect(BRANDING_TIER_ESTIMATES["T1 Brand Mark"].designHours).toBe(27);
     expect(report.ready).toBe(true);
-    expect(report.firstClosedBrandingJobs.map((deal) => deal.dealId)).toEqual([1, 2, 3]);
+    expect(report.firstClosedBrandingJobs.map((deal: { dealId: number }) => deal.dealId)).toEqual([1, 2, 3]);
     expect(report.firstClosedBrandingJobs[1]).toEqual(
       expect.objectContaining({
         estimatedDesignHours: 50,
@@ -405,8 +414,10 @@ describe("pipedrive-branding-tier-basis plan", () => {
       fieldsV1,
       fieldsV2,
       filters: [],
-      pipelines: [{ id: 10, name: BRANDING_PIPELINE_NAME }],
-      stages: BRANDING_STAGE_NAMES.map((name, index) => ({ id: 70 + index, name, pipeline_id: 10, order_nr: index + 1 })),
+      pipelines: [{ id: 10, name: BRANDING_PIPELINE_NAME } as never],
+      stages: BRANDING_STAGE_NAMES.map(
+        (name, index) => ({ id: 70 + index, name, pipeline_id: 10, order_nr: index + 1 }) as never,
+      ),
       useBrandingPipeline: true,
     });
 
