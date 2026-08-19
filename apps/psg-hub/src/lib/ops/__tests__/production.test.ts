@@ -92,6 +92,7 @@ describe("toMailAddress / buildMailDocument", () => {
   it("puts the rendered asset in front for postcards and file for letters", () => {
     const postcard = buildMailDocument(DOC);
     expect(postcard.front).toBe("https://assets.test/doc-1.pdf");
+    expect(postcard.back).toBe("https://assets.test/doc-1.pdf");
     expect(postcard.metadata).toEqual({ batchId: "batch-1" });
 
     const letter = buildMailDocument({ ...DOC, piece_type: "letter", color: true, size: "6x9" });
@@ -107,6 +108,23 @@ describe("toMailAddress / buildMailDocument", () => {
     expect(selfMailer.size).toBe("8.5x11");
     expect(selfMailer.front).toBeUndefined();
     expect(selfMailer.back).toBeUndefined();
+  });
+
+  it("forwards stored postcard size and both sides to the adapter", async () => {
+    const doc: DocumentRow = {
+      ...DOC,
+      size: "6x9",
+    };
+    const { client } = makeClient(doc);
+    const adapter = stubAdapter();
+    await printDocument(client, adapter, "doc-1");
+    const sent = (adapter.submit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(sent).toMatchObject({
+      pieceType: "postcard",
+      front: "https://assets.test/doc-1.pdf",
+      back: "https://assets.test/doc-1.pdf",
+      size: "6x9",
+    });
   });
 });
 
@@ -124,7 +142,11 @@ describe("printDocument", () => {
   it("submits via the adapter and persists external_id + status back on the row", async () => {
     const { client, update, insert } = makeClient(DOC);
     const adapter = stubAdapter();
-    const outcome = await printDocument(client, adapter, "doc-1");
+    const printedAt = "2026-06-18T18:00:00.000Z";
+    const outcome = await printDocument(client, adapter, "doc-1", {
+      printedAt,
+      printedByProfileId: "actor-1",
+    });
 
     expect(adapter.submit).toHaveBeenCalledOnce();
     expect(outcome).toEqual({
@@ -134,7 +156,13 @@ describe("printDocument", () => {
       vendor: "lob",
     });
     expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ external_id: "psc_new", vendor: "lob", status: "created" })
+      expect.objectContaining({
+        external_id: "psc_new",
+        vendor: "lob",
+        status: "created",
+        printed_at: printedAt,
+        printed_by_profile_id: "actor-1",
+      })
     );
     // A first print is not a reprint — no audit row.
     expect(insert).not.toHaveBeenCalled();
@@ -143,6 +171,43 @@ describe("printDocument", () => {
   it("throws when the document is missing", async () => {
     const { client } = makeClient(null);
     await expect(printDocument(client, stubAdapter(), "missing")).rejects.toThrow(/not found/);
+  });
+
+  it("skips an already printed document without submitting to the vendor", async () => {
+    const { client, update } = makeClient({
+      ...DOC,
+      external_id: "psc_existing",
+      status: "created",
+      printed_at: "2026-06-18T17:00:00.000Z",
+      vendor: "lob",
+    });
+    const adapter = stubAdapter();
+
+    const outcome = await printDocument(client, adapter, "doc-1", {
+      printedAt: "2026-06-18T18:00:00.000Z",
+      printedByProfileId: "actor-1",
+    });
+
+    expect(adapter.submit).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(outcome).toEqual({
+      documentId: "doc-1",
+      externalId: "psc_existing",
+      status: "created",
+      vendor: "lob",
+      skippedAlreadyPrinted: true,
+    });
+  });
+
+  it("stamps the linked letter eligibility row when a document prints", async () => {
+    const printedAt = "2026-06-18T18:00:00.000Z";
+    const { client, updates } = makeBatchClient({ ...DOC, letter_eligibility_id: "elig-1" });
+    const adapter = stubAdapter();
+
+    await printDocument(client, adapter, "doc-1", { printedAt });
+
+    expect(updates.production_documents?.[0]).toMatchObject({ printed_at: printedAt });
+    expect(updates.letter_eligibility).toEqual([{ printed_at: printedAt }]);
   });
 
   it("resolves the adapter from the document's vendor when passed a resolver", async () => {
@@ -239,13 +304,47 @@ describe("printBatch", () => {
     const adapter = stubAdapter();
     const printedAt = "2026-06-18T18:00:00.000Z";
 
-    const outcome = await printBatch(client, adapter, "batch-1", ["doc-1", "doc-2"], printedAt);
+    const outcome = await printBatch(client, adapter, "batch-1", ["doc-1", "doc-2"], printedAt, "actor-1");
 
     expect(adapter.submit).toHaveBeenCalledTimes(2);
     expect(outcome.status).toBe("historical");
     expect(outcome.printed).toHaveLength(2);
+    expect(outcome.printedCount).toBe(2);
+    expect(outcome.skippedAlreadyPrinted).toBe(0);
     expect(updates.production_batches).toEqual([
       { status: "historical", printed_at: printedAt },
+    ]);
+    expect(updates.production_documents?.[0]).toMatchObject({
+      printed_at: printedAt,
+      printed_by_profile_id: "actor-1",
+    });
+  });
+
+  it("reports skipped-already-printed documents on a rerun without double-sending", async () => {
+    const { client, updates } = makeBatchClient({
+      ...DOC,
+      external_id: "psc_existing",
+      status: "created",
+      printed_at: "2026-06-18T17:00:00.000Z",
+      vendor: "lob",
+    });
+    const adapter = stubAdapter();
+
+    const outcome = await printBatch(
+      client,
+      adapter,
+      "batch-1",
+      ["doc-1", "doc-2"],
+      "2026-06-18T18:00:00.000Z",
+      "actor-1"
+    );
+
+    expect(adapter.submit).not.toHaveBeenCalled();
+    expect(outcome.printedCount).toBe(0);
+    expect(outcome.skippedAlreadyPrinted).toBe(2);
+    expect(updates.production_documents).toBeUndefined();
+    expect(updates.production_batches).toEqual([
+      { status: "historical", printed_at: "2026-06-18T18:00:00.000Z" },
     ]);
   });
 
@@ -269,6 +368,8 @@ describe("printBatch", () => {
 
     expect(adapter.submit).not.toHaveBeenCalled();
     expect(outcome.status).toBe("historical");
+    expect(outcome.printedCount).toBe(0);
+    expect(outcome.skippedAlreadyPrinted).toBe(0);
     expect(updates.production_batches).toHaveLength(1);
   });
 });
@@ -356,7 +457,7 @@ describe("buildBatchDocuments", () => {
     const built = buildBatchDocuments(company, [customers[0]], { product: "self_mailer" });
     const doc = built.documents[0];
     expect(doc.piece_type).toBe("self_mailer");
-    expect(doc.size).toBe("8.5x11");
+    expect(doc.size).toBe("6x18_bifold");
     expect(doc.color).toBe(true);
   });
 
