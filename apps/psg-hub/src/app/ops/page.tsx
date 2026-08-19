@@ -18,7 +18,7 @@ const MODULES: {
   { fn: "manage_production", label: "Production", href: "/ops/production", note: "Mail production via Lob — print queue, status, reprint, historical" },
   { fn: "manage_production", label: "Mail Templates", href: "/ops/production/templates", note: "Proof letters and self-mailers, then run Lob test-mode seed proofs" },
   { fn: "design_mail_artwork", label: "Mail Editor", href: "/ops/production/artwork", note: "Build postcard front/back artwork before production" },
-  { fn: "manage_bsm_content_approvals", label: "BSM Content Approvals", href: "/ops/bsm-content-approvals", note: "Create customer review workspaces, add documents, and track reviewer decisions" },
+  { fn: "manage_bsm_content_approvals", label: "Content Approvals", href: "/ops/bsm-content-approvals", note: "Create customer review workspaces, add documents, and track reviewer decisions" },
   { fn: "manage_users", label: "Superadmin", href: "/ops/admin", note: "Security profiles & access matrix" },
   { fn: "manage_users", label: "BSM Progress", href: "/ops/bsm-progress", note: "Build status, roadmap, time, cost, tool notes, and feature ideas", superadminOnly: true },
 ];

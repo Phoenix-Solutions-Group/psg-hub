@@ -14,7 +14,7 @@ describe("visibleOpsNavItems", () => {
       expect.arrayContaining([
         "Production",
         "Mail Editor",
-        "BSM Content Approvals",
+        "Content Approvals",
         "Companies",
         "User Access",
       ])
@@ -27,7 +27,7 @@ describe("visibleOpsNavItems", () => {
     expect(labels).toContain("Production");
     expect(labels).toContain("Companies");
     expect(labels).not.toContain("Mail Editor");
-    expect(labels).not.toContain("BSM Content Approvals");
+    expect(labels).not.toContain("Content Approvals");
     expect(labels).not.toContain("BSM Review Workspace");
     expect(labels).not.toContain("User Access");
   });

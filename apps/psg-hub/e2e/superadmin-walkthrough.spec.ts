@@ -20,7 +20,7 @@ test.describe("clean BSM demo admin walkthrough", () => {
     await expect(page.getByRole("heading", { name: "Internal Operations" })).toBeVisible();
     await expect(page.getByRole("link", { name: /Companies & ROs/ })).toBeVisible();
     await expect(page.getByRole("link", { name: "Production", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "BSM Content Approvals", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Content Approvals", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Superadmin/ })).toBeVisible();
     await shoot(page, "focused-bsm-ops-home");
 
