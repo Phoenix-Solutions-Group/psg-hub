@@ -9,6 +9,7 @@ import hashlib
 import json
 import re
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -249,9 +250,22 @@ def transform(row: dict[str, Any], source_export_id: str, maximum_date: date) ->
 def csv_rows(path: Path) -> Iterable[dict[str, Any]]:
     with path.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
-        missing = REQUIRED_COLUMNS - set(reader.fieldnames or [])
-        if missing:
-            raise ValueError(f"CSV is missing required columns: {', '.join(sorted(missing))}")
+        fieldnames = reader.fieldnames or []
+        columns = set(fieldnames)
+        missing = REQUIRED_COLUMNS - columns
+        unexpected = columns - REQUIRED_COLUMNS
+        duplicates = sorted(name for name, count in Counter(fieldnames).items() if count > 1)
+        if missing or unexpected or duplicates:
+            details = []
+            if missing:
+                details.append(f"missing: {', '.join(sorted(missing))}")
+            if unexpected:
+                details.append(f"unexpected: {', '.join(sorted(unexpected))}")
+            if duplicates:
+                details.append(f"duplicate: {', '.join(duplicates)}")
+            raise ValueError(
+                f"CSV columns do not match the privacy allowlist ({'; '.join(details)})"
+            )
         yield from reader
 
 
@@ -477,6 +491,41 @@ def self_test() -> dict[str, Any]:
         assert "older than" in str(error)
     else:
         raise AssertionError("stale source was accepted")
+
+    with tempfile.TemporaryDirectory() as directory:
+        safe_path = Path(directory) / "repair.csv"
+        fieldnames = sorted(REQUIRED_COLUMNS)
+        with safe_path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerow({field: sample[field] for field in fieldnames})
+        validated = run(
+            argparse.Namespace(
+                self_test=False,
+                validate_only=True,
+                input_file=str(safe_path),
+                env_file=None,
+                project_id="gylkkzmcmbdftxieyabw",
+                batch_size=500,
+                workers=8,
+                max_file_age_hours=None,
+            )
+        )
+        assert validated["status"] == "validated"
+        assert validated["rows"] == validated["accepted"] == 1
+        assert "Alice" not in json.dumps(validated)
+
+        unsafe_path = Path(directory) / "repair-with-pii.csv"
+        with unsafe_path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=[*fieldnames, "RC_Cust_First"])
+            writer.writeheader()
+            writer.writerow({field: sample[field] for field in [*fieldnames, "RC_Cust_First"]})
+        try:
+            list(csv_rows(unsafe_path))
+        except ValueError as error:
+            assert "unexpected: RC_Cust_First" in str(error)
+        else:
+            raise AssertionError("unexpected PII column was accepted")
     return {"self_test": "passed", "fields": len(fact), "pii_fields": 0}
 
 
@@ -502,8 +551,10 @@ def validate_source_freshness(
 def run(args: argparse.Namespace) -> dict[str, Any]:
     if args.self_test:
         return self_test()
-    if not args.input_file or not args.env_file:
-        raise ValueError("--input-file and --env-file are required unless --self-test is used")
+    if not args.input_file:
+        raise ValueError("--input-file is required unless --self-test is used")
+    if not args.validate_only and not args.env_file:
+        raise ValueError("--env-file is required unless --validate-only or --self-test is used")
     if args.batch_size < 1 or args.workers < 1:
         raise ValueError("--batch-size and --workers must be positive")
 
@@ -512,16 +563,30 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("--input-file must be an absolute path to a file")
     file_modified = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
     validate_source_freshness(file_modified, args.max_file_age_hours)
+    file_hash = sha256_file(path)
+    source_export_id = f"filemaker_rc_{file_hash[:20]}"
+    maximum_date = file_modified.date() + timedelta(days=1)
+    profile = profile_file(path, source_export_id, maximum_date)
+    if args.validate_only:
+        return {
+            "source_export_id": source_export_id,
+            "status": "validated",
+            "file_sha256": file_hash,
+            "rows": profile["row_count"],
+            "accepted": profile["accepted_count"],
+            "rejected": profile["rejected_count"],
+            "rejected_reasons": profile["rejected_reasons"],
+            "shops": len(profile["shop_names"]),
+            "arrival_min": profile["arrival_min"],
+            "arrival_max": profile["arrival_max"],
+        }
+
     env = load_env(Path(args.env_file))
     supabase_url = env["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/")
     service_key = env["SUPABASE_SERVICE_ROLE_KEY"]
     if args.project_id not in supabase_url:
         raise ValueError("Supabase URL does not match --project-id")
 
-    file_hash = sha256_file(path)
-    source_export_id = f"filemaker_rc_{file_hash[:20]}"
-    maximum_date = file_modified.date() + timedelta(days=1)
-    profile = profile_file(path, source_export_id, maximum_date)
     client = Supabase(supabase_url, service_key)
     existing_status = client.source_status(source_export_id)
     if existing_status in {"loaded", "superseded"}:
@@ -611,6 +676,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=500)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--max-file-age-hours", type=float)
+    parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     return parser.parse_args()
 

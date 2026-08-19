@@ -203,7 +203,9 @@
   OData extractor requests only the 15 importer fields, filters the observed 2020+
   source scope, enforces 300,000-500,000 source rows and exact `@odata.count`
   reconciliation, rejects off-host pagination, and atomically publishes a mode-0600
-  file. Its two-page self-test and the importer's new optional file-age gate pass.
+  file. Its two-page self-test and the importer's optional file-age gate pass. The
+  importer now also rejects missing, unexpected, or duplicate CSV columns and provides
+  a no-secret, no-network validation-only reconciliation pass before any database write.
 - Live unauthenticated endpoint checks identify `https://psgweb.me` as the current
   FileMaker host: Data API product information returns HTTP 200 and the Advantage
   OData metadata endpoint returns the expected HTTP 401 authentication challenge.

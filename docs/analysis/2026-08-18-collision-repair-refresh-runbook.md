@@ -105,6 +105,20 @@ python3 /opt/psg/psg-hub/apps/psg-hub/scripts/export-filemaker-collision-odata.p
   --output-file /opt/psg/runtime/filemaker-collision.csv
 ```
 
+Validate the completed file before opening any Supabase connection:
+
+```bash
+python3 /opt/psg/psg-hub/apps/psg-hub/scripts/import-filemaker-collision-facts.py \
+  --input-file /opt/psg/runtime/filemaker-collision.csv \
+  --max-file-age-hours 2 \
+  --validate-only
+```
+
+The validation pass requires the exact 15-field privacy allowlist, rejects missing,
+unexpected, or duplicate columns, and reports only the file hash, aggregate row
+reconciliation, shop count, rejection reasons, and arrival-date range. It reads no
+Supabase secret and performs no network request or database write.
+
 The exporter:
 
 - requests only the governed fields with OData `$select`;
