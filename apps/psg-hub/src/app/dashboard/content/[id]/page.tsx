@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
+import type { ComponentProps } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getActiveShopContext } from "@/lib/shop/context";
@@ -9,19 +10,23 @@ import {
   getRiversideAnalyticsPreviewShop,
   shouldUseRiversideAnalyticsPreviewFallback,
 } from "@/lib/bsm/riverside-analytics-demo";
-import {
-  findRiversideDemoContentItem,
-} from "@/lib/bsm/riverside-demo-content";
+import { findRiversideDemoContentItem } from "@/lib/bsm/riverside-demo-content";
 import { Badge } from "@/components/ui/badge";
 import { ContentPreview } from "@/components/dashboard/content-preview";
 import { ApprovalActions } from "@/components/dashboard/approval-actions";
 
-const statusColors: Record<string, string> = {
-  draft: "bg-muted text-muted-foreground",
-  pending_review: "bg-yellow-100 text-yellow-800",
-  approved: "bg-green-100 text-green-800",
-  published: "bg-blue-100 text-blue-800",
-  rejected: "bg-red-100 text-red-800",
+type ContentStatusBadgeVariant = ComponentProps<typeof Badge>["variant"];
+
+const statusBadgeVariants: Record<string, ContentStatusBadgeVariant> = {
+  draft: "secondary",
+  sent: "warning",
+  in_review: "warning",
+  pending_review: "warning",
+  updates_requested: "warning",
+  approved: "success",
+  published: "success",
+  declined: "destructive",
+  rejected: "destructive",
 };
 
 function isRiversideDemoHost(host: string | null): boolean {
@@ -39,6 +44,40 @@ function bodyFromReviewItem(item: Awaited<ReturnType<typeof getBsmCustomerReview
     item.contextNote,
   ];
   return bodyCandidates.find((value): value is string => typeof value === "string" && value.trim().length > 0) ?? null;
+}
+
+function ContentHeader({
+  title,
+  status,
+  contentType,
+  updatedAt,
+}: {
+  title: string;
+  status: string;
+  contentType: string;
+  updatedAt: string;
+}) {
+  return (
+    <div>
+      <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+      <div className="mt-2 flex items-center gap-3">
+        <Badge variant={statusBadgeVariants[status] ?? "secondary"}>
+          {status.replace(/_/g, " ")}
+        </Badge>
+        <span className="text-sm text-muted-foreground">
+          {contentType.replace(/_/g, " ")}
+        </span>
+        <span className="text-sm text-muted-foreground">
+          Updated{" "}
+          {new Date(updatedAt).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export default async function ContentDetailPage({
@@ -86,45 +125,31 @@ export default async function ContentDetailPage({
     previewShop?.id ?? riversideDemoShop?.id ?? activeShopId;
   const contentReader = previewShop ? service : supabase;
 
-  if (user) {
-    try {
-      const reviewItem = await getBsmCustomerReviewItem(supabase, id, user.id);
+  const reviewItem = user
+    ? await getBsmCustomerReviewItem(supabase, id, user.id).catch((error: unknown) => {
+        if (error instanceof BsmCustomerReviewError && (error.status === 403 || error.status === 404)) {
+          return null;
+        }
 
-      return (
-        <div className="space-y-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">{reviewItem.title}</h1>
-              <div className="mt-2 flex items-center gap-3">
-                <Badge
-                  variant="secondary"
-                  className={statusColors[reviewItem.status] || ""}
-                >
-                  {reviewItem.status.replace(/_/g, " ")}
-                </Badge>
-                <span className="text-sm text-muted-foreground">
-                  {reviewItem.contentType.replace(/_/g, " ")}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  Updated{" "}
-                  {new Date(reviewItem.updatedAt).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <ContentPreview body={bodyFromReviewItem(reviewItem)} />
-        </div>
-      );
-    } catch (error) {
-      if (!(error instanceof BsmCustomerReviewError) || (error.status !== 403 && error.status !== 404)) {
         throw error;
-      }
-    }
+      })
+    : null;
+
+  if (reviewItem) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-start justify-between">
+          <ContentHeader
+            title={reviewItem.title}
+            status={reviewItem.status}
+            contentType={reviewItem.contentType}
+            updatedAt={reviewItem.updatedAt}
+          />
+        </div>
+
+        <ContentPreview body={bodyFromReviewItem(reviewItem)} />
+      </div>
+    );
   }
 
   let query = contentReader
@@ -148,28 +173,12 @@ export default async function ContentDetailPage({
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{item.title}</h1>
-          <div className="mt-2 flex items-center gap-3">
-            <Badge
-              variant="secondary"
-              className={statusColors[item.status] || ""}
-            >
-              {item.status.replace(/_/g, " ")}
-            </Badge>
-            <span className="text-sm text-muted-foreground">
-              {item.content_type.replace(/_/g, " ")}
-            </span>
-            <span className="text-sm text-muted-foreground">
-              Updated{" "}
-              {new Date(item.updated_at).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </span>
-          </div>
-        </div>
+        <ContentHeader
+          title={item.title}
+          status={item.status}
+          contentType={item.content_type}
+          updatedAt={item.updated_at}
+        />
         {item.status === "pending_review" && (
           <ApprovalActions contentId={item.id} />
         )}

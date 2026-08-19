@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ComponentProps } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -19,12 +20,18 @@ type ContentItem = {
   updated_at: string;
 };
 
-const statusColors: Record<string, string> = {
-  draft: "bg-muted text-muted-foreground",
-  pending_review: "bg-yellow-100 text-yellow-800",
-  approved: "bg-green-100 text-green-800",
-  published: "bg-blue-100 text-blue-800",
-  rejected: "bg-red-100 text-red-800",
+type ContentStatusBadgeVariant = ComponentProps<typeof Badge>["variant"];
+
+const statusBadgeVariants: Record<string, ContentStatusBadgeVariant> = {
+  draft: "secondary",
+  sent: "warning",
+  in_review: "warning",
+  pending_review: "warning",
+  updates_requested: "warning",
+  approved: "success",
+  published: "success",
+  declined: "destructive",
+  rejected: "destructive",
 };
 
 function formatDate(dateStr: string) {
@@ -76,10 +83,7 @@ export function ContentTable({ items }: { items: ContentItem[] }) {
               {formatType(item.content_type)}
             </TableCell>
             <TableCell>
-              <Badge
-                variant="secondary"
-                className={statusColors[item.status] || ""}
-              >
+              <Badge variant={statusBadgeVariants[item.status] ?? "secondary"}>
                 {formatType(item.status)}
               </Badge>
             </TableCell>
