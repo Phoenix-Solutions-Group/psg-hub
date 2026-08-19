@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 const responseBody = () => ({
   status: "ok",
   service: "psg-hub",
+  buildSha:
+    process.env.PSG_PREVIEW_SOURCE_SHA ??
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+    process.env.GIT_COMMIT_SHA ??
+    "unknown",
   timestamp: new Date().toISOString(),
 });
 
