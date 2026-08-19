@@ -30,6 +30,20 @@
   scope, exactly 15 allowlisted fields, and zero direct customer or agent PII fields.
   No new governed repair export or Supabase import has occurred yet.
 
+## Pre-import Supabase baseline
+
+A read-only production query captured this baseline at 2026-08-19 19:41 UTC:
+
+- one loaded source ledger with 327,314 source rows, 327,313 accepted facts, and one
+  rejected row;
+- 199 distinct source-shop keys: one mapped and 198 unmapped;
+- the mapped feed contains 3,420 repairs, has latest arrival 2025-12-24, and is stale;
+- all four current forecasts are `stale_source`; and
+- three shop/horizon model policies are approved.
+
+Use these figures as before-state evidence only. The first governed import must capture
+the same measures again and explain every change before forecast scoring runs.
+
 ## One-time FileMaker configuration
 
 The FileMaker administrator must:
@@ -121,10 +135,21 @@ atomically supersedes the previous loaded snapshot, and skips an identical file.
 
 - The server's midnight backup and 12:30–1:40 AM FileMaker script window were verified
   on 2026-08-19. The staged systemd timer runs at 4:30 AM America/Chicago with up to
-  ten minutes of jitter, leaving a buffer after the separate 3:00 AM backup schedule.
+  ten minutes of jitter.
+- Two enabled FileMaker backup schedules currently target the same backup root. `FMS`
+  runs at midnight, retains up to seven backups, and is healthy. `Backup` runs at 3:00
+  AM, retains three, and has failed daily with FileMaker error 809 (`Disk full`). The
+  root filesystem currently has about 23 GB free; the healthy backup root contains two
+  snapshots totaling about 19 GB.
+- A separate persistent ext4 volume at `/mnt/HC_Volume_105029819` has about 75 GB free.
+  No backup configuration or files were changed. The FileMaker owner must either confirm
+  the 3:00 AM schedule is redundant and disable it, or move it to a FileMaker-owned
+  folder on that volume and prove a backup and restore. Do not delete the healthy
+  midnight backups to make room.
 - Install `apps/psg-hub/ops/systemd/psg-collision-refresh.{service,timer}` under
   `/etc/systemd/system/`. Keep the timer disabled until the first manual service run
-  passes every acceptance check and a named operational owner receives failures.
+  passes every acceptance check, the backup conflict is resolved, and a named
+  operational owner receives failures.
 - The service runs as the non-login `psg-refresh` account, reads only the mode-0600
   operations secret, writes only `/opt/psg/runtime`, lowers CPU and I/O priority, and
   applies systemd filesystem and privilege hardening.
@@ -143,10 +168,12 @@ atomically supersedes the previous loaded snapshot, and skips an identical file.
 Do not call the feed live until one scheduled run proves all of the following:
 
 1. OData responds through `https://psgweb.me` using the dedicated restricted account.
-2. The export reports 15 fields, zero direct customer/agent PII fields, and an in-range
-   row count equal to the OData count annotation.
+2. The export reports 330,530 rows or a documented source delta, 15 fields, zero direct
+   customer/agent PII fields, and a row count equal to the OData count annotation.
 3. The importer source ledger reconciles parsed = accepted + rejected.
-4. The prior snapshot becomes superseded only after final reconciliation.
-5. Mapped-shop dashboard counts and freshness match the new source ledger.
+4. Facts for the new source equal its accepted count; the prior source becomes
+   `superseded` and its facts are removed only after final reconciliation.
+5. Mapping counts remain explainable, and mapped-shop dashboard counts, source ID,
+   file age, and latest arrival date match the new source ledger.
 6. Weekly scoring publishes only for mapped shops with approved models and repair
    arrivals no more than 14 days old.

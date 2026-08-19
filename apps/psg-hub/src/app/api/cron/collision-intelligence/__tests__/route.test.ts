@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { rpc, from, feedEq, syncSpcReports } = vi.hoisted(() => ({
+const { rpc, from, feedEq, stormEq, syncSpcReports } = vi.hoisted(() => ({
   rpc: vi.fn(),
   from: vi.fn(),
   feedEq: vi.fn(),
+  stormEq: vi.fn(),
   syncSpcReports: vi.fn(),
 }));
 
@@ -30,9 +31,12 @@ beforeEach(() => {
   });
   rpc.mockResolvedValue({ data: { published: 1 }, error: null });
   feedEq.mockResolvedValue({ data: [], error: null });
-  from.mockReturnValue({
-    select: () => ({ eq: feedEq }),
-  });
+  stormEq.mockResolvedValue({ data: [], error: null });
+  from.mockImplementation((relation: string) => ({
+    select: () => ({
+      eq: relation === "v_collision_repair_feed_status" ? feedEq : stormEq,
+    }),
+  }));
 });
 
 describe("collision intelligence cron", () => {
@@ -49,6 +53,9 @@ describe("collision intelligence cron", () => {
     expect(syncSpcReports).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenCalledWith("run_collision_weekly_forecasts");
     expect(from).toHaveBeenCalledWith("v_collision_repair_feed_status");
+    expect(from).toHaveBeenCalledWith(
+      "v_collision_storm_source_reconciliation",
+    );
   });
 
   it("runs forecast scoring even when the weather refresh fails", async () => {
@@ -75,6 +82,32 @@ describe("collision intelligence cron", () => {
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(await response.json()).toMatchObject({
       repairFeed: "stale",
+      weather: "success",
+      forecasts: "success",
+    });
+  });
+
+  it("fails cron health when a storm event batch is unreconciled", async () => {
+    stormEq.mockResolvedValue({
+      data: [
+        {
+          source_key: "noaa_spc_preliminary_reports",
+          import_batch_id: "spc_missing",
+          event_rows: 10,
+          reported_rows: null,
+          reconciliation_status: "missing_source_ledger",
+        },
+      ],
+      error: null,
+    });
+
+    const response = await GET(request("Bearer cron-secret"));
+
+    expect(response.status).toBe(500);
+    expect(syncSpcReports).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(await response.json()).toMatchObject({
+      stormSources: "unreconciled",
       weather: "success",
       forecasts: "success",
     });

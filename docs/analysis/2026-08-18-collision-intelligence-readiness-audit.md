@@ -5,25 +5,43 @@
 
 ## 2026-08-19 update
 
-- The superadmin Data Review page now supports explicit source-shop mapping approval
+- The dedicated FileMaker repair account, exact hosted-file/entity identifiers, and
+  bounded 2020+ OData probe are verified. The probe reported 330,530 rows, exactly
+  15 allowlisted fields, and zero direct customer or agent PII fields. The hardened
+  refresh service is staged with its timer disabled; no full export/import has run.
+- A read-only production baseline confirms 327,313 currently loaded repair facts,
+  199 source shops, one approved mapping, four stale forecasts, and three approved
+  model horizons. The pre-import reconciliation contract is recorded in the refresh
+  runbook.
+- Live source reconciliation found 3,986 provisional SPC events from August 1–16
+  without a matching source-ledger row. This branch adds an idempotent provenance
+  backfill, a service-role-only reconciliation view, and a cron health gate. They are
+  tested locally but are not applied or deployed to production.
+- Two enabled FileMaker backups target the same root. The midnight job is healthy;
+  the 3:00 AM job fails daily with error 809. No backup configuration or files were
+  changed, and the collision refresh timer remains disabled.
+- The superadmin Data Review page supports explicit source-shop mapping approval
   with target selection, written identity evidence, confirmation, and an atomic audit
-  entry. One mapping remains active; 198 candidates remain unapproved.
+  entry. This branch also adds repair freshness, storm-ledger reconciliation, KDOT
+  coverage, and forecast publication status without exposing service-role access to
+  the browser. One mapping remains active; 198 candidates remain unapproved.
 - The review route is discoverable in dashboard navigation only for superadmins. The
   page and mutation endpoint retain independent server-side role checks.
-- The updated feature branch is deployed to a Vercel preview. Unauthenticated browser
-  and HTTP checks confirm the page redirects to login and the mutation returns 401;
-  authenticated product approval and production deployment remain separate gates.
+- The prior feature-branch revision is deployed to a Vercel preview. Unauthenticated
+  browser and HTTP checks confirm the page redirects to login and the mutation returns 401. The source-health addition is build-verified but not deployed because it depends
+  on the unapplied reconciliation migration; authenticated product approval and
+  production deployment remain separate gates.
 
 ## Requirement status
 
-| Goal requirement                                                    | Status                                             | Current evidence                                                                                                                                                                                                                                                              | Remaining work                                                                                                                       |
-| ------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Clean, documented, privacy-safe data                                | Snapshot plus refresh client implemented           | 327,313 FileMaker facts reconcile to the source ledger; direct PII and raw identifiers are absent; OData client selects 15 fields and validates scope/count; cron health now fails on mapped feeds older than 36 hours                                                        | Configure the restricted FileMaker account, run/schedule the refresh, deploy the monitored cron, and connect its failure to an owner |
-| Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; governed review workflow implemented  | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; carrier aliases and source-shop mappings require explicit superadmin approval and atomic audit evidence; 411,208 KDOT rows count-verified; 99.93% ZIP match                             | Review the highest-volume insurer candidates and approve additional shop mappings only after identity confirmation                   |
-| Operational dashboard                                               | Preview deployed; authenticated product QA pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build and unauthenticated preview checks pass | Run authenticated desktop/mobile preview QA, complete product approval, deploy, and smoke test                                       |
-| ZIP-level weather and market alerts                                 | Review queue built                                 | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; daily cron configured locally; notifications explicitly off                                                                                                                                    | Deploy/smoke-test the cron, approve owner and lifecycle, and measure false positives before authorizing notifications                |
-| Weekly forecasts outperform a seasonal baseline                     | Multi-shop historical evidence; publication gated  | Trailing four-week beats seasonal across four horizons in the current-shop segment; independently promoted shop/horizon policies; current run correctly writes four `stale_source` rows with no prediction; 13-observation live scorecard is active                           | Restore current repair ingest, accrue observed forecasts, review live error/coverage, and approve models per mapped shop             |
-| Clear confidence and limitations                                    | Implemented for pilot                              | Dashboard freshness, promotion evidence, interval coverage, model scope, metric contract, and evaluation reports                                                                                                                                                              | Add the same disclosures to exports and scheduled alerts                                                                             |
+| Goal requirement                                                    | Status                                             | Current evidence                                                                                                                                                                                                                                                              | Remaining work                                                                                                                                           |
+| ------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Clean, documented, privacy-safe data                                | Live preflight passed; first refresh pending       | 327,313 FileMaker facts reconcile to the current source ledger; direct PII and raw identifiers are absent; the restricted live OData probe reports 330,530 rows and exactly 15 approved fields; hardened service is staged with timer disabled                                | Approve and reconcile the first full refresh; resolve the duplicate backup schedule; apply storm provenance reconciliation; connect failures to an owner |
+| Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; governed review workflow implemented  | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; carrier aliases and source-shop mappings require explicit superadmin approval and atomic audit evidence; 411,208 KDOT rows count-verified; 99.93% ZIP match                             | Review the highest-volume insurer candidates and approve additional shop mappings only after identity confirmation                                       |
+| Operational dashboard                                               | Preview deployed; authenticated product QA pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build and unauthenticated preview checks pass | Run authenticated desktop/mobile preview QA, complete product approval, deploy, and smoke test                                                           |
+| ZIP-level weather and market alerts                                 | Review queue built                                 | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; daily cron configured locally; notifications explicitly off                                                                                                                                    | Deploy/smoke-test the cron, approve owner and lifecycle, and measure false positives before authorizing notifications                                    |
+| Weekly forecasts outperform a seasonal baseline                     | Multi-shop historical evidence; publication gated  | Trailing four-week beats seasonal across four horizons in the current-shop segment; independently promoted shop/horizon policies; current run correctly writes four `stale_source` rows with no prediction; 13-observation live scorecard is active                           | Restore current repair ingest, accrue observed forecasts, review live error/coverage, and approve models per mapped shop                                 |
+| Clear confidence and limitations                                    | Implemented for pilot                              | Dashboard freshness, promotion evidence, interval coverage, model scope, metric contract, and evaluation reports                                                                                                                                                              | Add the same disclosures to exports and scheduled alerts                                                                                                 |
 
 ## Live data coverage
 
@@ -52,10 +70,16 @@
 ### Weather data
 
 - `storm_zip_monthly`: 2016-01 through 2026-08.
+- Live coverage is 677,056 reconciled NCEI events plus 25,999 provisional SPC events.
+  Seven SPC batches reconcile; the 3,986-event August 1–16 batch currently lacks its
+  source-ledger row. The branch migration repairs that row and makes future drift fail
+  cron health, but production remains unchanged.
 - 135 of 143 valid pilot customer ZIPs have some weather history.
 - Weather metrics are historical-repair-weighted and include coverage percentages.
-- `storm_events` contains 677,056 NCEI rows and 25,812 current SPC preliminary
-  reports; the latest preliminary report is 2026-08-18.
+- The latest preliminary SPC report is 2026-08-19.
+- `weather_cache` is empty and is not a current dashboard or forecast input. Severe
+  weather analysis uses governed storm-event/ZIP data; average temperature and
+  precipitation analysis remains a separate future data-source decision.
 - The 72-hour customer-ZIP review view currently returns four candidates, including
   one high signal. This count changes as the rolling window advances.
 
@@ -67,6 +91,10 @@
 - Pilot customer-ZIP view: 92 months and 134,907 historical portfolio crashes.
 - The existing legacy `crash_zip_annual` table contains Chicago data for 2022-2025
   and overlaps none of the pilot shop's customer ZIPs; it is not used here.
+- The older partitioned `accidents` relation contains an estimated 7.7 million rows,
+  but `accident_import_sources` has no provenance rows. It is not a governed collision
+  dashboard input and should remain excluded until its source, license, row counts,
+  and refresh contract are reconstructed or the relation is retired.
 - Official 2024 NHTSA FARS, CRSS, and CISS tables are loaded. FARS is a fatal-crash
   census; CRSS/CISS are national probability samples and cannot substitute for local
   Kansas repair-demand counts.
@@ -165,20 +193,23 @@
 
 ## Next execution order
 
-1. Create the dedicated field-restricted FileMaker OData account for the verified
-   `https://psgweb.me` endpoint and run the refresh client once. Then
-   install the daily operations schedule and alert when the loaded source exceeds
-   36 hours old. The runbook is
+1. After explicit production approval, run the first full FileMaker export/import and
+   reconcile it against the captured Supabase baseline. Keep the daily timer disabled
+   until the duplicate 3:00 AM backup is disabled or moved, a backup/restore is proven,
+   and a named owner receives failures. The runbook is
    `docs/analysis/2026-08-18-collision-repair-refresh-runbook.md`.
-2. Use `/dashboard/collision-intelligence/review` as a superadmin to review the
+2. Apply the storm source-reconciliation migration and deploy the matching cron health
+   check. Confirm every NCEI/SPC batch is reconciled and browser roles cannot read the
+   service-only view.
+3. Use `/dashboard/collision-intelligence/review` as a superadmin to review the
    highest-volume insurer aliases and source-shop mappings. Mapping approval requires
    target selection, written identity evidence, and explicit confirmation, and it is
    committed with its audit entry in one transaction. The first candidate is PS773 to
    Tedesco Auto Body, but its model remains blocked because the calibration interval is
    zero. Never infer a mapping or insurer alias from name similarity alone.
-3. After 13 observed forecasts accrue per horizon, review the live monitoring status.
+4. After 13 observed forecasts accrue per horizon, review the live monitoring status.
    Manual review is requested when rolling MAE loses to seasonal or 80% interval
    coverage falls below 70%; the scorecard never changes promotion automatically.
-4. Complete product/navigation review using the verified desktop and mobile captures.
-5. Deploy separately, then smoke-test the Vercel cron and keep notifications disabled
+5. Complete product/navigation review using the verified desktop and mobile captures.
+6. Deploy separately, then smoke-test the Vercel cron and keep notifications disabled
    until an owner, acknowledgement lifecycle, and false-positive review are approved.

@@ -33,6 +33,14 @@ async function handle(request: Request): Promise<NextResponse> {
       .select("shop_id,source_age_hours")
       .eq("is_stale", true),
   ]);
+  const [stormSources] = await Promise.allSettled([
+    service
+      .from("v_collision_storm_source_reconciliation")
+      .select(
+        "source_key,import_batch_id,event_rows,reported_rows,reconciliation_status",
+      )
+      .eq("is_reconciled", false),
+  ]);
   const feedFailed =
     repairFeed.status === "rejected" ||
     (repairFeed.status === "fulfilled" && repairFeed.value.error);
@@ -40,12 +48,21 @@ async function handle(request: Request): Promise<NextResponse> {
     repairFeed.status === "fulfilled" && !repairFeed.value.error
       ? (repairFeed.value.data?.length ?? 0)
       : 0;
+  const stormSourcesFailed =
+    stormSources.status === "rejected" ||
+    (stormSources.status === "fulfilled" && stormSources.value.error);
+  const unreconciledStormSources =
+    stormSources.status === "fulfilled" && !stormSources.value.error
+      ? (stormSources.value.data?.length ?? 0)
+      : 0;
   if (
     weather.status === "rejected" ||
     forecasts.status === "rejected" ||
     forecasts.value.error ||
     feedFailed ||
-    staleFeeds > 0
+    staleFeeds > 0 ||
+    stormSourcesFailed ||
+    unreconciledStormSources > 0
   ) {
     const failure =
       weather.status === "rejected"
@@ -56,7 +73,14 @@ async function handle(request: Request): Promise<NextResponse> {
             (repairFeed.status === "rejected"
               ? repairFeed.reason
               : repairFeed.value.error) ||
-            new Error(`${staleFeeds} mapped repair feed(s) are stale`);
+            (staleFeeds > 0
+              ? new Error(`${staleFeeds} mapped repair feed(s) are stale`)
+              : stormSources.status === "rejected"
+                ? stormSources.reason
+                : stormSources.value.error) ||
+            new Error(
+              `${unreconciledStormSources} storm source batch(es) are unreconciled`,
+            );
     console.error("[collision-intelligence-cron]", failure);
     return NextResponse.json(
       {
@@ -67,6 +91,11 @@ async function handle(request: Request): Promise<NextResponse> {
             ? "failed"
             : "success",
         repairFeed: feedFailed ? "failed" : staleFeeds ? "stale" : "current",
+        stormSources: stormSourcesFailed
+          ? "failed"
+          : unreconciledStormSources
+            ? "unreconciled"
+            : "current",
       },
       { status: 500 },
     );
@@ -76,6 +105,7 @@ async function handle(request: Request): Promise<NextResponse> {
     weather: weather.value,
     forecasts: forecasts.value.data,
     repairFeed: "current",
+    stormSources: "current",
   });
 }
 

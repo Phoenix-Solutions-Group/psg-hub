@@ -32,11 +32,50 @@ type HubShop = {
   slug: string | null;
 };
 
+type RepairSourceHealth = {
+  row_count: number;
+  accepted_count: number;
+  rejected_count: number;
+  arrival_max: string | null;
+};
+
+type RepairFeedHealth = {
+  is_stale: boolean;
+};
+
+type StormSourceHealth = {
+  event_rows: number | null;
+  is_reconciled: boolean;
+};
+
+type CrashSourceHealth = {
+  min_source_year: number;
+  max_source_year: number;
+  imported_row_count: number;
+  zip_matched_row_count: number;
+  last_sync_status: string;
+};
+
+type ForecastHealth = {
+  status: string;
+  generated_at: string;
+};
+
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
   notation: "compact",
   maximumFractionDigits: 1,
+});
+
+const dateTime = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "UTC",
+  timeZoneName: "short",
 });
 
 const notices: Record<string, string> = {
@@ -63,46 +102,88 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   if (access.role !== "psg_superadmin") redirect("/dashboard");
 
   const service = createServiceClient();
-  const [aliasResult, shopResult, hubShopResult, mappedShopResult, params] =
-    await Promise.all([
-      service
-        .from("v_collision_insurer_alias_review_queue")
-        .select(
-          "source_label_normalized,source_label_name,source_shop_count,repair_orders,repair_value_cents,latest_arrival_date",
-        )
-        .eq("review_status", "candidate")
-        .order("repair_orders", { ascending: false })
-        .limit(20),
-      service
-        .from("v_collision_filemaker_shop_summary")
-        .select(
-          "source_shop_key,source_shop_name,repair_orders,repair_orders_2026,latest_arrival_date",
-        )
-        .is("shop_id", null)
-        .order("repair_orders", { ascending: false })
-        .limit(8),
-      service
-        .from("shops")
-        .select("id,name,slug")
-        .order("name", { ascending: true }),
-      service
-        .from("collision_shop_mappings")
-        .select("shop_id")
-        .eq("mapping_status", "mapped"),
-      searchParams,
-    ]);
+  const [
+    aliasResult,
+    shopResult,
+    hubShopResult,
+    mappedShopResult,
+    repairSourceResult,
+    repairFeedResult,
+    stormSourceResult,
+    crashSourceResult,
+    forecastResult,
+    params,
+  ] = await Promise.all([
+    service
+      .from("v_collision_insurer_alias_review_queue")
+      .select(
+        "source_label_normalized,source_label_name,source_shop_count,repair_orders,repair_value_cents,latest_arrival_date",
+      )
+      .eq("review_status", "candidate")
+      .order("repair_orders", { ascending: false })
+      .limit(20),
+    service
+      .from("v_collision_filemaker_shop_summary")
+      .select(
+        "source_shop_key,source_shop_name,repair_orders,repair_orders_2026,latest_arrival_date",
+      )
+      .is("shop_id", null)
+      .order("repair_orders", { ascending: false })
+      .limit(8),
+    service
+      .from("shops")
+      .select("id,name,slug")
+      .order("name", { ascending: true }),
+    service
+      .from("collision_shop_mappings")
+      .select("shop_id")
+      .eq("mapping_status", "mapped"),
+    service
+      .from("collision_repair_sources")
+      .select("row_count,accepted_count,rejected_count,arrival_max")
+      .eq("status", "loaded")
+      .order("imported_at", { ascending: false })
+      .limit(1),
+    service.from("v_collision_repair_feed_status").select("is_stale"),
+    service
+      .from("v_collision_storm_source_reconciliation")
+      .select("event_rows,is_reconciled"),
+    service
+      .from("ksdot_crash_sources")
+      .select(
+        "min_source_year,max_source_year,imported_row_count,zip_matched_row_count,last_sync_status",
+      )
+      .order("imported_at", { ascending: false })
+      .limit(1),
+    service
+      .from("collision_demand_forecasts")
+      .select("status,generated_at")
+      .order("generated_at", { ascending: false })
+      .limit(4),
+    searchParams,
+  ]);
 
   if (
     aliasResult.error ||
     shopResult.error ||
     hubShopResult.error ||
-    mappedShopResult.error
+    mappedShopResult.error ||
+    repairSourceResult.error ||
+    repairFeedResult.error ||
+    stormSourceResult.error ||
+    crashSourceResult.error ||
+    forecastResult.error
   ) {
     throw new Error(
       aliasResult.error?.message ??
         shopResult.error?.message ??
         hubShopResult.error?.message ??
         mappedShopResult.error?.message ??
+        repairSourceResult.error?.message ??
+        repairFeedResult.error?.message ??
+        stormSourceResult.error?.message ??
+        crashSourceResult.error?.message ??
+        forecastResult.error?.message ??
         "Review queue failed",
     );
   }
@@ -115,6 +196,29 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const availableHubShops = ((hubShopResult.data ?? []) as HubShop[]).filter(
     (shop) => !mappedShopIds.has(shop.id),
   );
+  const repairSource = (repairSourceResult.data?.[0] ??
+    null) as RepairSourceHealth | null;
+  const repairFeeds = (repairFeedResult.data ?? []) as RepairFeedHealth[];
+  const stormSources = (stormSourceResult.data ?? []) as StormSourceHealth[];
+  const crashSource = (crashSourceResult.data?.[0] ??
+    null) as CrashSourceHealth | null;
+  const forecasts = (forecastResult.data ?? []) as ForecastHealth[];
+  const staleRepairFeeds = repairFeeds.filter((feed) => feed.is_stale).length;
+  const unreconciledStormSources = stormSources.filter(
+    (source) => !source.is_reconciled,
+  ).length;
+  const stormEvents = stormSources.reduce(
+    (total, source) => total + (source.event_rows ?? 0),
+    0,
+  );
+  const publishedForecasts = forecasts.filter(
+    (forecast) => forecast.status === "published",
+  ).length;
+  const crashZipMatchPct =
+    crashSource && crashSource.imported_row_count
+      ? (crashSource.zip_matched_row_count / crashSource.imported_row_count) *
+        100
+      : null;
   const notice = params.result ? notices[params.result] : null;
 
   return (
@@ -140,6 +244,136 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
           {notice}
         </div>
       ) : null}
+
+      <section aria-labelledby="source-health-heading" className="space-y-3">
+        <div>
+          <h2 id="source-health-heading" className="text-lg font-semibold">
+            Source health
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Read-only freshness and provenance checks for repair, crash,
+            weather, and forecast inputs.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <SourceHealthCard
+            title="Repair source"
+            status={
+              !repairSource
+                ? "Not loaded"
+                : !repairFeeds.length
+                  ? "No mapped feed"
+                  : staleRepairFeeds
+                    ? "Stale"
+                    : "Current"
+            }
+            healthy={Boolean(
+              repairSource && repairFeeds.length && !staleRepairFeeds,
+            )}
+          >
+            <ReviewMetric
+              label="Accepted / source rows"
+              value={
+                repairSource
+                  ? `${repairSource.accepted_count.toLocaleString()} / ${repairSource.row_count.toLocaleString()}`
+                  : "—"
+              }
+            />
+            <ReviewMetric
+              label="Rejected"
+              value={repairSource?.rejected_count.toLocaleString() ?? "—"}
+            />
+            <ReviewMetric
+              label="Latest arrival"
+              value={repairSource?.arrival_max ?? "—"}
+            />
+          </SourceHealthCard>
+
+          <SourceHealthCard
+            title="Storm provenance"
+            status={
+              !stormSources.length
+                ? "No batches"
+                : unreconciledStormSources
+                  ? "Unreconciled"
+                  : "Reconciled"
+            }
+            healthy={Boolean(stormSources.length && !unreconciledStormSources)}
+          >
+            <ReviewMetric
+              label="Event rows"
+              value={stormEvents.toLocaleString()}
+            />
+            <ReviewMetric
+              label="Source batches"
+              value={stormSources.length.toLocaleString()}
+            />
+            <ReviewMetric
+              label="Unreconciled"
+              value={unreconciledStormSources.toLocaleString()}
+            />
+          </SourceHealthCard>
+
+          <SourceHealthCard
+            title="KDOT crashes"
+            status={crashSource?.last_sync_status ?? "Not loaded"}
+            healthy={crashSource?.last_sync_status === "loaded"}
+          >
+            <ReviewMetric
+              label="Imported rows"
+              value={crashSource?.imported_row_count.toLocaleString() ?? "—"}
+            />
+            <ReviewMetric
+              label="ZIP matched"
+              value={
+                crashZipMatchPct === null
+                  ? "—"
+                  : `${crashZipMatchPct.toFixed(2)}%`
+              }
+            />
+            <ReviewMetric
+              label="Coverage"
+              value={
+                crashSource
+                  ? `${crashSource.min_source_year}–${crashSource.max_source_year}`
+                  : "—"
+              }
+            />
+          </SourceHealthCard>
+
+          <SourceHealthCard
+            title="Forecast readiness"
+            status={
+              !forecasts.length
+                ? "No forecasts"
+                : publishedForecasts === forecasts.length
+                  ? "Published"
+                  : "Gated"
+            }
+            healthy={Boolean(
+              forecasts.length && publishedForecasts === forecasts.length,
+            )}
+          >
+            <ReviewMetric
+              label="Latest forecast rows"
+              value={forecasts.length.toLocaleString()}
+            />
+            <ReviewMetric
+              label="Published"
+              value={publishedForecasts.toLocaleString()}
+            />
+            <ReviewMetric
+              label="Last generated"
+              value={
+                forecasts[0]
+                  ? dateTime.format(new Date(forecasts[0].generated_at))
+                  : "—"
+              }
+            />
+          </SourceHealthCard>
+        </div>
+      </section>
 
       <section aria-labelledby="alias-review-heading" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -413,5 +647,27 @@ function ReviewMetric({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="font-heading font-semibold">{value}</p>
     </div>
+  );
+}
+
+function SourceHealthCard({
+  title,
+  status,
+  healthy,
+  children,
+}: {
+  title: string;
+  status: string;
+  healthy: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+        <CardTitle>{title}</CardTitle>
+        <Badge variant={healthy ? "success" : "warning"}>{status}</Badge>
+      </CardHeader>
+      <CardContent className="space-y-3">{children}</CardContent>
+    </Card>
   );
 }
