@@ -1,18 +1,17 @@
 # Collision Intelligence Readiness Audit
 
-**Audited:** 2026-08-18
+**Audited:** 2026-08-18; updated 2026-08-19
 **Verdict:** pilot analytics foundation is implemented; the full project is not complete
 
 ## 2026-08-19 update
 
-- The dedicated FileMaker repair account, exact hosted-file/entity identifiers, and
-  bounded 2020+ OData probe are verified. The probe reported 330,530 rows, exactly
-  15 allowlisted fields, and zero direct customer or agent PII fields. The hardened
-  refresh service is staged with its timer disabled; no full export/import has run.
-- A read-only production baseline confirms 327,313 currently loaded repair facts,
-  199 source shops, one approved mapping, four stale forecasts, and three approved
-  model horizons. The pre-import reconciliation contract is recorded in the refresh
-  runbook.
+- The first governed FileMaker repair export/import is reconciled. FileMaker returned
+  330,535 rows across 34 pages with exactly 15 allowlisted fields and zero direct
+  customer or agent PII fields. Supabase accepted 330,533 rows, rejected two with
+  recorded reasons, superseded the prior snapshot, and retained no old-source facts.
+- The refresh service is staged with its timer disabled. The imported feed is current,
+  but the single mapped pilot's latest repair arrival remains 2025-12-24, so all four
+  forecasts remain correctly gated rather than published.
 - Live source reconciliation found 3,986 provisional SPC events from August 1–16
   without a matching source-ledger row. This branch adds an idempotent provenance
   backfill, a service-role-only reconciliation view, and a cron health gate. They are
@@ -45,7 +44,7 @@
 
 | Goal requirement                                                    | Status                                             | Current evidence                                                                                                                                                                                                                                                              | Remaining work                                                                                                                                           |
 | ------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Clean, documented, privacy-safe data                                | Live preflight passed; first refresh pending       | 327,313 FileMaker facts reconcile to the current source ledger; direct PII and raw identifiers are absent; the restricted live OData probe reports 330,530 rows and exactly 15 approved fields; hardened service is staged with timer disabled                                | Approve and reconcile the first full refresh; resolve the duplicate backup schedule; apply storm provenance reconciliation; connect failures to an owner |
+| Clean, documented, privacy-safe data                                | First manual refresh reconciled; recurring operation gated | 330,533 FileMaker facts reconcile to 330,535 parsed rows and two recorded rejections; direct PII and raw identifiers are absent; the restricted export contains exactly 15 approved fields; hardened service is staged with timer disabled                             | Resolve the duplicate backup schedule, name an alert owner, prove restore recovery, apply storm provenance reconciliation, then separately approve recurring refresh |
 | Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; governed review workflow implemented  | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; carrier aliases and source-shop mappings require explicit superadmin approval and atomic audit evidence; 411,208 KDOT rows count-verified; 99.93% ZIP match                             | Review the highest-volume insurer candidates and approve additional shop mappings only after identity confirmation                                       |
 | Operational dashboard                                               | Local authenticated QA passed; deployed approval pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build plus authenticated desktop/mobile Chromium checks pass | Review the captures, deploy after the matching migrations are approved, and run an authenticated smoke test                                             |
 | ZIP-level weather and market alerts                                 | Review queue built                                 | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; daily cron configured locally; notifications explicitly off                                                                                                                                    | Deploy/smoke-test the cron, approve owner and lifecycle, and measure false positives before authorizing notifications                                    |
@@ -56,11 +55,13 @@
 
 ### Repair data
 
-- Complete privacy-safe FileMaker snapshot: 327,313 accepted facts from 327,314
-  parsed rows; one row with no master shop key was rejected and recorded in provenance.
-- Full arrival history: 2011-01-18 through 2026-07-10; 16,009 arrivals are in 2026.
-- Full payment mix: 262,127 insurance-classified, 64,050 known non-insurance, and
-  1,136 unknown/other repairs; total recorded repair value is $1,652,295,954.68.
+- Complete privacy-safe FileMaker snapshot: 330,533 accepted facts from 330,535
+  parsed rows; one missing-shop-key row and one invalid-repair-amount row were rejected
+  and recorded in provenance.
+- Full arrival history: 2011-01-18 through 2026-08-14; 330,514 rows have an arrival
+  date and 330,404 have a completion date.
+- Full payment mix: 264,625 insurance-classified, 64,760 known non-insurance, and
+  1,148 unknown repairs; total recorded repair value is $1,671,343,984.99.
 - 199 source shop keys are present. PS177 is explicitly mapped; 198 remain unmapped
   and cannot appear in participating-shop dashboards.
 - Shop mapping, model promotion, forecasts, weather, and crash features use `shop_id`
@@ -71,7 +72,7 @@
   repair value. The unified view contains zero legacy rows for that company.
 - The mapped company's arrival history still ends 2025-12-24, so the dashboard
   correctly labels forecasting as not live even though other source shops are newer.
-- The service-only insurer review table contains 1,045 normalized label candidates
+- The service-only insurer review table contains 1,056 normalized label candidates
   across the full snapshot. The mapped pilot has 101 normalized carrier labels and
   zero approved canonical aliases; the dashboard labels them unreviewed rather than
   silently merging names.
@@ -181,7 +182,9 @@
 - Performance advisor: covering indexes were added for both mapping foreign keys.
   Informational unused-index notices remain for newly created fact indexes before
   sustained product traffic.
-- Source ledger counts reconcile to 327,314 parsed, 327,313 accepted, and one rejected.
+- Source ledger counts reconcile to 330,535 parsed, 330,533 accepted, and two rejected.
+  The prior source is `superseded`, has zero remaining facts, and an identical-file
+  rerun was skipped without a second import.
 - A read-only production execution of the forecast-readiness query returns all four
   expected pilot shop/horizon rows and correctly gates all four as `stale_source`. An
   isolated PostgreSQL fixture also verifies `published`, `model_not_approved`,
@@ -212,8 +215,9 @@
   The `fm.psghub.me`, `fm2.psghub.me`, and `fm3.psghub.me` names are stale or
   misconfigured and are excluded from the refresh contract.
 - Supabase migration `collision_repair_feed_freshness` is live. Its per-shop view is
-  `security_invoker=true`, grants select only to `service_role`, and correctly marks
-  the 3,420-row pilot snapshot stale at roughly 861 hours old.
+  `security_invoker=true`, grants select only to `service_role`, and reports the newly
+  loaded source as current. The mapped 3,420-row pilot still ends 2025-12-24, so its
+  repair-arrival freshness gate remains closed.
 - KDOT source counts match the live ArcGIS service for every imported year.
 - Crash/weather feature evaluation keeps the trailing four-week model as champion;
   KDOT improves the comparable ridge model by 2.1% MAE but not enough to promote.
@@ -224,14 +228,14 @@
 
 ## Next execution order
 
-1. After explicit production approval, run the first full FileMaker export/import and
-   reconcile it against the captured Supabase baseline. Keep the daily timer disabled
-   until the duplicate 3:00 AM backup is disabled or moved, a backup/restore is proven,
-   and a named owner receives failures. The runbook is
-   `docs/analysis/2026-08-18-collision-repair-refresh-runbook.md`.
-2. Apply the storm source-reconciliation and forecast-readiness migrations, then deploy
-   the matching cron health checks. Apply the collision example-function hardening in
-   the same controlled release. Because the shared migration ledger is divergent, use
+1. Resolve the FileMaker operations gate: the owner must decide whether to disable or
+   relocate the failing duplicate 3:00 AM backup, prove backup/restore recovery, and
+   name the person or channel that receives refresh failures. Keep the daily refresh
+   timer disabled until those controls are approved and verified.
+2. After separate production approval, apply the storm source-reconciliation and
+   forecast-readiness migrations, then deploy the matching cron health checks. Apply
+   the collision example-function hardening in the same controlled release. Because
+   the shared migration ledger is divergent, use
    individually reviewed migration execution after approval rather than `db push`,
    `migration repair`, or `db pull`. Confirm every NCEI/SPC batch is reconciled, every
    mapped shop/horizon has an explainable state, and browser roles cannot read the

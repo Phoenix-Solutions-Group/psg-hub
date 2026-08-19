@@ -3,13 +3,13 @@
 **Project:** PSG collision intelligence
 **Source:** PhoenixSolutions Advantage FileMaker
 **Target:** Supabase `gylkkzmcmbdftxieyabw`
-**Status:** bounded repair probe passed; first governed export/import and timer activation remain
+**Status:** first governed repair export/import reconciled; timer remains disabled
 
 ## Source evidence
 
 - The July 15, 2025 DDR identifies Repair Customer as stable table `FMTID:131`.
-- The current governed snapshot contains 327,314 source rows and 199 source-shop
-  keys. Its creation dates are exactly 2020-01-02 through 2026-07-13.
+- The pre-import governed snapshot contained 327,314 source rows and 199 source-shop
+  keys. Its creation dates were exactly 2020-01-02 through 2026-07-13.
 - The legacy `Export - FM & Excel Data - Repair Customer` script is interactive,
   inherits the operator's found set, and exports customer names, addresses, phones,
   email, birthdates, claim numbers, and agent details. It is not the recurring PSG
@@ -26,9 +26,9 @@
   was caused by omitting the hosted filename's `.fmp12` suffix. `FMTID:131` is the
   stable DDR identifier, not an OData entity URL; the live OData entity is the quoted
   `Master_Repair Customer` name.
-- The 2026-08-19 bounded live probe returned 330,530 records in the approved 2020+
-  scope, exactly 15 allowlisted fields, and zero direct customer or agent PII fields.
-  No new governed repair export or Supabase import has occurred yet.
+- The final 2026-08-19 bounded live probe returned 330,535 records in the approved
+  2020+ scope, exactly 15 allowlisted fields, and zero direct customer or agent PII
+  fields. The first governed export/import then reconciled this count in Supabase.
 
 ## Pre-import Supabase baseline
 
@@ -43,6 +43,32 @@ A read-only production query captured this baseline at 2026-08-19 19:41 UTC:
 
 Use these figures as before-state evidence only. The first governed import must capture
 the same measures again and explain every change before forecast scoring runs.
+
+## First governed run — 2026-08-19
+
+The approved manual run completed with the refresh timer still disabled:
+
+- FileMaker exported 330,535 rows in 34 pages to a mode-0600 runtime file. The export
+  contained exactly the 15 approved fields and no direct customer or agent PII fields.
+- The independent no-secret, no-network validation accepted 330,533 rows and rejected
+  two: one missing shop key and one invalid repair amount. Parsed = accepted + rejected.
+- The source ID is `filemaker_rc_5cba1235612af4c11a4e`; the file SHA-256 is
+  `5cba1235612af4c11a4e023795ec9c0afc28eb073ca82d9a9144a1bf65b8d75c`.
+- The importer loaded 330,533 facts, superseded the prior source, and removed all
+  327,313 facts from that superseded snapshot only after reconciliation. No facts
+  remain attached to the old source.
+- The source delta is +3,221 parsed rows, +3,220 accepted facts, and +1 rejection.
+  Source-shop coverage remains 199 keys: one mapped and 198 unmapped.
+- The governed arrival range is now 2011-01-18 through 2026-08-14. The loaded feed is
+  current, but the mapped pilot still has only 3,420 repairs and its latest arrival is
+  2025-12-24. Forecast publication therefore remains correctly blocked.
+- A second importer execution against the same file returned
+  `skipped: identical_file_already_reconciled`, proving the rerun guard without a
+  second import.
+
+This completes the first manual import gate only. Forecast scoring, recurring timer
+activation, the pending production migrations, deployment, backup changes, and alert
+ownership remain separately controlled actions.
 
 ## One-time FileMaker configuration
 
@@ -164,8 +190,8 @@ Do not run broad `db push`, `migration repair`, or `db pull` during this release
 future scoped history repair requires its own approval and coordination with the other
 applications sharing this project.
 
-After the first governed FileMaker import is reconciled, apply these reviewed files in
-order through the migration runner:
+The first governed FileMaker import is reconciled. Under a separate production
+approval, apply these reviewed files in order through the migration runner:
 
 1. `20260819195103_collision_storm_source_reconciliation.sql`
 2. `20260819201319_collision_forecast_readiness.sql`
@@ -233,7 +259,7 @@ pilot horizons. The local database ledger itself remains intentionally unrepaire
 Do not call the feed live until one scheduled run proves all of the following:
 
 1. OData responds through `https://psgweb.me` using the dedicated restricted account.
-2. The export reports 330,530 rows or a documented source delta, 15 fields, zero direct
+2. The export reports 330,535 rows or a documented source delta, 15 fields, zero direct
    customer/agent PII fields, and a row count equal to the OData count annotation.
 3. The importer source ledger reconciles parsed = accepted + rejected.
 4. Facts for the new source equal its accepted count; the prior source becomes
