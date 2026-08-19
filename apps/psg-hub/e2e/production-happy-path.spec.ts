@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { BSM_DEMO_ADMIN, OPS_STAFF, PROD_OPS } from "./fixtures";
 import { checkA11y, shoot } from "./_helpers";
+import { productionBrowserTestVendor } from "@/lib/production/browser-gate";
 import { currentTemplateHash } from "@/lib/production/template-gate";
 
 /**
@@ -52,7 +53,7 @@ function adminClient() {
 }
 
 function productionTestVendor() {
-  return process.env.LOB_API_KEY ? "lob" : "inhouse";
+  return productionBrowserTestVendor(process.env.LOB_API_KEY);
 }
 
 async function seedReleasedWarrantyTemplate(): Promise<void> {
