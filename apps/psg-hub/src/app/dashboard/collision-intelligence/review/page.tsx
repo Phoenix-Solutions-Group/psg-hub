@@ -26,6 +26,12 @@ type ShopCandidate = {
   latest_arrival_date: string | null;
 };
 
+type HubShop = {
+  id: string;
+  name: string | null;
+  slug: string | null;
+};
+
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -39,6 +45,11 @@ const notices: Record<string, string> = {
   conflict:
     "This label was reviewed by someone else. The queue has been refreshed.",
   error: "The review could not be saved. No alias decision was changed.",
+  mapping_approved:
+    "Shop mapping approved. Its repair history is now available to authorized members of that PSG Hub shop.",
+  mapping_conflict:
+    "The source or target shop was mapped by someone else. The queue has been refreshed.",
+  mapping_error: "The shop mapping could not be saved. No mapping was changed.",
 };
 
 export default async function CollisionDataReviewPage({ searchParams }: Props) {
@@ -52,36 +63,58 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   if (access.role !== "psg_superadmin") redirect("/dashboard");
 
   const service = createServiceClient();
-  const [aliasResult, shopResult, params] = await Promise.all([
-    service
-      .from("v_collision_insurer_alias_review_queue")
-      .select(
-        "source_label_normalized,source_label_name,source_shop_count,repair_orders,repair_value_cents,latest_arrival_date",
-      )
-      .eq("review_status", "candidate")
-      .order("repair_orders", { ascending: false })
-      .limit(20),
-    service
-      .from("v_collision_filemaker_shop_summary")
-      .select(
-        "source_shop_key,source_shop_name,repair_orders,repair_orders_2026,latest_arrival_date",
-      )
-      .is("shop_id", null)
-      .order("repair_orders", { ascending: false })
-      .limit(8),
-    searchParams,
-  ]);
+  const [aliasResult, shopResult, hubShopResult, mappedShopResult, params] =
+    await Promise.all([
+      service
+        .from("v_collision_insurer_alias_review_queue")
+        .select(
+          "source_label_normalized,source_label_name,source_shop_count,repair_orders,repair_value_cents,latest_arrival_date",
+        )
+        .eq("review_status", "candidate")
+        .order("repair_orders", { ascending: false })
+        .limit(20),
+      service
+        .from("v_collision_filemaker_shop_summary")
+        .select(
+          "source_shop_key,source_shop_name,repair_orders,repair_orders_2026,latest_arrival_date",
+        )
+        .is("shop_id", null)
+        .order("repair_orders", { ascending: false })
+        .limit(8),
+      service
+        .from("shops")
+        .select("id,name,slug")
+        .order("name", { ascending: true }),
+      service
+        .from("collision_shop_mappings")
+        .select("shop_id")
+        .eq("mapping_status", "mapped"),
+      searchParams,
+    ]);
 
-  if (aliasResult.error || shopResult.error) {
+  if (
+    aliasResult.error ||
+    shopResult.error ||
+    hubShopResult.error ||
+    mappedShopResult.error
+  ) {
     throw new Error(
       aliasResult.error?.message ??
         shopResult.error?.message ??
+        hubShopResult.error?.message ??
+        mappedShopResult.error?.message ??
         "Review queue failed",
     );
   }
 
   const aliases = (aliasResult.data ?? []) as AliasCandidate[];
   const shops = (shopResult.data ?? []) as ShopCandidate[];
+  const mappedShopIds = new Set(
+    (mappedShopResult.data ?? []).map((row) => row.shop_id as string),
+  );
+  const availableHubShops = ((hubShopResult.data ?? []) as HubShop[]).filter(
+    (shop) => !mappedShopIds.has(shop.id),
+  );
   const notice = params.result ? notices[params.result] : null;
 
   return (
@@ -278,6 +311,95 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                 </tbody>
               </table>
             </div>
+            <form
+              action="/api/collision-intelligence/shop-mapping-review"
+              method="post"
+              className="mt-6 space-y-4 border-t border-border pt-5"
+            >
+              <div>
+                <h3 className="font-heading font-semibold">
+                  Approve one mapping
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  This immediately makes the selected source history visible to
+                  authorized members of the target shop. One target shop can
+                  have only one active source mapping.
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="text-sm font-medium">
+                  FileMaker source shop
+                  <select
+                    name="source_shop_key"
+                    required
+                    defaultValue=""
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                  >
+                    <option value="" disabled>
+                      Select a verified source shop
+                    </option>
+                    {shops.map((shop) => (
+                      <option
+                        key={shop.source_shop_key}
+                        value={shop.source_shop_key}
+                      >
+                        {shop.source_shop_name} ({shop.source_shop_key})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm font-medium">
+                  PSG Hub shop
+                  <select
+                    name="shop_id"
+                    required
+                    defaultValue=""
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                  >
+                    <option value="" disabled>
+                      Select the confirmed target shop
+                    </option>
+                    {availableHubShops.map((shop) => (
+                      <option key={shop.id} value={shop.id}>
+                        {shop.name ?? shop.slug ?? shop.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label className="block text-sm font-medium">
+                Identity evidence
+                <textarea
+                  name="review_notes"
+                  required
+                  minLength={20}
+                  maxLength={1000}
+                  rows={3}
+                  placeholder="Describe the signed agreement, customer confirmation, or other evidence used to verify this identity."
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                />
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="identity_confirmed"
+                  value="confirmed"
+                  required
+                  className="mt-1"
+                />
+                <span>
+                  I confirmed that these records belong to this exact legal and
+                  operating shop—not a name-similar business.
+                </span>
+              </label>
+              <button
+                type="submit"
+                disabled={!shops.length || !availableHubShops.length}
+                className="rounded-md bg-primary px-3 py-2 font-heading text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Approve shop mapping
+              </button>
+            </form>
           </CardContent>
         </Card>
       </section>

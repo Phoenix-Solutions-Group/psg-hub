@@ -41,6 +41,7 @@ const CATEGORIES: (AuditCategory | "all")[] = [
   "modules",
   "profiles",
   "superadmin",
+  "collision",
   "other",
 ];
 
@@ -52,11 +53,13 @@ export function AccessAuditViewer({ entries }: { entries: AuditEntry[] }) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return entries.filter((e) => {
-      if (category !== "all" && auditCategory(e.action) !== category) return false;
+      if (category !== "all" && auditCategory(e.action) !== category)
+        return false;
       if (!q) return true;
-      const hay = `${auditActionLabel(e.action)} ${e.actorName} ${e.targetName ?? ""} ${summarizePayload(
-        e.payload
-      )}`.toLowerCase();
+      const hay =
+        `${auditActionLabel(e.action)} ${e.actorName} ${e.targetName ?? ""} ${summarizePayload(
+          e.payload,
+        )}`.toLowerCase();
       return hay.includes(q);
     });
   }, [entries, category, query]);
@@ -126,7 +129,9 @@ export function AccessAuditViewer({ entries }: { entries: AuditEntry[] }) {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline">{auditActionLabel(e.action)}</Badge>
+                        <Badge variant="outline">
+                          {auditActionLabel(e.action)}
+                        </Badge>
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">{e.actorName}</TableCell>
@@ -169,8 +174,9 @@ export function AccessAuditViewer({ entries }: { entries: AuditEntry[] }) {
       )}
 
       <p className="text-xs text-muted-foreground">
-        Showing {filtered.length} of {entries.length} event{entries.length === 1 ? "" : "s"}. This
-        log is append-only and cannot be edited or deleted.
+        Showing {filtered.length} of {entries.length} event
+        {entries.length === 1 ? "" : "s"}. This log is append-only and cannot be
+        edited or deleted.
       </p>
     </div>
   );

@@ -17,6 +17,7 @@ export type AuditCategory =
   | "modules"
   | "profiles"
   | "superadmin"
+  | "collision"
   | "intel"
   | "production"
   | "approvals"
@@ -37,6 +38,7 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "shop.assign": "Assigned to shop",
   "shop.unassign": "Removed from shop",
   "tier.change": "Changed tier",
+  "collision.shop_mapping.approve": "Approved collision shop mapping",
   "module.visibility.set": "Set module visibility",
   "module_access.grant": "Allowed module (grant)",
   "module_access.deny": "Denied module (grant)",
@@ -92,6 +94,7 @@ export function auditCategory(action: string): AuditCategory {
   if (action.startsWith("module")) return "modules";
   if (action.startsWith("security_profile")) return "profiles";
   if (action.startsWith("superadmin")) return "superadmin";
+  if (action.startsWith("collision.")) return "collision";
   if (action.startsWith("intel")) return "intel";
   if (action.startsWith("production")) return "production";
   if (
@@ -103,7 +106,8 @@ export function auditCategory(action: string): AuditCategory {
   }
   if (action.startsWith("sitemap")) return "sitemap";
   if (action.startsWith("ccc.")) return "ccc";
-  if (action.startsWith("gbp") || action.startsWith("google_ads")) return "integrations";
+  if (action.startsWith("gbp") || action.startsWith("google_ads"))
+    return "integrations";
   if (action.startsWith("intake")) return "intake";
   return "other";
 }
@@ -113,6 +117,7 @@ export const AUDIT_CATEGORY_LABELS: Record<AuditCategory, string> = {
   modules: "Module access",
   profiles: "Security profiles",
   superadmin: "Superadmin allowlist",
+  collision: "Collision data",
   intel: "Intel reports",
   production: "Mail production",
   approvals: "Approval queue",
@@ -134,7 +139,8 @@ export function knownAuditActions(): readonly AuditAction[] {
  * them; never dumps the full JSON. Returns "" when nothing notable is present.
  */
 export function summarizePayload(payload: unknown): string {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "";
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return "";
   const p = payload as Record<string, unknown>;
   const parts: string[] = [];
   const pick = (key: string, label?: string) => {
@@ -152,7 +158,8 @@ export function summarizePayload(payload: unknown): string {
   pick("toTier", "tier");
   pick("visibility");
   pick("path");
-  if (parts.length === 0 && typeof p.action === "string") parts.push(String(p.action));
+  if (parts.length === 0 && typeof p.action === "string")
+    parts.push(String(p.action));
   return parts.join(" · ");
 }
 
@@ -177,7 +184,8 @@ const SUMMARIZED_KEYS = new Set([
  * so the viewer offers an expandable drill-down (PSG-88 P2) only where useful.
  */
 export function hasPayloadDetail(payload: unknown): boolean {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return false;
   const p = payload as Record<string, unknown>;
   return Object.entries(p).some(([key, value]) => {
     if (value === undefined || value === null) return false;
@@ -192,7 +200,8 @@ export function hasPayloadDetail(payload: unknown): boolean {
  * empty / non-object payload.
  */
 export function formatPayloadDetail(payload: unknown): string {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "";
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return "";
   const p = payload as Record<string, unknown>;
   const ordered: Record<string, unknown> = {};
   for (const key of Object.keys(p).sort()) ordered[key] = p[key];

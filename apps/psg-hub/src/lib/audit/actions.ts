@@ -23,6 +23,9 @@ export const AUDIT_ACTIONS = [
   "shop.assign",
   "shop.unassign",
   "tier.change",
+  // Collision source-shop identity approval. The database RPC writes the
+  // mapping and this append-only audit event in one transaction.
+  "collision.shop_mapping.approve",
   // modules + access matrix
   "module.visibility.set",
   "module_access.grant",
