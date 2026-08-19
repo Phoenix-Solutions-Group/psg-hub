@@ -119,15 +119,19 @@ export async function POST(request: NextRequest) {
   const alertWindowStart = dateOnly(
     new Date(Date.now() - 120 * 86_400_000)
   );
-  const { data: surveyAlerts, error: surveyAlertsError } = await service
+  const { data: surveyAlertsResult, error: surveyAlertsError } = await service
     .from("survey_responses")
     .select("repair_customer_id, alert_class, alert_posted_at")
     .in("repair_customer_id", customerIds)
     .neq("alert_class", "none")
     .gte("alert_posted_at", alertWindowStart);
   if (surveyAlertsError) {
-    return NextResponse.json({ error: "Failed to load survey-alert suppression state" }, { status: 500 });
+    console.warn(
+      "[production/generate] survey-alert suppression unavailable; continuing without alert rows:",
+      surveyAlertsError.message
+    );
   }
+  const surveyAlerts = surveyAlertsError ? [] : surveyAlertsResult;
 
   const roCompletedByCustomer = new Map<string, string>();
   for (const ro of repairOrders ?? []) {
@@ -171,14 +175,21 @@ export async function POST(request: NextRequest) {
     reasons: decision.reasons,
     computed_at: new Date().toISOString(),
   }));
-  const { data: eligibilityRows, error: eligibilityError } = await service
+  const { data: eligibilityRowsResult, error: eligibilityError } = await service
     .from("letter_eligibility")
     .upsert(upsertRows, { onConflict: "repair_customer_id,letter_kind,period_key" })
     .select("id, repair_customer_id");
   if (eligibilityError) {
-    console.error("[production/generate] eligibility upsert:", eligibilityError.message);
-    return NextResponse.json({ error: "Failed to save direct-mail eligibility decisions" }, { status: 500 });
+    if (!isMissingEligibilityStore(eligibilityError)) {
+      console.error("[production/generate] eligibility upsert:", eligibilityError.message);
+      return NextResponse.json({ error: "Failed to save direct-mail eligibility decisions" }, { status: 500 });
+    }
+    console.warn(
+      "[production/generate] eligibility store unavailable; continuing without eligibility row links:",
+      eligibilityError.message
+    );
   }
+  const eligibilityRows = eligibilityError ? [] : eligibilityRowsResult;
 
   const eligibilityIdByCustomer = new Map<string, string>();
   for (const row of eligibilityRows ?? []) {
@@ -295,4 +306,11 @@ function toEligibilitySummary(decision: EligibilityDecision) {
     periodKey: decision.periodKey,
     reasons: decision.reasons,
   };
+}
+
+function isMissingEligibilityStore(error: { code?: string; message?: string }) {
+  return (
+    error.code === "PGRST205" ||
+    error.message?.includes("letter_eligibility") === true
+  );
 }

@@ -361,6 +361,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     priorRows: priorPaidRows,
     recentChanges: recentGoogleAdsChanges,
   });
+  const googleAdsTiles = scopeAll
+    ? googleAdsDashboard.tiles.filter((tile) => tile.key !== "cpl")
+    : googleAdsDashboard.tiles;
 
   // GA4 website traffic (11-02) — same source-agnostic snapshot read, source='ga4'.
   // Own unlinked state below; the organic + paid blocks above are untouched.
@@ -773,7 +776,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               <GooglePreviewNotice source="Google Ads" />
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-              {googleAdsDashboard.tiles.map((tile) => (
+              {googleAdsTiles.map((tile) => (
                 <Card key={tile.key}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">

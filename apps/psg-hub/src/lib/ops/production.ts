@@ -240,13 +240,22 @@ export async function printDocument(
   documentId: string,
   opts: { printedAt?: string; printedByProfileId?: string | null; forceReprint?: boolean } = {}
 ): Promise<PrintOutcome> {
-  const { data: doc, error } = await client
+  const fullDocumentColumns =
+    "id, batch_id, piece_type, to_address, from_address, color, size, rendered_url, product_id, letter_eligibility_id, external_id, status, proof_url, expected_delivery_date, printed_at, printed_by_profile_id, vendor";
+  const legacyDocumentColumns =
+    "id, batch_id, piece_type, to_address, from_address, color, size, rendered_url, product_id, external_id, status, proof_url, expected_delivery_date, vendor";
+  let { data: doc, error } = await client
     .from("production_documents")
-    .select(
-      "id, batch_id, piece_type, to_address, from_address, color, size, rendered_url, product_id, letter_eligibility_id, external_id, status, proof_url, expected_delivery_date, printed_at, printed_by_profile_id, vendor"
-    )
+    .select(fullDocumentColumns)
     .eq("id", documentId)
     .single();
+  if (error && isMissingOptionalColumn(error, "letter_eligibility_id")) {
+    ({ data: doc, error } = await client
+      .from("production_documents")
+      .select(legacyDocumentColumns)
+      .eq("id", documentId)
+      .single());
+  }
   if (error) throw new Error(`printDocument load failed: ${error.message}`);
   if (!doc) throw new Error("printDocument: document not found");
 
@@ -266,18 +275,40 @@ export async function printDocument(
   const printedAt = opts.printedAt ?? new Date().toISOString();
   const result = await resolvePrintAdapter(adapter, doc).submit(buildMailDocument(doc));
 
-  const { error: updateError } = await client
+  const updateValues = {
+    external_id: result.externalId,
+    vendor: result.vendor,
+    status: result.status,
+    proof_url: result.proofUrl ?? null,
+    expected_delivery_date: result.expectedDeliveryDate ?? null,
+    printed_at: printedAt,
+    printed_by_profile_id: opts.printedByProfileId ?? null,
+  };
+  let { error: updateError } = await client
     .from("production_documents")
-    .update({
-      external_id: result.externalId,
-      vendor: result.vendor,
-      status: result.status,
-      proof_url: result.proofUrl ?? null,
-      expected_delivery_date: result.expectedDeliveryDate ?? null,
-      printed_at: printedAt,
-      printed_by_profile_id: opts.printedByProfileId ?? null,
-    })
+    .update(updateValues)
     .eq("id", documentId);
+  if (updateError && isMissingOptionalColumn(updateError, "printed_at")) {
+    const {
+      printed_at: _printedAt,
+      printed_by_profile_id: _printedByProfileId,
+      ...legacyUpdateValues
+    } = updateValues;
+    ({ error: updateError } = await client
+      .from("production_documents")
+      .update(legacyUpdateValues)
+      .eq("id", documentId));
+  }
+  if (updateError && isMissingOptionalColumn(updateError, "printed_by_profile_id")) {
+    const {
+      printed_by_profile_id: _printedByProfileId,
+      ...legacyUpdateValues
+    } = updateValues;
+    ({ error: updateError } = await client
+      .from("production_documents")
+      .update(legacyUpdateValues)
+      .eq("id", documentId));
+  }
   if (updateError) throw new Error(`printDocument persist failed: ${updateError.message}`);
   await markLetterEligibilityPrinted(client, doc, printedAt);
 
@@ -287,6 +318,14 @@ export async function printDocument(
     status: result.status,
     vendor: result.vendor,
   };
+}
+
+function isMissingOptionalColumn(error: DbError, column: string): boolean {
+  return (
+    error.message.includes(column) &&
+    (error.message.includes("does not exist") ||
+      error.message.includes("Could not find"))
+  );
 }
 
 export interface BatchPrintOutcome {

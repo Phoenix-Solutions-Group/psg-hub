@@ -50,7 +50,7 @@ test.describe("analytics — per-shop (OWNER)", () => {
 
     const mail = directMailSection(page);
     await expect(mail).toContainText("Letters mailed");
-    await expect(mail.getByText("3", { exact: true }).first()).toBeVisible();
+    await expect(mail.getByText("4", { exact: true }).first()).toBeVisible();
     await expect(mail).toContainText("Households reached");
     await expect(mail.getByRole("paragraph").filter({ hasText: /^2$/ })).toBeVisible();
     await expect(mail).toContainText("Customer response signals");

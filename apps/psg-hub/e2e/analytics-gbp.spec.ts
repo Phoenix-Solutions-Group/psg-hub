@@ -109,7 +109,7 @@ test.describe("gbp panel — unlinked state (MEGA, no gbp)", () => {
       page.getByText("No Google Business Profile linked")
     ).toBeVisible();
     await expect(
-      page.getByText("will light up when the shop connects its own Google account")
+      page.getByText("Connect a Google Business Profile to see calls")
     ).toBeVisible();
 
     await checkA11y(page, "analytics-gbp-unlinked");
