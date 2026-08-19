@@ -33,6 +33,13 @@
   browser and HTTP checks confirm the page redirects to login and the mutation returns 401. The source-health addition is build-verified but not deployed because it depends
   on the unapplied reconciliation migration; authenticated product approval and
   production deployment remain separate gates.
+- A linked `supabase db push --dry-run` made no production changes and stopped on the
+  shared project's historical migration-ledger drift. Five already-applied collision
+  migrations have the same names under different timestamps; older sibling-app drift
+  also exists. Do not run global `migration repair` or `db pull` for this release.
+- The two legacy collision example RPCs have fixed-search-path, service-role-only
+  hardening staged and rollback-tested. This is a third pending collision migration;
+  it is not applied to production.
 
 ## Requirement status
 
@@ -164,6 +171,11 @@
 - Security advisor: the three new `rls_enabled_no_policy` notices are informational
   and intentional for service-only repair facts, source ledger, and mapping table; no
   anonymous or authenticated policy was added.
+- The remaining collision-scoped security warnings were traced to two unused legacy
+  example RPCs. The staged migration fixes their `search_path`, revokes execution from
+  `public`, `anon`, and `authenticated`, preserves `service_role`, and contains a
+  database assertion for both properties. A local transaction applied the migration
+  and rolled it back successfully.
 - The pre-existing `v_collision_targeting_zip_annual` security-definer error was
   removed; the view is now invoker-security and service-role-only.
 - Performance advisor: covering indexes were added for both mapping foreign keys.
@@ -216,9 +228,12 @@
    and a named owner receives failures. The runbook is
    `docs/analysis/2026-08-18-collision-repair-refresh-runbook.md`.
 2. Apply the storm source-reconciliation and forecast-readiness migrations, then deploy
-   the matching cron health checks. Confirm every NCEI/SPC batch is reconciled, every
-   mapped shop/horizon has an explainable state, and browser roles cannot read either
-   service-only view.
+   the matching cron health checks. Apply the collision example-function hardening in
+   the same controlled release. Because the shared migration ledger is divergent, use
+   individually reviewed migration execution after approval rather than `db push`,
+   `migration repair`, or `db pull`. Confirm every NCEI/SPC batch is reconciled, every
+   mapped shop/horizon has an explainable state, and browser roles cannot read the
+   service-only views or example RPCs.
 3. Use `/dashboard/collision-intelligence/review` as a superadmin to review the
    highest-volume insurer aliases and source-shop mappings. Mapping approval requires
    target selection, written identity evidence, and explicit confirmation, and it is
