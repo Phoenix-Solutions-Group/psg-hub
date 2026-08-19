@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assertNoRealRiversideCollision,
   assertNoSupabaseError,
   assertRequiredRiversideSeedTablesExist,
   buildAggregateDerivedAnalyticsRows,
@@ -12,6 +13,31 @@ import {
   requiredDemoEnvNames,
   shouldSeedInternalRegressionUser,
 } from "../../../../scripts/seed-superadmin-qa-env.mjs";
+
+function riversideCollisionClient({
+  clients = [],
+  shops = [],
+}: {
+  clients?: Array<{ id: string; name: string; website_url: string | null }>;
+  shops?: Array<{ id: string; name: string; slug: string; url: string | null }>;
+}) {
+  return {
+    from(table: string) {
+      return {
+        select() {
+          return {
+            eq() {
+              return Promise.resolve({ data: table === "clients" ? clients : [], error: null });
+            },
+            or() {
+              return Promise.resolve({ data: table === "shops" ? shops : [], error: null });
+            },
+          };
+        },
+      };
+    },
+  };
+}
 
 describe("clean BSM demo seed", () => {
   it("requires only the two visible demo accounts by default", () => {
@@ -235,6 +261,61 @@ describe("clean BSM demo seed", () => {
       `Required production table ${missingTable} is unavailable`
     );
     expect(REQUIRED_RIVERSIDE_PRODUCTION_TABLES).toContain("survey_responses");
+  });
+
+  it("allows existing Riverside records that are clearly marked as .example demos", async () => {
+    const client = riversideCollisionClient({
+      clients: [
+        {
+          id: "demo-client",
+          name: CLEAN_DEMO_SEED.clientName,
+          website_url: "https://riversidecollision.example",
+        },
+      ],
+      shops: [
+        {
+          id: "demo-shop",
+          name: CLEAN_DEMO_SEED.shopName,
+          slug: CLEAN_DEMO_SEED.shopSlug,
+          url: "https://riversidecollision.example",
+        },
+      ],
+    });
+
+    await expect(assertNoRealRiversideCollision(client)).resolves.toBeUndefined();
+  });
+
+  it("stops before writing when a real client already uses the Riverside name", async () => {
+    const client = riversideCollisionClient({
+      clients: [
+        {
+          id: "real-client",
+          name: CLEAN_DEMO_SEED.clientName,
+          website_url: "https://riversidecollision.com",
+        },
+      ],
+    });
+
+    await expect(assertNoRealRiversideCollision(client)).rejects.toThrow(
+      "Riverside demo seed stopped before writing: client Riverside Collision (real-client) already exists and does not look like the demo .example record."
+    );
+  });
+
+  it("stops before writing when a real shop uses the Riverside name or slug", async () => {
+    const client = riversideCollisionClient({
+      shops: [
+        {
+          id: "real-shop",
+          name: CLEAN_DEMO_SEED.shopName,
+          slug: CLEAN_DEMO_SEED.shopSlug,
+          url: "https://riversidecollision.com",
+        },
+      ],
+    });
+
+    await expect(assertNoRealRiversideCollision(client)).rejects.toThrow(
+      "Riverside demo seed stopped before writing: shop Riverside Collision / riverside-collision (real-shop) already exists and does not look like the demo .example record."
+    );
   });
 
   it("seeds a customer-visible Riverside content item for the dashboard content route", () => {
