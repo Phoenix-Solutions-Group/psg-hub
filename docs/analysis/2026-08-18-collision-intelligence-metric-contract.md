@@ -59,6 +59,10 @@ the authenticated user's membership before the service client is called.
 | Cycle time                   | Calendar days from `date_in` through `date_out`; negative values fail quality review                                                                                                            |
 | Weekly demand                | Repair orders grouped into PostgreSQL Monday-start weeks                                                                                                                                        |
 
+The recent operating trend compares the latest 13 completed source weeks with the
+preceding 13. It excludes the newest potentially partial source week, treats missing
+weeks as zero demand and value, and weights cycle time by completed-cycle observations.
+
 FileMaker carrier labels are available as trimmed raw labels plus lowercase
 alphanumeric-normalized labels. They support carrier-tagged repair volume and value,
 not insurer claim counts. `collision_insurer_alias_reviews` starts each observed

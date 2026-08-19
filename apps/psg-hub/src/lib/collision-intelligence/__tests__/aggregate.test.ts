@@ -189,6 +189,7 @@ describe("collision intelligence aggregation", () => {
       averageRepairAmount: 100,
     });
     expect(dashboard.summary.averageCycleDays).toBeCloseTo(50 / 3);
+    expect(dashboard.recentPerformance).toBeNull();
     expect(dashboard.crashSeries).toEqual([{ month: "2025-01", crashes: 12 }]);
     expect(dashboard.crashes).toMatchObject({
       latestTotal: 12,
@@ -282,6 +283,59 @@ describe("collision intelligence aggregation", () => {
     expect(evaluateCollisionBaseline(baselineRows)).toMatchObject({
       champion: "trailing4",
       beatsSeasonal: true,
+    });
+  });
+
+  it("compares complete 13-week operating periods and excludes the latest week", () => {
+    const weeklyRows = Array.from({ length: 27 }, (_, index) => {
+      const week = new Date("2025-01-06T00:00:00Z");
+      week.setUTCDate(week.getUTCDate() + index * 7);
+      const currentPeriod = index >= 13 && index < 26;
+
+      return {
+        company_name: "Pilot Shop",
+        week_start: week.toISOString().slice(0, 10),
+        repair_orders: index === 26 ? 999 : currentPeriod ? 12 : 10,
+        insured_repair_orders: currentPeriod ? 10 : 8,
+        repair_value_cents:
+          index === 26 ? 999_000_00 : currentPeriod ? 150_000 : 100_000,
+        average_cycle_days: index === 26 ? 99 : currentPeriod ? 8 : 10,
+        cycle_time_observations: currentPeriod ? 12 : 10,
+      };
+    });
+
+    const dashboard = buildCollisionDashboard(
+      weeklyRows,
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+    );
+
+    expect(dashboard.recentPerformance).toMatchObject({
+      windowWeeks: 13,
+      currentStart: "2025-04-07",
+      currentEnd: "2025-07-06",
+      priorStart: "2025-01-06",
+      priorEnd: "2025-04-06",
+      workload: { current: 156, prior: 130, changePct: 20 },
+      repairValue: { current: 19_500, prior: 13_000, changePct: 50 },
+      cycleTime: {
+        current: 8,
+        prior: 10,
+        currentObservations: 156,
+        priorObservations: 130,
+        changePct: -20,
+      },
     });
   });
 });

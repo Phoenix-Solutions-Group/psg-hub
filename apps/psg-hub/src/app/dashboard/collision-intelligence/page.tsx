@@ -39,6 +39,12 @@ function formatDate(value: string | null) {
   }).format(new Date(`${value}T12:00:00Z`));
 }
 
+function formatChange(changePct: number | null) {
+  if (changePct === null) return "No prior-period baseline";
+  if (changePct === 0) return "Flat vs prior period";
+  return `${changePct > 0 ? "Up" : "Down"} ${Math.abs(changePct).toFixed(1)}% vs prior period`;
+}
+
 export default async function CollisionIntelligencePage() {
   const supabase = await createClient();
   const {
@@ -100,8 +106,12 @@ export default async function CollisionIntelligencePage() {
                         new Date(dashboard.repairFeed.fileModifiedAt),
                       )
                     : "not available"}
-                  ; repair arrivals end {formatDate(summary.latestWeek)};
-                  weather extends through{" "}
+                  ; repair arrivals end{" "}
+                  {formatDate(
+                    dashboard.repairFeed?.latestArrivalDate ??
+                      summary.latestWeek,
+                  )}
+                  ; weather extends through{" "}
                   {formatDate(dashboard.weather.latestMonth)}; completed-month
                   KDOT crashes extend through{" "}
                   {formatDate(dashboard.crashes.latestMonth)}.
@@ -158,6 +168,53 @@ export default async function CollisionIntelligencePage() {
               }
             />
           </div>
+
+          {dashboard.recentPerformance ? (
+            <section
+              aria-labelledby="recent-performance-heading"
+              className="space-y-3"
+            >
+              <div>
+                <h2
+                  id="recent-performance-heading"
+                  className="text-lg font-semibold"
+                >
+                  Recent operating trend
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {dashboard.recentPerformance.windowWeeks} completed source
+                  weeks, {formatDate(dashboard.recentPerformance.currentStart)}–
+                  {formatDate(dashboard.recentPerformance.currentEnd)}, compared
+                  with {formatDate(dashboard.recentPerformance.priorStart)}–
+                  {formatDate(dashboard.recentPerformance.priorEnd)}. The newest
+                  potentially partial source week is excluded.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <MetricCard
+                  label="Workload"
+                  value={`${dashboard.recentPerformance.workload.current.toLocaleString()} ROs`}
+                  detail={`${formatChange(dashboard.recentPerformance.workload.changePct)} · ${dashboard.recentPerformance.workload.prior.toLocaleString()} prior`}
+                />
+                <MetricCard
+                  label="Repair value"
+                  value={currency.format(
+                    dashboard.recentPerformance.repairValue.current,
+                  )}
+                  detail={`${formatChange(dashboard.recentPerformance.repairValue.changePct)} · ${currency.format(dashboard.recentPerformance.repairValue.prior)} prior`}
+                />
+                <MetricCard
+                  label="Average cycle time"
+                  value={
+                    dashboard.recentPerformance.cycleTime.current === null
+                      ? "—"
+                      : `${dashboard.recentPerformance.cycleTime.current.toFixed(1)} days`
+                  }
+                  detail={`${formatChange(dashboard.recentPerformance.cycleTime.changePct)} · ${dashboard.recentPerformance.cycleTime.currentObservations.toLocaleString()} completed ROs`}
+                />
+              </div>
+            </section>
+          ) : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <InsightListCard

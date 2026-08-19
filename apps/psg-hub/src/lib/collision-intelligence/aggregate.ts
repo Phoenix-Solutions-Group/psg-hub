@@ -149,6 +149,92 @@ function numberOf(value: Numeric): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function shiftDate(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function percentChange(current: number | null, prior: number | null) {
+  return current === null || prior === null || prior === 0
+    ? null
+    : (100 * (current - prior)) / prior;
+}
+
+function summarizePeriod(
+  rows: CollisionWeeklyRow[],
+  start: string,
+  endExclusive: string,
+) {
+  const period = rows.filter(
+    (row) => row.week_start >= start && row.week_start < endExclusive,
+  );
+  const repairOrders = period.reduce(
+    (sum, row) => sum + numberOf(row.repair_orders),
+    0,
+  );
+  const repairValue =
+    period.reduce((sum, row) => sum + numberOf(row.repair_value_cents), 0) /
+    100;
+  const cycleObservations = period.reduce(
+    (sum, row) => sum + numberOf(row.cycle_time_observations),
+    0,
+  );
+  const cycleDays = period.reduce(
+    (sum, row) =>
+      sum +
+      numberOf(row.average_cycle_days) * numberOf(row.cycle_time_observations),
+    0,
+  );
+
+  return {
+    repairOrders,
+    repairValue,
+    cycleObservations,
+    averageCycleDays: cycleObservations ? cycleDays / cycleObservations : null,
+  };
+}
+
+function recentPerformance(rows: CollisionWeeklyRow[]) {
+  const latestWeek = rows.at(-1)?.week_start;
+  if (!latestWeek) return null;
+
+  const currentStart = shiftDate(latestWeek, -13 * 7);
+  const priorStart = shiftDate(latestWeek, -26 * 7);
+  if (rows[0].week_start > priorStart) return null;
+
+  const current = summarizePeriod(rows, currentStart, latestWeek);
+  const prior = summarizePeriod(rows, priorStart, currentStart);
+
+  return {
+    windowWeeks: 13,
+    currentStart,
+    currentEnd: shiftDate(latestWeek, -1),
+    priorStart,
+    priorEnd: shiftDate(currentStart, -1),
+    workload: {
+      current: current.repairOrders,
+      prior: prior.repairOrders,
+      changePct: percentChange(current.repairOrders, prior.repairOrders),
+    },
+    repairValue: {
+      current: current.repairValue,
+      prior: prior.repairValue,
+      changePct: percentChange(current.repairValue, prior.repairValue),
+    },
+    cycleTime: {
+      current: current.averageCycleDays,
+      prior: prior.averageCycleDays,
+      currentObservations: current.cycleObservations,
+      priorObservations: prior.cycleObservations,
+      changePct: percentChange(
+        current.averageCycleDays,
+        prior.averageCycleDays,
+      ),
+    },
+  };
+}
+
 function modelError(actual: number[], predicted: number[]) {
   const absoluteErrors = actual.map((value, index) =>
     Math.abs(value - predicted[index]),
@@ -341,10 +427,14 @@ export function buildCollisionDashboard(
       firstWeek: weekly[0]?.week_start ?? null,
       latestWeek: weekly.at(-1)?.week_start ?? null,
     },
-    weeklySeries: weekly.slice(-52).map((row) => ({
-      week: row.week_start.slice(5),
-      orders: numberOf(row.repair_orders),
-    })),
+    recentPerformance: recentPerformance(weekly),
+    weeklySeries: [...forecastRows]
+      .sort((a, b) => a.week_start.localeCompare(b.week_start))
+      .slice(-52)
+      .map((row) => ({
+        week: row.week_start.slice(5),
+        orders: numberOf(row.repair_orders),
+      })),
     weatherSeries: weather.slice(-12).map((row) => ({
       month: row.month.slice(0, 7),
       score: numberOf(row.weighted_storm_demand_score),
