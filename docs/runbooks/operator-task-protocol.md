@@ -14,6 +14,19 @@ of it.
 
 This is a routing change only. It does **not** widen what we hand to humans.
 
+## Relationship to board escalation and public review
+
+The Board Escalation & Review Standard (PSG-1173) complements this runbook
+rather than replacing it. This runbook covers steps only a human operator can
+physically perform, such as vendor-console actions, legal sign-off, or payment
+approval. The board escalation standard also covers moments where Nick needs to
+make a business decision, answer a question, give input, or review something
+public/customer-facing before it goes live.
+
+When either policy applies, create a child issue assigned to Nick and block the
+parent task on that child issue. Keep the ask plain-language, self-contained,
+and specific about what Nick needs to do.
+
 ## Rule #1 still holds: never hand a human what an agent can do
 
 Route to Nick **only** for steps that an agent genuinely cannot perform. If an

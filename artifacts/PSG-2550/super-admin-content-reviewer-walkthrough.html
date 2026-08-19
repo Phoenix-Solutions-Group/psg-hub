@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Super Admin Walkthrough: Content Approvals Review Workspace</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #52606d;
+      --line: #d8dee6;
+      --paper: #ffffff;
+      --wash: #f5f7fa;
+      --accent: #0b5cab;
+      --accent-ink: #073d73;
+      --pass: #0f766e;
+      --warn: #9a3412;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--wash);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+    header {
+      border-bottom: 3px solid var(--accent);
+      padding-bottom: 18px;
+      margin-bottom: 26px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 34px 0 12px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 8px;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 19px;
+      letter-spacing: 0;
+    }
+    p, li { font-size: 16px; }
+    a { color: var(--accent); }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 8px 18px;
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .notice {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--accent);
+      padding: 16px 18px;
+      margin: 18px 0;
+    }
+    .warning { border-left-color: var(--warn); }
+    .success { border-left-color: var(--pass); }
+    code {
+      background: #eef2f6;
+      border: 1px solid #dde5ee;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 0.95em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      margin: 12px 0 18px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #eef4fb;
+      color: var(--accent-ink);
+    }
+    ol, ul { padding-left: 24px; }
+    .step {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 18px;
+      margin: 16px 0;
+    }
+    .expected {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: #f0fdfa;
+      border-left: 4px solid var(--pass);
+      color: #134e4a;
+    }
+    .sources {
+      color: var(--muted);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Super Admin Walkthrough: Content Approvals Review Workspace</h1>
+      <p>This is the rendered human-test guide for PSG operators testing the Content Approvals reviewer flow.</p>
+      <div class="meta">
+        <div><strong>Issue:</strong> PSG-2550</div>
+        <div><strong>Audience:</strong> PSG super admin or internal operator</div>
+        <div><strong>Last updated:</strong> August 4, 2026</div>
+        <div><strong>Status:</strong> Corrected HTML render for Nick review</div>
+      </div>
+    </header>
+
+    <section class="notice success">
+      <strong>Bottom line:</strong> use this walkthrough to test the corrected workspace-first Content Approvals experience as a PSG super admin. Create or choose one Review Workspace for one body shop, add documents, add reviewers, preview the reviewer experience, start the review, then confirm the reviewer can comment and submit a decision.
+    </section>
+
+    <h2>Direct Links</h2>
+    <ul>
+      <li><a href="https://home.psgweb.me/ops/bsm-content-approvals">Super admin Content Approvals screen</a></li>
+      <li>Reviewer link format after starting a review: <code>https://home.psgweb.me/review-workspace?invite=&lt;invite-token&gt;</code></li>
+      <li>Sample files in the repo: <code>artifacts/PSG-2550/sample-files/</code></li>
+    </ul>
+
+    <h2>What To Say First</h2>
+    <p>Content Approvals gives PSG one controlled place to send customer marketing work for approval. A super admin creates a private Review Workspace for one shop, adds the files or generated pages the customer needs to review, chooses the reviewers, and starts a secure review. The customer uses a private link and one-time code to add comments and approve or request changes.</p>
+    <p>Business value: PSG can review full content packages instead of chasing approvals through email. Each workspace is tied to one shop, which reduces the risk of showing the wrong content to the wrong customer. Decisions, comments, files, and versions stay auditable.</p>
+
+    <h2>Pre-Walkthrough Checklist</h2>
+    <ul>
+      <li>Sign in with a PSG operations account that has the <code>manage_bsm_content_approvals</code> permission.</li>
+      <li>Use one demo shop for the entire walkthrough.</li>
+      <li>Use demo-safe files only. Do not upload customer lists, insurance documents, credentials, invoices, or production records.</li>
+      <li>Keep one reviewer email available for the test. Use a safe internal or test inbox unless Nick approves a real customer invite.</li>
+      <li>Open the sample folder: <code>artifacts/PSG-2550/sample-files/</code>.</li>
+    </ul>
+
+    <h2>Current Upload Types To Test</h2>
+    <p>These are the file types currently accepted by the super-admin Content Approvals upload control. Each file must be under 25 MB.</p>
+    <table>
+      <thead>
+        <tr><th>Sample file</th><th>Type tested</th><th>Expected behavior</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>bsm-review-sample-proof.pdf</code></td><td>PDF</td><td>Uploads as a review document and opens from the proof link.</td></tr>
+        <tr><td><code>bsm-review-sample-mailer.docx</code></td><td>Word document, DOCX</td><td>Uploads as a review document and opens from the proof link or attachment behavior provided by the browser.</td></tr>
+        <tr><td><code>bsm-review-sample-landing.html</code></td><td>HTML</td><td>Uploads as a review document. The app stores HTML safely and opens the proof through the review link.</td></tr>
+        <tr><td><code>bsm-review-sample-copy.md</code></td><td>Markdown</td><td>Uploads as a document-type review file.</td></tr>
+        <tr><td><code>bsm-review-sample-copy.txt</code></td><td>Plain text</td><td>Uploads as a document-type review file.</td></tr>
+        <tr><td><code>bsm-review-sample-before-after.png</code></td><td>PNG image</td><td>Uploads and previews as an image.</td></tr>
+        <tr><td><code>bsm-review-sample-before-after.jpg</code></td><td>JPG image</td><td>Uploads and previews as an image.</td></tr>
+        <tr><td><code>bsm-review-sample-before-after.webp</code></td><td>WebP image</td><td>Uploads and previews as an image.</td></tr>
+      </tbody>
+    </table>
+    <section class="notice warning">
+      <strong>Important note for Nick:</strong> the lower-level review-workspace processing code has a contract for DOC files and HTML ZIP packages, but the current super-admin upload control does not expose DOC or ZIP upload as a testable path on this screen. Do not mark DOC or HTML ZIP as passed from this walkthrough until a visible upload path exists.
+    </section>
+
+    <h2>Human Test Walkthrough</h2>
+
+    <section class="step">
+      <h3>1. Open Content Approvals</h3>
+      <ol>
+        <li>Go to <a href="https://home.psgweb.me/ops/bsm-content-approvals">https://home.psgweb.me/ops/bsm-content-approvals</a>.</li>
+        <li>Confirm the page title says <strong>Content Approvals</strong>.</li>
+        <li>Confirm the page explains that each approval is managed as a <strong>Review Workspace</strong>.</li>
+        <li>In <strong>Shop</strong>, choose the demo shop.</li>
+      </ol>
+      <div class="expected">Expected result: the page shows workspace controls, reviewer controls, document controls, and a table named <strong>Workspace documents</strong>.</div>
+    </section>
+
+    <section class="step">
+      <h3>2. Create A Review Workspace</h3>
+      <ol>
+        <li>In <strong>Workspace title</strong>, enter a clear title, for example <code>Nick QA - August content review</code>.</li>
+        <li>In <strong>Reviewer instructions</strong>, enter a short instruction, for example <code>Please check the offer, phone number, and requested changes before approval.</code></li>
+        <li>Select <strong>Create workspace</strong>.</li>
+      </ol>
+      <div class="expected">Expected result: the new workspace is selected in <strong>Review Workspace</strong>, and the page shows a success message that the workspace is ready for documents and reviewers.</div>
+    </section>
+
+    <section class="step">
+      <h3>3. Add Reviewers</h3>
+      <ol>
+        <li>In <strong>Reviewer email</strong>, enter the test reviewer email.</li>
+        <li>In <strong>Reviewer name</strong>, enter the reviewer name if available.</li>
+        <li>Select <strong>Add reviewer</strong>.</li>
+        <li>If saved reviewer contacts appear, also test selecting one saved contact.</li>
+      </ol>
+      <div class="expected">Expected result: the selected reviewer appears as a selected reviewer row or chip. Removing the reviewer should also work.</div>
+    </section>
+
+    <section class="step">
+      <h3>4. Add The First Uploaded File</h3>
+      <ol>
+        <li>In <strong>Review title</strong>, enter <code>PDF proof review</code>.</li>
+        <li>In <strong>Context note for the customer</strong>, enter <code>Please confirm this proof is ready for customer-facing use.</code></li>
+        <li>Leave the source switch on <strong>File</strong>.</li>
+        <li>Choose <code>artifacts/PSG-2550/sample-files/bsm-review-sample-proof.pdf</code>.</li>
+        <li>Select <strong>Add document</strong>.</li>
+      </ol>
+      <div class="expected">Expected result: the document appears in <strong>Workspace documents</strong>, is attached to the selected Review Workspace, and enters edit mode so a super admin can adjust the title, note, or replacement file before reviewer submission.</div>
+    </section>
+
+    <section class="step">
+      <h3>5. Add A Generated Page</h3>
+      <ol>
+        <li>Select <strong>Generated page</strong>.</li>
+        <li>In <strong>Review title</strong>, enter <code>Generated landing page review</code>.</li>
+        <li>In <strong>Context note for the customer</strong>, enter <code>Please review this generated page before PSG schedules it.</code></li>
+        <li>In <strong>Generated page path</strong>, enter <code>/generated/demo-shop/august-offer</code>.</li>
+        <li>In <strong>Preview URL</strong>, enter a safe demo URL if one exists. Otherwise leave it blank.</li>
+        <li>In <strong>Source content ID</strong>, enter a demo ID if one exists. Otherwise leave it blank.</li>
+        <li>Select <strong>Attach</strong>.</li>
+      </ol>
+      <div class="expected">Expected result: the generated page appears in <strong>Workspace documents</strong> as a generated-page item.</div>
+    </section>
+
+    <section class="step">
+      <h3>6. Add The Remaining Sample Files</h3>
+      <ol>
+        <li>Repeat the file upload step for each sample file listed above.</li>
+        <li>Give each document a simple title that names the file type.</li>
+        <li>Add a customer context note.</li>
+        <li>Confirm each accepted file appears in <strong>Workspace documents</strong>.</li>
+      </ol>
+      <div class="expected">Expected result: PDF, DOCX, HTML, Markdown, text, PNG, JPG, and WebP each appear in the workspace document list. If any current sample file is rejected, record the exact file name and error message.</div>
+    </section>
+
+    <section class="step">
+      <h3>7. Edit A Document Before Submission</h3>
+      <ol>
+        <li>Find one uploaded document in <strong>Workspace documents</strong>.</li>
+        <li>Select <strong>Edit</strong>.</li>
+        <li>Change the title or context note.</li>
+        <li>For an uploaded file, choose a replacement file from the sample folder.</li>
+        <li>Select <strong>Save edit</strong>.</li>
+      </ol>
+      <div class="expected">Expected result: the document updates and the page shows that the edit was saved as the usable version.</div>
+    </section>
+
+    <section class="step">
+      <h3>8. Preview The Workspace</h3>
+      <ol>
+        <li>Confirm the Review Workspace is selected.</li>
+        <li>Select <strong>Preview read-only</strong>.</li>
+        <li>Review the document list shown in preview mode.</li>
+        <li>For at least one document with an <strong>Open proof</strong> link, open the proof.</li>
+      </ol>
+      <div class="expected">Expected result: preview mode says comments and decisions are not saved there. Documents show processing status and review status. Proof links open in a new tab when available.</div>
+    </section>
+
+    <section class="step">
+      <h3>9. Start The Review</h3>
+      <ol>
+        <li>Confirm the page does not show a blocker message.</li>
+        <li>Confirm at least one document is attached.</li>
+        <li>Confirm at least one reviewer is selected.</li>
+        <li>Select <strong>Start review</strong>.</li>
+      </ol>
+      <div class="expected">Expected result: the page shows <strong>Review started</strong>, lists how many documents were sent and how many reviewers were invited, and gives each reviewer a private <code>/review-workspace?invite=...</code> link and one-time code.</div>
+    </section>
+
+    <section class="step">
+      <h3>10. Open The Reviewer Experience</h3>
+      <ol>
+        <li>Copy one reviewer link from <strong>Review started</strong>.</li>
+        <li>Open the full production link: <code>https://home.psgweb.me/review-workspace?invite=&lt;invite-token&gt;</code>.</li>
+        <li>Enter the one-time code shown for that reviewer.</li>
+        <li>Select <strong>Open review</strong>.</li>
+      </ol>
+      <div class="expected">Expected result: the reviewer sees the private Body Shop Marketer Review workspace with the documents listed.</div>
+    </section>
+
+    <section class="step">
+      <h3>11. Review The Actual File</h3>
+      <ol>
+        <li>In the reviewer workspace, open at least one proof.</li>
+        <li>Confirm the proof content matches the file or generated page added by the super admin.</li>
+        <li>For image files, confirm the image renders in the review area.</li>
+        <li>For non-image files, confirm the proof link or embedded proof opens without showing private storage paths or internal error details.</li>
+      </ol>
+      <div class="expected">Expected result: the reviewer can inspect the actual proof content or proof link before making a decision.</div>
+    </section>
+
+    <section class="step">
+      <h3>12. Add A Private Comment</h3>
+      <ol>
+        <li>Select <strong>Comment on this document</strong> for the document being tested.</li>
+        <li>In <strong>Private comment</strong>, enter <code>Please update the offer wording before approval.</code></li>
+        <li>Select <strong>Add suggestion</strong>.</li>
+      </ol>
+      <div class="expected">Expected result: the comment appears in <strong>Private comments</strong> with a pin number. The comment remains part of the reviewer workspace.</div>
+    </section>
+
+    <section class="step">
+      <h3>13. Request Changes</h3>
+      <ol>
+        <li>Choose <strong>Request changes</strong>.</li>
+        <li>In <strong>Decision note</strong>, enter <code>The offer needs one wording update before approval.</code></li>
+        <li>Select <strong>Submit review</strong>.</li>
+      </ol>
+      <div class="expected">Expected result: the review becomes read-only after submit. If the review round is still active, the reviewer can use <strong>Reopen response</strong>.</div>
+    </section>
+
+    <section class="step">
+      <h3>14. Reopen And Approve</h3>
+      <ol>
+        <li>Select <strong>Reopen response</strong>.</li>
+        <li>Choose <strong>Approve</strong>.</li>
+        <li>Update the decision note if needed.</li>
+        <li>Select <strong>Submit review</strong> again.</li>
+      </ol>
+      <div class="expected">Expected result: the revised submission is saved. This confirms that a reviewer can revise while the round remains open.</div>
+    </section>
+
+    <section class="step">
+      <h3>15. Confirm Super Admin Tracking</h3>
+      <ol>
+        <li>Return to <a href="https://home.psgweb.me/ops/bsm-content-approvals">https://home.psgweb.me/ops/bsm-content-approvals</a>.</li>
+        <li>Confirm the workspace document table shows comment counts and the latest decision.</li>
+        <li>Confirm the workspace row reflects the active review state.</li>
+      </ol>
+      <div class="expected">Expected result: PSG staff can see customer feedback and decision status without relying on an email thread.</div>
+    </section>
+
+    <section class="step">
+      <h3>16. Remove Demo Documents</h3>
+      <ol>
+        <li>Use this only for demo records.</li>
+        <li>In <strong>Workspace documents</strong>, choose a demo item.</li>
+        <li>Select <strong>Remove</strong>.</li>
+        <li>Confirm the remove action.</li>
+      </ol>
+      <div class="expected">Expected result: the item leaves the active workspace document list.</div>
+    </section>
+
+    <h2>Features Covered</h2>
+    <ul>
+      <li>Super-admin access gate for Content Approvals.</li>
+      <li>Shop-scoped workspace selection and Review Workspace creation.</li>
+      <li>Reviewer instructions, saved reviewer contact selection, and new reviewer entry.</li>
+      <li>File upload review documents and generated-page review documents.</li>
+      <li>Required title, customer context note, and Review Workspace before attaching documents.</li>
+      <li>File size and file type validation.</li>
+      <li>Edit title, note, and replacement file before submission.</li>
+      <li>Read-only workspace preview and proof opening.</li>
+      <li>Start review, reviewer invite link, and one-time code.</li>
+      <li>Reviewer secure access, document list, proof inspection, private comments, change request, approval, and resubmission.</li>
+      <li>Admin tracking of comments and latest decision.</li>
+      <li>Demo cleanup by removing records from the active library.</li>
+    </ul>
+
+    <h2>Pass Or Fail Checklist</h2>
+    <ul>
+      <li>The Content Approvals link opens for a PSG super admin.</li>
+      <li>A Review Workspace can be created for one demo shop.</li>
+      <li>At least one reviewer can be added.</li>
+      <li>PDF, DOCX, HTML, Markdown, text, PNG, JPG, and WebP sample files can each be tested through the current upload control.</li>
+      <li>A generated-page review item can be attached.</li>
+      <li>Preview read-only works and does not save comments or decisions.</li>
+      <li>Start review produces a reviewer link and one-time code.</li>
+      <li>The reviewer can open the review with the link and code.</li>
+      <li>The reviewer can inspect the actual proof or proof link.</li>
+      <li>The reviewer can add a private comment.</li>
+      <li>The reviewer can request changes after adding a comment.</li>
+      <li>The reviewer can reopen and resubmit while the round remains active.</li>
+      <li>The super admin can see the resulting comments and latest decision.</li>
+      <li>Demo records can be removed from the active list after testing.</li>
+    </ul>
+
+    <h2>Known Gap Before Public Customer Rollout</h2>
+    <section class="notice warning">
+      The current super-admin screen does not expose DOC upload or HTML ZIP upload, even though the lower-level processing contract includes those file kinds. Nick should not sign off that DOC and HTML ZIP are customer-ready from this walkthrough alone. They need either a visible upload path or a separate release note saying those formats are deferred.
+    </section>
+
+    <h2>Safety Rules</h2>
+    <ul>
+      <li>Do not upload real customer private documents.</li>
+      <li>Do not use a real customer email unless Nick approves that customer-facing test.</li>
+      <li>Do not share invite links or one-time codes outside the test group.</li>
+      <li>Do not publish this as a customer-facing guide until Nick approves it.</li>
+    </ul>
+
+    <h2>Sources Checked</h2>
+    <p class="sources">Reference.md; docs/runbooks/graphify-codebase-graph.md; Graphify query for content reviewer, content approvals, workspace, file upload, and review routes; PSG-2605 completed requirements summary; apps/psg-hub/src/app/ops/bsm-content-approvals/page.tsx; apps/psg-hub/src/components/ops/bsm-content-approval-manager.tsx; apps/psg-hub/src/lib/bsm/content-approvals-shared.ts; apps/psg-hub/src/lib/bsm/review-workspace-processing.ts; apps/psg-hub/src/app/review-workspace/reviewer-workspace.tsx.</p>
+  </main>
+</body>
+</html>

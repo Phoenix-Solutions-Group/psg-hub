@@ -15,6 +15,7 @@ import {
   scanCarrierDisclosure,
   scanAbsoluteCost,
   scanInsuranceImplication,
+  scanTestimonials,
   type VerifiedFacts,
 } from "../index";
 
@@ -128,6 +129,65 @@ describe("checkClaimIntegrity — unbacked claims (spec §7)", () => {
     });
     expect(res.verdict).toBe("reject");
     expect(res.violations[0]?.code).toBe("unbacked_claim");
+  });
+});
+
+describe("SOP Section 9 — no fake testimonials or unverified review claims", () => {
+  it("rejects a testimonial-shaped quote that is not in the approved review log", () => {
+    const res = checkClaimIntegrity({
+      text: '"They handled everything perfectly." - a happy customer',
+      manifest: [],
+      facts: baseFacts,
+    });
+    expect(res.verdict).toBe("reject");
+    expect(res.hardFail).toBe(true);
+    expect(res.violations.some((v) => v.code === "unapproved_testimonial")).toBe(true);
+  });
+
+  it("allows a testimonial quote only when it matches an approved logged review", () => {
+    const res = checkClaimIntegrity({
+      text: '"They made my car look brand new." - Maria G.',
+      manifest: [
+        {
+          claimText: "They made my car look brand new.",
+          field: "approvedReviewQuotes",
+          value: "They made my car look brand new.",
+        },
+      ],
+      facts: baseFacts,
+    });
+    expect(res.verdict).toBe("ship");
+    expect(res.violations).toHaveLength(0);
+  });
+
+  it("does not treat ordinary quoted copy as a customer testimonial", () => {
+    expect(scanTestimonials('Tap "call now" to reach the shop.', baseFacts.approvedReviewQuotes)).toHaveLength(0);
+  });
+
+  it("rejects review-rating claims without a verified, linkable rating", () => {
+    const res = checkClaimIntegrity({
+      text: "Our 4.9-star Google rating gives drivers confidence.",
+      manifest: [],
+      facts: baseFacts,
+    });
+    expect(res.verdict).toBe("reject");
+    expect(res.violations.some((v) => v.code === "unverified_rating")).toBe(true);
+  });
+
+  it("allows a rating claim when it is verified, linkable, and not over-claimed", () => {
+    const res = checkClaimIntegrity({
+      text: "Our 4.8-star Google rating gives drivers confidence.",
+      manifest: [{ claimText: "4.8-star Google rating", field: "rating", value: "4.8" }],
+      facts: verifiedFactsSchema.parse({
+        ...baseFacts,
+        rating: {
+          value: 4.8,
+          reviewCount: 123,
+          profileUrl: "https://example.com/google-profile",
+        },
+      }),
+    });
+    expect(res.verdict).toBe("ship");
   });
 });
 

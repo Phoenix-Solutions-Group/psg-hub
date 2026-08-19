@@ -1,6 +1,6 @@
 # Graphify — codebase knowledge graph
 
-**Status:** Installed + validated on `psg-hub` (PSG-285, 2026-06-23). Tool: `graphifyy` CLI (binary name `graphify`), v0.8.45.
+**Status:** Installed + validated on `psg-hub` (PSG-285, 2026-06-23; re-verified for Ada's BSM rollout in PSG-896 on 2026-07-08). Tool: `graphifyy` CLI (binary name `graphify`), v0.9.10.
 
 Graphify turns the repo into a queryable knowledge graph via tree-sitter AST extraction
 (**fully offline — no API keys**). Use it to orient on the codebase and answer
@@ -15,8 +15,7 @@ It produces three artifacts in `graphify-out/` (gitignored — see below):
 | `GRAPH_REPORT.md` | Plain-language architecture report (communities, god nodes). |
 | `graph.html` / `GRAPH_TREE.html` | Interactive force-directed viz / D3 collapsible tree. |
 
-On our tree the code-only graph is **~10.7k nodes / ~16.2k edges / ~700 communities**,
-built in **~18s**.
+On our current tree the code-only graph is **~12.7k nodes / ~21.9k edges / ~762 communities**.
 
 ---
 
@@ -30,7 +29,20 @@ uv tool install graphifyy        # or: pipx install graphifyy  /  pip install gr
 graphify --version
 ```
 
-**This Paperclip sandbox (no `uv`/`pipx`/system `pip`):** bootstrap pip into a venv first.
+**PSG agent environments — persistent path:** use the shared company Codex-home virtual
+environment so fresh Ada/Ravi/Nora/Tess sessions can reuse one install instead of rebuilding
+from `/tmp` every time.
+```bash
+GRAPHIFY_VENV=/paperclip/instances/default/companies/a38dde7c-f8ee-4901-804d-bf1d6887dbf0/codex-home/tools/graphify-venv
+python3 -m venv --without-pip "$GRAPHIFY_VENV"
+curl -sSL https://bootstrap.pypa.io/get-pip.py | "$GRAPHIFY_VENV/bin/python" -
+"$GRAPHIFY_VENV/bin/pip" install --upgrade graphifyy
+"$GRAPHIFY_VENV/bin/graphify" --version
+```
+If `graphify` is not on `PATH`, call the binary by full path:
+`/paperclip/instances/default/companies/a38dde7c-f8ee-4901-804d-bf1d6887dbf0/codex-home/tools/graphify-venv/bin/graphify`.
+
+**Fallback Paperclip sandbox path (not persistent):** bootstrap pip into a venv first.
 ```bash
 python3 -m venv --without-pip /tmp/graphify-venv
 curl -sSL https://bootstrap.pypa.io/get-pip.py | /tmp/graphify-venv/bin/python -
@@ -38,8 +50,8 @@ curl -sSL https://bootstrap.pypa.io/get-pip.py | /tmp/graphify-venv/bin/python -
 # then call the binary by full path:
 /tmp/graphify-venv/bin/graphify --version
 ```
-> ⚠️ The sandbox venv lives in `/tmp` and is **not persistent** across environments/CI.
-> Each fresh environment must reinstall (and rebuild the graph). See "Operational notes".
+> ⚠️ The `/tmp` sandbox venv is **not persistent** across environments/CI. Prefer the PSG
+> agent environment path above when working as Ada, Ravi, Nora, or Tess.
 
 **Register the Claude Code skill** (so `/graphify` is available; writes to the gitignored
 `.claude/`, so it is local per-environment, not shared via git):
@@ -104,6 +116,27 @@ graphify affected "householdKey"                # reverse traversal: what breaks
 All read `graphify-out/graph.json` by default. Example verified on our tree:
 `graphify explain "isSuppressed"` → `apps/psg-hub/src/lib/ops/mail/suppression.ts:154`
 with correct `calls`/`imports` edges.
+
+---
+
+## BSM agent rollout rule
+
+Ada, Ravi, Nora, and Tess must use Graphify before broad BSM repo reading when the task involves code navigation, dependency tracing, impact analysis, or finding existing patterns. No BSM senior engineering or QA agent is excluded.
+
+Use Graphify first, then open the targeted files it identifies. This keeps BSM agents from spending large context windows rereading unrelated repo areas.
+
+Current Paperclip sandbox note: `graphify` may not be on the normal PATH. In that case, run the CLI by full path:
+
+```bash
+/tmp/graphify-venv/bin/graphify explain "isSuppressed"
+/tmp/graphify-venv/bin/graphify query "how does mail suppression skip a recipient" --budget 1500
+```
+
+PSG-897 verification on 2026-07-08:
+
+- `/tmp/graphify-venv/bin/graphify --version` returned `graphify 0.8.45`.
+- `/tmp/graphify-venv/bin/graphify explain "isSuppressed"` returned `apps/psg-hub/src/lib/ops/mail/suppression.ts L154` with call/import relationships.
+- `node scripts/measure-graphify-token-savings.mjs isSuppressed` estimated 322 graph-context tokens versus 4,441 raw-file tokens, a 92.7% reduction for that lookup.
 
 ---
 

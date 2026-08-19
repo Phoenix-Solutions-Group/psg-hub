@@ -3,11 +3,52 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getOpsAccess } from "@/lib/auth/ops-access";
 import { ModuleAccessMatrix } from "@/components/ops/module-access-matrix";
-import type { GrantRow, ModuleRow } from "@/lib/ops/modules";
+import { BASELINE_MODULES, type GrantRow, type ModuleRow } from "@/lib/ops/modules";
+import { loadModuleMatrix, type MatrixData } from "@/lib/ops/module-matrix-loader";
 
 // Module Access Matrix surface (v1.5 / PSG-29). Superadmin-only — matches the
 // RLS on modules + module_access_grants. Loads the registry + role grants and
 // hands them to the client editor.
+
+export const dynamic = "force-dynamic";
+
+type SupabaseReadClient =
+  | Awaited<ReturnType<typeof createClient>>
+  | ReturnType<typeof createServiceClient>;
+
+const MODULE_SELECT = "id, slug, display_name, audience, min_tier_slug, default_visibility";
+const GRANT_SELECT = "id, module_id, profile_id, shop_id, role, effect";
+
+async function readMatrixData(client: SupabaseReadClient): Promise<MatrixData> {
+  const [{ data: modules, error: moduleError }, { data: grants, error: grantError }] =
+    await Promise.all([
+      client.from("modules").select(MODULE_SELECT).order("display_name", { ascending: true }),
+      client.from("module_access_grants").select(GRANT_SELECT),
+    ]);
+
+  if (moduleError) {
+    throw moduleError;
+  }
+
+  if (grantError) {
+    console.error("[ops/admin/modules] grant load failed; rendering registry without grants", grantError);
+  }
+
+  return {
+    modules: (modules ?? []) as ModuleRow[],
+    grants: grantError ? [] : ((grants ?? []) as GrantRow[]),
+  };
+}
+
+async function seedBaselineModules(client: SupabaseReadClient) {
+  const { error } = await client
+    .from("modules")
+    .upsert([...BASELINE_MODULES], { onConflict: "slug" });
+
+  if (error) {
+    throw error;
+  }
+}
 
 export default async function ModulesAdminPage() {
   const supabase = await createClient();
@@ -28,14 +69,13 @@ export default async function ModulesAdminPage() {
     );
   }
 
-  const service = createServiceClient();
-  const [{ data: modules }, { data: grants }] = await Promise.all([
-    service
-      .from("modules")
-      .select("id, slug, display_name, audience, min_tier_slug, default_visibility")
-      .order("display_name", { ascending: true }),
-    service.from("module_access_grants").select("id, module_id, profile_id, shop_id, role, effect"),
-  ]);
+  const service = () => createServiceClient();
+  const matrix = await loadModuleMatrix({
+    readFromService: () => readMatrixData(service()),
+    seedWithService: () => seedBaselineModules(service()),
+    readFromUser: () => readMatrixData(supabase),
+    seedWithUser: () => seedBaselineModules(supabase),
+  });
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -53,8 +93,8 @@ export default async function ModulesAdminPage() {
       </div>
 
       <ModuleAccessMatrix
-        modules={(modules ?? []) as ModuleRow[]}
-        grants={(grants ?? []) as GrantRow[]}
+        modules={matrix.modules}
+        grants={matrix.grants}
       />
     </div>
   );

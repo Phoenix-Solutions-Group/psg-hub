@@ -34,7 +34,7 @@ export const INTAKE_BUCKET = "pilot-intake";
 // server-only (imports the service client); these are duplicated intentionally
 // for client-side UX validation, not as the security boundary.
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const FILE_NAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
+const UNSAFE_FILE_NAME_RE = /[\/\\\u0000-\u001f\u007f]/;
 const MAX_SEGMENT = 100;
 
 /** Validate a kebab-case slug. Returns an error message, or null when valid. */
@@ -50,8 +50,8 @@ export function validateSlug(label: string, value: string): string | null {
 export function validateFileName(value: string): string | null {
   if (value.length === 0) return "A file is required";
   if (value.length > MAX_SEGMENT) return "File name is too long";
-  if (value.includes("..") || !FILE_NAME_RE.test(value)) {
-    return "File name must be a single safe segment (letters, digits, dot, dash, underscore — no spaces). Rename the file and retry.";
+  if (value === "." || value === ".." || UNSAFE_FILE_NAME_RE.test(value)) {
+    return "File name must be a single safe segment without slashes or control characters. Rename the file and retry.";
   }
   return null;
 }

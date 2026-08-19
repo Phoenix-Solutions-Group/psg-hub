@@ -40,3 +40,7 @@ export function decideDashboardAccess(access: DashboardAccess): "pass" | "no-sho
   if (isStaff) return "pass";
   return access.shopIds.length > 0 ? "pass" : "no-shop";
 }
+
+export function postLoginPathFor(access: Pick<DashboardAccess, "role">): "/ops" | "/dashboard" {
+  return access.role === "psg_internal" || access.role === "psg_superadmin" ? "/ops" : "/dashboard";
+}

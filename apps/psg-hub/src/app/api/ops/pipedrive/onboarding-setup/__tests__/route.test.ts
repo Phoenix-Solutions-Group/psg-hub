@@ -21,10 +21,12 @@ vi.mock("@/lib/pipedrive/projects", async (importActual) => {
 // PSG-607 — recurring actions (`recurring-qa-smoke`, `recurring-run`). Stub the heavy live
 // helpers; keep the real resolveRecurringBoardConfig so the env-pair/fallback is exercised.
 const { runRecurringQaSmoke } = vi.hoisted(() => ({ runRecurringQaSmoke: vi.fn() }));
+const { runProposalQaSmoke } = vi.hoisted(() => ({ runProposalQaSmoke: vi.fn() }));
 const { activeRecurringAccounts, runRecurringCycle } = vi.hoisted(() => ({
   activeRecurringAccounts: vi.fn(),
   runRecurringCycle: vi.fn(),
 }));
+vi.mock("@/lib/pipedrive/proposal-qa-smoke", () => ({ runProposalQaSmoke }));
 vi.mock("@/lib/pipedrive/recurring-qa-smoke", () => ({ runRecurringQaSmoke }));
 vi.mock("@/lib/pipedrive/recurring-accounts", async (importActual) => {
   const actual =
@@ -227,6 +229,30 @@ describe("POST /api/ops/pipedrive/onboarding-setup — recurring-qa-smoke (PSG-6
     expect(res.status).toBe(503);
     expect(await res.json()).toMatchObject({ reason: "board_not_configured" });
     expect(runRecurringQaSmoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/ops/pipedrive/onboarding-setup — proposal-qa-smoke (PSG-2448)", () => {
+  beforeEach(() => {
+    runProposalQaSmoke.mockResolvedValue({
+      allChecksPass: true,
+      dealId: 42,
+      createdDraftIds: ["draft-1"],
+      cleanup: { dealDeleted: true },
+    });
+  });
+
+  it("200 returns fake-deal proposal automation evidence without exposing secrets", async () => {
+    const res = await POST(makeReq({ action: "proposal-qa-smoke", runTag: "tess" }, SECRET));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      evidence: { dealId: 42, createdDraftIds: ["draft-1"] },
+    });
+    expect(runProposalQaSmoke).toHaveBeenCalledWith({
+      companyDomain: null,
+      runTag: "tess",
+    });
   });
 });
 

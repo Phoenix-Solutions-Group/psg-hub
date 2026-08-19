@@ -20,3 +20,22 @@ export type { EnvelopeSource, ImportOptions } from "./send-history-import";
 // and suppression resolve to byte-identical household / recipient keys.
 export { canonicalAddress, householdKey, normalizePersonName, recipientHash } from "./household";
 export type { HashOptions } from "./household";
+export {
+  dateOnly,
+  evaluateDirectMailEligibility,
+  evaluateEligibilityBatch,
+  extractRoCompletedAt,
+  hasOpenSurveyAlert,
+  letterKindForProduct,
+  periodKeyFor,
+  printableReasons,
+} from "./eligibility";
+export type {
+  EligibilityBatch,
+  EligibilityCustomer,
+  EligibilityDecision,
+  IneligibleReason,
+  LetterKind,
+  NonPrintableReason,
+  SurveyAlert,
+} from "./eligibility";

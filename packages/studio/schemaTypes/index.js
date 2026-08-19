@@ -86,7 +86,7 @@ const productionMailTemplate = {
       type: 'string',
       title: 'Product',
       description: 'Which PSG production piece this template renders.',
-      options: {list: ['thank_you', 'warranty', 'envelope']},
+      options: {list: ['thank_you', 'warranty', 'envelope', 'service_recovery', 'self_mailer']},
       validation: (Rule) => Rule.required(),
     },
     {

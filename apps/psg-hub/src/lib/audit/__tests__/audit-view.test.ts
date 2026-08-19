@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AUDIT_ACTIONS } from "@/lib/audit/access-audit";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import {
   auditActionLabel,
   auditCategory,

@@ -81,6 +81,16 @@ describe("gateGeneratedAsset", () => {
     expect(gated.result.hardFail).toBe(true);
     expect(gated.result.violations.some((v) => v.code === "competitor_mention")).toBe(true);
   });
+
+  it("HARD-FAILs an invented testimonial even when the claims manifest is clean", () => {
+    const asset = backedAsset();
+    asset.body += '\n\n"They handled everything perfectly." - a happy customer';
+    const gated = gateGeneratedAsset(asset, facts);
+    expect(gated.result.verdict).toBe("reject");
+    expect(gated.result.hardFail).toBe(true);
+    expect(gated.result.violations.some((v) => v.code === "unapproved_testimonial")).toBe(true);
+    expect(isShippable(gated)).toBe(false);
+  });
 });
 
 describe("toContentItemDraft", () => {

@@ -69,6 +69,8 @@ export function templateContentHash(template: MailTemplate): string {
     frontHtml: template.frontHtml ?? null,
     backHtml: template.backHtml ?? null,
     bodyHtml: template.bodyHtml ?? null,
+    insideHtml: template.insideHtml ?? null,
+    outsideHtml: template.outsideHtml ?? null,
     size: template.size ?? null,
     color: template.color ?? null,
   });
@@ -131,6 +133,62 @@ export const SAMPLE_MERGE_DATA: MailMergeData = {
     warrantyTerm: "for as long as you own the vehicle",
   },
 };
+
+/**
+ * Governance-demo proof data for screenshot capture. This is still fake demo
+ * data, but it matches the approved Riverside/Maria capture frame so the proof
+ * screen can be captured without pretending the fixed sample is a customer row.
+ */
+export const RIVERSIDE_DEMO_MERGE_DATA: MailMergeData = {
+  customer: {
+    firstName: "Maria",
+    lastName: "Alvarez",
+    vehicle: "2022 Toyota Camry",
+    vehicleShort: "Camry",
+    serviceDate: "2026-07-08",
+    letterDate: "July 2026",
+    addressLine1: "185 Berry St Ste 6100",
+    city: "San Francisco",
+    state: "CA",
+    zip: "94107",
+    surveySecurityCode: "RIV-4821",
+    surveyId: "RIV-SID-90042",
+    roNumber: "RIV-RO-10042",
+  },
+  company: {
+    name: "Riverside Collision",
+    phone: "(555) 014-7821",
+    email: "service@riversidecollision.example",
+    websiteUrl: "riversidecollision.example",
+    city: "San Francisco",
+    state: "CA",
+  },
+  program: {
+    greeting: "We truly appreciate your business.",
+    footer: "Riverside Collision ·",
+    logo: "https://cdn.example/riverside-collision.png",
+    addressLine1: "2400 Harbor Drive",
+    addressLine2: "San Francisco, CA 94107",
+    ownerName: "Pat Morgan",
+    ownerFirstName: "Pat",
+    ownerTitle: "Owner",
+    ownerSignatureUrl: "https://cdn.example/riverside-owner-signature.png",
+    ownerDirectLine: "(555) 014-7822",
+    surveyUrl: "www.theacrb.com",
+    tagline: "We keep our customers by keeping our customers satisfied",
+    pieceCode: "PS682",
+    jobNumber: "RIV-1042.07",
+    hasWarranty: "true",
+    warrantyTerm: "for as long as you own the vehicle",
+  },
+};
+
+export const TEMPLATE_PROOF_SEEDS = ["sample", "riverside"] as const;
+export type TemplateProofSeed = (typeof TEMPLATE_PROOF_SEEDS)[number];
+
+export function templateProofDataForSeed(seed: string | null | undefined): MailMergeData {
+  return seed === "riverside" ? RIVERSIDE_DEMO_MERGE_DATA : SAMPLE_MERGE_DATA;
+}
 
 /** A rendered proof of a template: merged HTML surfaces + unresolved tokens. */
 export interface TemplateProof {

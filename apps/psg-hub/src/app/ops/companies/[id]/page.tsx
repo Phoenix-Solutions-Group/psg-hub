@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
 import { CompanyDetailForm } from "@/components/ops/company-detail-form";
+import { ApprovedContentArchiveTable } from "@/components/dashboard/approved-content-archive-table";
+import { listApprovedContentArchiveRows } from "@/lib/bsm/approved-content-archive";
 
 type CompanyAddress = {
   line1?: string;
@@ -62,12 +64,13 @@ export default async function CompanyDetailPage({
   if (!company) notFound();
 
   // Summary counts for the sub-module cards.
-  const [{ count: employeeCount }, { count: programCount }] = await Promise.all([
+  const [{ count: employeeCount }, { count: programCount }, approvedArchive] = await Promise.all([
     service.from("employees").select("id", { count: "exact", head: true }).eq("company_id", id),
     service
       .from("company_programs")
       .select("id", { count: "exact", head: true })
       .eq("company_id", id),
+    company.shop_id ? listApprovedContentArchiveRows(service, company.shop_id, 25) : Promise.resolve([]),
   ]);
 
   return (
@@ -109,6 +112,16 @@ export default async function CompanyDetailPage({
           </p>
         </a>
       </div>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="font-heading text-lg font-semibold">Approved Content Archive</h2>
+          <p className="text-sm text-muted-foreground">
+            PSG can find this customer&apos;s approved files and generated pages here.
+          </p>
+        </div>
+        <ApprovedContentArchiveTable rows={approvedArchive} />
+      </section>
     </div>
   );
 }

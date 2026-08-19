@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { REPORTS, REPORTS_BY_SLUG, getReport, reportsForBatch } from "../registry";
 import { BATCHES } from "../types";
 
-// The exact slug set is frozen by PLANNING.md (the public report ids).
+// The base 27 slugs are frozen by PLANNING.md; call-tracking-summary is the
+// first paid-media extension added for first-batch BSM call tracking.
 const EXPECTED_SLUGS = [
   // volume-invoicing (5)
   "processing-recap",
@@ -35,11 +36,13 @@ const EXPECTED_SLUGS = [
   "unresolved-issue",
   "referral-noted",
   "referral-comparison",
+  // paid-media
+  "call-tracking-summary",
 ];
 
 describe("reports registry", () => {
-  it("registers exactly the 26 (+1) named reports", () => {
-    expect(REPORTS).toHaveLength(27);
+  it("registers the 26 (+1) named reports plus the paid-media call report", () => {
+    expect(REPORTS).toHaveLength(28);
     expect(new Set(REPORTS.map((r) => r.slug))).toEqual(new Set(EXPECTED_SLUGS));
   });
 

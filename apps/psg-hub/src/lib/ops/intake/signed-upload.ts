@@ -19,7 +19,7 @@ export const PILOT_INTAKE_BUCKET = "pilot-intake";
 // Path convention: "{companySlug}/{shopSlug}/{fileName}". Slugs are lowercase
 // kebab (matches public.shops.slug); the file name is a single safe segment.
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const FILE_NAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
+const UNSAFE_FILE_NAME_RE = /[\/\\\u0000-\u001f\u007f]/;
 const MAX_SEGMENT = 100;
 
 export type SignedUploadInput = {
@@ -65,7 +65,7 @@ function requireSlug(label: string, value: unknown): string {
 /**
  * Build + validate the storage object path from caller input. Rejects anything
  * that is not a clean "{companySlug}/{shopSlug}/{fileName}" triple — no path
- * traversal ("..", "/", "\"), no leading dot, no control chars — so the minted
+ * separators ("/", "\"), control chars, or dot-only path segments — so the minted
  * token can never escape the bucket prefix. Pure; throws IntakePathError on bad input.
  */
 export function buildIntakePath(input: SignedUploadInput): string {
@@ -79,9 +79,9 @@ export function buildIntakePath(input: SignedUploadInput): string {
   if (fileName.length > MAX_SEGMENT) {
     throw new IntakePathError("fileName is too long");
   }
-  if (fileName.includes("..") || !FILE_NAME_RE.test(fileName)) {
+  if (fileName === "." || fileName === ".." || UNSAFE_FILE_NAME_RE.test(fileName)) {
     throw new IntakePathError(
-      "fileName must be a single safe segment (letters, digits, dot, dash, underscore)",
+      "fileName must be a single safe segment without slashes or control characters",
     );
   }
 
