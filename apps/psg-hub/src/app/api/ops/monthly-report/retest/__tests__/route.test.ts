@@ -121,6 +121,61 @@ describe("POST /api/ops/monthly-report/retest", () => {
     );
   });
 
+  it("can redirect retest emails to an internal PSG recipient after auth", async () => {
+    const res = await POST(
+      req(
+        SECRET,
+        "https://hub.psgweb.me/api/ops/monthly-report/retest?recipient=Nick@PhoenixSolutionsGroup.net"
+      )
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.recipientOverride).toBe(true);
+
+    const deps = lastDeps();
+    const message = deps.buildReportEmail(
+      {
+        id: "demo-shop",
+        name: "Demo Body Shop",
+        ownerEmail: "demo-owner@example.com",
+      },
+      "2026-06",
+      "https://hub.psgweb.me/api/reports/demo-shop/2026-06/download"
+    );
+    expect(message.to).toBe("nick@phoenixsolutionsgroup.net");
+  });
+
+  it("rejects non-PSG recipient overrides before doing report work", async () => {
+    const res = await POST(
+      req(SECRET, "https://hub.psgweb.me/api/ops/monthly-report/retest?recipient=owner@example.com")
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_internal_recipient" });
+    expect(runMonthlyReports).not.toHaveBeenCalled();
+  });
+
+  it("uses shop owner emails when no retest recipient override is supplied", async () => {
+    const res = await POST(req(SECRET));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.recipientOverride).toBe(false);
+
+    const deps = lastDeps();
+    const message = deps.buildReportEmail(
+      {
+        id: "demo-shop",
+        name: "Demo Body Shop",
+        ownerEmail: "demo-owner@example.com",
+      },
+      "2026-06",
+      "https://hub.psgweb.me/api/reports/demo-shop/2026-06/download"
+    );
+    expect(message.to).toBe("demo-owner@example.com");
+  });
+
   it("returns sanitized evidence only", async () => {
     const res = await POST(req(SECRET));
     const body = await res.json();

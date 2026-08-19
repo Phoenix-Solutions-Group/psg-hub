@@ -56,6 +56,15 @@ function configured(): boolean {
   );
 }
 
+function recipientOverride(request: Request): string | null {
+  const email = new URL(request.url).searchParams.get("recipient")?.trim().toLowerCase();
+  if (!email) return null;
+  if (!/^[^@\s]+@phoenixsolutionsgroup\.net$/.test(email)) {
+    throw new Error("invalid_internal_recipient");
+  }
+  return email;
+}
+
 function redact(raw: string | null | undefined): string {
   const redacted = sanitizeLastError(raw)
     .replace(/https?:\/\/\S+/gi, "[url]")
@@ -170,6 +179,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "report_not_configured" }, { status: 503 });
   }
 
+  let overrideRecipient: string | null = null;
+  try {
+    overrideRecipient = recipientOverride(request);
+  } catch {
+    return NextResponse.json({ error: "invalid_internal_recipient" }, { status: 400 });
+  }
+
   const service = createServiceClient();
   const { start, end } = monthWindow(PERIOD);
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
@@ -200,7 +216,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     force: false,
     claimForSend: (shopId, period) => claimReport(service, shopId, period),
     markEmailed: (shopId, period) => markEmailed(service, shopId, period),
-    buildReportEmail: (shop, period, url) => buildReportEmail(shop, period, url),
+    buildReportEmail: (shop, period, url) =>
+      buildReportEmail(
+        overrideRecipient ? { ...shop, ownerEmail: overrideRecipient } : shop,
+        period,
+        url
+      ),
     sendEmail: (message) => sendEmail(message),
     downloadUrl: (shopId, period) => `${appUrl}/api/reports/${shopId}/${period}/download`,
     pdfKey,
@@ -210,6 +231,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     period: PERIOD,
     window: { start, end },
     force: false,
+    recipientOverride: Boolean(overrideRecipient),
     targetShops: [...TARGET_SHOP_NAMES],
     counts: result.counts,
     results: result.results.map(publicResult),
