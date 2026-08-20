@@ -5,6 +5,18 @@ import { createServiceClient } from "@/lib/supabase/service";
 
 const destination = "/dashboard/collision-intelligence/review";
 const canonicalKeyPattern = /^[a-z0-9]+(?: [a-z0-9]+)*$/;
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function canonicalKey(name: string) {
+  return name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
 
 function text(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -46,8 +58,7 @@ export async function POST(request: Request) {
 
   const sourceLabel = text(formData, "source_label_normalized");
   const action = text(formData, "action");
-  const canonicalKey = text(formData, "canonical_insurer_key");
-  const canonicalName = text(formData, "canonical_insurer_name");
+  const canonicalTarget = text(formData, "canonical_target");
   const notes = text(formData, "review_notes");
 
   if (!sourceLabel || sourceLabel.length > 300) {
@@ -64,13 +75,10 @@ export async function POST(request: Request) {
   }
   if (
     action === "approve" &&
-    (!canonicalKeyPattern.test(canonicalKey) ||
-      canonicalKey.length > 200 ||
-      !canonicalName ||
-      canonicalName.length > 200)
+    (!canonicalTarget || canonicalTarget.length > 300)
   ) {
     return NextResponse.json(
-      { error: "A valid canonical key and name are required" },
+      { error: "A verified insurer match is required" },
       { status: 400 },
     );
   }
@@ -78,7 +86,7 @@ export async function POST(request: Request) {
   const service = createServiceClient();
   const { data: evidence, error: evidenceError } = await service
     .from("v_collision_insurer_alias_review_queue")
-    .select("source_label_normalized")
+    .select("source_label_normalized,source_label_name")
     .eq("source_label_normalized", sourceLabel)
     .maybeSingle();
   if (evidenceError) {
@@ -93,6 +101,80 @@ export async function POST(request: Request) {
       { error: "Source label not found" },
       { status: 404 },
     );
+  }
+
+  let canonicalInsurerKey = "";
+  let canonicalInsurerName = "";
+  if (action === "approve") {
+    if (canonicalTarget === "source") {
+      canonicalInsurerName = evidence.source_label_name.trim();
+      canonicalInsurerKey = canonicalKey(canonicalInsurerName);
+    } else if (canonicalTarget.startsWith("master:")) {
+      const insurerId = canonicalTarget.slice("master:".length);
+      if (!uuidPattern.test(insurerId)) {
+        return NextResponse.json(
+          { error: "Invalid insurer selection" },
+          { status: 400 },
+        );
+      }
+      const { data: insurer, error: insurerError } = await service
+        .from("insurance_companies")
+        .select("name")
+        .eq("id", insurerId)
+        .maybeSingle();
+      if (insurerError) {
+        console.error(
+          "[insurer-alias-review] master insurer lookup failed:",
+          insurerError.message,
+        );
+        return redirectToQueue(request, "error");
+      }
+      if (!insurer) return redirectToQueue(request, "target_missing");
+      canonicalInsurerName = insurer.name.trim();
+      canonicalInsurerKey = canonicalKey(canonicalInsurerName);
+    } else if (canonicalTarget.startsWith("approved:")) {
+      const insurerKey = canonicalTarget.slice("approved:".length);
+      if (!canonicalKeyPattern.test(insurerKey) || insurerKey.length > 200) {
+        return NextResponse.json(
+          { error: "Invalid insurer selection" },
+          { status: 400 },
+        );
+      }
+      const { data: insurer, error: insurerError } = await service
+        .from("collision_insurer_alias_reviews")
+        .select("canonical_insurer_key,canonical_insurer_name")
+        .eq("review_status", "approved")
+        .eq("canonical_insurer_key", insurerKey)
+        .limit(1)
+        .maybeSingle();
+      if (insurerError) {
+        console.error(
+          "[insurer-alias-review] approved insurer lookup failed:",
+          insurerError.message,
+        );
+        return redirectToQueue(request, "error");
+      }
+      if (!insurer) return redirectToQueue(request, "target_missing");
+      canonicalInsurerKey = insurer.canonical_insurer_key?.trim() ?? "";
+      canonicalInsurerName = insurer.canonical_insurer_name?.trim() ?? "";
+    } else {
+      return NextResponse.json(
+        { error: "Invalid insurer selection" },
+        { status: 400 },
+      );
+    }
+
+    if (
+      !canonicalKeyPattern.test(canonicalInsurerKey) ||
+      canonicalInsurerKey.length > 200 ||
+      !canonicalInsurerName ||
+      canonicalInsurerName.length > 200
+    ) {
+      return NextResponse.json(
+        { error: "Selected insurer cannot be used as a reporting name" },
+        { status: 400 },
+      );
+    }
   }
 
   // New labels can arrive after the initial review-table seed. Insert only the
@@ -116,8 +198,8 @@ export async function POST(request: Request) {
     action === "approve"
       ? {
           review_status: "approved",
-          canonical_insurer_key: canonicalKey,
-          canonical_insurer_name: canonicalName,
+          canonical_insurer_key: canonicalInsurerKey,
+          canonical_insurer_name: canonicalInsurerName,
           review_notes: notes || null,
           reviewed_by: user.id,
           reviewed_at: reviewedAt,

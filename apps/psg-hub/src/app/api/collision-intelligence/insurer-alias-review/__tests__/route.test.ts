@@ -2,8 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getDashboardAccess = vi.fn();
 let user: { id: string } | null = null;
-let evidence: { source_label_normalized: string } | null = null;
+let evidence: {
+  source_label_normalized: string;
+  source_label_name: string;
+} | null = null;
 let updated: { source_label_normalized: string } | null = null;
+let masterInsurer: { name: string } | null = null;
+let approvedInsurer: {
+  canonical_insurer_key: string;
+  canonical_insurer_name: string;
+} | null = null;
 const upsert = vi.fn();
 const update = vi.fn();
 
@@ -23,8 +31,25 @@ vi.mock("@/lib/supabase/service", () => ({
           maybeSingle: vi.fn(async () => ({ data: evidence, error: null })),
         };
       }
+      if (table === "insurance_companies") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn(async () => ({
+            data: masterInsurer,
+            error: null,
+          })),
+        };
+      }
       return {
         upsert,
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn(async () => ({
+          data: approvedInsurer,
+          error: null,
+        })),
         update: vi.fn((patch: unknown) => {
           update(patch);
           return {
@@ -54,6 +79,8 @@ beforeEach(() => {
   user = null;
   evidence = null;
   updated = null;
+  masterInsurer = null;
+  approvedInsurer = null;
   upsert.mockReset();
   upsert.mockResolvedValue({ error: null });
   update.mockReset();
@@ -70,21 +97,24 @@ describe("POST insurer alias review", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it("approves an observed candidate without overwriting a prior decision", async () => {
+  it("uses the observed source name without accepting a typed reporting name", async () => {
     user = { id: "superadmin-1" };
     getDashboardAccess.mockResolvedValue({
       role: "psg_superadmin",
       shopIds: [],
     });
-    evidence = { source_label_normalized: "state farm ins" };
+    evidence = {
+      source_label_normalized: "state farm ins",
+      source_label_name: "State Farm Ins.",
+    };
     updated = { source_label_normalized: "state farm ins" };
 
     const response = await POST(
       request({
         action: "approve",
         source_label_normalized: "state farm ins",
-        canonical_insurer_key: "state farm",
-        canonical_insurer_name: "State Farm",
+        canonical_target: "source",
+        canonical_insurer_name: "Wrong typed value",
         review_notes: "Verified carrier label",
       }),
     );
@@ -94,9 +124,63 @@ describe("POST insurer alias review", () => {
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         review_status: "approved",
-        canonical_insurer_key: "state farm",
+        canonical_insurer_key: "state farm ins",
+        canonical_insurer_name: "State Farm Ins.",
         reviewed_by: "superadmin-1",
       }),
     );
+  });
+
+  it("resolves a selected master insurer on the server", async () => {
+    user = { id: "superadmin-1" };
+    getDashboardAccess.mockResolvedValue({
+      role: "psg_superadmin",
+      shopIds: [],
+    });
+    evidence = {
+      source_label_normalized: "travelers ins",
+      source_label_name: "Travelers Ins",
+    };
+    masterInsurer = { name: "Travelers Insurance" };
+    updated = { source_label_normalized: "travelers ins" };
+
+    const response = await POST(
+      request({
+        action: "approve",
+        source_label_normalized: "travelers ins",
+        canonical_target: "master:11111111-1111-4111-8111-111111111111",
+      }),
+    );
+
+    expect(response.status).toBe(303);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canonical_insurer_key: "travelers insurance",
+        canonical_insurer_name: "Travelers Insurance",
+      }),
+    );
+  });
+
+  it("rejects an invented insurer target", async () => {
+    user = { id: "superadmin-1" };
+    getDashboardAccess.mockResolvedValue({
+      role: "psg_superadmin",
+      shopIds: [],
+    });
+    evidence = {
+      source_label_normalized: "travelers ins",
+      source_label_name: "Travelers Ins",
+    };
+
+    const response = await POST(
+      request({
+        action: "approve",
+        source_label_normalized: "travelers ins",
+        canonical_target: "typed:State Farm",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(update).not.toHaveBeenCalled();
   });
 });

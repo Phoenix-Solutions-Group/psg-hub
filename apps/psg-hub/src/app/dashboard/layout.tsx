@@ -29,7 +29,7 @@ export function dashboardNav(
       ? [
           {
             href: "/dashboard/collision-intelligence/review",
-            label: "Collision Data Review",
+            label: "Data Quality & Matching",
           },
         ]
       : []),

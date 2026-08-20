@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardAccess } from "@/lib/auth/shop-access";
@@ -17,6 +18,21 @@ type AliasCandidate = {
   repair_orders: number;
   repair_value_cents: number;
   latest_arrival_date: string | null;
+};
+
+type ApprovedInsurer = {
+  canonical_insurer_key: string | null;
+  canonical_insurer_name: string | null;
+};
+
+type InsuranceCompany = {
+  id: string;
+  name: string;
+};
+
+type InsurerOption = {
+  label: string;
+  value: string;
 };
 
 type ShopCandidate = {
@@ -81,11 +97,15 @@ const dateTime = new Intl.DateTimeFormat("en-US", {
 });
 
 const notices: Record<string, string> = {
-  approved: "Insurer alias approved and applied to canonical reporting.",
-  rejected: "Insurer alias rejected; the source label remains separate.",
+  approved:
+    "Insurer matched. Reports will now group this imported label under the selected standard name.",
+  rejected:
+    "Imported label left ungrouped. Reports will continue to show it separately.",
   conflict:
     "This label was reviewed by someone else. The queue has been refreshed.",
   error: "The review could not be saved. No alias decision was changed.",
+  target_missing:
+    "That standard insurer is no longer available. Choose another match.",
   mapping_approved:
     "Shop mapping approved. Its repair history is now available to authorized members of that PSG Hub shop.",
   mapping_conflict:
@@ -106,6 +126,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const service = createServiceClient();
   const [
     aliasResult,
+    approvedInsurerResult,
+    insuranceCompanyResult,
     shopResult,
     hubShopResult,
     mappedShopResult,
@@ -124,6 +146,12 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       .eq("review_status", "candidate")
       .order("repair_orders", { ascending: false })
       .limit(20),
+    service
+      .from("collision_insurer_alias_reviews")
+      .select("canonical_insurer_key,canonical_insurer_name")
+      .eq("review_status", "approved")
+      .order("canonical_insurer_name", { ascending: true }),
+    service.from("insurance_companies").select("id,name").order("name"),
     service
       .from("v_collision_filemaker_shop_summary")
       .select(
@@ -176,6 +204,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
 
   if (
     aliasResult.error ||
+    approvedInsurerResult.error ||
+    insuranceCompanyResult.error ||
     shopResult.error ||
     hubShopResult.error ||
     mappedShopResult.error ||
@@ -187,6 +217,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   ) {
     throw new Error(
       aliasResult.error?.message ??
+        approvedInsurerResult.error?.message ??
+        insuranceCompanyResult.error?.message ??
         shopResult.error?.message ??
         hubShopResult.error?.message ??
         mappedShopResult.error?.message ??
@@ -200,6 +232,30 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   }
 
   const aliases = (aliasResult.data ?? []) as AliasCandidate[];
+  const insurerOptionsByName = new Map<string, InsurerOption>();
+  for (const insurer of (insuranceCompanyResult.data ??
+    []) as InsuranceCompany[]) {
+    insurerOptionsByName.set(insurer.name.trim().toLocaleLowerCase(), {
+      label: insurer.name.trim(),
+      value: `master:${insurer.id}`,
+    });
+  }
+  for (const insurer of (approvedInsurerResult.data ??
+    []) as ApprovedInsurer[]) {
+    const key = insurer.canonical_insurer_key?.trim();
+    const name = insurer.canonical_insurer_name?.trim();
+    if (!key || !name) continue;
+    const normalizedName = name.toLocaleLowerCase();
+    if (!insurerOptionsByName.has(normalizedName)) {
+      insurerOptionsByName.set(normalizedName, {
+        label: name,
+        value: `approved:${key}`,
+      });
+    }
+  }
+  const insurerOptions = [...insurerOptionsByName.values()].sort((a, b) =>
+    a.label.localeCompare(b.label),
+  );
   const shops = (shopResult.data ?? []) as ShopCandidate[];
   const featuredShops = shops.slice(0, 8);
   const mappedShopIds = new Set(
@@ -243,17 +299,25 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="font-heading text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          Collision intelligence
+      <div className="max-w-4xl">
+        <h1 className="text-2xl font-bold tracking-tight">
+          Data quality &amp; matching
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Prepare imported collision data before it appears in shop reports.
+          Match FileMaker insurer labels to a standard insurer name, connect
+          imported shops to PSG Hub, and check whether each data feed is ready.
+          Nothing is merged automatically, and every saved decision is audited.
         </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">Data review</h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Approve carrier aliases only after identity review. Carrier-tagged
-          repair volume is not insurer claim volume. Shop mappings require a
-          target shop, written identity evidence, and explicit confirmation;
-          approval changes tenant-visible repair history and is audited.
-        </p>
+        <div className="mt-4 rounded-lg bg-secondary/50 p-4 text-sm leading-6">
+          <p className="font-heading font-semibold">What changes here</p>
+          <p className="mt-1 text-muted-foreground">
+            Insurer matches change how carrier-tagged repair orders are grouped
+            in reports. Shop matches change which authorized users can see the
+            imported repair history. These are repair records—not insurer claim
+            counts.
+          </p>
+        </div>
       </div>
 
       {notice ? (
@@ -268,11 +332,11 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       <section aria-labelledby="source-health-heading" className="space-y-3">
         <div>
           <h2 id="source-health-heading" className="text-lg font-semibold">
-            Source health
+            Data feed status
           </h2>
           <p className="text-sm text-muted-foreground">
-            Read-only freshness and provenance checks for repair, crash,
-            weather, and forecast inputs.
+            Read-only checks showing whether repair, crash, weather, and
+            forecast data are current and traceable.
           </p>
         </div>
 
@@ -429,24 +493,29 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="alias-review-heading" className="text-lg font-semibold">
-              Highest-volume insurer labels
+              Match imported insurer names
             </h2>
-            <p className="text-sm text-muted-foreground">
-              A decision applies to the normalized source label across all
-              shops.
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              FileMaker may use several names for the same insurer. For each
+              imported label, choose an existing standard name or establish the
+              exact displayed name as a new standard. The decision applies to
+              this label across every source shop.
             </p>
           </div>
-          <Badge variant="warning">Manual review required</Badge>
+          <Badge variant="warning">Decision required</Badge>
         </div>
 
         {aliases.length ? (
           <div className="grid gap-4 xl:grid-cols-2">
             {aliases.map((alias) => (
               <Card key={alias.source_label_normalized}>
-                <CardHeader>
-                  <CardTitle>{alias.source_label_name}</CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    Source key: {alias.source_label_normalized}
+                <CardHeader className="border-b border-border pb-4">
+                  <CardTitle className="text-lg">
+                    {alias.source_label_name}
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Imported label used on repair orders. Review it before
+                    grouping it with another insurer.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -479,35 +548,60 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                       name="source_label_normalized"
                       value={alias.source_label_normalized}
                     />
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="text-sm font-medium">
-                        Canonical key
-                        <input
-                          name="canonical_insurer_key"
-                          required
-                          maxLength={200}
-                          pattern="[a-z0-9]+( [a-z0-9]+)*"
-                          placeholder="state farm"
-                          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
-                        />
-                      </label>
-                      <label className="text-sm font-medium">
-                        Canonical name
-                        <input
-                          name="canonical_insurer_name"
-                          required
-                          maxLength={200}
-                          placeholder="State Farm"
-                          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
-                        />
-                      </label>
-                    </div>
                     <label className="block text-sm font-medium">
-                      Review notes
+                      How should reports name this insurer?
+                      <select
+                        name="canonical_target"
+                        required
+                        defaultValue=""
+                        aria-describedby={`insurer-match-help-${alias.source_label_normalized}`}
+                        className="mt-1 w-full min-w-0 rounded-md border border-border bg-background px-3 py-2 font-normal"
+                      >
+                        <option value="" disabled>
+                          Select a verified reporting name
+                        </option>
+                        <optgroup label="Start a new standard name">
+                          <option value="source">
+                            Use “{alias.source_label_name}” as the standard
+                          </option>
+                        </optgroup>
+                        {insurerOptions.length ? (
+                          <optgroup label="Match an existing standard name">
+                            {insurerOptions.map((insurer) => (
+                              <option key={insurer.value} value={insurer.value}>
+                                {insurer.label}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ) : null}
+                      </select>
+                    </label>
+                    <p
+                      id={`insurer-match-help-${alias.source_label_normalized}`}
+                      className="text-xs leading-5 text-muted-foreground"
+                    >
+                      Choose an existing name whenever it is the same legal
+                      insurer. Start a new standard only when the imported name
+                      above is the complete name reports should use.
+                    </p>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Can’t find the right insurer? Add it to the{" "}
+                      <Link
+                        href="/ops/sys-config/insurance-companies"
+                        className="font-medium text-primary underline underline-offset-4"
+                      >
+                        insurer master list
+                      </Link>{" "}
+                      first, then return here.
+                    </p>
+                    <label className="block text-sm font-medium">
+                      Decision notes{" "}
+                      <span className="font-normal">(optional)</span>
                       <textarea
                         name="review_notes"
                         maxLength={1000}
                         rows={2}
+                        placeholder="Record the evidence used to confirm this match."
                         className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
                       />
                     </label>
@@ -518,7 +612,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         value="approve"
                         className="rounded-md bg-primary px-3 py-2 font-heading text-sm font-medium text-primary-foreground"
                       >
-                        Approve alias
+                        Save insurer match
                       </button>
                       <button
                         type="submit"
@@ -527,7 +621,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         formNoValidate
                         className="rounded-md border border-border px-3 py-2 font-heading text-sm font-medium"
                       >
-                        Keep separate
+                        Leave ungrouped
                       </button>
                     </div>
                   </form>
@@ -537,7 +631,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
           </div>
         ) : (
           <Card>
-            <CardContent>No candidate insurer labels remain.</CardContent>
+            <CardContent className="text-muted-foreground">
+              Every imported insurer label has a saved decision.
+            </CardContent>
           </Card>
         )}
       </section>
@@ -545,12 +641,13 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       <section aria-labelledby="shop-review-heading" className="space-y-3">
         <div>
           <h2 id="shop-review-heading" className="text-lg font-semibold">
-            Unmapped source shops
+            Connect imported shops
           </h2>
-          <p className="text-sm text-muted-foreground">
-            The eight highest-current-volume candidates are shown below. Every
-            unmapped source shop remains available in the approval selector.
-            Confirm legal and operating identity before any mapping.
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+            Match a FileMaker shop to its existing PSG Hub account. The eight
+            highest-current-volume candidates are shown below; every unmatched
+            shop remains available in the selector. Confirm the exact legal and
+            operating identity before connecting repair history.
           </p>
         </div>
         <Card>
@@ -602,18 +699,16 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
               className="mt-6 space-y-4 border-t border-border pt-5"
             >
               <div>
-                <h3 className="font-heading font-semibold">
-                  Approve one mapping
-                </h3>
+                <h3 className="font-heading font-semibold">Connect one shop</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  This immediately makes the selected source history visible to
-                  authorized members of the target shop. One target shop can
-                  have only one active source mapping.
+                  This makes the imported repair history visible to authorized
+                  members of the selected PSG Hub shop. Each PSG Hub shop can
+                  have only one active FileMaker connection.
                 </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="text-sm font-medium">
-                  FileMaker source shop
+                  Imported FileMaker shop
                   <select
                     name="source_shop_key"
                     required
@@ -634,7 +729,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                   </select>
                 </label>
                 <label className="text-sm font-medium">
-                  PSG Hub shop
+                  Existing PSG Hub shop
                   <select
                     name="shop_id"
                     required
@@ -682,7 +777,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                 disabled={!shops.length || !availableHubShops.length}
                 className="rounded-md bg-primary px-3 py-2 font-heading text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Approve shop mapping
+                Connect shop and repair history
               </button>
             </form>
           </CardContent>
