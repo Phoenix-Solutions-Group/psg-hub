@@ -85,8 +85,11 @@ export async function getCollisionDashboard(shopId: string) {
         "zip_code,historical_repair_orders,source_event_id,event_type,event_at,magnitude,magnitude_unit,alert_level,threshold_basis,is_provisional",
       )
       .eq("shop_id", shopId)
+      .order("alert_level", { ascending: true })
+      .order("historical_repair_orders", { ascending: false })
       .order("event_at", { ascending: false })
-      .limit(6),
+      // ponytail: 500 raw 72-hour reports per shop; move clustering into SQL if this cap is reached.
+      .limit(500),
     service
       .from("collision_demand_forecasts")
       .select(
@@ -235,7 +238,8 @@ export async function getCollisionDashboard(shopId: string) {
           `Collision national crash query failed: ${nationalCrashError.message}`,
         );
 
-      nationalCrashRows = (nationalCrashes.data ?? []) as CollisionNationalCrashRow[];
+      nationalCrashRows = (nationalCrashes.data ??
+        []) as CollisionNationalCrashRow[];
       nationalCrashSourceRows = (nationalCrashSource.data ?? []).map((row) => ({
         ...row,
         state_name: stateName,

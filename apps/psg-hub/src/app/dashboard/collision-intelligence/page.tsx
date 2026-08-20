@@ -118,10 +118,10 @@ export default async function CollisionIntelligencePage() {
                     : dashboard.crashes.coverageStatus ===
                         "national_fatal_context"
                       ? `official NHTSA FARS ${dashboard.crashes.nationalYear} fatal-crash context is available for ${dashboard.crashes.nationalState}; it is not total crashes or claim volume.`
-                    : dashboard.crashes.coverageStatus ===
-                        "outside_kansas_portfolio"
-                      ? "the KDOT source is loaded, but this shop has no qualifying Kansas customer ZIPs."
-                      : "the local crash source is unavailable."}
+                      : dashboard.crashes.coverageStatus ===
+                          "outside_kansas_portfolio"
+                        ? "the KDOT source is loaded, but this shop has no qualifying Kansas customer ZIPs."
+                        : "the local crash source is unavailable."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -425,7 +425,13 @@ export default async function CollisionIntelligencePage() {
                           </Badge>
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">
+                          {alert.reportCount > 1
+                            ? `${alert.reportCount} reports · Latest `
+                            : ""}
                           {eventTime.format(new Date(alert.eventAt))} ·{" "}
+                          {alert.magnitude !== null
+                            ? `${alert.reportCount > 1 ? "Peak " : ""}${alert.magnitude.toLocaleString()} ${alert.magnitudeUnit ?? ""} · `
+                            : ""}
                           {alert.thresholdBasis}
                         </p>
                       </div>
@@ -780,8 +786,10 @@ export default async function CollisionIntelligencePage() {
                     <dd className="mt-1">
                       NOAA storm exposure is weighted by historical repairs in
                       customer ZIPs. The 72-hour queue uses preliminary SPC
-                      reports and NWS severe thresholds; it is a review signal,
-                      not proof of damage or a claim.
+                      reports and NWS severe thresholds. Same-day reports are
+                      grouped by ZIP and event type, with the peak measurement
+                      shown; each group is a review signal, not proof of damage
+                      or a claim.
                     </dd>
                   </div>
                   <div>
@@ -793,8 +801,8 @@ export default async function CollisionIntelligencePage() {
                       ZIPs and exclude the current partial month. Outside that
                       coverage, official NHTSA FARS provides state-level 2024
                       fatal-crash context only; it is not total crashes or claim
-                      volume. Missing coverage is shown as unavailable, never
-                      as zero crashes.
+                      volume. Missing coverage is shown as unavailable, never as
+                      zero crashes.
                     </dd>
                   </div>
                   <div>

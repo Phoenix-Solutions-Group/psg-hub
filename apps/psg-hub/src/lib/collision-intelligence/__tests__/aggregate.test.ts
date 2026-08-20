@@ -67,6 +67,30 @@ describe("collision intelligence aggregation", () => {
           threshold_basis: "Hail >= 1 inch",
           is_provisional: true,
         },
+        {
+          zip_code: "67037",
+          historical_repair_orders: 14,
+          source_event_id: 124,
+          event_type: "hail",
+          event_at: "2026-08-18T01:40:00Z",
+          magnitude: 1.75,
+          magnitude_unit: "IN",
+          alert_level: "high",
+          threshold_basis: "Hail >= 1 inch",
+          is_provisional: true,
+        },
+        {
+          zip_code: "67037",
+          historical_repair_orders: 14,
+          source_event_id: 125,
+          event_type: "thunderstorm wind",
+          event_at: "2026-08-18T02:00:00Z",
+          magnitude: null,
+          magnitude_unit: "MPH",
+          alert_level: "review",
+          threshold_basis: "Preliminary report below severe threshold",
+          is_provisional: true,
+        },
       ],
       [
         {
@@ -214,9 +238,14 @@ describe("collision intelligence aggregation", () => {
       expect.objectContaining({
         zipCode: "67037",
         eventType: "hail",
-        magnitude: 1.25,
+        magnitude: 1.75,
         alertLevel: "high",
         isProvisional: true,
+        reportCount: 2,
+      }),
+      expect.objectContaining({
+        eventType: "thunderstorm wind",
+        reportCount: 1,
       }),
     ]);
     expect(dashboard.operationalForecast).toMatchObject({

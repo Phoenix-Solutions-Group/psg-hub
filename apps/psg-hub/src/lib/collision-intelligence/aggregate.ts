@@ -172,6 +172,51 @@ function numberOf(value: Numeric): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function summarizeWeatherAlerts(alertRows: CollisionAlertRow[]) {
+  const grouped = new Map<
+    string,
+    CollisionAlertRow & { reportCount: number }
+  >();
+
+  for (const row of alertRows) {
+    // ponytail: UTC-day grouping is enough for review-only signals; add storm-cell IDs before notifications.
+    const key = `${row.zip_code}:${row.event_type}:${row.event_at.slice(0, 10)}`;
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, { ...row, reportCount: 1 });
+      continue;
+    }
+
+    existing.reportCount += 1;
+    existing.historical_repair_orders = Math.max(
+      numberOf(existing.historical_repair_orders),
+      numberOf(row.historical_repair_orders),
+    );
+    existing.is_provisional ||= row.is_provisional;
+
+    if (row.event_at > existing.event_at) {
+      existing.event_at = row.event_at;
+      existing.source_event_id = row.source_event_id;
+    }
+    if (numberOf(row.magnitude) > numberOf(existing.magnitude)) {
+      existing.magnitude = row.magnitude;
+      existing.magnitude_unit = row.magnitude_unit;
+    }
+    if (row.alert_level === "high" && existing.alert_level !== "high") {
+      existing.alert_level = "high";
+      existing.threshold_basis = row.threshold_basis;
+    }
+  }
+
+  return [...grouped.values()].sort(
+    (a, b) =>
+      Number(b.alert_level === "high") - Number(a.alert_level === "high") ||
+      numberOf(b.historical_repair_orders) -
+        numberOf(a.historical_repair_orders) ||
+      b.event_at.localeCompare(a.event_at),
+  );
+}
+
 function shiftDate(value: string, days: number) {
   const date = new Date(`${value}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -519,7 +564,8 @@ export function buildCollisionDashboard(
         : lowest,
     null,
   );
-  const highWeatherAlerts = alertRows.filter(
+  const weatherAlerts = summarizeWeatherAlerts(alertRows);
+  const highWeatherAlerts = weatherAlerts.filter(
     (alert) => alert.alert_level === "high",
   );
   const highWeatherSignals = highWeatherAlerts.length;
@@ -607,9 +653,9 @@ export function buildCollisionDashboard(
         ? ("covered" as const)
         : latestNationalCrash
           ? ("national_fatal_context" as const)
-        : crashSource?.last_sync_status === "loaded"
-          ? ("outside_kansas_portfolio" as const)
-          : ("source_unavailable" as const),
+          : crashSource?.last_sync_status === "loaded"
+            ? ("outside_kansas_portfolio" as const)
+            : ("source_unavailable" as const),
       latestMonth: latestCrash?.month ?? latestNationalCrash?.month ?? null,
       latestTotal: latestCrash
         ? numberOf(latestCrash.total_crashes)
@@ -631,21 +677,19 @@ export function buildCollisionDashboard(
       latestCoveragePct: numberOf(weather.at(-1)?.weather_coverage_pct ?? 0),
       refreshedAt: weather.at(-1)?.weather_refreshed_at ?? null,
     },
-    alerts: [...alertRows]
-      .sort((a, b) => b.event_at.localeCompare(a.event_at))
-      .slice(0, 6)
-      .map((row) => ({
-        zipCode: row.zip_code,
-        historicalRepairOrders: numberOf(row.historical_repair_orders),
-        sourceEventId: String(row.source_event_id),
-        eventType: row.event_type,
-        eventAt: row.event_at,
-        magnitude: row.magnitude === null ? null : numberOf(row.magnitude),
-        magnitudeUnit: row.magnitude_unit,
-        alertLevel: row.alert_level,
-        thresholdBasis: row.threshold_basis,
-        isProvisional: row.is_provisional,
-      })),
+    alerts: weatherAlerts.slice(0, 6).map((row) => ({
+      zipCode: row.zip_code,
+      historicalRepairOrders: numberOf(row.historical_repair_orders),
+      sourceEventId: String(row.source_event_id),
+      eventType: row.event_type,
+      eventAt: row.event_at,
+      magnitude: row.magnitude === null ? null : numberOf(row.magnitude),
+      magnitudeUnit: row.magnitude_unit,
+      alertLevel: row.alert_level,
+      thresholdBasis: row.threshold_basis,
+      isProvisional: row.is_provisional,
+      reportCount: row.reportCount,
+    })),
     operationalForecasts,
     operationalForecast: operationalForecasts[0] ?? null,
     planningGuidance: [
