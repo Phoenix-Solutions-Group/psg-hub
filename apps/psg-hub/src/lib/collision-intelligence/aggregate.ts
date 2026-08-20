@@ -795,7 +795,7 @@ export function buildCollisionDashboard(
           : "No high preliminary signals",
         week: null,
         detail: highestWeatherExposure
-          ? `${numberOf(highestWeatherExposure.historical_repair_orders).toLocaleString()} historical repair orders came from this ZIP; ${highWeatherSignals} high preliminary weather signal${highWeatherSignals === 1 ? " is" : "s are"} active across the customer market. Prepare intake coverage, but do not treat a weather report as vehicle damage or a claim.`
+          ? `${numberOf(highestWeatherExposure.historical_repair_orders).toLocaleString()} historical repair orders came from this ZIP; ${highWeatherSignals} preliminary weather report${highWeatherSignals === 1 ? " meets" : "s meet"} a severe threshold across the customer market. Review intake coverage, but do not treat a threshold crossing as predicted repair demand, vehicle damage, or a claim.`
           : "Continue monitoring the 72-hour customer-ZIP queue; notifications remain disabled.",
       },
     ].filter((guidance) => guidance !== null),

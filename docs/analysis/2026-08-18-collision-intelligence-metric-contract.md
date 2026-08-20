@@ -106,6 +106,14 @@ SPC reports are preliminary and may be revised. A candidate indicates weather in
 historical customer market; it is not evidence of a damaged vehicle, repair order, or
 insurance claim.
 
+The 2026-08-20 historical follow-through backtest uses final NCEI ZIP-months as a
+proxy for the preliminary queue. Across 21,795 severe-threshold shop/ZIP-months, 4.89%
+were followed by an unusual next-month repair increase versus 4.39% across 391,458
+no-threshold controls. The 0.50-point lift does not support automated notifications.
+The UI therefore says `Severe threshold met`, retains historical ZIP volume as context,
+and keeps notification state off. Full method and limitations are in
+`2026-08-20-collision-weather-alert-backtest.md`.
+
 The local deployment configuration runs `/api/cron/collision-intelligence` daily at
 12:15 UTC. Each run replaces three complete convective-day snapshots atomically, then
 runs the weekly scorer. It also checks `v_collision_repair_feed_status`; any mapped
@@ -176,21 +184,21 @@ itself.
 
 ### Full privacy-safe FileMaker export
 
-| Check                                |                        Result |
-| ------------------------------------ | ----------------------------: |
-| Parsed source rows                   |                       330,535 |
-| Accepted repair facts                |                       330,533 |
+| Check                                |                                     Result |
+| ------------------------------------ | -----------------------------------------: |
+| Parsed source rows                   |                                    330,535 |
+| Accepted repair facts                |                                    330,533 |
 | Rejected rows                        | 2: missing shop key; invalid repair amount |
-| Distinct accepted source records     |                       330,533 |
-| Source shop keys                     |                           199 |
-| Explicitly mapped source shop keys   |                             1 |
-| Insurance-classified repairs         |                       264,625 |
-| Known non-insurance repairs          |                        64,760 |
-| Unknown/other payment classification |                         1,148 |
-| Repair value                         |             $1,671,343,984.99 |
-| Arrival range                        | 2011-01-18 through 2026-08-14 |
-| 2026 repair arrivals                 |                        19,229 |
-| Rows with one or more quality flags  |                         7,467 |
+| Distinct accepted source records     |                                    330,533 |
+| Source shop keys                     |                                        199 |
+| Explicitly mapped source shop keys   |                                          1 |
+| Insurance-classified repairs         |                                    264,625 |
+| Known non-insurance repairs          |                                     64,760 |
+| Unknown/other payment classification |                                      1,148 |
+| Repair value                         |                          $1,671,343,984.99 |
+| Arrival range                        |              2011-01-18 through 2026-08-14 |
+| 2026 repair arrivals                 |                                     19,229 |
+| Rows with one or more quality flags  |                                      7,467 |
 
 The source ledger reconciles `330,535 = 330,533 + 2` before the snapshot becomes
 visible. Loading rows are hidden from analysis views; finalization and replacement of
@@ -218,7 +226,7 @@ the prior loaded snapshot occur in one database transaction.
 | Rows with a 52-week lag                   |                                                      267 |
 | Multi-shop weekly modeling rows           |                                                   35,850 |
 | Multi-shop eligible holdout shops         |                                                       79 |
-| Current-shop holdout shops                |                    44; trailing-4 beat seasonal in 40 |
+| Current-shop holdout shops                |                       44; trailing-4 beat seasonal in 40 |
 | Current-shop interval validation          | 81.5% coverage on 22 held-out shops after 1.10× widening |
 | KDOT crash facts, 2019 through 2026-08-13 |                                                  411,208 |
 | KDOT ZIP-matched crash facts              |                                         410,910 (99.93%) |

@@ -430,8 +430,8 @@ export default async function CollisionIntelligencePage() {
                             }
                           >
                             {alert.alertLevel === "high"
-                              ? "High signal"
-                              : "Review"}
+                              ? "Severe threshold met"
+                              : "Below severe threshold"}
                           </Badge>
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">
@@ -460,6 +460,11 @@ export default async function CollisionIntelligencePage() {
                   in the last 72 hours.
                 </p>
               )}
+              <p className="mt-4 text-xs leading-5 text-muted-foreground">
+                A severe threshold describes the weather report, not predicted
+                repair demand. Historical testing does not yet support automated
+                customer notifications.
+              </p>
             </CardContent>
           </Card>
 

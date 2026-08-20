@@ -186,7 +186,10 @@ function buildExport(
       value: alert.historicalRepairOrders,
       lower: null,
       upper: null,
-      status: alert.alertLevel,
+      status:
+        alert.alertLevel === "high"
+          ? "severe_threshold_met"
+          : "below_severe_threshold",
       detail: `${alert.isProvisional ? "Preliminary" : "Final"} NOAA report${alert.magnitude === null ? "" : `; ${alert.magnitude} ${alert.magnitudeUnit ?? ""}`}; ${alert.thresholdBasis}. Historical repair orders are market exposure, not storm damage or claims.`,
     });
   }
