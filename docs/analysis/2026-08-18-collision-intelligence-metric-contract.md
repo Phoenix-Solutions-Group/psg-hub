@@ -239,8 +239,10 @@ Before dashboard publication or model retraining:
    fleet-wide PSG forecasts.
 9. KDOT source-year counts reconcile before a sync is marked loaded.
 10. ZIP matching reports matched, unmatched, and pending records separately.
-11. Event-level weather remains labeled preliminary, uses the 72-hour window, and
-    cannot trigger an external notification until an owner and lifecycle are approved.
+11. Event-level weather remains labeled preliminary, uses the 72-hour window, stores
+    hail in inches and wind in MPH, and applies the NWS severe thresholds of one inch
+    and 58 MPH. It cannot trigger an external notification until an owner and lifecycle
+    are approved.
 12. Forecast publication is blocked when repair arrivals are more than 14 days old;
     blocked rows contain no predicted, lower, or upper value.
 13. The scorer requires an approved model-registry row whose recorded MAE beats the

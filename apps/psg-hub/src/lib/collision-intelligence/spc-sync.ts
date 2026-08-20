@@ -200,6 +200,7 @@ export function parseSpcReport(
         timeZone: "UTC",
       }),
       magnitude: magnitude(reportType, row),
+      // SPC report tables publish wind `Speed` in MPH; the alert view uses 58 MPH.
       magnitude_type:
         reportType === "hail" ? "IN" : reportType === "wind" ? "MPH" : null,
       begin_lat: latitude,

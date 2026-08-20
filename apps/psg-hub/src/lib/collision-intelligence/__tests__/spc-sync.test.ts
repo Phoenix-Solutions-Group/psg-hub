@@ -44,4 +44,18 @@ describe("SPC report parsing", () => {
       /latitude/,
     );
   });
+
+  it("preserves SPC wind speed in MPH for the 58 MPH severe threshold", () => {
+    const csv = [
+      "Time,Speed,Location,County,State,Lat,Lon,Comments",
+      "1400,58,TEST,SEDGWICK,KS,37.65,-97.42,Measured gust",
+    ].join("\n");
+
+    expect(
+      parseSpcReport("2026-08-17", "wind", csv, "batch-1")[0],
+    ).toMatchObject({
+      magnitude: 58,
+      magnitude_type: "MPH",
+    });
+  });
 });
