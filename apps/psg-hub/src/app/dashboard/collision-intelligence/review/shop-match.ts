@@ -7,6 +7,7 @@ export type ShopDirectoryEntry = {
   address_region: string | null;
   address_postal_code: string | null;
   client: { name: string } | null;
+  members?: Array<{ count: number }>;
 };
 
 export type ShopIdentityEvidence = {

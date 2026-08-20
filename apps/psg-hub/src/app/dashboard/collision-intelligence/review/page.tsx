@@ -287,7 +287,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     service
       .from("shops")
       .select(
-        "id,name,slug,address_street,address_locality,address_region,address_postal_code,client:clients(name)",
+        "id,name,slug,address_street,address_locality,address_region,address_postal_code,client:clients(name),members:shop_users(count)",
       )
       .order("name", { ascending: true }),
     service
@@ -1904,6 +1904,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         Select a candidate after verifying its identity
                       </option>
                       {selectableShopMatches.map((match) => {
+                        const memberCount = match.shop.members?.[0]?.count ?? 0;
                         const location = [
                           match.shop.address_street,
                           match.shop.address_locality,
@@ -1919,16 +1920,40 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                               match.shop.id}{" "}
                             — exact address match · {match.score}/100 name match
                             · {location || "location not stored"} · parent{" "}
-                            {match.shop.client?.name ?? "unknown"}
+                            {match.shop.client?.name ?? "unknown"} ·{" "}
+                            {memberCount.toLocaleString()} shop{" "}
+                            {memberCount === 1 ? "member" : "members"}
                           </option>
                         );
                       })}
                     </select>
                     <span className="mt-2 block font-sans text-xs font-normal leading-5 text-muted-foreground">
                       The list is ranked, not approved. Compare the parent
-                      account and physical location before selecting one.
+                      account and physical location before selecting one. The
+                      member count shows how many customer users can currently
+                      open the dashboard for that shop; staff access is
+                      separate.
                     </span>
                   </label>
+
+                  {selectableShopMatches.every(
+                    (match) => (match.shop.members?.[0]?.count ?? 0) === 0,
+                  ) ? (
+                    <div
+                      role="note"
+                      className="rounded-md border border-warning/50 bg-warning/10 p-3"
+                    >
+                      <p className="font-heading text-sm font-semibold">
+                        Shop audience not ready
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-foreground/75">
+                        No customer users are assigned to this Hub shop yet.
+                        Confirm or add the intended members before treating this
+                        as an operational shop dashboard. PSG staff access is
+                        unchanged.
+                      </p>
+                    </div>
+                  ) : null}
 
                   {selectableShopMatches.some(
                     (match) => match.locationWarning,
