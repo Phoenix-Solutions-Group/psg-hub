@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardAccess } from "@/lib/auth/shop-access";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { isMissingReviewView } from "./source-health";
 
 type Props = {
   searchParams: Promise<{ result?: string }>;
@@ -164,6 +165,15 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     searchParams,
   ]);
 
+  const stormHealthUnavailable = isMissingReviewView(
+    stormSourceResult.error,
+    "v_collision_storm_source_reconciliation",
+  );
+  const forecastHealthUnavailable = isMissingReviewView(
+    forecastResult.error,
+    "v_collision_forecast_readiness",
+  );
+
   if (
     aliasResult.error ||
     shopResult.error ||
@@ -171,9 +181,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     mappedShopResult.error ||
     repairSourceResult.error ||
     repairFeedResult.error ||
-    stormSourceResult.error ||
+    (stormSourceResult.error && !stormHealthUnavailable) ||
     crashSourceResult.error ||
-    forecastResult.error
+    (forecastResult.error && !forecastHealthUnavailable)
   ) {
     throw new Error(
       aliasResult.error?.message ??
@@ -303,25 +313,37 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
           <SourceHealthCard
             title="Storm provenance"
             status={
-              !stormSources.length
-                ? "No batches"
-                : unreconciledStormSources
-                  ? "Unreconciled"
-                  : "Reconciled"
+              stormHealthUnavailable
+                ? "Release pending"
+                : !stormSources.length
+                  ? "No batches"
+                  : unreconciledStormSources
+                    ? "Unreconciled"
+                    : "Reconciled"
             }
             healthy={Boolean(stormSources.length && !unreconciledStormSources)}
           >
             <ReviewMetric
               label="Event rows"
-              value={stormEvents.toLocaleString()}
+              value={
+                stormHealthUnavailable ? "—" : stormEvents.toLocaleString()
+              }
             />
             <ReviewMetric
               label="Source batches"
-              value={stormSources.length.toLocaleString()}
+              value={
+                stormHealthUnavailable
+                  ? "—"
+                  : stormSources.length.toLocaleString()
+              }
             />
             <ReviewMetric
               label="Unreconciled"
-              value={unreconciledStormSources.toLocaleString()}
+              value={
+                stormHealthUnavailable
+                  ? "—"
+                  : unreconciledStormSources.toLocaleString()
+              }
             />
           </SourceHealthCard>
 
@@ -355,11 +377,13 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
           <SourceHealthCard
             title="Forecast readiness"
             status={
-              !forecasts.length
-                ? "No mapped shops"
-                : readyForecasts === forecasts.length
-                  ? "Ready"
-                  : "Gated"
+              forecastHealthUnavailable
+                ? "Release pending"
+                : !forecasts.length
+                  ? "No mapped shops"
+                  : readyForecasts === forecasts.length
+                    ? "Ready"
+                    : "Gated"
             }
             healthy={Boolean(
               forecasts.length && readyForecasts === forecasts.length,
@@ -367,15 +391,27 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
           >
             <ReviewMetric
               label="Shop / horizon policies"
-              value={forecasts.length.toLocaleString()}
+              value={
+                forecastHealthUnavailable
+                  ? "—"
+                  : forecasts.length.toLocaleString()
+              }
             />
             <ReviewMetric
               label="Ready"
-              value={readyForecasts.toLocaleString()}
+              value={
+                forecastHealthUnavailable
+                  ? "—"
+                  : readyForecasts.toLocaleString()
+              }
             />
             <ReviewMetric
               label="Gate states"
-              value={forecastGateStates || "None"}
+              value={
+                forecastHealthUnavailable
+                  ? "Release migration not applied"
+                  : forecastGateStates || "None"
+              }
             />
             <ReviewMetric
               label="Last generated"
