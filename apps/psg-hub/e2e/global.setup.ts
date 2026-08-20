@@ -548,6 +548,17 @@ async function seedPortalReview(
   locationId: string,
   opts: { reviewId: string }
 ): Promise<void> {
+  // This fixture ID is stable across runs, while a reset/reseed can recreate the
+  // shop with a new ID. Remove fixture-owned child rows before the review upsert
+  // changes its shop so the composite tenant FK cannot retain the prior shop ID.
+  const { error: commentsErr } = await admin
+    .from("review_response_comments")
+    .delete()
+    .eq("review_item_id", opts.reviewId);
+  if (commentsErr) {
+    throw new Error(`[e2e] review response comments reset failed: ${commentsErr.message}`);
+  }
+
   const { error: reviewErr } = await admin.from("review_items").upsert(
     {
       id: opts.reviewId,
