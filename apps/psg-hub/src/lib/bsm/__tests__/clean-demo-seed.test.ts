@@ -6,6 +6,7 @@ import {
   assertRequiredRiversideSeedTablesExist,
   buildAggregateDerivedAnalyticsRows,
   buildAggregateDerivedDirectMailPrior,
+  buildRiversideDemoInvoiceRows,
   buildRiversideOperationalReportRows,
   CLEAN_DEMO_SEED,
   deriveGoogleAdsBenchmarkMetrics,
@@ -248,6 +249,17 @@ describe("clean BSM demo seed", () => {
     });
   });
 
+  it("builds representative, non-payable invoices for the approved demo shop", () => {
+    const rows = buildRiversideDemoInvoiceRows("12345678-demo-shop");
+
+    expect(rows.map((row) => row.status)).toEqual(["open", "paid", "void"]);
+    expect(rows.map((row) => row.amount_due)).toEqual([125000, 250000, 75000]);
+    expect(rows.every((row) => row.shop_id === "12345678-demo-shop")).toBe(true);
+    expect(rows.every((row) => row.hosted_invoice_url === null)).toBe(true);
+    expect(rows.every((row) => row.invoice_pdf === null)).toBe(true);
+    expect(rows.every((row) => row.raw.testOnly === true)).toBe(true);
+  });
+
   it("builds Riverside direct-mail priors from aggregate rows instead of invented counts", () => {
     const row = buildAggregateDerivedDirectMailPrior({
       company: { id: "riverside-company" },
@@ -293,6 +305,7 @@ describe("clean BSM demo seed", () => {
     );
     expect(REQUIRED_RIVERSIDE_PRODUCTION_TABLES).toContain("survey_responses");
     expect(REQUIRED_RIVERSIDE_PRODUCTION_TABLES).toContain("repair_orders");
+    expect(REQUIRED_RIVERSIDE_PRODUCTION_TABLES).toContain("invoices");
   });
 
   it("allows existing Riverside records that are clearly marked as .example demos", async () => {

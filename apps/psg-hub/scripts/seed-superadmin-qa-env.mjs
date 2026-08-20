@@ -34,6 +34,7 @@ export const REQUIRED_RIVERSIDE_PRODUCTION_TABLES = [
   "app_user_roles",
   "bsm_content_review_items",
   "clients",
+  "invoices",
   "locations",
   "mail_send_history",
   "mail_send_priors",
@@ -186,6 +187,55 @@ export function buildRiversideOperationalReportRows({ companyId, customerId }) {
     payload_jsonb: { demoSeed: "psg-2975-operational-reports" },
     updated_at: row.created_at,
   }));
+}
+
+export function buildRiversideDemoInvoiceRows(shopId) {
+  const idSuffix = shopId.slice(0, 8);
+  const shared = {
+    shop_id: shopId,
+    stripe_customer_id: `cus_demo_riverside_${idSuffix}`,
+    stripe_subscription_id: `sub_demo_riverside_${idSuffix}`,
+    currency: "usd",
+    hosted_invoice_url: null,
+    invoice_pdf: null,
+    raw: { demoSeed: "psg-3036", testOnly: true },
+  };
+
+  return [
+    {
+      ...shared,
+      stripe_invoice_id: `in_demo_riverside_open_${idSuffix}`,
+      number: "RIV-DEMO-1003",
+      status: "open",
+      amount_due: 125000,
+      amount_paid: 0,
+      period_start: "2026-08-01T00:00:00.000Z",
+      period_end: "2026-08-31T23:59:59.000Z",
+      created: "2026-08-15T14:00:00.000Z",
+    },
+    {
+      ...shared,
+      stripe_invoice_id: `in_demo_riverside_paid_${idSuffix}`,
+      number: "RIV-DEMO-1002",
+      status: "paid",
+      amount_due: 250000,
+      amount_paid: 250000,
+      period_start: "2026-07-01T00:00:00.000Z",
+      period_end: "2026-07-31T23:59:59.000Z",
+      created: "2026-07-15T14:00:00.000Z",
+    },
+    {
+      ...shared,
+      stripe_invoice_id: `in_demo_riverside_void_${idSuffix}`,
+      number: "RIV-DEMO-1001",
+      status: "void",
+      amount_due: 75000,
+      amount_paid: 0,
+      period_start: "2026-06-01T00:00:00.000Z",
+      period_end: "2026-06-30T23:59:59.000Z",
+      created: "2026-06-15T14:00:00.000Z",
+    },
+  ];
 }
 
 export function shouldSeedInternalRegressionUser(env = process.env) {
@@ -720,10 +770,8 @@ async function seedBillingTier(shopId) {
   const now = new Date();
   const currentPeriodEnd = new Date(now);
   currentPeriodEnd.setUTCMonth(currentPeriodEnd.getUTCMonth() + 1);
-  const oldDemoInvoiceIds = [
-    `in_demo_riverside_open_${shopId.slice(0, 8)}`,
-    `in_demo_riverside_paid_${shopId.slice(0, 8)}`,
-  ];
+  const demoInvoices = buildRiversideDemoInvoiceRows(shopId);
+  const oldDemoInvoiceIds = demoInvoices.map((invoice) => invoice.stripe_invoice_id);
 
   assertNoSupabaseError(
     await supabase.from("payments").delete().in("stripe_invoice_id", oldDemoInvoiceIds),
@@ -747,6 +795,11 @@ async function seedBillingTier(shopId) {
       { onConflict: "shop_id" }
     ),
     "Seed Riverside performance subscription"
+  );
+
+  assertNoSupabaseError(
+    await supabase.from("invoices").upsert(demoInvoices, { onConflict: "stripe_invoice_id" }),
+    "Seed safe Riverside demo invoices"
   );
 }
 
