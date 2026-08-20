@@ -5,7 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardAccess } from "@/lib/auth/shop-access";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { isMissingReviewView } from "./source-health";
+import {
+  isForecastArrivalFresh,
+  isMissingReviewView,
+} from "./source-health";
 
 type Props = {
   searchParams: Promise<{
@@ -344,7 +347,10 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     a.label.localeCompare(b.label),
   );
   const shops = (shopResult.data ?? []) as ShopCandidate[];
-  const featuredShops = shops.slice(0, 8);
+  const featuredShops = shops.slice(0, 8).map((shop) => ({
+    ...shop,
+    hasFreshArrivals: isForecastArrivalFresh(shop.latest_arrival_date),
+  }));
   const mappedShopIds = new Set(
     (mappedShopResult.data ?? []).map((row) => row.shop_id as string),
   );
@@ -903,6 +909,12 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
             shop remains available in the selector. Confirm the exact legal and
             operating identity before connecting repair history.
           </p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+            “Fresh arrivals” means the latest repair arrived within the 14-day
+            forecast gate. Connecting a shop makes its data eligible for model
+            evaluation; a separately approved model is still required before
+            forecasts are published.
+          </p>
         </div>
         <Card>
           <CardContent>
@@ -921,6 +933,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     </th>
                     <th scope="col" className="pb-3">
                       Latest arrival
+                    </th>
+                    <th scope="col" className="pb-3 pl-4">
+                      Forecast input
                     </th>
                   </tr>
                 </thead>
@@ -941,6 +956,15 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                       </td>
                       <td className="py-3">
                         {shop.latest_arrival_date ?? "Unknown"}
+                      </td>
+                      <td className="py-3 pl-4">
+                        <Badge
+                          variant={shop.hasFreshArrivals ? "success" : "warning"}
+                        >
+                          {shop.hasFreshArrivals
+                            ? "Fresh arrivals"
+                            : "Stale or missing"}
+                        </Badge>
                       </td>
                     </tr>
                   ))}
@@ -977,7 +1001,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         key={shop.source_shop_key}
                         value={shop.source_shop_key}
                       >
-                        {shop.source_shop_name} ({shop.source_shop_key})
+                        {shop.source_shop_name} ({shop.source_shop_key}) —{" "}
+                        {shop.repair_orders_2026.toLocaleString()} repairs in
+                        2026; last {shop.latest_arrival_date ?? "unknown"}
                       </option>
                     ))}
                   </select>

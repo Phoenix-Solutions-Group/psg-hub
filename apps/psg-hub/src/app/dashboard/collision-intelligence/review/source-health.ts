@@ -7,3 +7,13 @@ export function isMissingReviewView(
     Boolean(error.message?.includes(`'public.${view}'`))
   );
 }
+
+export function isForecastArrivalFresh(
+  latestArrivalDate: string | null,
+  today = new Date(),
+): boolean {
+  if (!latestArrivalDate) return false;
+  const cutoff = new Date(today);
+  cutoff.setUTCDate(cutoff.getUTCDate() - 14);
+  return latestArrivalDate >= cutoff.toISOString().slice(0, 10);
+}
