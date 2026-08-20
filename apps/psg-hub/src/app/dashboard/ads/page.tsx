@@ -93,13 +93,15 @@ function priorWindow(from: string, days: number): { from: string; to: string } {
   };
 }
 
-function friendlyStatus(status: string): string {
+export function friendlyStatus(status: string, requestType: string): string {
   const labels: Record<string, string> = {
     submitted: "Received",
     psg_reviewing: "PSG is working on it",
     in_progress: "PSG is working on it",
     needs_more_info: "We need one detail from you",
-    done: "Done - it is live",
+    done: requestType === "performance_review" || requestType === "problem_report"
+      ? "Answered"
+      : "Done – the change is live",
     declined: "Could not do this",
   };
   return labels[status] ?? "Received";
@@ -330,7 +332,7 @@ export default async function AdsPage({ searchParams }: Props) {
                         </p>
                       </div>
                       <Badge variant={campaign.status === "enabled" ? "success" : "secondary"}>
-                        {campaign.status}
+                        {campaign.status === "enabled" ? "Running" : "Paused"}
                       </Badge>
                     </li>
                   );
@@ -373,6 +375,7 @@ export default async function AdsPage({ searchParams }: Props) {
           <CardContent className="py-4">
             <CustomerRequestActions
               shopId={shopId}
+              canSubmit={membership.role === "owner" || membership.role === "manager"}
               campaigns={campaigns.map((campaign) => ({ id: campaign.id, name: campaign.name }))}
             />
           </CardContent>
@@ -398,7 +401,7 @@ export default async function AdsPage({ searchParams }: Props) {
                       </p>
                     </div>
                     <Badge variant={request.status === "declined" ? "destructive" : "secondary"}>
-                      {friendlyStatus(request.status)}
+                      {friendlyStatus(request.status, request.request_type)}
                     </Badge>
                   </div>
                   {request.psg_response ? (
@@ -428,7 +431,7 @@ export default async function AdsPage({ searchParams }: Props) {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Pending report state: PSG is reviewing the next Google Ads report before it appears here.
+                {"Your next report is with PSG for review. We'll post it here as soon as it's approved."}
               </p>
             </CardContent>
           </Card>
@@ -439,7 +442,7 @@ export default async function AdsPage({ searchParams }: Props) {
             <CardContent>
               {reports.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Ready report state: no reviewed reports have been published yet.
+                  No reports yet. Your first reviewed report will appear here.
                 </p>
               ) : (
                 <ul className="space-y-3">
