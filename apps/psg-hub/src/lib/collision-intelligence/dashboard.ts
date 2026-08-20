@@ -42,6 +42,7 @@ export async function getCollisionDashboard(shopId: string) {
     vehicles,
     quality,
     modelRegistry,
+    horizonModelRegistry,
     forecastMonitoring,
     repairFeed,
     seasonality,
@@ -136,6 +137,13 @@ export async function getCollisionDashboard(shopId: string) {
       .eq("shop_id", shopId)
       .limit(1),
     service
+      .from("collision_forecast_horizon_registry")
+      .select(
+        "forecast_horizon_weeks,model_key,promotion_status,seasonal_baseline_mae,model_mae,mae_improvement_pct,interval_multiplier,interval_half_width,interval_validation_coverage_pct",
+      )
+      .eq("shop_id", shopId)
+      .order("forecast_horizon_weeks", { ascending: true }),
+    service
       .from("v_collision_forecast_monitoring")
       .select(
         "forecast_horizon_weeks,model_key,observation_count,monitoring_window_weeks,monitoring_start_week,monitoring_end_week,live_mae,live_wape_pct,live_interval_coverage_pct,monitoring_status,monitoring_reason",
@@ -177,6 +185,7 @@ export async function getCollisionDashboard(shopId: string) {
     vehicles.error ??
     quality.error ??
     modelRegistry.error ??
+    horizonModelRegistry.error ??
     forecastMonitoring.error ??
     repairFeed.error ??
     seasonality.error ??
@@ -196,7 +205,13 @@ export async function getCollisionDashboard(shopId: string) {
     (customerZips.data ?? []) as CollisionZipRow[],
     (vehicles.data ?? []) as CollisionVehicleRow[],
     (quality.data ?? []) as CollisionQualityRow[],
-    (modelRegistry.data ?? []) as CollisionModelRegistryRow[],
+    [
+      ...(modelRegistry.data ?? []).map((row) => ({
+        ...row,
+        forecast_horizon_weeks: 1,
+      })),
+      ...(horizonModelRegistry.data ?? []),
+    ] as CollisionModelRegistryRow[],
     (forecastMonitoring.data ?? []) as CollisionForecastMonitoringRow[],
     (repairFeed.data ?? []) as CollisionRepairFeedRow[],
     (seasonality.data ?? []) as CollisionSeasonalityRow[],

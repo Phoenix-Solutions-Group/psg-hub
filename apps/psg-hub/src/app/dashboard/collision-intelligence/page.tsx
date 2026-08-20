@@ -539,39 +539,52 @@ export default async function CollisionIntelligencePage() {
               </div>
             </div>
 
-            {dashboard.modelEvidence ? (
+            {dashboard.modelEvidence.length ? (
               <Card>
-                <CardHeader className="flex flex-row items-start justify-between gap-4">
-                  <div>
-                    <CardTitle>Model promotion evidence</CardTitle>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Chronological shop holdout plus separate cross-shop
-                      interval-policy validation.
-                    </p>
-                  </div>
-                  <Badge variant="success">
-                    {dashboard.modelEvidence.status}
-                  </Badge>
+                <CardHeader>
+                  <CardTitle>Confidence by forecast week</CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Each week is promoted separately against the seasonal
+                    baseline, then its operating interval is checked on held-out
+                    shops.
+                  </p>
                 </CardHeader>
-                <CardContent className="grid gap-4 md:grid-cols-3">
-                  <MetricCard
-                    label="Selected model"
-                    value={dashboard.modelEvidence.modelKey.replaceAll(
-                      "_",
-                      " ",
-                    )}
-                    detail={`${dashboard.modelEvidence.maeImprovementPct.toFixed(1)}% lower MAE than seasonal`}
-                  />
-                  <MetricCard
-                    label="Holdout MAE"
-                    value={dashboard.modelEvidence.modelMae.toFixed(2)}
-                    detail={`Seasonal baseline: ${dashboard.modelEvidence.seasonalMae.toFixed(2)}`}
-                  />
-                  <MetricCard
-                    label="Operating interval"
-                    value={`±${dashboard.modelEvidence.intervalHalfWidth.toFixed(0)} repairs`}
-                    detail={`${dashboard.modelEvidence.validationCoveragePct.toFixed(1)}% held-out-shop coverage after ${dashboard.modelEvidence.intervalMultiplier.toFixed(2)}× widening`}
-                  />
+                <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {dashboard.modelEvidence.map((evidence) => (
+                    <div
+                      key={evidence.horizonWeeks}
+                      className="rounded-lg border border-border p-4"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-heading font-semibold">
+                          Week {evidence.horizonWeeks}
+                        </p>
+                        <Badge
+                          variant={
+                            evidence.status === "approved"
+                              ? "success"
+                              : "warning"
+                          }
+                        >
+                          {evidence.status}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-sm capitalize text-foreground/75">
+                        {evidence.modelKey.replaceAll("_", " ")}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        MAE {evidence.modelMae.toFixed(2)} vs seasonal{" "}
+                        {evidence.seasonalMae.toFixed(2)} (
+                        {evidence.maeImprovementPct.toFixed(1)}% lower)
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        80% range ±{evidence.intervalHalfWidth.toFixed(0)}{" "}
+                        repairs · {evidence.validationCoveragePct.toFixed(1)}%
+                        held-out coverage after{" "}
+                        {evidence.intervalMultiplier.toFixed(2)}× widening
+                      </p>
+                    </div>
+                  ))}
                 </CardContent>
               </Card>
             ) : null}

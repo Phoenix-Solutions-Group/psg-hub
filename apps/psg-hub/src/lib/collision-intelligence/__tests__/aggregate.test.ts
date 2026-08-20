@@ -142,6 +142,7 @@ describe("collision intelligence aggregation", () => {
       ],
       [
         {
+          forecast_horizon_weeks: 1,
           model_key: "trailing4_v1",
           promotion_status: "approved",
           seasonal_baseline_mae: 3.63,
@@ -150,6 +151,17 @@ describe("collision intelligence aggregation", () => {
           interval_multiplier: 1.55,
           interval_half_width: 9,
           interval_validation_coverage_pct: 92.3,
+        },
+        {
+          forecast_horizon_weeks: 4,
+          model_key: "seasonal_recent_blend_v1",
+          promotion_status: "approved",
+          seasonal_baseline_mae: 3.63,
+          model_mae: 3.04,
+          mae_improvement_pct: 16.5,
+          interval_multiplier: 1.55,
+          interval_half_width: 8,
+          interval_validation_coverage_pct: 92.1,
         },
       ],
       [
@@ -267,12 +279,19 @@ describe("collision intelligence aggregation", () => {
       issue: "missing_ro_number",
       affectedPercent: 3,
     });
-    expect(dashboard.modelEvidence).toMatchObject({
+    expect(dashboard.modelEvidence).toHaveLength(2);
+    expect(dashboard.modelEvidence[0]).toMatchObject({
+      horizonWeeks: 1,
       modelKey: "trailing4_v1",
       status: "approved",
       modelMae: 2.65,
       intervalHalfWidth: 9,
       validationCoveragePct: 92.3,
+    });
+    expect(dashboard.modelEvidence[1]).toMatchObject({
+      horizonWeeks: 4,
+      modelKey: "seasonal_recent_blend_v1",
+      intervalHalfWidth: 8,
     });
     expect(dashboard.forecastMonitoring[0]).toMatchObject({
       horizonWeeks: 1,

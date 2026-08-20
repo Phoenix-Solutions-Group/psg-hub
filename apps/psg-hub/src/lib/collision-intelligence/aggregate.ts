@@ -128,6 +128,7 @@ export type CollisionQualityRow = {
 };
 
 export type CollisionModelRegistryRow = {
+  forecast_horizon_weeks: Numeric;
   model_key: string;
   promotion_status: "review" | "approved" | "retired";
   seasonal_baseline_mae: Numeric;
@@ -509,7 +510,6 @@ export function buildCollisionDashboard(
   const topInsurer = insurerRows[0];
   const latestSpcSource = spcSourceRows[0];
   const repairFeed = repairFeedRows[0];
-  const modelRegistry = modelRegistryRows[0];
   const crashSource = crashSourceRows[0];
 
   return {
@@ -696,20 +696,23 @@ export function buildCollisionDashboard(
       totalRepairs: numberOf(row.repair_orders),
       affectedPercent: numberOf(row.affected_percent),
     })),
-    modelEvidence: modelRegistry
-      ? {
-          modelKey: modelRegistry.model_key,
-          status: modelRegistry.promotion_status,
-          seasonalMae: numberOf(modelRegistry.seasonal_baseline_mae),
-          modelMae: numberOf(modelRegistry.model_mae),
-          maeImprovementPct: numberOf(modelRegistry.mae_improvement_pct),
-          intervalMultiplier: numberOf(modelRegistry.interval_multiplier),
-          intervalHalfWidth: numberOf(modelRegistry.interval_half_width),
-          validationCoveragePct: numberOf(
-            modelRegistry.interval_validation_coverage_pct,
-          ),
-        }
-      : null,
+    modelEvidence: [...modelRegistryRows]
+      .sort(
+        (a, b) =>
+          numberOf(a.forecast_horizon_weeks) -
+          numberOf(b.forecast_horizon_weeks),
+      )
+      .map((row) => ({
+        horizonWeeks: numberOf(row.forecast_horizon_weeks),
+        modelKey: row.model_key,
+        status: row.promotion_status,
+        seasonalMae: numberOf(row.seasonal_baseline_mae),
+        modelMae: numberOf(row.model_mae),
+        maeImprovementPct: numberOf(row.mae_improvement_pct),
+        intervalMultiplier: numberOf(row.interval_multiplier),
+        intervalHalfWidth: numberOf(row.interval_half_width),
+        validationCoveragePct: numberOf(row.interval_validation_coverage_pct),
+      })),
     forecastMonitoring: [...forecastMonitoringRows]
       .sort(
         (a, b) =>
