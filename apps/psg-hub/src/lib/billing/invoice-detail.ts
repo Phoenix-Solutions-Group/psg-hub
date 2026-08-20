@@ -22,6 +22,20 @@ export type InvoiceDocumentData = {
   lines: InvoiceLineItem[];
 };
 
+export function invoiceRemainingBalance(
+  status: string,
+  amountDue: number,
+  raw: unknown
+): number {
+  const value =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const rawRemaining = finiteNumber(value.amount_remaining);
+
+  if (rawRemaining != null) return Math.max(0, rawRemaining);
+  if (status === "paid" || status === "void") return 0;
+  return Math.max(0, amountDue);
+}
+
 function finiteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
