@@ -8,9 +8,11 @@ import {
 describe("collision intelligence aggregation", () => {
   it("keeps financial, cycle-time, and forecast denominators honest", () => {
     const baselineRows: CollisionForecastRow[] = Array.from(
-      { length: 52 },
+      { length: 104 },
       (_, index) => ({
-        week_start: `2025-${String(Math.floor(index / 4) + 1).padStart(2, "0")}-${String((index % 4) * 7 + 1).padStart(2, "0")}`,
+        week_start: new Date(Date.UTC(2024, 0, 1 + index * 7))
+          .toISOString()
+          .slice(0, 10),
         repair_orders: 10,
         repair_orders_lag_52_weeks: 20,
         trailing_4_week_average: 10,
@@ -334,6 +336,7 @@ describe("collision intelligence aggregation", () => {
       champion: "trailing4",
       beatsSeasonal: true,
     });
+    expect(evaluateCollisionBaseline(baselineRows.slice(1))).toBeNull();
   });
 
   it("distinguishes unavailable local crash coverage from zero crashes", () => {

@@ -418,7 +418,9 @@ export function evaluateCollisionBaseline(rows: CollisionForecastRow[]) {
         row.trailing_4_week_average !== null,
     )
     .sort((a, b) => a.week_start.localeCompare(b.week_start));
-  if (eligible.length < 52) return null;
+  // Require the same 52-week calibration + 52-week holdout frame used by the
+  // governed evaluator. The first seasonal lag already consumes 52 weeks.
+  if (eligible.length < 104) return null;
 
   const holdout = eligible.slice(-52);
   const actual = holdout.map((row) => numberOf(row.repair_orders));

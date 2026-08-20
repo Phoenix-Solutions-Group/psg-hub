@@ -92,6 +92,10 @@ The standard evaluation requires a seasonal lag plus 52 calibration weeks and
 at least 156 calendar weeks, after which the evaluator still excludes long
 internal gaps.
 
+The dashboard's historical baseline card uses that same minimum frame but is
+exploratory only. Model approval depends on the separately stored, four-horizon
+evaluation and interval-coverage evidence in the forecast registries.
+
 ## Forecast meaning
 
 The target is aggregate weekly repair arrivals by shop for horizons one through

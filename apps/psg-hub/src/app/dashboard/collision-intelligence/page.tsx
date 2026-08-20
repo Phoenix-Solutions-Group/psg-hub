@@ -457,15 +457,17 @@ export default async function CollisionIntelligencePage() {
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <h2 id="forecast-heading" className="text-lg font-semibold">
-                  Forecast baseline
+                  Historical baseline check
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  Chronological final-year holdout; lower error is better.
+                  Exploratory final-year holdout after a 52-week calibration
+                  window. Approval uses the governed evaluator below.
                 </p>
               </div>
               {baseline?.beatsSeasonal ? (
                 <Badge variant="success">
-                  {baseline.maeImprovementPct.toFixed(1)}% lower MAE
+                  Preliminary · {baseline.maeImprovementPct.toFixed(1)}% lower
+                  MAE
                 </Badge>
               ) : null}
             </div>
@@ -700,8 +702,9 @@ export default async function CollisionIntelligencePage() {
             ) : (
               <Card>
                 <CardContent className="pt-6 text-muted-foreground">
-                  At least 104 weeks of history are required for the seasonal
-                  comparison.
+                  At least 156 calendar weeks are required before this
+                  exploratory seasonal comparison is shown. Long coverage gaps
+                  can require more history in the governed evaluator.
                 </CardContent>
               </Card>
             )}
