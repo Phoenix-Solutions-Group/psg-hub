@@ -1,0 +1,61 @@
+[
+  {
+    "registry_source": "naic_loc",
+    "registry_type": "group",
+    "registry_id": "3548",
+    "naics_code": "811121",
+    "carrier_name": "Travelers Group",
+    "evidence_type": "carrier_appetite",
+    "evidence_scope": "national_marketing",
+    "state_codes": [],
+    "coverage_types": ["businessowners_policy", "garagekeepers"],
+    "source_name": "Travelers Small Business Appetite Guide",
+    "source_url": "https://foragents.travelers.com/lscontent/iw-documents/business/small-bus/appetite-guide/select-app-guide-print.pdf",
+    "evidence_summary": "The official appetite guide explicitly includes body shops among target garage businesses.",
+    "observed_on": "2026-08-20",
+    "valid_through": null,
+    "is_current": true
+  },
+  {
+    "registry_source": "naic_loc",
+    "registry_type": "group",
+    "registry_id": "7",
+    "naics_code": "811121",
+    "carrier_name": "Federated Mutual Group",
+    "evidence_type": "carrier_appetite",
+    "evidence_scope": "national_marketing",
+    "state_codes": [],
+    "coverage_types": [
+      "commercial_auto",
+      "general_liability",
+      "workers_compensation"
+    ],
+    "source_name": "Federated Auto Services Insurance",
+    "source_url": "https://www.federatedinsurance.com/industries/auto-services",
+    "evidence_summary": "The official industry page explicitly lists body repair and collision shops as businesses served.",
+    "observed_on": "2026-08-20",
+    "valid_through": null,
+    "is_current": true
+  },
+  {
+    "registry_source": "naic_loc",
+    "registry_type": "group",
+    "registry_id": "2538",
+    "naics_code": "811121",
+    "carrier_name": "AmTrust Financial Services Group",
+    "evidence_type": "carrier_appetite",
+    "evidence_scope": "national_marketing",
+    "state_codes": [],
+    "coverage_types": [
+      "businessowners_policy",
+      "garagekeepers",
+      "workers_compensation"
+    ],
+    "source_name": "AmTrust Auto Services BOP and Workers Compensation Guide",
+    "source_url": "https://www.amtrustfinancial.com/getmedia/31fcad6d-1093-4830-8057-fb61f5967ca2/Auto-Service-BOP-Highlight-Sheet-MKT5461.pdf?ext=.pdf",
+    "evidence_summary": "The official 2026 guide identifies auto body repair as an eligible class and describes garagekeepers coverage.",
+    "observed_on": "2026-08-20",
+    "valid_through": null,
+    "is_current": true
+  }
+]

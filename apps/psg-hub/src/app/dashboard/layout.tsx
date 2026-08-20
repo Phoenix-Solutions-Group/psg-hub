@@ -31,6 +31,10 @@ export function dashboardNav(
             href: "/dashboard/collision-intelligence/review",
             label: "Data Quality & Matching",
           },
+          {
+            href: "/dashboard/collision-intelligence/body-shop-insurance",
+            label: "Body Shop Insurance",
+          },
         ]
       : []),
     { href: "/dashboard/audit", label: "SEO Audit" },
