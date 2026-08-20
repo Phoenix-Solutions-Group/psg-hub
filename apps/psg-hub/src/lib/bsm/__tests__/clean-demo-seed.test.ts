@@ -84,6 +84,7 @@ describe("clean BSM demo seed", () => {
       searchCampaignExternalId: "demo-riverside-search",
       pmaxCampaignExternalId: "demo-riverside-pmax",
     });
+    expect(CLEAN_DEMO_SEED.googleAds.accountCustomerId).not.toBe("6048611995");
     expect(CLEAN_DEMO_SEED.gtm.containerPublicId).toBe("GTM-BSMDEMO");
     expect(CLEAN_DEMO_SEED.yext.entityId).toBe("riverside-collision-san-francisco");
     expect(CLEAN_DEMO_SEED.customerContent.title).toBe("Riverside Collision July repair tips");

@@ -5,6 +5,7 @@ import { assertAdsTier } from "@/lib/google-ads/tier";
 import { getTemplate } from "@/lib/google-ads/templates";
 import { createCampaign } from "@/lib/google-ads/campaigns";
 import { AdsApiError } from "@/lib/google-ads/types";
+import { requireOpsFn } from "@/lib/auth/ops-access";
 
 const DEFAULT_MAX_MICROS = 500_000_000;
 
@@ -29,6 +30,17 @@ export async function GET(request: Request) {
   const shopId = url.searchParams.get("shop_id");
   if (!shopId) {
     return NextResponse.json({ error: "shop_id required" }, { status: 400 });
+  }
+
+  const { data: membership } = await supabase
+    .from("shop_users")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("shop_id", shopId)
+    .maybeSingle();
+
+  if (!membership) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
@@ -65,14 +77,9 @@ type CreateBody = {
 };
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const gate = await requireOpsFn("ads_mutations");
+  if (!gate.ok) return gate.response;
+  const userId = gate.userId;
 
   let body: CreateBody;
   try {
@@ -101,23 +108,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: err.message }, { status: 402 });
     }
     throw err;
-  }
-
-  const { data: membership } = await supabase
-    .from("shop_users")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("shop_id", shopId)
-    .maybeSingle();
-
-  if (!membership) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  if (membership.role !== "owner" && membership.role !== "manager") {
-    return NextResponse.json(
-      { error: "Only owners or managers can create campaigns" },
-      { status: 403 }
-    );
   }
 
   const service = createServiceClient();
@@ -184,7 +174,7 @@ export async function POST(request: Request) {
   try {
     const result = await createCampaign({
       shopId,
-      userId: user.id,
+      userId,
       template,
       campaignName,
       dailyBudgetMicros: dailyBudget,
