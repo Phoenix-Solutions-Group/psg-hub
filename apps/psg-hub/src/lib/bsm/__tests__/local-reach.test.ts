@@ -146,6 +146,8 @@ describe("Local Reach helpers", () => {
       ],
       error: null,
     }));
+    const evidenceIn = vi.fn(() => ({ order: evidenceOrder }));
+    const evidenceShopEq = vi.fn(() => ({ in: evidenceIn }));
     const client = {
       from(table: string) {
         if (table === "local_reach_customer_settings") {
@@ -155,15 +157,15 @@ describe("Local Reach helpers", () => {
           return { select: () => ({ eq: () => ({ order: recommendationOrder }) }) };
         }
         if (table === "local_reach_evidence_links") {
-          return { select: () => ({ in: () => ({ order: evidenceOrder }) }) };
+          return { select: () => ({ eq: evidenceShopEq }) };
         }
         throw new Error(`Unexpected table: ${table}`);
       },
     };
 
-    const workspace = await getLocalReachWorkspace(client as never, "shop-1");
+    const workspace = await getLocalReachWorkspace(client as never, "shop-1", "Riverside Collision");
 
-    expect(workspace.settings.shopName).toBe("Supreme Collision Centre");
+    expect(workspace.settings.shopName).toBe("Riverside Collision");
     expect(workspace.recommendations[0]).toMatchObject({
       id: "rec-1",
       title: "Add Thornhill hail repair FAQ",
@@ -173,5 +175,31 @@ describe("Local Reach helpers", () => {
     });
     expect(workspace.recommendations[0].evidence).toHaveLength(1);
     expect(workspace.stats.waitingForReview).toBe(1);
+    expect(evidenceShopEq).toHaveBeenCalledWith("shop_id", "shop-1");
+    expect(evidenceIn).toHaveBeenCalledWith("recommendation_id", ["rec-1"]);
+  });
+
+  it("uses the authenticated active-shop identity when no settings row exists", async () => {
+    const settingsMaybeSingle = vi.fn(async () => ({ data: null, error: null }));
+    const recommendationsOrder = vi.fn(async () => ({ data: [], error: null }));
+    const client = {
+      from(table: string) {
+        if (table === "local_reach_customer_settings") {
+          return { select: () => ({ eq: () => ({ maybeSingle: settingsMaybeSingle }) }) };
+        }
+        if (table === "local_reach_recommendations") {
+          return { select: () => ({ eq: () => ({ order: () => ({ order: recommendationsOrder }) }) }) };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const workspace = await getLocalReachWorkspace(
+      client as never,
+      "riverside-shop-id",
+      "Riverside Collision",
+    );
+
+    expect(workspace.settings.shopName).toBe("Riverside Collision");
   });
 });
