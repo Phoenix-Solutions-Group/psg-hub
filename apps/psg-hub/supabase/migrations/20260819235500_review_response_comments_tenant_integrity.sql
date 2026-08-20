@@ -11,3 +11,13 @@ alter table public.review_response_comments
   foreign key (review_item_id, shop_id)
   references public.review_items (id, shop_id)
   on delete cascade;
+
+alter table public.review_responses
+  add constraint review_responses_id_review_shop_key
+  unique (id, review_item_id, shop_id);
+
+alter table public.review_response_comments
+  add constraint review_response_comments_response_review_shop_fk
+  foreign key (review_response_id, review_item_id, shop_id)
+  references public.review_responses (id, review_item_id, shop_id)
+  on delete set null (review_response_id);
