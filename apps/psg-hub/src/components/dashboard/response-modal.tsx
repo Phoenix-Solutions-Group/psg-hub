@@ -98,6 +98,8 @@ export function ResponseModal({
   // Capture opener for focus return + initial focus + ESC key.
   useEffect(() => {
     openerRef.current = document.activeElement as HTMLElement | null;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     firstFocusableRef.current?.focus();
 
     function onKey(e: KeyboardEvent) {
@@ -109,6 +111,7 @@ export function ResponseModal({
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousBodyOverflow;
       openerRef.current?.focus();
     };
   }, [onClose]);
@@ -262,7 +265,7 @@ export function ResponseModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
       onClick={onClose}
     >
       <div
@@ -272,7 +275,7 @@ export function ResponseModal({
         aria-labelledby="response-modal-title"
         onKeyDown={onKeyDown}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl rounded-md border bg-background p-6 shadow-lg"
+        className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-md border bg-background p-6 shadow-lg"
       >
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
