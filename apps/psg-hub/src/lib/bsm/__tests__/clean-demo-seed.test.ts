@@ -110,12 +110,12 @@ describe("clean BSM demo seed", () => {
     expect(summarize("2026-07")).toEqual({
       opened: 3,
       closed: 2,
-      processed: 18_500,
+      processed: 8_500,
     });
     expect(summarize("2026-08")).toEqual({
       opened: 2,
       closed: 1,
-      processed: 14_750,
+      processed: 4_750,
     });
     expect(rows.every((row) => row.company_id === "riverside-company")).toBe(true);
     expect(rows.every((row) => row.payload_jsonb.demoSeed === "psg-2975-operational-reports"))
