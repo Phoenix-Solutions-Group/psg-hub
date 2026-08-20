@@ -80,6 +80,7 @@ type RepairSourceHealth = {
 
 type RepairFeedHealth = {
   is_stale: boolean;
+  latest_arrival_date: string | null;
 };
 
 type StormSourceHealth = {
@@ -199,7 +200,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       .eq("status", "loaded")
       .order("imported_at", { ascending: false })
       .limit(1),
-    service.from("v_collision_repair_feed_status").select("is_stale"),
+    service
+      .from("v_collision_repair_feed_status")
+      .select("is_stale,latest_arrival_date"),
     service
       .from("v_collision_storm_source_reconciliation")
       .select("event_rows,is_reconciled"),
@@ -376,6 +379,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     null) as CrashSourceHealth | null;
   const forecasts = (forecastResult.data ?? []) as ForecastHealth[];
   const staleRepairFeeds = repairFeeds.filter((feed) => feed.is_stale).length;
+  const staleShopArrivals = repairFeeds.filter(
+    (feed) => !isForecastArrivalFresh(feed.latest_arrival_date),
+  ).length;
   const unreconciledStormSources = stormSources.filter(
     (source) => !source.is_reconciled,
   ).length;
@@ -454,11 +460,16 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                 : !repairFeeds.length
                   ? "No mapped feed"
                   : staleRepairFeeds
-                    ? "Stale"
-                    : "Current"
+                    ? "Source stale"
+                    : staleShopArrivals
+                      ? "Shop arrivals stale"
+                      : "Current"
             }
             healthy={Boolean(
-              repairSource && repairFeeds.length && !staleRepairFeeds,
+              repairSource &&
+              repairFeeds.length &&
+              !staleRepairFeeds &&
+              !staleShopArrivals,
             )}
           >
             <ReviewMetric
@@ -474,8 +485,16 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
               value={repairSource?.rejected_count.toLocaleString() ?? "—"}
             />
             <ReviewMetric
-              label="Latest arrival"
+              label="Latest source arrival"
               value={repairSource?.arrival_max ?? "—"}
+            />
+            <ReviewMetric
+              label="Forecast-current mapped shops"
+              value={
+                repairFeeds.length
+                  ? `${repairFeeds.length - staleShopArrivals} / ${repairFeeds.length}`
+                  : "—"
+              }
             />
           </SourceHealthCard>
 
