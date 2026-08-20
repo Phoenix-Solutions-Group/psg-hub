@@ -130,8 +130,22 @@ export default async function CollisionIntelligencePage() {
                   }
                 >
                   {dashboard.repairFeed && !dashboard.repairFeed.isStale
-                    ? "Repair feed current"
-                    : "Repair feed stale"}
+                    ? "Source snapshot current"
+                    : "Source snapshot stale"}
+                </Badge>
+                <Badge
+                  variant={
+                    operationalForecast &&
+                    operationalForecast.sourceAgeDays <= 14
+                      ? "success"
+                      : "warning"
+                  }
+                >
+                  {!operationalForecast
+                    ? "Shop arrivals unavailable"
+                    : operationalForecast.sourceAgeDays <= 14
+                      ? "Shop arrivals current"
+                      : "Shop arrivals stale"}
                 </Badge>
                 <Badge
                   variant={
@@ -479,7 +493,9 @@ export default async function CollisionIntelligencePage() {
                 ) : (
                   <div>
                     <p className="font-heading font-semibold">
-                      Publication blocked by data freshness
+                      {operationalForecast?.status === "stale_source"
+                        ? "No recent shop arrivals"
+                        : "Forecast not ready"}
                     </p>
                     <p className="mt-1 text-sm text-foreground/75">
                       {operationalForecast?.reason ??
