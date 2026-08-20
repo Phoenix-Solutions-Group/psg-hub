@@ -31,6 +31,7 @@ export const MULTI = {
   statePath: path.join(AUTH_DIR, "multi.json"),
   shopA: "E2E Multi Shop A",
   shopB: "E2E Multi Shop B",
+  reviewItemId: "22222222-dddd-4ddd-8ddd-222222222222",
   bsmReviewItemId: "22222222-bbbb-4bbb-8bbb-222222222222",
 };
 
