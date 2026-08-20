@@ -165,10 +165,14 @@ export default async function LocalReachPage() {
   let loadError: string | null = null;
 
   if (user) {
-    const { activeShopId } = await getActiveShopContext(user.id);
+    const { shops, activeShopId } = await getActiveShopContext(user.id);
     if (activeShopId) {
       try {
-        workspace = await getLocalReachWorkspace(supabase, activeShopId);
+        const activeShop = shops.find((shop) => shop.id === activeShopId);
+        if (!activeShop) {
+          throw new Error("The active shop is no longer available.");
+        }
+        workspace = await getLocalReachWorkspace(supabase, activeShop.id, activeShop.name);
       } catch (error) {
         loadError = error instanceof Error ? error.message : "Local Reach could not load.";
       }

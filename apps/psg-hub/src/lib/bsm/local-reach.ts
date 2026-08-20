@@ -72,8 +72,7 @@ export type LocalReachWorkspace = {
 
 type JsonRecord = Record<string, unknown>;
 
-const DEFAULT_SETTINGS: LocalReachSettings = {
-  shopName: "Supreme Collision",
+const DEFAULT_SETTINGS: Omit<LocalReachSettings, "shopName"> = {
   market: "Ontario, Canada",
   pilotStatus: "Setup audit in progress",
   lastAuditAt: null,
@@ -170,6 +169,7 @@ export function buildSetupSteps(settings: LocalReachSettings, recommendations: L
 export async function getLocalReachWorkspace(
   client: SupabaseClient,
   shopId: string,
+  activeShopName: string,
 ): Promise<LocalReachWorkspace> {
   const [settingsResult, recommendationsResult] = await Promise.all([
     client.from("local_reach_customer_settings").select("*").eq("shop_id", shopId).maybeSingle(),
@@ -196,6 +196,7 @@ export async function getLocalReachWorkspace(
     const evidenceResult = await client
       .from("local_reach_evidence_links")
       .select("*")
+      .eq("shop_id", shopId)
       .in("recommendation_id", recommendationIds)
       .order("source_date", { ascending: false });
     if (evidenceResult.error) {
@@ -220,7 +221,9 @@ export async function getLocalReachWorkspace(
 
   const rawSettings = (settingsResult.data ?? {}) as JsonRecord;
   const settings: LocalReachSettings = {
-    shopName: asNullableString(rawSettings.shop_name) ?? DEFAULT_SETTINGS.shopName,
+    // Membership context is authoritative for identity. Settings may contain a
+    // stale imported label, but must never make this shop look like another one.
+    shopName: activeShopName,
     market: asNullableString(rawSettings.market) ?? DEFAULT_SETTINGS.market,
     pilotStatus: asNullableString(rawSettings.pilot_status) ?? DEFAULT_SETTINGS.pilotStatus,
     lastAuditAt: asNullableString(rawSettings.last_audit_at),
