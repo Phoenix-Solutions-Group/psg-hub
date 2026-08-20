@@ -68,4 +68,16 @@ describe("shop identity matching", () => {
     expect(match.shop.id).toBe("wallace");
     expect(match.score).toBe(100);
   });
+
+  it("does not suggest a shop based only on generic industry words", () => {
+    expect(rankShopMatches("IFM Collision Center", shops)).toEqual([]);
+    expect(rankShopMatches("Andover Auto Body", shops)).toEqual([]);
+  });
+
+  it("keeps a close spelling match on the distinctive name", () => {
+    const [match] = rankShopMatches("Walace Collision Center", shops);
+
+    expect(match.shop.id).toBe("wallace");
+    expect(match.score).toBeGreaterThanOrEqual(80);
+  });
 });

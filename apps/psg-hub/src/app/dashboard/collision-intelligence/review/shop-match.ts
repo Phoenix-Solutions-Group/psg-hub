@@ -28,6 +28,21 @@ const directions = new Set([
   "west",
 ]);
 
+const genericShopTokens = new Set([
+  "auto",
+  "automotive",
+  "body",
+  "car",
+  "center",
+  "collision",
+  "paint",
+  "repair",
+  "service",
+  "services",
+  "shop",
+  "the",
+]);
+
 export function normalizeShopMatchText(value: string) {
   return value
     .normalize("NFKD")
@@ -42,6 +57,12 @@ export function normalizeShopMatchText(value: string) {
 
 function tokenSet(value: string) {
   return new Set(normalizeShopMatchText(value).split(" ").filter(Boolean));
+}
+
+function distinctiveText(tokens: Set<string>) {
+  return [...tokens]
+    .filter((token) => token.length > 1 && !genericShopTokens.has(token))
+    .join(" ");
 }
 
 function dice(left: string, right: string) {
@@ -80,6 +101,18 @@ function similarity(source: string, target: string) {
       (shared / Math.max(leftTokens.size, rightTokens.size)) * 40,
   );
   if (left.includes(right) || right.includes(left)) score = Math.max(78, score);
+  const hasDistinctiveOverlap = [...leftTokens].some(
+    (token) =>
+      token.length > 1 &&
+      !genericShopTokens.has(token) &&
+      rightTokens.has(token),
+  );
+  if (
+    !hasDistinctiveOverlap &&
+    dice(distinctiveText(leftTokens), distinctiveText(rightTokens)) < 0.55
+  ) {
+    score = Math.min(24, score);
+  }
   return hasLocationGap(source, target) ? Math.min(79, score) : score;
 }
 
