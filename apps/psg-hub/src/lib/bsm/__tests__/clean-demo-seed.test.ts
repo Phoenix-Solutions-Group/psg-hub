@@ -259,6 +259,10 @@ describe("clean BSM demo seed", () => {
     expect(rows.every((row) => row.hosted_invoice_url === null)).toBe(true);
     expect(rows.every((row) => row.invoice_pdf === null)).toBe(true);
     expect(rows.every((row) => row.raw.testOnly === true)).toBe(true);
+    expect(rows.map((row) => row.raw.balance_due)).toEqual([125000, 0, 0]);
+    expect(rows.every((row) => typeof row.raw.due_date === "string")).toBe(true);
+    expect(rows.every((row) => row.raw.lines.length > 0)).toBe(true);
+    expect(rows.every((row) => row.raw.subtotal + row.raw.tax === row.raw.total)).toBe(true);
   });
 
   it("builds Riverside direct-mail priors from aggregate rows instead of invented counts", () => {
