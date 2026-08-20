@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { OWNER, MULTI, PASSWORD } from "./fixtures";
+import { OPS_STAFF, OWNER, MULTI, PASSWORD } from "./fixtures";
 import { checkA11y, shoot } from "./_helpers";
 
 // Phase 10 / 10-01. Two proofs against the LOCAL migrated DB:
@@ -27,6 +27,14 @@ if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(url)) {
 const admin = createClient(url, serviceKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+
+const PDF_BYTES = new Uint8Array([
+  0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, 0x25, 0xe2, 0xe3,
+  0xcf, 0xd3, 0x0a, 0x31, 0x20, 0x30, 0x20, 0x6f, 0x62, 0x6a, 0x0a, 0x3c,
+  0x3c, 0x3e, 0x3e, 0x0a, 0x65, 0x6e, 0x64, 0x6f, 0x62, 0x6a, 0x0a, 0x74,
+  0x72, 0x61, 0x69, 0x6c, 0x65, 0x72, 0x0a, 0x3c, 0x3c, 0x3e, 0x3e, 0x0a,
+  0x25, 0x25, 0x45, 0x4f, 0x46,
+]);
 
 async function shopIdByName(name: string): Promise<string> {
   const { data, error } = await admin
@@ -188,38 +196,249 @@ test.describe("google ads — schema round-trip with real clients (AC-1, AC-2)",
   });
 });
 
-test.describe("google ads — /dashboard/ads online, unlinked surface (AC-3)", () => {
-  // OWNER shop slug (e2e-owner-auto-body) is in SHOP_ADS_TIER_OVERRIDE
-  // (.env.test.local) -> treated as Performance tier. 0 linked accounts -> the
-  // empty-link state.
+test.describe("google ads — customer-facing hub", () => {
   test.use({ storageState: OWNER.statePath });
 
-  test("renders the accounts/link surface, not the coming-soon guard, no mutation controls", async ({
-    page,
-  }) => {
+  let ownerShopId: string;
+  let reportId: string;
+  let needsInfoRequestId: string;
+  let otherShopReportId: string;
+
+  test.beforeAll(async () => {
+    ownerShopId = await shopIdByName(OWNER.shopName);
+    const otherShopId = await shopIdByName(MULTI.shopA);
+
+    await admin.from("google_ads_customer_requests").delete().eq("shop_id", ownerShopId);
+    await admin.from("google_ads_optimization_audit_reports").delete().eq("shop_id", ownerShopId);
+    await admin.from("google_ads_campaigns").delete().eq("shop_id", ownerShopId);
+    await admin.from("google_ads_accounts").delete().eq("shop_id", ownerShopId);
+
+    const { data: acct, error: acctErr } = await admin
+      .from("google_ads_accounts")
+      .insert({
+        shop_id: ownerShopId,
+        customer_id: "9876543210",
+        encrypted_refresh_token: "\\x746f6b656e",
+        key_version: 1,
+        scope: "https://www.googleapis.com/auth/adwords",
+        status: "linked",
+      })
+      .select("id")
+      .single();
+    expect(acctErr, `account insert: ${acctErr?.message}`).toBeNull();
+
+    const { error: campaignErr } = await admin.from("google_ads_campaigns").insert([
+      {
+        shop_id: ownerShopId,
+        account_id: acct!.id,
+        external_resource_name: "customers/9876543210/campaigns/100",
+        external_id: "100",
+        name: "E2E Collision Repair Leads",
+        campaign_type: "SEARCH",
+        status: "enabled",
+        daily_budget_micros: 75000000,
+        metrics: { conversions: 24, clicks: 300, impressions: 8000, cost_micros: 1800000000 },
+        metrics_synced_at: new Date().toISOString(),
+      },
+    ]);
+    expect(campaignErr, `campaign insert: ${campaignErr?.message}`).toBeNull();
+
+    const { data: requestRows, error: requestErr } = await admin
+      .from("google_ads_customer_requests")
+      .insert([
+        {
+          shop_id: ownerShopId,
+          requested_by_profile_id: (await admin.auth.admin.listUsers()).data.users.find(
+            (user) => user.email === OWNER.email,
+          )!.id,
+          request_type: "campaign_adjustment",
+          title: "Confirm repair services",
+          details: "Please confirm which repair services should be promoted.",
+          status: "needs_more_info",
+          psg_response: "Which services should this campaign emphasize?",
+        },
+        {
+          shop_id: ownerShopId,
+          requested_by_profile_id: (await admin.auth.admin.listUsers()).data.users.find(
+            (user) => user.email === OWNER.email,
+          )!.id,
+          request_type: "new_campaign",
+          title: "Launch bumper repair",
+          details: "Please launch a bumper repair campaign.",
+          status: "done",
+          psg_response: "Campaign is live.",
+          resolved_at: new Date().toISOString(),
+        },
+      ])
+      .select("id, status");
+    expect(requestErr, `request insert: ${requestErr?.message}`).toBeNull();
+    needsInfoRequestId = requestRows!.find((row) => row.status === "needs_more_info")!.id;
+
+    reportId = "44444444-4444-4444-4444-444444444444";
+    otherShopReportId = "55555555-5555-5555-5555-555555555555";
+    await admin.storage
+      .from("google-ads-audit-reports")
+      .upload(`${ownerShopId}/${reportId}.pdf`, PDF_BYTES, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
+    await admin.storage
+      .from("google-ads-audit-reports")
+      .upload(`${otherShopId}/${otherShopReportId}.pdf`, PDF_BYTES, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
+    const opsUser = (await admin.auth.admin.listUsers()).data.users.find(
+      (user) => user.email === OPS_STAFF.email,
+    )!;
+    const { error: reportErr } = await admin.from("google_ads_optimization_audit_reports").upsert(
+      [
+        {
+          id: reportId,
+          shop_id: ownerShopId,
+          title: "E2E Google Ads report",
+          period_month: "2026-07",
+          storage_path: `${ownerShopId}/${reportId}.pdf`,
+          original_filename: "e2e-google-ads-report.pdf",
+          content_type: "application/pdf",
+          byte_size: PDF_BYTES.byteLength,
+          published_by_profile_id: opsUser.id,
+        },
+        {
+          id: otherShopReportId,
+          shop_id: otherShopId,
+          title: "Other shop report",
+          period_month: "2026-07",
+          storage_path: `${otherShopId}/${otherShopReportId}.pdf`,
+          original_filename: "other-shop-report.pdf",
+          content_type: "application/pdf",
+          byte_size: PDF_BYTES.byteLength,
+          published_by_profile_id: opsUser.id,
+        },
+      ],
+      { onConflict: "id" },
+    );
+    expect(reportErr, `report insert: ${reportErr?.message}`).toBeNull();
+  });
+
+  test("renders the customer hub, request workflow, reports, and screenshot evidence", async ({ page }) => {
     await page.goto("/dashboard/ads");
 
-    // Real surface heading + the empty accounts state from <AccountsTable>.
-    await expect(page.getByRole("heading", { name: "Google Ads" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your Google Ads" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "How your ads are doing" })).toBeVisible();
+    await expect(page.getByText("Numbers current as of")).toBeVisible();
+    await expect(page.getByText("Spend", { exact: true })).toBeVisible();
+    await expect(page.getByText("Leads", { exact: true })).toBeVisible();
+    await expect(page.getByText("Cost per lead", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Best-performing ads" })).toBeVisible();
     await expect(
-      page.getByText("No Google Ads account linked yet.")
+      page.getByLabel("Best-performing ads").getByText("E2E Collision Repair Leads"),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Link Google Ads" })
-    ).toBeVisible();
 
-    // The old "coming soon" guard copy is gone.
-    await expect(page.getByText(/arrive in a later release/)).toHaveCount(0);
+    const requests = [
+      { type: "budget_change", fields: { "Requested monthly budget": "3000", "Why do you want this change?": "Increase qualified repair leads", "When would you like it?": "2026-09-01" } },
+      { type: "campaign_status_change", fields: { "Pause or restart?": "Pause", "Why?": "Shop capacity is full", "Requested date": "2026-09-02", "If pausing, until when?": "September 15" } },
+      { type: "new_campaign", fields: { "Service to promote": "Fleet repair", "Offer or message": "Fast fleet estimates", "Area to cover": "Riverside", "Start date": "2026-09-03", "Monthly budget guidance": "2500" } },
+      { type: "ad_copy_change", fields: { "What is wrong?": "The service wording is outdated", "Exact new wording": "Certified aluminum repair", "Why should it change?": "Match current shop capabilities" } },
+      { type: "location_change", fields: { "Current area": "Riverside", "Requested cities, ZIP codes, or radius": "Riverside and Moreno Valley" } },
+      { type: "destination_change", fields: { "New phone number": "951-555-0100" } },
+      { type: "performance_review", fields: { "What would you like us to review?": "Why did lead volume change?", "Which time period?": "Last 30 days" } },
+      { type: "problem_report", fields: { "What is wrong?": "The dashboard numbers look stale", Example: "Yesterday and today match exactly", "When did it happen?": "This morning" } },
+    ] as const;
 
-    // Campaign MUTATION is out of scope (v1.2 / D52) — no create/edit control.
-    await expect(
-      page.getByRole("button", { name: /Create campaign/i })
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: /Create your first campaign/i })
-    ).toHaveCount(0);
+    for (const request of requests) {
+      await page.getByRole("button", { name: "Request a change" }).click();
+      await page.getByLabel("Request type").selectOption(request.type);
+      if (!["new_campaign", "performance_review", "problem_report"].includes(request.type)) {
+        await page.getByLabel("Campaign").selectOption({ label: "E2E Collision Repair Leads" });
+      }
+      for (const [label, value] of Object.entries(request.fields)) {
+        await page.getByLabel(label).fill(value);
+      }
+      await page.getByRole("button", { name: "Review request" }).click();
+      await page.getByText("I understand this is a request").click();
+      await page.getByRole("button", { name: "Send for PSG review" }).click();
+      await expect(page.getByRole("status")).toContainText("Nothing changed in Google Ads");
+    }
 
-    await checkA11y(page, "google-ads-empty-link");
-    await shoot(page, "google-ads-empty-link");
+    const { data: submitted } = await admin
+      .from("google_ads_customer_requests")
+      .select("request_type, acknowledged_at")
+      .eq("shop_id", ownerShopId)
+      .eq("status", "submitted");
+    expect(new Set(submitted?.map((row) => row.request_type))).toEqual(
+      new Set(requests.map((request) => request.type)),
+    );
+    expect(submitted?.every((row) => row.acknowledged_at)).toBe(true);
+
+    const { data: unchangedCampaign } = await admin
+      .from("google_ads_campaigns")
+      .select("status, daily_budget_micros")
+      .eq("shop_id", ownerShopId)
+      .single();
+    expect(unchangedCampaign).toEqual({ status: "enabled", daily_budget_micros: 75000000 });
+
+    await expect(page.getByText("We need one detail from you")).toBeVisible();
+    await page.getByLabel("Your answer").fill("Promote certified aluminum repair and bumper repair.");
+    await page.getByRole("button", { name: "Send detail" }).click();
+    await expect(page.getByText("Detail sent to PSG.")).toBeVisible();
+
+    await expect(page.getByText("Pending report state")).toBeVisible();
+    await expect(page.getByText("E2E Google Ads report")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Download report (PDF)" })).toBeVisible();
+
+    await checkA11y(page, "google-ads-customer-hub");
+    await shoot(page, "google-ads-customer-hub");
+  });
+
+  test("report owner can download and report non-owner is denied", async ({ page }) => {
+    const ownerResponse = await page.request.get(`/api/google-ads/audit-reports/${reportId}/download`);
+    expect(ownerResponse.status()).toBe(200);
+
+    const nonOwnerResponse = await page.request.get(
+      `/api/google-ads/audit-reports/${otherShopReportId}/download`,
+    );
+    expect(nonOwnerResponse.status()).toBe(403);
+  });
+});
+
+test.describe("google ads — ops request status update", () => {
+  test.use({ storageState: OPS_STAFF.statePath });
+
+  test("PSG operations can move a customer request status from the browser context", async ({ page }) => {
+    const ownerShopId = await shopIdByName(OWNER.shopName);
+    const { data: request, error } = await admin
+      .from("google_ads_customer_requests")
+      .insert({
+        shop_id: ownerShopId,
+        requested_by_profile_id: (await admin.auth.admin.listUsers()).data.users.find(
+          (user) => user.email === OWNER.email,
+        )!.id,
+        request_type: "campaign_adjustment",
+        title: "Ops status proof",
+        details: "Please update this request through the operations route.",
+        status: "submitted",
+      })
+      .select("id")
+      .single();
+    expect(error, `status proof insert: ${error?.message}`).toBeNull();
+
+    const response = await page.request.patch(`/api/ops/google-ads/requests/${request!.id}`, {
+      data: {
+        status: "in_progress",
+        response: "PSG is working on it.",
+      },
+    });
+    expect(response.status()).toBe(200);
+
+    const { data: updated } = await admin
+      .from("google_ads_customer_requests")
+      .select("status, psg_response")
+      .eq("id", request!.id)
+      .single();
+    expect(updated).toMatchObject({
+      status: "in_progress",
+      psg_response: "PSG is working on it.",
+    });
   });
 });
