@@ -58,4 +58,18 @@ describe("CustomerRequestActions dialog", () => {
     flushSync(() => dialog.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(dialog.open).toBe(false);
   });
+
+  it("wraps backward keyboard focus from the first control to the last control", () => {
+    flushSync(() => root.render(<CustomerRequestActions shopId="shop-1" canSubmit campaigns={[]} />));
+    click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Request a change")!);
+    const dialog = container.querySelector("dialog")!;
+    const controls = Array.from(dialog.querySelectorAll<HTMLElement>("button, input, select"))
+      .filter((element) => !element.hasAttribute("disabled"));
+
+    controls[0].focus();
+    flushSync(() => controls[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
+
+    expect(document.activeElement).toBe(controls.at(-1));
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
 });

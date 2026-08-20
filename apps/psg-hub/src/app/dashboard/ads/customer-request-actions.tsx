@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { handleTabTrap } from "@/lib/ads/focus-trap";
 
 type RequestKind =
   | "budget_change"
@@ -90,6 +91,23 @@ export function CustomerRequestActions({ shopId, campaigns, canSubmit }: Props) 
   }, [open]);
 
   function close() { if (!pending) { setOpen(false); setStep(1); setAcknowledged(false); setMessage(null); queueMicrotask(() => triggerRef.current?.focus()); } }
+  const trapFocus = useCallback((event: React.KeyboardEvent<HTMLDialogElement>) => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((element) => !element.hasAttribute("disabled"));
+    const plan = handleTabTrap(
+      { key: event.key, shiftKey: event.shiftKey },
+      { activeIndex: focusables.indexOf(document.activeElement as HTMLElement), count: focusables.length },
+    );
+    if (plan.prevent && plan.focusIndex !== null) {
+      event.preventDefault();
+      focusables[plan.focusIndex]?.focus();
+    }
+  }, []);
   function resetFor(next: RequestKind) { setKind(next); setValues({}); setCampaignId(""); setAcknowledged(false); setMessage(null); }
   function submit() {
     setMessage(null);
@@ -115,7 +133,7 @@ export function CustomerRequestActions({ shopId, campaigns, canSubmit }: Props) 
     <p className="text-sm text-muted-foreground">Nothing you submit here changes a live campaign or your spending. PSG reviews every request first.</p>
     {canSubmit ? <Button ref={triggerRef} className="min-h-11 w-full sm:w-auto" onClick={() => setOpen(true)}>Request a change</Button> : <p className="rounded-md border bg-muted/40 p-3 text-sm">A shop owner or manager can send requests to PSG. Ask one of them to submit this change for your shop.</p>}
     {!open ? <p role="status" className="text-sm font-medium">{message}</p> : null}
-    <dialog ref={dialogRef} aria-labelledby="ads-request-title" onCancel={(event) => { event.preventDefault(); close(); }} onClick={(event) => { if (event.target === event.currentTarget) close(); }} className="m-auto max-h-[92vh] w-full max-w-none overflow-y-auto rounded-t-lg bg-background p-5 text-foreground shadow-xl backdrop:bg-black/50 sm:max-w-2xl sm:rounded-lg sm:p-6">
+    <dialog ref={dialogRef} aria-labelledby="ads-request-title" onKeyDown={trapFocus} onCancel={(event) => { event.preventDefault(); close(); }} onClick={(event) => { if (event.target === event.currentTarget) close(); }} className="m-auto max-h-[92vh] w-full max-w-none overflow-y-auto rounded-t-lg bg-background p-5 text-foreground shadow-xl backdrop:bg-black/50 sm:max-w-2xl sm:rounded-lg sm:p-6">
       <div>
         <div className="flex items-start justify-between gap-4"><div><p className="text-sm text-muted-foreground">Step {step} of 2</p><h3 ref={headingRef} tabIndex={-1} id="ads-request-title" className="text-xl font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50">{step === 1 ? "Tell PSG what you need" : "Review your request"}</h3></div><Button variant="ghost" size="icon" className="min-h-11 min-w-11" aria-label="Close request" onClick={close}><X /></Button></div>
         {step === 1 ? <div className="mt-5 space-y-4">
