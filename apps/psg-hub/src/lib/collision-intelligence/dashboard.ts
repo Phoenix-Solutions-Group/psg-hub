@@ -5,6 +5,7 @@ import {
   buildCollisionDashboard,
   type CollisionAlertRow,
   type CollisionCrashRow,
+  type CollisionCrashSourceRow,
   type CollisionForecastRow,
   type CollisionForecastMonitoringRow,
   type CollisionForecastStatusRow,
@@ -44,6 +45,7 @@ export async function getCollisionDashboard(shopId: string) {
     forecastMonitoring,
     repairFeed,
     seasonality,
+    crashSource,
   ] = await Promise.all([
     service
       .from("v_collision_weekly_demand")
@@ -155,6 +157,11 @@ export async function getCollisionDashboard(shopId: string) {
       .eq("shop_id", shopId)
       .order("arrival_year", { ascending: true })
       .order("arrival_month", { ascending: true }),
+    service
+      .from("ksdot_crash_sources")
+      .select("last_sync_status")
+      .order("imported_at", { ascending: false, nullsFirst: false })
+      .limit(1),
   ]);
 
   const error =
@@ -172,7 +179,8 @@ export async function getCollisionDashboard(shopId: string) {
     modelRegistry.error ??
     forecastMonitoring.error ??
     repairFeed.error ??
-    seasonality.error;
+    seasonality.error ??
+    crashSource.error;
   if (error)
     throw new Error(`Collision dashboard query failed: ${error.message}`);
 
@@ -192,5 +200,6 @@ export async function getCollisionDashboard(shopId: string) {
     (forecastMonitoring.data ?? []) as CollisionForecastMonitoringRow[],
     (repairFeed.data ?? []) as CollisionRepairFeedRow[],
     (seasonality.data ?? []) as CollisionSeasonalityRow[],
+    (crashSource.data ?? []) as CollisionCrashSourceRow[],
   );
 }

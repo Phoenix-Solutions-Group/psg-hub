@@ -112,9 +112,13 @@ export default async function CollisionIntelligencePage() {
                       summary.latestWeek,
                   )}
                   ; weather extends through{" "}
-                  {formatDate(dashboard.weather.latestMonth)}; completed-month
-                  KDOT crashes extend through{" "}
-                  {formatDate(dashboard.crashes.latestMonth)}.
+                  {formatDate(dashboard.weather.latestMonth)};{" "}
+                  {dashboard.crashes.coverageStatus === "covered"
+                    ? `completed-month KDOT crashes extend through ${formatDate(dashboard.crashes.latestMonth)}.`
+                    : dashboard.crashes.coverageStatus ===
+                        "outside_kansas_portfolio"
+                      ? "the KDOT source is loaded, but this shop has no qualifying Kansas customer ZIPs."
+                      : "the local crash source is unavailable."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -308,15 +312,37 @@ export default async function CollisionIntelligencePage() {
               xKey="week"
               ariaLabel="Weekly repair-order arrivals over the latest 52 weeks"
             />
-            <BarChartCard
-              title="Crashes in customer ZIPs"
-              caption="Official KDOT crashes across the repair-customer ZIP portfolio; the current partial month is excluded."
-              data={dashboard.crashSeries}
-              dataKey="crashes"
-              xKey="month"
-              ariaLabel="Monthly KDOT crashes in repair-customer ZIPs over the latest 12 complete months"
-              color="var(--chart-3)"
-            />
+            {dashboard.crashes.coverageStatus === "covered" ? (
+              <BarChartCard
+                title="Crashes in customer ZIPs"
+                caption={`Official KDOT crashes across ${dashboard.crashes.activeZipCount} of ${dashboard.crashes.customerZipCount} qualifying Kansas customer ZIPs; the current partial month is excluded.`}
+                data={dashboard.crashSeries}
+                dataKey="crashes"
+                xKey="month"
+                ariaLabel="Monthly KDOT crashes in repair-customer ZIPs over the latest 12 complete months"
+                color="var(--chart-3)"
+              />
+            ) : (
+              <Card>
+                <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+                  <div>
+                    <CardTitle>Local crash trend unavailable</CardTitle>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {dashboard.crashes.coverageStatus ===
+                      "outside_kansas_portfolio"
+                        ? "The current local crash source covers Kansas customer ZIPs only. This shop has no qualifying Kansas ZIPs, so no crash chart is shown. This is unavailable data—not zero crashes."
+                        : "The KDOT source has not completed a loaded sync. No crash chart is shown; unavailable data does not mean zero crashes."}
+                    </p>
+                  </div>
+                  <Badge variant="warning">
+                    {dashboard.crashes.coverageStatus ===
+                    "outside_kansas_portfolio"
+                      ? "Kansas-only source"
+                      : "Source unavailable"}
+                  </Badge>
+                </CardHeader>
+              </Card>
+            )}
             <BarChartCard
               title="Customer-market storm exposure"
               caption="Historical-repair-weighted NOAA storm score; exposure is not a claim count."

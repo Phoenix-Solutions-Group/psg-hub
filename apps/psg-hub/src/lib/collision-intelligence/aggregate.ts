@@ -40,6 +40,10 @@ export type CollisionCrashRow = {
   crash_refreshed_at: string | null;
 };
 
+export type CollisionCrashSourceRow = {
+  last_sync_status: "running" | "loaded" | "failed";
+};
+
 export type CollisionAlertRow = {
   zip_code: string;
   historical_repair_orders: Numeric;
@@ -412,6 +416,7 @@ export function buildCollisionDashboard(
   forecastMonitoringRows: CollisionForecastMonitoringRow[],
   repairFeedRows: CollisionRepairFeedRow[],
   seasonalityRows: CollisionSeasonalityRow[] = [],
+  crashSourceRows: CollisionCrashSourceRow[] = [],
 ) {
   const weekly = [...weeklyRows].sort((a, b) =>
     a.week_start.localeCompare(b.week_start),
@@ -505,6 +510,7 @@ export function buildCollisionDashboard(
   const latestSpcSource = spcSourceRows[0];
   const repairFeed = repairFeedRows[0];
   const modelRegistry = modelRegistryRows[0];
+  const crashSource = crashSourceRows[0];
 
   return {
     companyName: weekly[0]?.company_name ?? null,
@@ -542,6 +548,11 @@ export function buildCollisionDashboard(
       crashes: numberOf(row.total_crashes),
     })),
     crashes: {
+      coverageStatus: latestCrash
+        ? ("covered" as const)
+        : crashSource?.last_sync_status === "loaded"
+          ? ("outside_kansas_portfolio" as const)
+          : ("source_unavailable" as const),
       latestMonth: latestCrash?.month ?? null,
       latestTotal: numberOf(latestCrash?.total_crashes ?? 0),
       latestRainOrSnow: numberOf(latestCrash?.rain_or_snow_crashes ?? 0),

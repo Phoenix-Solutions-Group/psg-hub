@@ -192,6 +192,7 @@ describe("collision intelligence aggregation", () => {
     expect(dashboard.recentPerformance).toBeNull();
     expect(dashboard.crashSeries).toEqual([{ month: "2025-01", crashes: 12 }]);
     expect(dashboard.crashes).toMatchObject({
+      coverageStatus: "covered",
       latestTotal: 12,
       latestRainOrSnow: 1,
       customerZipCount: 4,
@@ -283,6 +284,36 @@ describe("collision intelligence aggregation", () => {
     expect(evaluateCollisionBaseline(baselineRows)).toMatchObject({
       champion: "trailing4",
       beatsSeasonal: true,
+    });
+  });
+
+  it("distinguishes unavailable local crash coverage from zero crashes", () => {
+    const dashboard = buildCollisionDashboard(
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [
+        {
+          last_sync_status: "loaded",
+        },
+      ],
+    );
+
+    expect(dashboard.crashSeries).toEqual([]);
+    expect(dashboard.crashes).toMatchObject({
+      coverageStatus: "outside_kansas_portfolio",
     });
   });
 
