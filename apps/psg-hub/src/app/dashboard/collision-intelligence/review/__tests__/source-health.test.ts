@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildForecastReadinessFallback,
+  forecastEvaluationReadiness,
   isForecastArrivalFresh,
   isMissingReviewView,
 } from "../source-health";
@@ -35,6 +36,22 @@ describe("isForecastArrivalFresh", () => {
     expect(isForecastArrivalFresh("2026-08-06", today)).toBe(true);
     expect(isForecastArrivalFresh("2026-08-05", today)).toBe(false);
     expect(isForecastArrivalFresh(null, today)).toBe(false);
+  });
+});
+
+describe("forecastEvaluationReadiness", () => {
+  it("requires enough history and arrivals within the publication gate", () => {
+    const today = new Date("2026-08-20T12:00:00Z");
+
+    expect(
+      forecastEvaluationReadiness("2019-11-18", "2026-08-12", today),
+    ).toMatchObject({ historyReady: true, arrivalsFresh: true, ready: true });
+    expect(
+      forecastEvaluationReadiness("2019-11-18", "2025-12-24", today),
+    ).toMatchObject({ historyReady: true, arrivalsFresh: false, ready: false });
+    expect(
+      forecastEvaluationReadiness("2025-01-01", "2026-08-12", today),
+    ).toMatchObject({ historyReady: false, arrivalsFresh: true, ready: false });
   });
 });
 

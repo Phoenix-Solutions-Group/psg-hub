@@ -8,6 +8,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { findInsurerNameMatches, includeFocusedAlias } from "./insurer-match";
 import {
   buildForecastReadinessFallback,
+  forecastEvaluationReadiness,
   isForecastArrivalFresh,
   isMissingReviewView,
   type ForecastPolicyRow,
@@ -178,15 +179,6 @@ const forecastGateActions: Record<string, string> = {
     "Refresh and reconcile the mapped FileMaker repair feed, then rerun the weekly forecast. Publication stays paused until the latest repair arrival is 14 days old or less.",
   insufficient_history:
     "Load enough completed weekly repair history, then rerun the chronological model evaluation.",
-};
-
-// ponytail: read-only evaluation snapshot; stage governed registry rows only after mapping.
-const pilotForecastEvidence: Record<
-  string,
-  { improvement: string; interval: string }
-> = {
-  PS228: { improvement: "13.9–16.6%", interval: "±4–6 repair orders" },
-  PS229: { improvement: "7.1–23.0%", interval: "±7–8 repair orders" },
 };
 
 export default async function CollisionDataReviewPage({ searchParams }: Props) {
@@ -497,8 +489,11 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const selectedShopEvidence = selectedShop
     ? shopIdentityEvidence[selectedShop.source_shop_key]
     : null;
-  const selectedForecastEvidence = selectedShop
-    ? pilotForecastEvidence[selectedShop.source_shop_key]
+  const selectedForecastReadiness = selectedShop
+    ? forecastEvaluationReadiness(
+        selectedShop.first_arrival_date,
+        selectedShop.latest_arrival_date,
+      )
     : null;
   const selectedInsuredShare =
     selectedShop && selectedShop.repair_orders
@@ -1519,29 +1514,52 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                 </div>
               ) : null}
 
-              {selectedForecastEvidence ? (
+              {selectedForecastReadiness ? (
                 <div
                   role="note"
-                  className="rounded-lg border border-success/40 bg-success/10 p-4"
+                  className={
+                    selectedForecastReadiness.ready
+                      ? "rounded-lg border border-success/40 bg-success/10 p-4"
+                      : "rounded-lg border border-warning/50 bg-warning/10 p-4"
+                  }
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-heading font-semibold">
-                      Pre-mapping forecast evaluation
+                      Forecast evaluation readiness
                     </p>
-                    <Badge variant="success">Passed 4 of 4 horizons</Badge>
+                    <Badge
+                      variant={
+                        selectedForecastReadiness.ready ? "success" : "warning"
+                      }
+                    >
+                      {selectedForecastReadiness.ready
+                        ? "Ready to evaluate"
+                        : !selectedForecastReadiness.historyReady
+                          ? "More history required"
+                          : "Refresh arrivals first"}
+                    </Badge>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-foreground/75">
-                    The selected models improved weekly-arrival MAE by{" "}
-                    {selectedForecastEvidence.improvement} versus the 52-week
-                    seasonal baseline. Prediction intervals are approximately{" "}
-                    {selectedForecastEvidence.interval}.
+                    This source spans approximately{" "}
+                    {selectedForecastReadiness.coverageWeeks.toLocaleString()}{" "}
+                    calendar weeks; its latest arrival is{" "}
+                    {selectedForecastReadiness.arrivalsFresh
+                      ? "within"
+                      : "outside"}{" "}
+                    the 14-day publication gate.{" "}
+                    {selectedForecastReadiness.ready
+                      ? "Run the read-only four-horizon evaluator before making a mapping or model decision."
+                      : !selectedForecastReadiness.historyReady
+                        ? "At least 156 calendar weeks are needed for the seasonal lag, calibration, and holdout windows."
+                        : "Refresh and reconcile repair arrivals before evaluating an operating forecast."}
                   </p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Read-only evaluation: 52-week calibration and chronological
-                    holdout through Aug 10, 2026; held-out-shop interval
-                    coverage was 80.1–83.7%. This evidence does not approve or
-                    publish a forecast. A confirmed shop mapping and separate
-                    model review are still required.
+                    This is an input-readiness check, not model evidence. The
+                    governed evaluator still excludes long coverage gaps and
+                    requires every horizon to beat the 52-week seasonal baseline
+                    with at least 80% held-out-shop interval coverage. A
+                    confirmed mapping is required only before staging manual
+                    model review; nothing here approves or publishes a forecast.
                   </p>
                 </div>
               ) : null}

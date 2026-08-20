@@ -18,6 +18,48 @@ export function isForecastArrivalFresh(
   return latestArrivalDate >= cutoff.toISOString().slice(0, 10);
 }
 
+const minimumForecastEvaluationWeeks = 156;
+
+export function forecastEvaluationReadiness(
+  firstArrivalDate: string | null,
+  latestArrivalDate: string | null,
+  today = new Date(),
+) {
+  if (!firstArrivalDate || !latestArrivalDate)
+    return {
+      coverageWeeks: 0,
+      historyReady: false,
+      arrivalsFresh: false,
+      ready: false,
+    };
+
+  const firstArrival = Date.parse(`${firstArrivalDate}T00:00:00Z`);
+  const latestArrival = Date.parse(`${latestArrivalDate}T00:00:00Z`);
+  if (
+    !Number.isFinite(firstArrival) ||
+    !Number.isFinite(latestArrival) ||
+    latestArrival < firstArrival
+  )
+    return {
+      coverageWeeks: 0,
+      historyReady: false,
+      arrivalsFresh: false,
+      ready: false,
+    };
+
+  const coverageWeeks =
+    Math.floor((latestArrival - firstArrival) / (7 * 24 * 60 * 60 * 1000)) + 1;
+  const historyReady = coverageWeeks >= minimumForecastEvaluationWeeks;
+  const arrivalsFresh = isForecastArrivalFresh(latestArrivalDate, today);
+
+  return {
+    coverageWeeks,
+    historyReady,
+    arrivalsFresh,
+    ready: historyReady && arrivalsFresh,
+  };
+}
+
 export type ForecastPolicyRow = {
   shop_id: string;
   forecast_horizon_weeks?: number | null;
