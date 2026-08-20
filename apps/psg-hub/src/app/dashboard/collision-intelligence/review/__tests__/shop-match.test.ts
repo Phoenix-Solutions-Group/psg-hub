@@ -19,9 +19,9 @@ const shops: ShopDirectoryEntry[] = [
   },
   {
     id: "body-shop",
-    name: "Tracy's Body Shop",
-    slug: "tracys-body-shop",
-    address_street: "1500 Center Park Rd",
+    name: "South Lincoln",
+    slug: null,
+    address_street: "1500 Center Park Road",
     address_locality: "Lincoln",
     address_region: "NE",
     address_postal_code: "68512",

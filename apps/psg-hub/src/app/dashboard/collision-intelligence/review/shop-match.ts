@@ -99,6 +99,10 @@ export function normalizeShopMatchText(value: string) {
     .replace(/\s+/g, " ");
 }
 
+function normalizeStreet(value: string) {
+  return normalizeShopMatchText(value).replace(/\broad\b/g, "rd");
+}
+
 export function matchesVerifiedShopLocation(
   sourceShopKey: string,
   shop: Pick<
@@ -112,8 +116,8 @@ export function matchesVerifiedShopLocation(
   const evidence = shopIdentityEvidence[sourceShopKey];
   if (!evidence) return true;
   return (
-    normalizeShopMatchText(shop.address_street ?? "") ===
-      normalizeShopMatchText(evidence.street) &&
+    normalizeStreet(shop.address_street ?? "") ===
+      normalizeStreet(evidence.street) &&
     normalizeShopMatchText(shop.address_locality ?? "") ===
       normalizeShopMatchText(evidence.locality) &&
     normalizeShopMatchText(shop.address_region ?? "") ===
