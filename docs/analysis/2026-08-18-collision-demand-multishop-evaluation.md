@@ -1,6 +1,6 @@
 # Multi-shop Collision Demand Evaluation
 
-**Evaluated:** 2026-08-18
+**Evaluated:** 2026-08-18; refreshed 2026-08-19 after the first governed import
 **Decision:** approve `trailing4_v1` only for explicitly mapped shops where its
 shop-level chronological holdout beats the registered seasonal baseline
 
@@ -10,6 +10,10 @@ shop-level chronological holdout beats the registered seasonal baseline
   week grain.
 - Frame: `v_collision_filemaker_forecast_training_weekly`, with zero-demand weeks
   retained and one-, four-, and 52-week lags computed per source shop.
+- Coverage gaps: evaluation starts after the latest internal run of more than 26
+  zero-repair weeks. Such a run is treated as unknown source coverage, not observed
+  zero demand. Explicit FileMaker coverage intervals should replace this conservative
+  heuristic when available.
 - Eligibility: at least 104 weeks of history with a 52-week seasonal lag.
 - Split: the 52 weeks before the holdout calibrate prediction intervals; the latest
   52 weeks are the final chronological holdout for each shop.
@@ -27,24 +31,24 @@ only; they cannot produce a PSG Hub shop forecast.
 
 ## Results
 
-| Evaluation population | Eligible shops | Holdout shop-weeks | Holdout repairs | Seasonal MAE | Trailing-4 MAE | MAE improvement | Shops where trailing-4 wins |
+| Evaluation population | Eligible shops | Holdout shop-weeks | Holdout repairs | Seasonal MAE | Trailing-4 MAE | MAE improvement | Trailing-4 champions |
 | --------------------- | -------------: | -----------------: | --------------: | -----------: | -------------: | --------------: | --------------------------: |
-| All history           |             94 |              4,888 |          45,600 |       4.4114 |     **2.8512** |       **35.4%** |                    92 of 94 |
-| Current-shop segment  |             30 |              1,560 |          16,113 |       4.4051 |     **2.9856** |       **32.2%** |                    30 of 30 |
+| All history           |             79 |              4,108 |          40,718 |         4.25 |       **3.01** |       **29.0%** |                    50 of 79 |
+| Current-shop segment  |             44 |              2,288 |          23,585 |       3.8864 |     **2.9986** |       **22.8%** |                    27 of 44 |
 
-For all eligible shops, trailing-4 WAPE was 30.6% versus 47.3% for the seasonal
-baseline. Within the current-shop segment, trailing-4 WAPE was 28.9% versus 42.6%.
-The blend was the individual shop champion for 11 of the 30 current shops; trailing-4
-was champion for the other 19. No current shop selected the seasonal baseline.
+For all eligible shops, trailing-4 WAPE was 30.4% versus 42.8% for the seasonal
+baseline. Within the current-shop segment, trailing-4 WAPE was 29.1% versus 37.7%.
+The blend was the individual shop champion for 17 of the 44 current shops; trailing-4
+was champion for 27. No current shop selected the seasonal baseline at horizon 1.
 
 ### Four-week current-shop backtest
 
 | Horizon | Seasonal MAE | Trailing-4 MAE | MAE improvement | Trailing-4 WAPE | Held-out-shop interval coverage |
 | ------: | -----------: | -------------: | --------------: | --------------: | ------------------------------: |
-|       1 |         4.41 |           2.99 |           32.2% |           28.9% |                           92.3% |
-|       2 |         4.41 |           3.07 |           30.4% |           29.7% |                           93.8% |
-|       3 |         4.41 |           3.12 |           29.2% |           30.2% |                           92.7% |
-|       4 |         4.41 |           3.20 |           27.4% |           31.0% |                           93.3% |
+|       1 |         3.89 |           3.00 |           22.8% |           29.1% |                           81.5% |
+|       2 |         3.89 |           3.05 |           21.6% |           29.5% |                           81.6% |
+|       3 |         3.89 |           3.09 |           20.4% |           30.0% |                           78.8% |
+|       4 |         3.89 |           3.13 |           19.6% |           30.3% |                           78.6% |
 
 Trailing-4 beats seasonal at all four aggregate horizons. For PS177 specifically,
 trailing-4 remains the shop champion for horizons 1–3; the seasonal/recent blend is
@@ -53,19 +57,21 @@ the horizon-4 champion. The promoted PS177 intervals are therefore horizon-speci
 
 ## Operating interval policy
 
-The unadjusted trailing-4 interval covered 73.5% of current-shop holdout weeks. A
-multiplier of **1.55** was selected using 14 calibration shops. It covered **92.3%**
-of holdout weeks across the separate 16-shop validation group.
+The unadjusted trailing-4 interval covered 78.5% of current-shop holdout weeks. A
+multiplier of **1.10** was selected using 22 calibration shops. It covered **81.5%**
+of holdout weeks across the separate 22-shop validation group.
 
-For horizons 2–4, the same deterministic shop split selected multipliers of 1.70,
-1.60, and 1.55 for the promoted PS177 models. Held-out-shop coverage was 93.8%,
-92.7%, and 92.1%. Coverage is measured separately by horizon; week-1 evidence is not
-silently reused for later weeks.
+For horizons 2–4, the same deterministic shop split selected multipliers of 1.10,
+1.05, and 1.00. Held-out-shop coverage was 81.6%, 78.8%, and 78.6%. Coverage is
+measured separately by horizon; week-1 evidence is not silently reused for later
+weeks. Horizons 3–4 remain below the nominal 80% target and require more observed
+evidence before any new policy is promoted.
 
 For the mapped PS177 pilot, the calibrated shop interval half-width is 5.25 repairs.
-Applying the cross-shop multiplier and rounding outward produces the registered
-operating interval of **plus or minus 9 repairs**. This is intentionally conservative;
-92.3% is an observed validation result, not a guarantee of future coverage.
+The registry still carries the earlier conservative **plus or minus 9 repairs**
+policy; this refreshed evaluation does not silently change a promoted model or
+interval. Reapproval must consider the new gap-aware evidence and later observed
+forecast coverage.
 
 ## Promotion and publication policy
 
@@ -91,10 +97,13 @@ mapped and therefore cannot be published.
 
 ## Limits
 
-- The current-shop interval validation contains 16 held-out shops; it should be
+- The current-shop interval validation contains 22 held-out shops; it should be
   rerun as more mapped shops and live outcomes become available.
-- The FileMaker snapshot ends 2026-07-10. This is historical validation, not proof
-  that a recurring ingest is operational.
+- The FileMaker snapshot ends 2026-08-14. The first manual import reconciled, but the
+  recurring refresh remains disabled pending backup/restore ownership and alerting.
+- Eleven of 55 current-source candidates lack sufficient post-gap history. PS773 is
+  among them; its apparent zero-width interval came from treating a multi-year
+  coverage gap as observed zero demand and is no longer accepted as model evidence.
 - Shop demand can change after staffing, insurer relationships, acquisitions, or
   process changes. Live MAE, WAPE, coverage, and drift monitoring are still needed.
 - Crash and weather data remain context and alert inputs because they did not beat

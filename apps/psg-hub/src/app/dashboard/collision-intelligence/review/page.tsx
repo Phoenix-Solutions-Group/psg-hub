@@ -129,8 +129,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         "source_shop_key,source_shop_name,repair_orders,repair_orders_2026,latest_arrival_date",
       )
       .is("shop_id", null)
-      .order("repair_orders", { ascending: false })
-      .limit(8),
+      .order("repair_orders_2026", { ascending: false })
+      .order("latest_arrival_date", { ascending: false })
+      .order("repair_orders", { ascending: false }),
     service
       .from("shops")
       .select("id,name,slug")
@@ -190,6 +191,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
 
   const aliases = (aliasResult.data ?? []) as AliasCandidate[];
   const shops = (shopResult.data ?? []) as ShopCandidate[];
+  const featuredShops = shops.slice(0, 8);
   const mappedShopIds = new Set(
     (mappedShopResult.data ?? []).map((row) => row.shop_id as string),
   );
@@ -510,8 +512,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
             Unmapped source shops
           </h2>
           <p className="text-sm text-muted-foreground">
-            Read-only evidence. Confirm legal and operating identity before any
-            mapping.
+            The eight highest-current-volume candidates are shown below. Every
+            unmapped source shop remains available in the approval selector.
+            Confirm legal and operating identity before any mapping.
           </p>
         </div>
         <Card>
@@ -535,7 +538,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {shops.map((shop) => (
+                  {featuredShops.map((shop) => (
                     <tr key={shop.source_shop_key}>
                       <td className="py-3 pr-4">
                         <p className="font-medium">{shop.source_shop_name}</p>

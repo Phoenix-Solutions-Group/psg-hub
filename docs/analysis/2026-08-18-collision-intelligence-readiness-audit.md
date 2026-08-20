@@ -124,8 +124,9 @@
 - The alert view is service-role-only; `authenticated` has no direct select grant.
 - `replace_spc_preliminary_events` validates source, event type, coordinates, and a
   maximum four-day window before replacing data in one transaction.
-- A local authenticated cron dry-run refreshed 750 rows across three convective days;
-  all 25,812 SPC rows have unique source IDs and populated event locations.
+- A local authenticated cron dry-run refreshed 750 rows across three convective days.
+  The current 25,999 SPC rows have unique source IDs and populated event locations;
+  the latest event begins 2026-08-19 16:22 UTC.
 - Cron health now queries the service-only repair-feed freshness view. A mapped feed
   older than 36 hours returns `repairFeed: stale` and HTTP 500 after weather refresh
   and safe forecast scoring still run; unit coverage proves the three operations are
@@ -137,9 +138,10 @@
   model MAE beats its registered seasonal baseline. PS177 uses `trailing4_v1`, with
   MAE 2.65 versus 3.63 and a conservative ±9 operating interval.
 - Weeks 2–4 require independent entries in the service-only
-  `collision_forecast_horizon_registry`. Current-shop chronological backtests beat
-  seasonal MAE by 27.4%–32.2% across all four horizons, with 92.3%–93.8%
-  held-out-shop interval coverage for the promoted horizon/model policies.
+  `collision_forecast_horizon_registry`. The gap-aware current-shop refresh still
+  beats seasonal MAE by 19.6%–22.8% across all four horizons. Held-out-shop interval
+  coverage is 81.5%, 81.6%, 78.8%, and 78.6%; horizons 3–4 need more evidence before
+  any new interval policy is promoted.
 - Forecasts retain origin week, target week, and horizon. This preserves forecast
   vintages for later accuracy and coverage monitoring instead of overwriting or
   mixing horizons.
@@ -155,9 +157,11 @@
   candidate labels, confirmed they collapsed to one canonical insurer row, and left
   zero approvals after rollback.
 - A rollback-only live schema test mapped PS773 to the existing Tedesco shop with no
-  company row, exposed all 1,116 expected repairs, built its weekly modeling frame,
+  company row, exposed the then-current 1,116 repairs, built its weekly modeling frame,
   accepted a shop-keyed review model, and persisted only a blocked null forecast.
   The transaction was rolled back; Tedesco remains unmapped pending explicit approval.
+  The refreshed source now contains 1,152 PS773 repairs through 2026-08-05. Gap-aware
+  evaluation rejects it because the post-gap segment has only 62 weeks.
 - The dashboard code now exposes alert-feed refresh time, a per-shop repair-feed
   freshness badge with a 36-hour threshold, a four-week operating outlook,
   horizon-specific intervals, planning checkpoints, and live monitoring reasons.
@@ -221,10 +225,11 @@
 - KDOT source counts match the live ArcGIS service for every imported year.
 - Crash/weather feature evaluation keeps the trailing four-week model as champion;
   KDOT improves the comparable ridge model by 2.1% MAE but not enough to promote.
-- Multi-shop chronological evaluation found trailing-4 MAE 2.99 versus seasonal MAE
-  4.41 in the 30-shop current segment. Trailing-4 beat seasonal in all 30 shops. A
-  1.55× interval multiplier selected on 14 shops covered 92.3% of holdout weeks in a
-  separate 16-shop validation group.
+- Gap-aware multi-shop chronological evaluation found trailing-4 MAE 3.00 versus
+  seasonal MAE 3.89 in the 44-shop current segment. Trailing-4 beat seasonal in 40
+  shops. A 1.10× interval multiplier selected on 22 shops covered 81.5% of holdout
+  weeks in a separate 22-shop validation group. Long internal zero runs are treated
+  as unknown source coverage rather than synthetic zero demand.
 
 ## Next execution order
 
@@ -243,9 +248,10 @@
 3. Use `/dashboard/collision-intelligence/review` as a superadmin to review the
    highest-volume insurer aliases and source-shop mappings. Mapping approval requires
    target selection, written identity evidence, and explicit confirmation, and it is
-   committed with its audit entry in one transaction. The first candidate is PS773 to
-   Tedesco Auto Body, but its model remains blocked because the calibration interval is
-   zero. Never infer a mapping or insurer alias from name similarity alone.
+   committed with its audit entry in one transaction. The selector now includes every
+   unmapped source shop. PS773 to Tedesco Auto Body is a descriptive mapping candidate,
+   but its model remains ineligible because only 62 weeks remain after a multi-year
+   coverage gap. Never infer a mapping or insurer alias from name similarity alone.
 4. After 13 observed forecasts accrue per horizon, review the live monitoring status.
    Manual review is requested when rolling MAE loses to seasonal or 80% interval
    coverage falls below 70%; the scorecard never changes promotion automatically.

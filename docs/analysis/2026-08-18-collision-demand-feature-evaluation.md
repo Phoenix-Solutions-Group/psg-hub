@@ -38,9 +38,11 @@ Keep KDOT crashes and NOAA weather as dashboard context and alert inputs. Do not
 promote them into the weekly repair forecast yet. Once current repair ingestion is
 restored, score the trailing four-week model weekly with an initial empirical
 shop interval of **±5.25 repairs**. The promotion registry now widens this to a
-conservative **±9 repairs** using the separately validated 1.55× cross-shop policy.
-Monitor observed coverage and retest features on a new
-strictly later holdout.
+conservative **±9 repairs** using the earlier cross-shop policy. The first governed
+refresh produced a gap-aware 44-shop validation set; it selected 1.10× for horizon 1
+with 81.5% held-out-shop coverage and did not automatically change the registered
+interval. Monitor observed coverage and retest features on a new strictly later
+holdout before reapproval.
 
 The figures above were rerun after the complete FileMaker snapshot replaced the
 legacy pilot source. The mapped modeling frame now reconciles to 3,420 FileMaker

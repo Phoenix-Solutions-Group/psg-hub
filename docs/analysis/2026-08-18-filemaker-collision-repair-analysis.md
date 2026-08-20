@@ -1,12 +1,12 @@
 # FileMaker Collision Repair Analysis
 
 **Supabase project:** `gylkkzmcmbdftxieyabw`
-**Verified:** 2026-08-18
-**Source:** Complete `repair-customer_nick.csv` snapshot, modified 2026-07-14 UTC
+**Verified:** 2026-08-19
+**Source:** Governed FileMaker OData export `filemaker_rc_5cba1235612af4c11a4e`
 
 ## Executive result
 
-The governed repair layer now contains 327,313 PII-minimized repair facts from 199
+The governed repair layer now contains 330,533 PII-minimized repair facts from 199
 usable FileMaker master shop keys. It supports shop, insurer, ZIP, vehicle,
 seasonality, payment-mix, repair-value, cycle-time, and data-quality analysis.
 
@@ -19,16 +19,16 @@ explicitly mapped and its repair arrivals are current.
 
 | Check                               |                        Result |
 | ----------------------------------- | ----------------------------: |
-| Parsed source rows                  |                       327,314 |
-| Accepted facts                      |                       327,313 |
-| Rejected rows                       |     1 missing master shop key |
-| Distinct accepted records           |                       327,313 |
+| Parsed source rows                  |                       330,535 |
+| Accepted facts                      |                       330,533 |
+| Rejected rows                       | 2: missing shop key; invalid repair amount |
+| Distinct accepted records           |                       330,533 |
 | Source shop keys                    |                           199 |
 | Source shops mapped to PSG Hub      |                             1 |
-| Arrival range                       | 2011-01-18 through 2026-07-10 |
-| 2026 arrivals                       |                        16,009 |
-| Recorded repair value               |             $1,652,295,954.68 |
-| Rows with at least one quality flag |                         7,365 |
+| Arrival range                       | 2011-01-18 through 2026-08-14 |
+| 2026 arrivals                       |                        19,229 |
+| Recorded repair value               |             $1,671,343,984.99 |
+| Rows with at least one quality flag |                         7,467 |
 
 Customer and agent names, street addresses, emails, phones, birthdates, raw
 repair-order numbers, raw serials, and the raw source payload are not stored. The
@@ -39,24 +39,24 @@ and becomes current only after its accepted count reconciles in one final transa
 
 | Classification | Repair orders | Interpretation                                           |
 | -------------- | ------------: | -------------------------------------------------------- |
-| Insurance      |       262,127 | Known insurance payment category                         |
-| Customer       |        61,302 | Known customer-pay category                              |
-| Third party    |         2,699 | Known third-party payment                                |
+| Insurance      |       264,625 | Known insurance payment category                         |
+| Customer       |        62,001 | Known customer-pay category                              |
+| Third party    |         2,709 | Known third-party payment                                |
 | Non-insurance  |            11 | Explicit non-insurance value                             |
-| Fleet          |            36 | Fleet payment                                            |
+| Fleet          |            37 | Fleet payment                                            |
 | Warranty       |             2 | Warranty payment                                         |
 | Other          |            14 | Total-loss variants; insurance status intentionally null |
-| Unknown        |         1,122 | Missing or unrecognized category; never guessed          |
+| Unknown        |         1,134 | Missing or unrecognized category; never guessed          |
 
 The leading normalized insurer labels across the complete export are:
 
 | Insurer label         | Repair orders |    Repair value |
 | --------------------- | ------------: | --------------: |
-| State Farm            |        66,579 | $345,958,883.00 |
-| Progressive Insurance |        29,809 | $161,552,416.44 |
-| GEICO                 |        22,391 | $123,164,672.54 |
-| Allstate              |        17,665 |  $94,904,380.33 |
-| U S A A               |        15,784 |  $85,849,829.64 |
+| State Farm            |        67,369 | $350,622,950.56 |
+| Progressive Insurance |        30,144 | $163,635,937.78 |
+| GEICO                 |        22,599 | $124,554,029.00 |
+| Allstate              |        17,930 |  $96,463,950.51 |
+| U S A A               |        15,927 |  $86,719,082.30 |
 
 These are repairs tagged with those labels, not counts of all claims filed with those
 insurers. The service-only alias queue contains every observed normalized label;
@@ -65,8 +65,8 @@ key and display name.
 
 ## Geographic and vehicle analysis
 
-The highest raw repair-order ZIP counts are 98391 (3,130), 55044 (2,671), 96789
-(2,637), 72758 (2,506), and 47240 (2,465). These counts are useful for customer-market
+The highest raw repair-order ZIP counts are 98391 (3,153), 96789 (2,735), 55044
+(2,671), 72758 (2,546), and 47240 (2,520). These counts are useful for customer-market
 concentration, weather exposure, and shop-specific marketing. They are not population-
 or vehicle-normalized market-share estimates.
 
@@ -74,11 +74,11 @@ The leading normalized make/model combinations are:
 
 | Vehicle      | Repair orders |   Repair value |
 | ------------ | ------------: | -------------: |
-| Toyota RAV4  |         8,492 | $39,973,269.68 |
-| Honda CR-V   |         7,917 | $33,927,573.54 |
-| Toyota Camry |         6,846 | $28,335,681.18 |
-| Ford F-150   |         6,508 | $37,235,307.57 |
-| Honda Civic  |         5,623 | $23,158,213.24 |
+| Toyota RAV4  |         8,810 | $41,673,192.18 |
+| Honda CR-V   |         8,410 | $36,362,846.73 |
+| Toyota Camry |         7,210 | $29,881,337.00 |
+| Ford F-150   |         6,572 | $37,679,375.96 |
+| Honda Civic  |         5,983 | $24,723,919.63 |
 
 Vehicle mix can guide OEM certification, aluminum/EV capability, parts capacity, and
 technician training. It does not by itself measure repair complexity; parts, labor,
@@ -88,16 +88,16 @@ calibration, and damage-severity data would be needed for that claim.
 
 | Quality flag                                   |  Rows |
 | ---------------------------------------------- | ----: |
-| Missing repair-order number                    | 5,453 |
-| Unknown payment category                       | 1,122 |
-| Zero repair amount                             |   670 |
-| Insurer label on known non-insurance repair    |   177 |
+| Missing repair-order number                    | 5,541 |
+| Unknown payment category                       | 1,134 |
+| Zero repair amount                             |   671 |
+| Insurer label on known non-insurance repair    |   178 |
 | Missing insurer on insurance-classified repair |   150 |
 | Completion before arrival                      |   124 |
 | Missing customer ZIP                           |    31 |
 | Invalid vehicle year                           |    30 |
-| Invalid arrival date                           |    19 |
-| Invalid completion date                        |     5 |
+| Invalid arrival date                           |    18 |
+| Invalid completion date                        |     4 |
 
 Invalid optional values are nulled and flagged rather than guessed. The 124 negative
 cycle observations do not contribute a completion date or cycle-time metric.
@@ -155,8 +155,8 @@ the browser.
 
 ## Next decisions
 
-1. Automate a current recurring FileMaker snapshot so participating shops can pass
-   the 14-day forecast freshness gate.
+1. Resolve backup/restore ownership and alert routing, then separately approve the
+   staged recurring FileMaker refresh timer.
 2. Approve source-shop mappings one at a time and verify that each mapping replaces,
    rather than unions with, any legacy source for that PSG Hub shop.
 3. Review and approve the highest-volume candidates in the insurer-alias queue; never

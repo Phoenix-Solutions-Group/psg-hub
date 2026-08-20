@@ -23,21 +23,29 @@ both sides of the mapping, prevents concurrent or duplicate assignments, updates
 mapping, and records `collision.shop_mapping.approve` in `access_audit` in one
 transaction. No candidate is approved from name similarity alone.
 
+The evidence table shows the eight highest-2026-volume source shops. The approval
+selector contains all 198 unmapped source shops, so a verified candidate is no longer
+excluded merely because it is outside the eight highest lifetime-volume rows.
+
 ## Current candidates
 
 | Source | FileMaker name                     | PSG Hub candidate                  | Name signal | Evidence                                                                   | Review decision                                                                                                                                 |
 | ------ | ---------------------------------- | ---------------------------------- | ----------: | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| PS1650 | Flower Hill Auto Body - Huntington | Flower Hill Auto Body — Huntington |       1.000 | 52 repairs; latest 2026-06-23                                              | Identity appears exact, but history is insufficient for a 52-week calibration plus 52-week holdout; confirm identity before descriptive mapping |
-| PS773  | Tedesco Auto Body, Inc.            | Tedesco Auto Body                  |       0.818 | 1,116 repairs; latest 2026-07-08; trailing-4 MAE 2.54 versus seasonal 6.75 | Strong identity candidate; forecast approval blocked because the calibration interval is zero and holdout interval coverage is only 1.9%        |
-| PS229  | Tracy’s Collision Center South     | Tracy's Collision Center           |       0.828 | 6,646 repairs; blend MAE 3.35 versus seasonal 4.42                         | Blocked: South and North both point to one generic PSG Hub shop                                                                                 |
-| PS228  | Tracy’s Collision Center North     | Tracy's Collision Center           |       0.800 | 4,567 repairs; blend MAE 2.77 versus seasonal 3.58                         | Blocked: requires distinct PSG Hub locations or an explicit consolidation rule                                                                  |
+| PS1650 | Flower Hill Auto Body - Huntington | Flower Hill Auto Body — Huntington |       1.000 | 61 repairs; latest 2026-06-25                                               | Identity appears exact, but history is insufficient for a 52-week calibration plus 52-week holdout; confirm identity before descriptive mapping |
+| PS773  | Tedesco Auto Body, Inc.            | Tedesco Auto Body                  |       0.818 | 1,152 repairs; 241 in 2026; latest 2026-08-05                              | Strong identity candidate for descriptive mapping; forecast evaluation is ineligible after the 2021–2025 source-coverage gap is excluded        |
+| PS229  | Tracy’s Collision Center South     | Tracy's Collision Center           |       0.828 | 6,752 repairs; 508 in 2026; latest 2026-08-12                              | Blocked: South and North both point to one generic PSG Hub shop                                                                                 |
+| PS228  | Tracy’s Collision Center North     | Tracy's Collision Center           |       0.800 | 4,630 repairs; 326 in 2026; latest 2026-08-12                              | Blocked: requires distinct PSG Hub locations or an explicit consolidation rule                                                                  |
 
 ## Recommended first action
 
 Confirm whether FileMaker PS773 is the same operating location as the PSG Hub
 Tedesco Auto Body shop. If approved, map it for descriptive repair, insurer, ZIP,
-vehicle, weather, and crash analytics, but leave its model registry unapproved. Then
-refresh or backfill the missing calibration-period repair history and rerun:
+vehicle, weather, and crash analytics, but leave its model registry unapproved. Its
+weekly frame contains no repairs from June 2021 through May 2025. The evaluator now
+treats internal zero runs longer than 26 weeks as unknown source coverage instead of
+zero demand; only 62 weeks remain after the gap, below the required post-gap seasonal
+lag, calibration, and holdout history. Backfill or explicitly prove the missing
+coverage before rerunning:
 
 ```bash
 python3 scripts/evaluate-collision-demand-features.py \
@@ -45,5 +53,6 @@ python3 scripts/evaluate-collision-demand-features.py \
   --source-shop-key PS773
 ```
 
-Do not publish a Tedesco numeric forecast until the recalibrated interval is nonzero,
-its held-out coverage is reported, and the latest repair arrival is within 14 days.
+Do not publish a Tedesco numeric forecast until it has sufficient continuous
+post-gap history, a nonzero calibrated interval, reported held-out coverage, and a
+latest repair arrival within 14 days.

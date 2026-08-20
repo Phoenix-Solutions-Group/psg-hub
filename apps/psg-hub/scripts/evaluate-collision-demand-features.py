@@ -38,6 +38,8 @@ FEATURE_SETS = {
     ),
 }
 
+MAX_INTERNAL_ZERO_WEEKS = 26
+
 
 def load_env(path: Path) -> dict[str, str]:
     if not path.is_absolute():
@@ -187,6 +189,38 @@ def quantile(values: list[float], probability: float) -> float:
     return ordered[index]
 
 
+def latest_observed_segment(
+    rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
+    """Exclude history before the latest long internal coverage gap."""
+    ordered = sorted(rows, key=lambda row: row["week_start"])
+    segment_start = 0
+    zero_run = 0
+    excluded_gap_weeks = 0
+    # ponytail: a 26-week zero run is treated as missing coverage; replace this
+    # heuristic with explicit source-coverage intervals when FileMaker provides them.
+    for index, row in enumerate(ordered):
+        if number(row["repair_orders"]) == 0:
+            zero_run += 1
+        else:
+            if zero_run > MAX_INTERNAL_ZERO_WEEKS:
+                segment_start = index
+                excluded_gap_weeks = zero_run
+            zero_run = 0
+    segment = ordered[segment_start:]
+    if segment_start:
+        segment = [
+            {
+                **row,
+                "repair_orders_lag_52_weeks": (
+                    None if index < 52 else row.get("repair_orders_lag_52_weeks")
+                ),
+            }
+            for index, row in enumerate(segment)
+        ]
+    return segment, excluded_gap_weeks
+
+
 def evaluate_model(
     training: list[dict[str, Any]],
     calibration: list[dict[str, Any]],
@@ -217,6 +251,7 @@ def evaluate_model(
 
 
 def evaluate(rows: list[dict[str, Any]], holdout_weeks: int, calibration_weeks: int) -> dict[str, Any]:
+    rows, excluded_gap_weeks = latest_observed_segment(rows)
     eligible = [
         row
         for row in rows
@@ -256,6 +291,8 @@ def evaluate(rows: list[dict[str, Any]], holdout_weeks: int, calibration_weeks: 
     weather_mae = models["ridge_demand_weather"]["mae"]
     all_mae = models["ridge_all"]["mae"]
     return {
+        "coverage_segment_start": rows[0]["week_start"],
+        "excluded_internal_gap_weeks": excluded_gap_weeks,
         "training_start": training[0]["week_start"],
         "training_end": training[-1]["week_start"],
         "calibration_start": calibration[0]["week_start"],
@@ -286,6 +323,7 @@ DIRECT_MODELS: dict[str, Callable[[dict[str, Any]], float]] = {
 def evaluate_direct_shop(
     rows: list[dict[str, Any]], holdout_weeks: int, calibration_weeks: int
 ) -> dict[str, Any] | None:
+    rows, excluded_gap_weeks = latest_observed_segment(rows)
     eligible = [
         row
         for row in rows
@@ -322,6 +360,8 @@ def evaluate_direct_shop(
         "source_shop_key": rows[0]["source_shop_key"],
         "source_shop_name": rows[0].get("source_shop_name"),
         "mapped": any(row.get("shop_id") is not None for row in rows),
+        "coverage_segment_start": rows[0]["week_start"],
+        "excluded_internal_gap_weeks": excluded_gap_weeks,
         "holdout_start": holdout[0]["week_start"],
         "holdout_end": holdout[-1]["week_start"],
         "holdout_repairs": int(sum(actual)),
@@ -590,7 +630,10 @@ def evaluate_direct_shop_horizons(
             rows_for_horizon(rows, horizon), holdout_weeks, calibration_weeks
         )
         if not result:
-            raise ValueError(f"Shop does not have enough history for horizon {horizon}")
+            raise ValueError(
+                "Shop does not have enough history after excluding long internal "
+                f"coverage gaps for horizon {horizon}"
+            )
         results[str(horizon)] = summarize_direct_shop(result)
     return {
         "scope": "filemaker_shop_horizons",
@@ -776,6 +819,20 @@ def self_test() -> None:
         ],
         3,
     )[10]["trailing_4_week_average"]
+    gapped = [
+        {
+            **weekly[index % len(weekly)],
+            "week_start": (date(2020, 1, 6) + timedelta(weeks=index)).isoformat(),
+            "repair_orders": 0 if 10 <= index < 40 else 10,
+        }
+        for index in range(130)
+    ]
+    current_segment, excluded_gap_weeks = latest_observed_segment(gapped)
+    assert excluded_gap_weeks == 30
+    assert current_segment[0]["week_start"] == "2020-10-12"
+    assert current_segment[0]["repair_orders_lag_52_weeks"] is None
+    assert current_segment[52]["repair_orders_lag_52_weeks"] == 20
+    assert evaluate_direct_shop(gapped, 52, 52) is None
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
@@ -818,7 +875,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             )
         result = evaluate_direct_shop(rows, args.holdout_weeks, args.calibration_weeks)
         if not result:
-            raise ValueError(f"{source_shop_key} does not have enough history")
+            raise ValueError(
+                f"{source_shop_key} does not have enough history after excluding "
+                "long internal coverage gaps"
+            )
         return summarize_direct_shop(result)
     if args.all_filemaker:
         rows = fetch_rows_paged(

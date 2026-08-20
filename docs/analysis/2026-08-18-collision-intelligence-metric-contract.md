@@ -2,7 +2,7 @@
 
 **Project:** PSG collision-repair intelligence
 **Database:** Supabase `gylkkzmcmbdftxieyabw`
-**Verified:** 2026-08-18
+**Verified:** 2026-08-19
 
 ## Purpose
 
@@ -134,6 +134,10 @@ repair week. It includes:
 
 Evaluation must use chronological holdouts. Random train/test splits are prohibited
 because they leak future operating conditions into historical predictions.
+Until FileMaker supplies explicit source-coverage intervals, evaluation excludes all
+history before the latest internal run of more than 26 zero-repair weeks. This keeps a
+multi-year source gap from becoming synthetic evidence of zero shop demand. A shop
+must still have enough post-gap history for calibration and holdout before promotion.
 
 ### Operational forecast publication
 
@@ -167,21 +171,21 @@ itself.
 
 | Check                                |                        Result |
 | ------------------------------------ | ----------------------------: |
-| Parsed source rows                   |                       327,314 |
-| Accepted repair facts                |                       327,313 |
-| Rejected rows                        |     1 missing master shop key |
-| Distinct accepted source records     |                       327,313 |
+| Parsed source rows                   |                       330,535 |
+| Accepted repair facts                |                       330,533 |
+| Rejected rows                        | 2: missing shop key; invalid repair amount |
+| Distinct accepted source records     |                       330,533 |
 | Source shop keys                     |                           199 |
 | Explicitly mapped source shop keys   |                             1 |
-| Insurance-classified repairs         |                       262,127 |
-| Known non-insurance repairs          |                        64,050 |
-| Unknown/other payment classification |                         1,136 |
-| Repair value                         |             $1,652,295,954.68 |
-| Arrival range                        | 2011-01-18 through 2026-07-10 |
-| 2026 repair arrivals                 |                        16,009 |
-| Rows with one or more quality flags  |                         7,365 |
+| Insurance-classified repairs         |                       264,625 |
+| Known non-insurance repairs          |                        64,760 |
+| Unknown/other payment classification |                         1,148 |
+| Repair value                         |             $1,671,343,984.99 |
+| Arrival range                        | 2011-01-18 through 2026-08-14 |
+| 2026 repair arrivals                 |                        19,229 |
+| Rows with one or more quality flags  |                         7,467 |
 
-The source ledger reconciles `327,314 = 327,313 + 1` before the snapshot becomes
+The source ledger reconciles `330,535 = 330,533 + 2` before the snapshot becomes
 visible. Loading rows are hidden from analysis views; finalization and replacement of
 the prior loaded snapshot occur in one database transaction.
 
@@ -205,17 +209,17 @@ the prior loaded snapshot occur in one database transaction.
 | Companies with repair history             |                                                        1 |
 | Continuous weekly modeling rows           |                                                      319 |
 | Rows with a 52-week lag                   |                                                      267 |
-| Multi-shop weekly modeling rows           |                                                   35,537 |
-| Multi-shop eligible holdout shops         |                                                       94 |
-| Current-shop holdout shops                |                   30; trailing-4 beat seasonal in all 30 |
-| Current-shop interval validation          | 92.3% coverage on 16 held-out shops after 1.55× widening |
+| Multi-shop weekly modeling rows           |                                                   35,850 |
+| Multi-shop eligible holdout shops         |                                                       79 |
+| Current-shop holdout shops                |                    44; trailing-4 beat seasonal in 40 |
+| Current-shop interval validation          | 81.5% coverage on 22 held-out shops after 1.10× widening |
 | KDOT crash facts, 2019 through 2026-08-13 |                                                  411,208 |
 | KDOT ZIP-matched crash facts              |                                         410,910 (99.93%) |
 | KDOT unmatched crash facts                |                                                      298 |
 | KDOT ZIP-month rows                       |                                                   45,048 |
 | Pilot customer-portfolio crash months     |                                                       92 |
-| Current SPC preliminary event facts       |                                                   25,812 |
-| Latest SPC preliminary event              |                                     2026-08-18 11:25 UTC |
+| Current SPC preliminary event facts       |                                                   25,999 |
+| Latest SPC preliminary event              |                                     2026-08-19 16:22 UTC |
 | Current weekly scoring state              |            `stale_source`; no numeric forecast published |
 
 ## Quality gates
@@ -245,6 +249,9 @@ Before dashboard publication or model retraining:
     automatic staffing, purchasing, marketing, damage, or claim decision.
 15. Forecast monitoring is horizon-specific, waits for 13 observed forecasts, and
     can request manual review but cannot auto-retire or auto-promote a model.
+16. Evaluation excludes pre-gap history after an internal run longer than 26
+    zero-repair weeks and reports insufficient post-gap history instead of calibrating
+    a zero-width interval.
 
 ## Known limitations
 
@@ -254,9 +261,10 @@ Before dashboard publication or model retraining:
 - The alias review queue contains observed carrier-label candidates, but no canonical
   aliases are approved yet. Until review, the dashboard identifies them as unreviewed
   labels and does not merge variants.
-- Repair history ends in December 2025 while weather data extends into August 2026.
-- Multi-shop evaluation covers 94 eligible historical shops and 30 current shops, but
-  the current-shop interval estimate has only 16 held-out validation shops. Continue
+- The mapped pilot's repair history ends in December 2025 while portfolio repair and
+  weather data extend into August 2026.
+- Gap-aware multi-shop evaluation covers 79 eligible historical shops and 44 current
+  shops, but the current-shop interval estimate has only 22 held-out validation shops. Continue
   reporting the sample and observed coverage rather than treating it as guaranteed.
 - Event-level SPC reports support same-day review but remain preliminary and
   point-based. The daily schedule is configured locally but is not a confirmed damage
