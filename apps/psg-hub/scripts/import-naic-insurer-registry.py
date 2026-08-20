@@ -62,7 +62,10 @@ def load_env(path: Path) -> dict[str, str]:
 def match_key(value: str) -> str:
     value = value.casefold().replace("&", " and ")
     value = STOP_WORDS.sub(" ", value)
-    return " ".join(re.findall(r"[a-z0-9]+", value))
+    normalized = " ".join(re.findall(r"[a-z0-9]+", value))
+    if re.fullmatch(r"[a-z0-9]( [a-z0-9])+", normalized):
+        return normalized.replace(" ", "")
+    return normalized
 
 
 def display_name(value: str) -> str:
@@ -259,6 +262,7 @@ def self_check() -> None:
     assert rows[0]["display_name"] == "Progressive Direct Insurance Company"
     assert rows[1]["display_name"] == "Progressive Group"
     assert rows[1]["match_key"] == "progressive"
+    assert match_key("U S A A INS CO") == "usaa"
 
 
 def main() -> int:

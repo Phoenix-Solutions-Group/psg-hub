@@ -8,7 +8,11 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { isMissingReviewView } from "./source-health";
 
 type Props = {
-  searchParams: Promise<{ result?: string }>;
+  searchParams: Promise<{
+    result?: string | string[];
+    registry_search?: string | string[];
+    search_source?: string | string[];
+  }>;
 };
 
 type AliasCandidate = {
@@ -47,6 +51,14 @@ type RegistrySuggestion = {
   match_score: number;
   source_release: string;
 };
+
+function searchValue(value: string | string[] | undefined) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function registryTarget(suggestion: RegistrySuggestion) {
+  return `registry:${suggestion.source}:${suggestion.record_type}:${suggestion.registry_id}`;
+}
 
 type ShopCandidate = {
   source_shop_key: string;
@@ -245,6 +257,13 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   }
 
   const aliases = (aliasResult.data ?? []) as AliasCandidate[];
+  const searchSource = searchValue(params.search_source);
+  const requestedSearchAlias = aliases.find(
+    (alias) => alias.source_label_normalized === searchSource,
+  );
+  const registrySearch = requestedSearchAlias
+    ? searchValue(params.registry_search).slice(0, 80)
+    : "";
   const registryResult = aliases.length
     ? await service.rpc("collision_insurer_registry_matches", {
         source_labels: aliases.map((alias) => alias.source_label_name),
@@ -259,6 +278,21 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   if (registryResult.error && !registryUnavailable) {
     throw new Error(registryResult.error.message);
   }
+  const directorySearchResult = registrySearch
+    ? await service.rpc("collision_insurer_registry_matches", {
+        source_labels: [registrySearch],
+        match_limit: 5,
+      })
+    : { data: [], error: null };
+  const directorySearchUnavailable = Boolean(directorySearchResult.error);
+  if (directorySearchResult.error) {
+    console.error(
+      "[collision-data-review] insurer directory search failed:",
+      directorySearchResult.error.message,
+    );
+  }
+  const directorySearchSuggestions = (directorySearchResult.data ??
+    []) as RegistrySuggestion[];
   const registrySuggestionsByLabel = new Map<string, RegistrySuggestion[]>();
   for (const suggestion of (registryResult.data ??
     []) as RegistrySuggestion[]) {
@@ -267,11 +301,27 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     suggestions.push(suggestion);
     registrySuggestionsByLabel.set(suggestion.source_label, suggestions);
   }
-  const aliasReviewItems = aliases.map((alias) => ({
-    alias,
-    registrySuggestions:
-      registrySuggestionsByLabel.get(alias.source_label_name) ?? [],
-  }));
+  const aliasReviewItems = aliases.map((alias) => {
+    const automaticSuggestions =
+      registrySuggestionsByLabel.get(alias.source_label_name) ?? [];
+    const searchedTargets = new Set(
+      directorySearchSuggestions.map(registryTarget),
+    );
+    return {
+      alias,
+      registrySuggestions:
+        alias.source_label_normalized ===
+        requestedSearchAlias?.source_label_normalized
+          ? [
+              ...directorySearchSuggestions,
+              ...automaticSuggestions.filter(
+                (suggestion) =>
+                  !searchedTargets.has(registryTarget(suggestion)),
+              ),
+            ]
+          : automaticSuggestions,
+    };
+  });
   const insurerOptionsByName = new Map<string, InsurerOption>();
   for (const insurer of (insuranceCompanyResult.data ??
     []) as InsuranceCompany[]) {
@@ -335,7 +385,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       ? (crashSource.zip_matched_row_count / crashSource.imported_row_count) *
         100
       : null;
-  const notice = params.result ? notices[params.result] : null;
+  const result = searchValue(params.result);
+  const notice = result ? notices[result] : null;
 
   return (
     <div className="space-y-6">
@@ -586,6 +637,56 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                   </div>
 
                   <form
+                    action="/dashboard/collision-intelligence/review"
+                    method="get"
+                    className="rounded-md border border-border bg-secondary/40 p-3"
+                  >
+                    <input
+                      type="hidden"
+                      name="search_source"
+                      value={alias.source_label_normalized}
+                    />
+                    <label
+                      htmlFor={`registry-search-${alias.source_label_normalized.replaceAll(" ", "-")}`}
+                      className="block text-sm font-medium"
+                    >
+                      Search the official insurer directory
+                    </label>
+                    <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                      <input
+                        id={`registry-search-${alias.source_label_normalized.replaceAll(" ", "-")}`}
+                        type="search"
+                        name="registry_search"
+                        required
+                        maxLength={80}
+                        defaultValue={
+                          alias.source_label_normalized === searchSource
+                            ? registrySearch
+                            : ""
+                        }
+                        placeholder="Try USAA or United Services"
+                        className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-md border border-border bg-background px-3 py-2 font-heading text-sm font-medium"
+                      >
+                        Search directory
+                      </button>
+                    </div>
+                    {alias.source_label_normalized === searchSource &&
+                    registrySearch ? (
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                        {directorySearchUnavailable
+                          ? "The directory search is temporarily unavailable."
+                          : directorySearchSuggestions.length
+                            ? `${directorySearchSuggestions.length} official result${directorySearchSuggestions.length === 1 ? "" : "s"} found for “${registrySearch}”. Choose one below.`
+                            : `No official insurer matches found for “${registrySearch}”. Try the legal name or a shorter search.`}
+                      </p>
+                    ) : null}
+                  </form>
+
+                  <form
                     action="/api/collision-intelligence/insurer-alias-review"
                     method="post"
                     className="space-y-3"
@@ -612,7 +713,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                             {registrySuggestions.map((suggestion) => (
                               <option
                                 key={`${suggestion.source}:${suggestion.record_type}:${suggestion.registry_id}`}
-                                value={`registry:${suggestion.source}:${suggestion.record_type}:${suggestion.registry_id}`}
+                                value={registryTarget(suggestion)}
                               >
                                 {suggestion.display_name} —{" "}
                                 {suggestion.match_score}%
