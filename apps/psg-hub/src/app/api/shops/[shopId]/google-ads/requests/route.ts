@@ -30,7 +30,7 @@ async function requireShopMember(shopId: string) {
     .eq("shop_id", shopId)
     .maybeSingle();
 
-  if (!membership) {
+  if (!membership || !["owner", "manager"].includes(membership.role)) {
     return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 
@@ -108,6 +108,7 @@ export async function POST(
         requestId: created.id,
         requestType: parsed.requestType,
         campaignId: parsed.campaignId ?? null,
+        acknowledged: true,
         executesGoogleAdsChange: false,
       },
     });

@@ -1,202 +1,104 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Send } from "lucide-react";
+import { Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
-type RequestKind = "campaign_adjustment" | "new_campaign";
+type RequestKind =
+  | "budget_change"
+  | "campaign_status_change"
+  | "new_campaign"
+  | "ad_copy_change"
+  | "location_change"
+  | "destination_change"
+  | "performance_review"
+  | "problem_report";
 
-type Props = {
-  shopId: string;
-  campaigns: Array<{ id: string; name: string }>;
+type Field = { key: string; label: string; type?: "date" | "number" | "url" | "tel"; placeholder?: string };
+type RequestDefinition = {
+  kind: RequestKind;
+  label: string;
+  warning: string;
+  campaign: boolean;
+  fields: Field[];
 };
 
-const REQUESTS: Array<{
-  label: string;
-  requestType: RequestKind;
-  title: string;
-  placeholder: string;
-}> = [
-  {
-    label: "Request an ad change",
-    requestType: "campaign_adjustment",
-    title: "Ad change request",
-    placeholder: "Tell us what needs to change and why.",
-  },
-  {
-    label: "Request a new campaign",
-    requestType: "new_campaign",
-    title: "New campaign request",
-    placeholder: "Tell us the service, market, offer, and timing.",
-  },
-  {
-    label: "Request a performance check-up",
-    requestType: "campaign_adjustment",
-    title: "Performance check-up request",
-    placeholder: "Tell us what you want PSG to review.",
-  },
+const REQUESTS: RequestDefinition[] = [
+  { kind: "budget_change", label: "Change my budget", campaign: true, warning: "Big budget swings can restart Google's learning. PSG will explain if results may dip for 1–2 weeks.", fields: [{ key: "currentMonthlyBudget", label: "Current monthly budget", type: "number" }, { key: "requestedMonthlyBudget", label: "Requested monthly budget", type: "number" }, { key: "reason", label: "Why do you want this change?" }, { key: "requestedDate", label: "When would you like it?", type: "date" }] },
+  { kind: "campaign_status_change", label: "Pause or restart a campaign", campaign: true, warning: "Pausing loses some of the history Google uses to find customers. Restarting is not instant.", fields: [{ key: "action", label: "Pause or restart?", placeholder: "Pause or restart" }, { key: "reason", label: "Why?" }, { key: "requestedDate", label: "Requested date", type: "date" }, { key: "pauseUntil", label: "If pausing, until when?" }] },
+  { kind: "new_campaign", label: "Talk to us about a new campaign", campaign: false, warning: "A new campaign may change your monthly scope and price. PSG will confirm cost before anything starts.", fields: [{ key: "service", label: "Service to promote" }, { key: "offer", label: "Offer or message" }, { key: "area", label: "Area to cover" }, { key: "startDate", label: "Start date", type: "date" }, { key: "endDate", label: "End date", type: "date" }, { key: "budgetGuidance", label: "Monthly budget guidance", type: "number" }, { key: "landingPage", label: "Landing page", type: "url" }, { key: "phoneNumber", label: "Phone number", type: "tel" }] },
+  { kind: "ad_copy_change", label: "Change what an ad says", campaign: true, warning: "Google reviews new ad text, usually in about one business day. Claims must be ones you can support.", fields: [{ key: "problem", label: "What is wrong?" }, { key: "newWording", label: "Exact new wording" }, { key: "reason", label: "Why should it change?" }] },
+  { kind: "location_change", label: "Change where ads show", campaign: true, warning: "Widening the area spreads the same budget thinner unless the budget changes too.", fields: [{ key: "currentArea", label: "Current area" }, { key: "requestedArea", label: "Requested cities, ZIP codes, or radius" }] },
+  { kind: "destination_change", label: "Change the phone number or landing page", campaign: true, warning: "PSG must re-check call and form tracking before leads count correctly again.", fields: [{ key: "phoneNumber", label: "New phone number", type: "tel" }, { key: "landingPage", label: "New landing page", type: "url" }] },
+  { kind: "performance_review", label: "Ask for a performance review", campaign: false, warning: "No ad change is made. This is a question for PSG's paid-media team.", fields: [{ key: "question", label: "What would you like us to review?" }, { key: "period", label: "Which time period?" }] },
+  { kind: "problem_report", label: "Report a problem", campaign: false, warning: "We'll confirm we've got your request within one business day, and give you an answer within two.", fields: [{ key: "problem", label: "What is wrong?" }, { key: "example", label: "Example" }, { key: "occurredAt", label: "When did it happen?" }] },
 ];
+
+type Props = { shopId: string; campaigns: Array<{ id: string; name: string }> };
 
 export function CustomerRequestActions({ shopId, campaigns }: Props) {
   const router = useRouter();
-  const [openLabel, setOpenLabel] = useState(REQUESTS[0].label);
-  const [details, setDetails] = useState("");
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [kind, setKind] = useState<RequestKind>("budget_change");
   const [campaignId, setCampaignId] = useState("");
-  const [budgetNotes, setBudgetNotes] = useState("");
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [acknowledged, setAcknowledged] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const selected = REQUESTS.find((item) => item.label === openLabel) ?? REQUESTS[0];
+  const selected = REQUESTS.find((request) => request.kind === kind) ?? REQUESTS[0];
+  const campaign = campaigns.find((item) => item.id === campaignId);
+  const missing = selected.fields.some((field) => !values[field.key]?.trim()) || (selected.campaign && !campaign);
+  const summary = useMemo(() => selected.fields.map((field) => ({ label: field.label, value: values[field.key] ?? "" })), [selected, values]);
 
+  useEffect(() => { if (open) closeButtonRef.current?.focus(); }, [open]);
+
+  function close() { if (!pending) { setOpen(false); setStep(1); setAcknowledged(false); } }
+  function resetFor(next: RequestKind) { setKind(next); setValues({}); setCampaignId(""); setAcknowledged(false); setMessage(null); }
   function submit() {
     setMessage(null);
     startTransition(async () => {
-      const campaign = campaigns.find((item) => item.id === campaignId);
+      const requestValues = Object.fromEntries(summary.map((item) => [item.label, item.value]));
+      const details = summary.map((item) => `${item.label}: ${item.value}`).join("\n");
       const res = await fetch(`/api/shops/${shopId}/google-ads/requests`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requestType: selected.requestType,
-          campaignId: campaign?.id ?? null,
-          campaignName: campaign?.name ?? null,
-          title: selected.title,
-          details,
-          budgetNotes: budgetNotes || null,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestType: selected.kind, campaignId: campaign?.id ?? null, campaignName: campaign?.name ?? null, title: selected.label, details, requestValues, acknowledged }),
       });
-      if (!res.ok) {
-        setMessage("We could not send this request. Please add more detail and try again.");
-        return;
-      }
-      setDetails("");
-      setCampaignId("");
-      setBudgetNotes("");
-      setMessage("Request received.");
-      router.refresh();
+      if (!res.ok) { setMessage("We could not send this request. Check each field and try again."); return; }
+      close(); setValues({}); setCampaignId(""); setMessage("Request received — waiting for PSG review. Nothing changed in Google Ads."); router.refresh();
     });
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2" aria-label="Google Ads request type">
-        {REQUESTS.map((item) => (
-          <button
-            key={item.label}
-            type="button"
-            onClick={() => {
-              setOpenLabel(item.label);
-              setMessage(null);
-            }}
-            aria-pressed={item.label === openLabel}
-            className={`rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-              item.label === openLabel
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
+  return <div className="space-y-3">
+    <p className="text-sm text-muted-foreground">Nothing you submit here changes a live campaign or your spending. PSG reviews every request first.</p>
+    <Button className="min-h-11 w-full sm:w-auto" onClick={() => setOpen(true)}>Request a change</Button>
+    <p role="status" className="text-sm font-medium">{message}</p>
+    {open ? <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-6" onKeyDown={(event) => { if (event.key === "Escape") close(); }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="ads-request-title" className="max-h-[92vh] w-full overflow-y-auto rounded-t-lg bg-background p-5 shadow-xl sm:max-w-2xl sm:rounded-lg sm:p-6">
+        <div className="flex items-start justify-between gap-4"><div><p className="text-sm text-muted-foreground">Step {step} of 2</p><h3 id="ads-request-title" className="text-xl font-semibold">{step === 1 ? "Tell PSG what you need" : "Review your request"}</h3></div><Button ref={closeButtonRef} variant="ghost" size="icon" aria-label="Close request" onClick={close}><X /></Button></div>
+        {step === 1 ? <div className="mt-5 space-y-4">
+          <label className="block space-y-1"><span className="text-sm font-medium">Request type</span><select className="min-h-11 w-full rounded-md border bg-background px-3" value={kind} onChange={(event) => resetFor(event.target.value as RequestKind)}>{REQUESTS.map((request) => <option key={request.kind} value={request.kind}>{request.label}</option>)}</select></label>
+          {selected.campaign ? <label className="block space-y-1"><span className="text-sm font-medium">Campaign</span><select className="min-h-11 w-full rounded-md border bg-background px-3" value={campaignId} onChange={(event) => setCampaignId(event.target.value)}><option value="">Choose a campaign</option>{campaigns.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label> : null}
+          {selected.fields.map((field) => <label key={field.key} className="block space-y-1"><span className="text-sm font-medium">{field.label}</span><Input required type={field.type ?? "text"} placeholder={field.placeholder} value={values[field.key] ?? ""} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))} /></label>)}
+          <p className="rounded-md bg-muted p-3 text-sm">{selected.warning}</p>
+          <Button className="min-h-11 w-full sm:w-auto" disabled={missing} onClick={() => setStep(2)}>Review request</Button>
+        </div> : <div className="mt-5 space-y-4">
+          <dl className="divide-y rounded-md border"><div className="p-3"><dt className="text-xs text-muted-foreground">What you're asking for</dt><dd className="font-medium">{selected.label}</dd></div><div className="p-3"><dt className="text-xs text-muted-foreground">Which campaign</dt><dd>{campaign?.name ?? "Not about a specific campaign"}</dd></div>{summary.map((item) => <div className="p-3" key={item.label}><dt className="text-xs text-muted-foreground">{item.label}</dt><dd className="whitespace-pre-wrap break-words">{item.value}</dd></div>)}</dl>
+          <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm"><p className="font-medium">Nothing changes right now. Your spending is not affected by sending this.</p><p className="mt-2">PSG reviews this. Nothing in your live Google Ads account changes until a PSG specialist makes the change and confirms it back to you.</p><p className="mt-2">We'll confirm we've got your request within one business day, and give you an answer within two. Business days only.</p></div>
+          <label className="flex items-start gap-3 text-sm"><input className="mt-1 size-4" type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /><span>I understand this is a request. PSG will review it before anything changes.</span></label>
+          {message ? <p role="alert" className="text-sm text-destructive">{message}</p> : null}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row"><Button variant="outline" onClick={() => setStep(1)}>Back</Button><Button disabled={!acknowledged || pending} onClick={submit}><Send />{pending ? "Sending…" : "Send for PSG review"}</Button></div>
+        </div>}
       </div>
-
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
-        <label className="space-y-1">
-          <span className="text-sm font-medium">{selected.label}</span>
-          <textarea
-            value={details}
-            onChange={(event) => setDetails(event.target.value)}
-            placeholder={selected.placeholder}
-            className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </label>
-        <div className="space-y-3">
-          <label className="space-y-1">
-            <span className="text-sm font-medium">Campaign</span>
-            <select
-              value={campaignId}
-              onChange={(event) => setCampaignId(event.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">General request</option>
-              {campaigns.map((campaign) => (
-                <option key={campaign.id} value={campaign.id}>
-                  {campaign.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="space-y-1">
-            <span className="text-sm font-medium">Budget notes</span>
-            <input
-              value={budgetNotes}
-              onChange={(event) => setBudgetNotes(event.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </label>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={submit} disabled={pending || details.trim().length < 10}>
-          <Send aria-hidden="true" />
-          {pending ? "Sending" : "Send request"}
-        </Button>
-        <p role="status" className="text-sm text-muted-foreground">
-          {message}
-        </p>
-      </div>
-    </div>
-  );
+    </div> : null}
+  </div>;
 }
 
-export function CustomerReplyForm({
-  shopId,
-  requestId,
-}: {
-  shopId: string;
-  requestId: string;
-}) {
-  const router = useRouter();
-  const [response, setResponse] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  function submit() {
-    setMessage(null);
-    startTransition(async () => {
-      const res = await fetch(`/api/shops/${shopId}/google-ads/requests/${requestId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ response }),
-      });
-      if (!res.ok) {
-        setMessage("We could not send that detail. Please try again.");
-        return;
-      }
-      setResponse("");
-      setMessage("Detail sent to PSG.");
-      router.refresh();
-    });
-  }
-
-  return (
-    <div className="mt-3 space-y-2">
-      <label className="space-y-1">
-        <span className="text-sm font-medium">Your answer</span>
-        <textarea
-          value={response}
-          onChange={(event) => setResponse(event.target.value)}
-          className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </label>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button size="sm" onClick={submit} disabled={pending || response.trim().length < 3}>
-          Send detail
-        </Button>
-        <p role="status" className="text-sm text-muted-foreground">
-          {message}
-        </p>
-      </div>
-    </div>
-  );
+export function CustomerReplyForm({ shopId, requestId }: { shopId: string; requestId: string }) {
+  const router = useRouter(); const [response, setResponse] = useState(""); const [message, setMessage] = useState<string | null>(null); const [pending, startTransition] = useTransition();
+  function submit() { setMessage(null); startTransition(async () => { const res = await fetch(`/api/shops/${shopId}/google-ads/requests/${requestId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ response }) }); if (!res.ok) { setMessage("We could not send that detail. Please try again."); return; } setResponse(""); setMessage("Detail sent to PSG."); router.refresh(); }); }
+  return <div className="mt-3 space-y-2"><label className="space-y-1"><span className="text-sm font-medium">Your answer</span><textarea value={response} onChange={(event) => setResponse(event.target.value)} className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /></label><div className="flex flex-wrap items-center gap-3"><Button size="sm" onClick={submit} disabled={pending || response.trim().length < 3}>Send detail</Button><p role="status" className="text-sm text-muted-foreground">{message}</p></div></div>;
 }

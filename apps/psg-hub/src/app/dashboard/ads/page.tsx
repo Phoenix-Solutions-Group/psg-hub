@@ -28,7 +28,7 @@ type Props = {
 
 type RequestRow = {
   id: string;
-  request_type: "campaign_adjustment" | "new_campaign";
+  request_type: string;
   campaign_name: string | null;
   title: string;
   details: string;
