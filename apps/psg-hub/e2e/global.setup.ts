@@ -105,6 +105,59 @@ async function seedShop(ownerId: string, name: string, role: string): Promise<st
 }
 
 /**
+ * Synthetic review used to verify the customer comment workflow and shop
+ * isolation without relying on Riverside or any production customer data.
+ */
+async function seedReviewFixture(
+  shopId: string,
+  reviewItemId: string,
+  author: string
+): Promise<void> {
+  const locationSlug = `e2e-review-${shopId.slice(0, 8)}`;
+  const { data: existingLocation } = await admin
+    .from("locations")
+    .select("id")
+    .eq("shop_id", shopId)
+    .eq("slug", locationSlug)
+    .maybeSingle();
+
+  let locationId = existingLocation?.id as string | undefined;
+  if (!locationId) {
+    const { data: location, error: locationError } = await admin
+      .from("locations")
+      .insert({
+        shop_id: shopId,
+        name: "E2E Review Location",
+        slug: locationSlug,
+        is_primary: true,
+      })
+      .select("id")
+      .single();
+    if (locationError || !location) {
+      throw new Error(
+        `[e2e] review location seed failed: ${locationError?.message}`
+      );
+    }
+    locationId = location.id as string;
+  }
+
+  const { error } = await admin.from("review_items").upsert(
+    {
+      id: reviewItemId,
+      shop_id: shopId,
+      location_id: locationId,
+      platform: "google",
+      rating: 5,
+      text: "Synthetic review for tenant-isolation testing.",
+      author,
+      reviewed_at: SNAPSHOT_SYNCED_AT,
+    },
+    { onConflict: "id" }
+  );
+  if (error) throw new Error(`[e2e] review fixture seed failed: ${error.message}`);
+}
+
+/**
  * 09-02: deterministic daily semrush snapshots for a shop (trailing `days`
  * ending SNAPSHOT_END_DATE). Values are formula-derived from the day index —
  * no randomness. Upsert on the idempotency key, so re-runs net zero new rows.
@@ -642,6 +695,17 @@ setup("seed fixtures + per-role storageState", async ({ browser }) => {
     totalReviewCount: 87,
     openStatus: "OPEN",
   });
+
+  await seedReviewFixture(
+    ownerShopId,
+    OWNER.reviewItemId,
+    "E2E Owner Review"
+  );
+  await seedReviewFixture(
+    shopAId,
+    MULTI.reviewItemId,
+    "E2E Separate Shop Review"
+  );
 
   await seedBsmContentApprovalReview(ownerShopId, ownerId, {
     itemId: OWNER.bsmReviewItemId,

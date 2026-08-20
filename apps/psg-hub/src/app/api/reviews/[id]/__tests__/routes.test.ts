@@ -45,6 +45,13 @@ let mockInsertedComment: {
   body: string;
   created_at: string;
 } | null = null;
+let mockComments: Array<{
+  id: string;
+  review_id: string;
+  response_id: string | null;
+  body: string;
+  created_at: string;
+}> = [];
 let mockRateLimitCount = 0;
 let serviceUpdateReturnsRow = true;
 
@@ -71,6 +78,13 @@ function serverClient() {
       if (table === "review_responses") return builder(mockExistingResponse);
       if (table === "review_response_comments") {
         return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockResolvedValue({ data: mockComments, error: null }),
+              }),
+            }),
+          }),
           insert: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
               single: vi.fn().mockResolvedValue({
@@ -146,13 +160,20 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: vi.fn(() => serviceClient()),
 }));
 
+vi.mock("@/lib/shop/context", () => ({
+  getActiveShopContext: vi.fn(async () => ({
+    shops: [],
+    activeShopId: mockMembership ? mockReview?.shop_id ?? null : null,
+  })),
+}));
+
 const { POST: draftPOST } = await import(
   "@/app/api/reviews/[id]/draft-response/route"
 );
 const { POST: approvePOST } = await import(
   "@/app/api/reviews/[id]/approve-response/route"
 );
-const { POST: commentPOST } = await import(
+const { GET: commentGET, POST: commentPOST } = await import(
   "@/app/api/reviews/[id]/comments/route"
 );
 
@@ -186,6 +207,7 @@ beforeEach(() => {
     body: "Looks ready.",
     created_at: "2026-07-17T16:00:00.000Z",
   };
+  mockComments = [];
   mockRateLimitCount = 0;
   serviceUpdateReturnsRow = true;
   process.env.ANTHROPIC_API_KEY = "test-key";
@@ -209,6 +231,42 @@ describe("POST /api/reviews/[id]/comments", () => {
       params: Promise.resolve({ id: "r1" }),
     });
     expect(res.status).toBe(401);
+  });
+
+  it("GET returns only comments for the active shop review", async () => {
+    mockUser = { id: "u1" };
+    mockReview = baseReview;
+    mockMembership = { role: "manager" };
+    mockComments = [
+      {
+        id: "comment-1",
+        review_id: "r1",
+        response_id: "resp-1",
+        body: "Looks ready.",
+        created_at: "2026-07-17T16:00:00.000Z",
+      },
+    ];
+
+    const res = await commentGET(new Request("http://localhost/x"), {
+      params: Promise.resolve({ id: "r1" }),
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      comments: [{ ...mockComments[0], author_name: "Team member" }],
+    });
+  });
+
+  it("GET denies a review outside the active shop", async () => {
+    mockUser = { id: "u1" };
+    mockReview = baseReview;
+    mockMembership = null;
+
+    const res = await commentGET(new Request("http://localhost/x"), {
+      params: Promise.resolve({ id: "r1" }),
+    });
+
+    expect(res.status).toBe(403);
   });
 
   it("403 cross-tenant comment attempt", async () => {

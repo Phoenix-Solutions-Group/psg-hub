@@ -2,11 +2,85 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { notifyBsmApprovalAdmins } from "@/lib/bsm/approval-notifications";
+import { getActiveShopContext } from "@/lib/shop/context";
 
 type CommentBody = {
   body?: string;
   responseId?: string | null;
 };
+
+async function getActiveReview(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  reviewId: string
+) {
+  const { activeShopId } = await getActiveShopContext(userId);
+  if (!activeShopId) return { review: null, status: 403 as const };
+
+  const { data: review, error } = await supabase
+    .from("review_items")
+    .select("id, shop_id, platform, author")
+    .eq("id", reviewId)
+    .eq("shop_id", activeShopId)
+    .maybeSingle();
+
+  if (error) return { review: null, status: 500 as const, error: error.message };
+  if (!review) return { review: null, status: 404 as const };
+  return { review, status: 200 as const };
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: reviewId } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const activeReview = await getActiveReview(supabase, user.id, reviewId);
+  if (!activeReview.review) {
+    return NextResponse.json(
+      {
+        error:
+          activeReview.status === 500
+            ? activeReview.error
+            : activeReview.status === 403
+              ? "Forbidden"
+              : "Not found",
+      },
+      { status: activeReview.status }
+    );
+  }
+
+  const { data: comments, error } = await supabase
+    .from("review_response_comments")
+    .select(
+      "id, review_id:review_item_id, response_id:review_response_id, body, created_at"
+    )
+    .eq("review_item_id", reviewId)
+    .eq("shop_id", activeReview.review.shop_id)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    return NextResponse.json(
+      { error: "Failed to load comments" },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    comments: (comments ?? []).map((comment) => ({
+      ...comment,
+      author_name: "Team member",
+    })),
+  });
+}
 
 export async function POST(
   request: Request,
@@ -40,29 +114,21 @@ export async function POST(
     );
   }
 
-  const { data: review, error: revErr } = await supabase
-    .from("review_items")
-    .select("id, shop_id, platform, author")
-    .eq("id", reviewId)
-    .maybeSingle();
-
-  if (revErr) {
-    return NextResponse.json({ error: revErr.message }, { status: 500 });
+  const activeReview = await getActiveReview(supabase, user.id, reviewId);
+  if (!activeReview.review) {
+    return NextResponse.json(
+      {
+        error:
+          activeReview.status === 500
+            ? activeReview.error
+            : activeReview.status === 403
+              ? "Forbidden"
+              : "Not found",
+      },
+      { status: activeReview.status }
+    );
   }
-  if (!review) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const { data: membership } = await supabase
-    .from("shop_users")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("shop_id", review.shop_id)
-    .maybeSingle();
-
-  if (!membership) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const review = activeReview.review;
 
   const responseId = body.responseId ?? null;
   if (responseId) {
@@ -96,7 +162,9 @@ export async function POST(
       body: text,
       created_by: user.id,
     })
-    .select("id, review_id:review_item_id, response_id:review_response_id, body, created_at")
+    .select(
+      "id, review_id:review_item_id, response_id:review_response_id, body, created_at"
+    )
     .single();
 
   if (insertErr) {
