@@ -68,6 +68,30 @@ export type CollisionAlertRow = {
   is_provisional: boolean;
 };
 
+export type CollisionAlertCaseRow = {
+  id: string;
+  zip_code: string;
+  event_type: string;
+  event_date: string;
+  alert_level: "high";
+  threshold_basis: string;
+  latest_event_at: string;
+  peak_magnitude: Numeric;
+  magnitude_unit: string | null;
+  historical_repair_orders: Numeric;
+  report_count: Numeric;
+  owner_profile_id: string;
+  status: "acknowledged" | "closed";
+  acknowledged_at: string;
+  outcome:
+    | "pending"
+    | "observed_follow_through"
+    | "no_observed_follow_through"
+    | "not_evaluable";
+  outcome_notes: string | null;
+  closed_at: string | null;
+};
+
 export type CollisionForecastStatusRow = {
   forecast_origin_week: string;
   forecast_horizon_weeks: Numeric;
@@ -479,6 +503,8 @@ export function buildCollisionDashboard(
   crashSourceRows: CollisionCrashSourceRow[] = [],
   nationalCrashRows: CollisionNationalCrashRow[] = [],
   nationalCrashSourceRows: CollisionNationalCrashSourceRow[] = [],
+  alertCaseRows: CollisionAlertCaseRow[] = [],
+  alertReviewAvailable = true,
 ) {
   const weekly = [...weeklyRows].sort((a, b) =>
     a.week_start.localeCompare(b.week_start),
@@ -574,6 +600,12 @@ export function buildCollisionDashboard(
     null,
   );
   const weatherAlerts = summarizeWeatherAlerts(alertRows);
+  const alertCasesBySignal = new Map(
+    alertCaseRows.map((reviewCase) => [
+      `${reviewCase.zip_code}:${reviewCase.event_type}:${reviewCase.event_date}`,
+      reviewCase,
+    ]),
+  );
   const highWeatherAlerts = weatherAlerts.filter(
     (alert) => alert.alert_level === "high",
   );
@@ -687,19 +719,60 @@ export function buildCollisionDashboard(
       latestCoveragePct: numberOf(weather.at(-1)?.weather_coverage_pct ?? 0),
       refreshedAt: weather.at(-1)?.weather_refreshed_at ?? null,
     },
-    alerts: weatherAlerts.slice(0, 6).map((row) => ({
-      zipCode: row.zip_code,
-      historicalRepairOrders: numberOf(row.historical_repair_orders),
-      sourceEventId: String(row.source_event_id),
-      eventType: row.event_type,
-      eventAt: row.event_at,
-      magnitude: row.magnitude === null ? null : numberOf(row.magnitude),
-      magnitudeUnit: row.magnitude_unit,
-      alertLevel: row.alert_level,
-      thresholdBasis: row.threshold_basis,
-      isProvisional: row.is_provisional,
-      reportCount: row.reportCount,
-    })),
+    alerts: weatherAlerts.slice(0, 6).map((row) => {
+      const eventDate = row.event_at.slice(0, 10);
+      const reviewCase = alertCasesBySignal.get(
+        `${row.zip_code}:${row.event_type}:${eventDate}`,
+      );
+      return {
+        zipCode: row.zip_code,
+        historicalRepairOrders: numberOf(row.historical_repair_orders),
+        sourceEventId: String(row.source_event_id),
+        eventType: row.event_type,
+        eventAt: row.event_at,
+        eventDate,
+        magnitude: row.magnitude === null ? null : numberOf(row.magnitude),
+        magnitudeUnit: row.magnitude_unit,
+        alertLevel: row.alert_level,
+        thresholdBasis: row.threshold_basis,
+        isProvisional: row.is_provisional,
+        reportCount: row.reportCount,
+        reviewCase: reviewCase
+          ? {
+              id: reviewCase.id,
+              status: reviewCase.status,
+              outcome: reviewCase.outcome,
+              acknowledgedAt: reviewCase.acknowledged_at,
+            }
+          : null,
+      };
+    }),
+    alertReviewAvailable,
+    weatherReviewCases: [...alertCaseRows]
+      .sort((left, right) => right.event_date.localeCompare(left.event_date))
+      .map((reviewCase) => ({
+        id: reviewCase.id,
+        zipCode: reviewCase.zip_code,
+        eventType: reviewCase.event_type,
+        eventDate: reviewCase.event_date,
+        thresholdBasis: reviewCase.threshold_basis,
+        latestEventAt: reviewCase.latest_event_at,
+        magnitude:
+          reviewCase.peak_magnitude === null
+            ? null
+            : numberOf(reviewCase.peak_magnitude),
+        magnitudeUnit: reviewCase.magnitude_unit,
+        historicalRepairOrders: numberOf(
+          reviewCase.historical_repair_orders,
+        ),
+        reportCount: numberOf(reviewCase.report_count),
+        ownerProfileId: reviewCase.owner_profile_id,
+        status: reviewCase.status,
+        acknowledgedAt: reviewCase.acknowledged_at,
+        outcome: reviewCase.outcome,
+        outcomeNotes: reviewCase.outcome_notes,
+        closedAt: reviewCase.closed_at,
+      })),
     operationalForecasts,
     operationalForecast: operationalForecasts[0] ?? null,
     planningGuidance: [

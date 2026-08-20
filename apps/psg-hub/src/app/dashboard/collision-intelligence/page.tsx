@@ -7,6 +7,10 @@ import { getCollisionDashboard } from "@/lib/collision-intelligence/dashboard";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { createClient } from "@/lib/supabase/server";
 
+type Props = {
+  searchParams: Promise<{ weather_review?: string | string[] }>;
+};
+
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -29,6 +33,17 @@ const eventLabels: Record<string, string> = {
   "thunderstorm wind": "Thunderstorm wind",
 };
 
+const weatherReviewNotices: Record<string, string> = {
+  acknowledged:
+    "Weather signal acknowledged. It now has an owner and remains review-only.",
+  closed: "Weather follow-up closed with an observed repair-demand outcome.",
+  release_pending:
+    "Weather review decisions stay read-only until the reviewed database migration is applied.",
+  stale:
+    "That weather signal or follow-up changed before it could be saved. The dashboard has been refreshed.",
+  error: "The weather review could not be saved. No review state changed.",
+};
+
 function formatDate(value: string | null) {
   if (!value) return "Not available";
   return new Intl.DateTimeFormat("en-US", {
@@ -45,19 +60,34 @@ function formatChange(changePct: number | null) {
   return `${changePct > 0 ? "Up" : "Down"} ${Math.abs(changePct).toFixed(1)}% vs prior period`;
 }
 
-export default async function CollisionIntelligencePage() {
+export default async function CollisionIntelligencePage({
+  searchParams,
+}: Props) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { activeShopId } = await getActiveShopContext(user.id);
+  const { shops, activeShopId } = await getActiveShopContext(user.id);
   if (!activeShopId) redirect("/dashboard");
 
+  const params = await searchParams;
+  const weatherReviewResult =
+    typeof params.weather_review === "string" ? params.weather_review : "";
+  const weatherReviewNotice = weatherReviewNotices[weatherReviewResult];
+  const activeShop = shops.find((shop) => shop.id === activeShopId);
+  const canReviewWeather =
+    activeShop?.role === "owner" || activeShop?.role === "manager";
   const dashboard = await getCollisionDashboard(activeShopId);
   const { summary, baseline, operationalForecast, operationalForecasts } =
     dashboard;
+  const openWeatherReviewCases = dashboard.weatherReviewCases.filter(
+    (reviewCase) => reviewCase.status === "acknowledged",
+  );
+  const closedWeatherReviewCases = dashboard.weatherReviewCases.filter(
+    (reviewCase) => reviewCase.status === "closed",
+  );
 
   return (
     <div className="space-y-6">
@@ -91,6 +121,15 @@ export default async function CollisionIntelligencePage() {
           </Link>
         </div>
       </div>
+
+      {weatherReviewNotice ? (
+        <p
+          role="status"
+          className="rounded-lg border border-border bg-secondary/40 px-4 py-3 text-sm"
+        >
+          {weatherReviewNotice}
+        </p>
+      ) : null}
 
       {!dashboard.companyName ? (
         <Card>
@@ -394,7 +433,7 @@ export default async function CollisionIntelligencePage() {
             />
           </div>
 
-          <Card>
+          <Card id="weather-alerts">
             <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
               <div>
                 <CardTitle>Recent severe-weather signals</CardTitle>
@@ -406,7 +445,12 @@ export default async function CollisionIntelligencePage() {
                     : " Feed has not completed a scheduled refresh."}
                 </p>
               </div>
-              <Badge variant="outline">Notifications off</Badge>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">Notifications off</Badge>
+                {!dashboard.alertReviewAvailable ? (
+                  <Badge variant="warning">Review lifecycle pending</Badge>
+                ) : null}
+              </div>
             </CardHeader>
             <CardContent>
               {dashboard.alerts.length ? (
@@ -433,6 +477,13 @@ export default async function CollisionIntelligencePage() {
                               ? "Severe threshold met"
                               : "Below severe threshold"}
                           </Badge>
+                          {alert.reviewCase ? (
+                            <Badge variant="outline">
+                              {alert.reviewCase.status === "closed"
+                                ? "Follow-up closed"
+                                : "Acknowledged"}
+                            </Badge>
+                          ) : null}
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">
                           {alert.reportCount > 1
@@ -451,6 +502,26 @@ export default async function CollisionIntelligencePage() {
                         {alert.historicalRepairOrders === 1 ? "" : "s"} from
                         this ZIP
                       </p>
+                      {dashboard.alertReviewAvailable &&
+                      canReviewWeather &&
+                      alert.alertLevel === "high" &&
+                      !alert.reviewCase ? (
+                        <form
+                          action="/api/collision-intelligence/weather-alert-review"
+                          method="post"
+                        >
+                          <input type="hidden" name="action" value="acknowledge" />
+                          <input type="hidden" name="zip_code" value={alert.zipCode} />
+                          <input type="hidden" name="event_type" value={alert.eventType} />
+                          <input type="hidden" name="event_date" value={alert.eventDate} />
+                          <button
+                            type="submit"
+                            className="rounded-md border border-border px-3 py-2 font-heading text-sm font-medium hover:bg-secondary"
+                          >
+                            Acknowledge and own
+                          </button>
+                        </form>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -460,10 +531,113 @@ export default async function CollisionIntelligencePage() {
                   in the last 72 hours.
                 </p>
               )}
+              {openWeatherReviewCases.length ? (
+                <div className="mt-5 space-y-3 border-t border-border pt-4">
+                  <div>
+                    <h3 className="font-heading font-semibold">
+                      Owned follow-ups
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Record whether unusual repair arrivals were observed during
+                      the pre-registered follow-up window. This does not validate
+                      the preliminary weather report itself.
+                    </p>
+                  </div>
+                  {openWeatherReviewCases.map((reviewCase) => (
+                    <form
+                      key={reviewCase.id}
+                      action="/api/collision-intelligence/weather-alert-review"
+                      method="post"
+                      className="space-y-3 rounded-md border border-border p-3"
+                    >
+                      <input type="hidden" name="action" value="close" />
+                      <input type="hidden" name="case_id" value={reviewCase.id} />
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-heading text-sm font-semibold">
+                            {eventLabels[reviewCase.eventType] ?? reviewCase.eventType} · ZIP{" "}
+                            {reviewCase.zipCode}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Signal date {formatDate(reviewCase.eventDate)} ·{" "}
+                            {reviewCase.reportCount} preliminary{" "}
+                            {reviewCase.reportCount === 1 ? "report" : "reports"}
+                          </p>
+                        </div>
+                        <Badge variant="outline">Acknowledged</Badge>
+                      </div>
+                      {canReviewWeather ? (
+                        <div className="grid gap-3 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)_auto] md:items-end">
+                          <label className="text-sm font-medium">
+                            Repair-demand outcome
+                            <select
+                              name="outcome"
+                              required
+                              defaultValue=""
+                              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                            >
+                              <option value="" disabled>
+                                Select an observed outcome
+                              </option>
+                              <option value="observed_follow_through">
+                                Unusual repair increase observed
+                              </option>
+                              <option value="no_observed_follow_through">
+                                No unusual increase observed
+                              </option>
+                              <option value="not_evaluable">Not evaluable</option>
+                            </select>
+                          </label>
+                          <label className="text-sm font-medium">
+                            Outcome evidence
+                            <textarea
+                              name="outcome_notes"
+                              required
+                              minLength={20}
+                              maxLength={2000}
+                              rows={2}
+                              placeholder="Describe the follow-up window, observed arrivals, and limitations."
+                              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                            />
+                          </label>
+                          <button
+                            type="submit"
+                            className="rounded-md bg-primary px-3 py-2 font-heading text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                          >
+                            Close follow-up
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          A shop owner or manager must record the outcome.
+                        </p>
+                      )}
+                    </form>
+                  ))}
+                </div>
+              ) : null}
+              {closedWeatherReviewCases.length ? (
+                <details className="mt-4 rounded-md border border-border p-3">
+                  <summary className="cursor-pointer font-heading text-sm font-semibold">
+                    Recent closed follow-ups · {closedWeatherReviewCases.length}
+                  </summary>
+                  <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                    {closedWeatherReviewCases.map((reviewCase) => (
+                      <li key={reviewCase.id}>
+                        {eventLabels[reviewCase.eventType] ?? reviewCase.eventType} · ZIP{" "}
+                        {reviewCase.zipCode} ·{" "}
+                        {reviewCase.outcome.replaceAll("_", " ")}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
               <p className="mt-4 text-xs leading-5 text-muted-foreground">
                 A severe threshold describes the weather report, not predicted
-                repair demand. Historical testing does not yet support automated
-                customer notifications.
+                repair demand. Acknowledgement creates an owned review case; it
+                does not send a notification or justify an operational change.
+                Historical testing does not yet support automated customer
+                notifications.
               </p>
             </CardContent>
           </Card>

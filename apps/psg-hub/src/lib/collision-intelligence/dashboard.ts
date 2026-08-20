@@ -3,6 +3,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   buildCollisionDashboard,
+  type CollisionAlertCaseRow,
   type CollisionAlertRow,
   type CollisionCrashRow,
   type CollisionCrashSourceRow,
@@ -37,6 +38,7 @@ export async function getCollisionDashboard(shopId: string) {
     forecast,
     crashes,
     alerts,
+    alertCases,
     forecastStatus,
     spcSource,
     insurers,
@@ -90,6 +92,14 @@ export async function getCollisionDashboard(shopId: string) {
       .order("event_at", { ascending: false })
       // ponytail: 500 raw 72-hour reports per shop; move clustering into SQL if this cap is reached.
       .limit(500),
+    service
+      .from("collision_weather_alert_cases")
+      .select(
+        "id,zip_code,event_type,event_date,alert_level,threshold_basis,latest_event_at,peak_magnitude,magnitude_unit,historical_repair_orders,report_count,owner_profile_id,status,acknowledged_at,outcome,outcome_notes,closed_at",
+      )
+      .eq("shop_id", shopId)
+      .order("event_date", { ascending: false })
+      .limit(20),
     service
       .from("collision_demand_forecasts")
       .select(
@@ -177,12 +187,18 @@ export async function getCollisionDashboard(shopId: string) {
       .limit(1),
   ]);
 
+  const alertReviewUnavailable = Boolean(
+    alertCases.error &&
+      (alertCases.error.code === "PGRST205" ||
+        alertCases.error.code === "42P01"),
+  );
   const error =
     weekly.error ??
     weather.error ??
     forecast.error ??
     crashes.error ??
     alerts.error ??
+    (alertReviewUnavailable ? null : alertCases.error) ??
     forecastStatus.error ??
     spcSource.error ??
     insurers.error ??
@@ -272,5 +288,7 @@ export async function getCollisionDashboard(shopId: string) {
     (crashSource.data ?? []) as CollisionCrashSourceRow[],
     nationalCrashRows,
     nationalCrashSourceRows,
+    (alertCases.data ?? []) as CollisionAlertCaseRow[],
+    !alertReviewUnavailable,
   );
 }

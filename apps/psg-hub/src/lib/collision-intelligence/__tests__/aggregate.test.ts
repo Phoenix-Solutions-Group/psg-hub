@@ -221,6 +221,32 @@ describe("collision intelligence aggregation", () => {
           latest_arrival_date: "2025-01-13",
         },
       ],
+      [],
+      [],
+      [],
+      [],
+      [
+        {
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          zip_code: "67037",
+          event_type: "hail",
+          event_date: "2026-08-18",
+          alert_level: "high",
+          threshold_basis: "Hail >= 1 inch",
+          latest_event_at: "2026-08-18T01:40:00Z",
+          peak_magnitude: 1.75,
+          magnitude_unit: "IN",
+          historical_repair_orders: 14,
+          report_count: 2,
+          owner_profile_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          status: "acknowledged",
+          acknowledged_at: "2026-08-18T03:00:00Z",
+          outcome: "pending",
+          outcome_notes: null,
+          closed_at: null,
+        },
+      ],
+      true,
     );
 
     expect(dashboard.summary).toMatchObject({
@@ -249,12 +275,22 @@ describe("collision intelligence aggregation", () => {
         alertLevel: "high",
         isProvisional: true,
         reportCount: 2,
+        reviewCase: expect.objectContaining({
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          status: "acknowledged",
+        }),
       }),
       expect.objectContaining({
         eventType: "thunderstorm wind",
         reportCount: 1,
       }),
     ]);
+    expect(dashboard.alertReviewAvailable).toBe(true);
+    expect(dashboard.weatherReviewCases[0]).toMatchObject({
+      zipCode: "67037",
+      status: "acknowledged",
+      outcome: "pending",
+    });
     expect(dashboard.operationalForecast).toMatchObject({
       week: "2026-08-17",
       horizonWeeks: 1,

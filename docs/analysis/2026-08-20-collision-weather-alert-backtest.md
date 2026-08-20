@@ -78,6 +78,13 @@ enough for automated outreach.
    validate exact 1–4 week outcomes from live preliminary SPC alerts against matched
    controls. Statistical significance without useful effect size is insufficient.
 
+The staged dashboard lifecycle now covers the manual-review portion: a current shop
+owner or manager can acknowledge and own a severe-threshold signal, then close it as
+observed follow-through, no observed follow-through, or not evaluable with written
+evidence. It remains unapplied in production, sends nothing externally, and does not
+replace the still-missing organization-level notification owner, economic threshold,
+or prospective matched-control validation.
+
 ## Limitations
 
 - ZIP-month timing cannot isolate whether repair activity occurred before or after a

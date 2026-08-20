@@ -101,6 +101,8 @@ the prior completed month so that training does not learn from future weather to
 | High signal        | Any tornado report, hail at least 1 inch, or wind at least 58 mph                                      |
 | Review signal      | A preliminary report below or without a measured NWS severe threshold                                  |
 | Notification state | Disabled; the dashboard is a review queue, not an automated alert sender                               |
+| Review case        | One shop, ZIP, event type, and UTC event date acknowledged by a current shop owner or manager          |
+| Demand outcome     | `observed_follow_through`, `no_observed_follow_through`, or `not_evaluable`, with 20–2,000 character evidence |
 
 SPC reports are preliminary and may be revised. A candidate indicates weather in a
 historical customer market; it is not evidence of a damaged vehicle, repair order, or
@@ -113,6 +115,13 @@ no-threshold controls. The 0.50-point lift does not support automated notificati
 The UI therefore says `Severe threshold met`, retains historical ZIP volume as context,
 and keeps notification state off. Full method and limitations are in
 `2026-08-20-collision-weather-alert-backtest.md`.
+
+The staged `collision_weather_alert_cases` lifecycle accepts only current
+severe-threshold candidates. A shop owner or manager becomes the case owner when
+acknowledging it; closure requires an explicit repair-demand outcome and evidence.
+The RPCs re-check the active shop membership and source candidate, append access-audit
+events, and never send a notification. `No observed follow-through` describes PSG's
+repair-arrival data, not whether the preliminary weather report was true or false.
 
 The local deployment configuration runs `/api/cron/collision-intelligence` daily at
 12:15 UTC. Each run replaces three complete convective-day snapshots atomically, then
