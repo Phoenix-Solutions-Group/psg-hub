@@ -116,6 +116,9 @@ export default async function CollisionIntelligencePage() {
                   {dashboard.crashes.coverageStatus === "covered"
                     ? `completed-month KDOT crashes extend through ${formatDate(dashboard.crashes.latestMonth)}.`
                     : dashboard.crashes.coverageStatus ===
+                        "national_fatal_context"
+                      ? `official NHTSA FARS ${dashboard.crashes.nationalYear} fatal-crash context is available for ${dashboard.crashes.nationalState}; it is not total crashes or claim volume.`
+                    : dashboard.crashes.coverageStatus ===
                         "outside_kansas_portfolio"
                       ? "the KDOT source is loaded, but this shop has no qualifying Kansas customer ZIPs."
                       : "the local crash source is unavailable."}
@@ -326,14 +329,27 @@ export default async function CollisionIntelligencePage() {
               xKey="week"
               ariaLabel="Weekly repair-order arrivals over the latest 52 weeks"
             />
-            {dashboard.crashes.coverageStatus === "covered" ? (
+            {dashboard.crashes.coverageStatus === "covered" ||
+            dashboard.crashes.coverageStatus === "national_fatal_context" ? (
               <BarChartCard
-                title="Crashes in customer ZIPs"
-                caption={`Official KDOT crashes across ${dashboard.crashes.activeZipCount} of ${dashboard.crashes.customerZipCount} qualifying Kansas customer ZIPs; the current partial month is excluded.`}
+                title={
+                  dashboard.crashes.coverageStatus === "covered"
+                    ? "Crashes in customer ZIPs"
+                    : "State fatal-crash context"
+                }
+                caption={
+                  dashboard.crashes.coverageStatus === "covered"
+                    ? `Official KDOT crashes across ${dashboard.crashes.activeZipCount} of ${dashboard.crashes.customerZipCount} qualifying Kansas customer ZIPs; the current partial month is excluded.`
+                    : `Official NHTSA FARS fatal crashes in ${dashboard.crashes.nationalState} by month for ${dashboard.crashes.nationalYear}. This is a fatal-crash census—not total crashes or claim volume.`
+                }
                 data={dashboard.crashSeries}
                 dataKey="crashes"
                 xKey="month"
-                ariaLabel="Monthly KDOT crashes in repair-customer ZIPs over the latest 12 complete months"
+                ariaLabel={
+                  dashboard.crashes.coverageStatus === "covered"
+                    ? "Monthly KDOT crashes in repair-customer ZIPs over the latest 12 complete months"
+                    : `Monthly NHTSA fatal crashes in ${dashboard.crashes.nationalState} during ${dashboard.crashes.nationalYear}`
+                }
                 color="var(--chart-3)"
               />
             ) : (
@@ -774,8 +790,11 @@ export default async function CollisionIntelligencePage() {
                     </dt>
                     <dd className="mt-1">
                       Official KDOT crashes cover qualifying Kansas customer
-                      ZIPs and exclude the current partial month. Missing local
-                      coverage is shown as unavailable, never as zero crashes.
+                      ZIPs and exclude the current partial month. Outside that
+                      coverage, official NHTSA FARS provides state-level 2024
+                      fatal-crash context only; it is not total crashes or claim
+                      volume. Missing coverage is shown as unavailable, never
+                      as zero crashes.
                     </dd>
                   </div>
                   <div>

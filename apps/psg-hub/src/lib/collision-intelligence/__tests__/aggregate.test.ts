@@ -337,6 +337,46 @@ describe("collision intelligence aggregation", () => {
     });
   });
 
+  it("uses state FARS records only as fatal-crash context", () => {
+    const dashboard = buildCollisionDashboard(
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [{ last_sync_status: "loaded" }],
+      [{ month: 1 }, { month: 1 }, { month: 2 }],
+      [
+        {
+          state_name: "Nebraska",
+          source_year: 2024,
+          imported_at: "2026-08-18T00:00:00Z",
+        },
+      ],
+    );
+
+    expect(dashboard.crashSeries).toEqual([
+      { month: "2024-01", crashes: 2 },
+      { month: "2024-02", crashes: 1 },
+    ]);
+    expect(dashboard.crashes).toMatchObject({
+      coverageStatus: "national_fatal_context",
+      nationalState: "Nebraska",
+      nationalYear: 2024,
+      latestTotal: 1,
+    });
+  });
+
   it("compares complete 13-week operating periods and excludes the latest week", () => {
     const weeklyRows = Array.from({ length: 27 }, (_, index) => {
       const week = new Date("2025-01-06T00:00:00Z");

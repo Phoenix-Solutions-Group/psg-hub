@@ -11,6 +11,8 @@ import {
   type CollisionForecastStatusRow,
   type CollisionInsurerRow,
   type CollisionModelRegistryRow,
+  type CollisionNationalCrashRow,
+  type CollisionNationalCrashSourceRow,
   type CollisionQualityRow,
   type CollisionRepairFeedRow,
   type CollisionSeasonalityRow,
@@ -193,6 +195,56 @@ export async function getCollisionDashboard(shopId: string) {
   if (error)
     throw new Error(`Collision dashboard query failed: ${error.message}`);
 
+  let nationalCrashRows: CollisionNationalCrashRow[] = [];
+  let nationalCrashSourceRows: CollisionNationalCrashSourceRow[] = [];
+  const topCustomerZip = customerZips.data?.[0]?.customer_zip;
+
+  if (!crashes.data?.length && topCustomerZip) {
+    const zipMapping = await service
+      .from("zcta_zip_mapping")
+      .select("state_name")
+      .eq("zip_code", topCustomerZip)
+      .order("reporting_year", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (zipMapping.error)
+      throw new Error(
+        `Collision national crash geography query failed: ${zipMapping.error.message}`,
+      );
+
+    const stateName = zipMapping.data?.state_name;
+    if (stateName) {
+      const [nationalCrashes, nationalCrashSource] = await Promise.all([
+        service
+          .from("nhtsa_crashes")
+          .select("month")
+          .eq("dataset_key", "fars")
+          .eq("source_year", 2024)
+          .eq("state", stateName),
+        service
+          .from("nhtsa_dataset_sources")
+          .select("source_year,imported_at")
+          .eq("dataset_key", "fars")
+          .eq("source_year", 2024)
+          .limit(1),
+      ]);
+      const nationalCrashError =
+        nationalCrashes.error ?? nationalCrashSource.error;
+
+      if (nationalCrashError)
+        throw new Error(
+          `Collision national crash query failed: ${nationalCrashError.message}`,
+        );
+
+      nationalCrashRows = (nationalCrashes.data ?? []) as CollisionNationalCrashRow[];
+      nationalCrashSourceRows = (nationalCrashSource.data ?? []).map((row) => ({
+        ...row,
+        state_name: stateName,
+      })) as CollisionNationalCrashSourceRow[];
+    }
+  }
+
   return buildCollisionDashboard(
     (weekly.data ?? []) as CollisionWeeklyRow[],
     (weather.data ?? []) as CollisionWeatherRow[],
@@ -216,5 +268,7 @@ export async function getCollisionDashboard(shopId: string) {
     (repairFeed.data ?? []) as CollisionRepairFeedRow[],
     (seasonality.data ?? []) as CollisionSeasonalityRow[],
     (crashSource.data ?? []) as CollisionCrashSourceRow[],
+    nationalCrashRows,
+    nationalCrashSourceRows,
   );
 }

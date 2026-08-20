@@ -44,6 +44,16 @@ export type CollisionCrashSourceRow = {
   last_sync_status: "running" | "loaded" | "failed";
 };
 
+export type CollisionNationalCrashRow = {
+  month: Numeric;
+};
+
+export type CollisionNationalCrashSourceRow = {
+  state_name: string;
+  source_year: Numeric;
+  imported_at: string | null;
+};
+
 export type CollisionAlertRow = {
   zip_code: string;
   historical_repair_orders: Numeric;
@@ -418,6 +428,8 @@ export function buildCollisionDashboard(
   repairFeedRows: CollisionRepairFeedRow[],
   seasonalityRows: CollisionSeasonalityRow[] = [],
   crashSourceRows: CollisionCrashSourceRow[] = [],
+  nationalCrashRows: CollisionNationalCrashRow[] = [],
+  nationalCrashSourceRows: CollisionNationalCrashSourceRow[] = [],
 ) {
   const weekly = [...weeklyRows].sort((a, b) =>
     a.week_start.localeCompare(b.week_start),
@@ -535,6 +547,23 @@ export function buildCollisionDashboard(
   const latestSpcSource = spcSourceRows[0];
   const repairFeed = repairFeedRows[0];
   const crashSource = crashSourceRows[0];
+  const nationalCrashSource = nationalCrashSourceRows[0];
+  const nationalCrashMonthly = nationalCrashRows.reduce<Map<number, number>>(
+    (monthly, row) => {
+      const month = numberOf(row.month);
+      if (month >= 1 && month <= 12)
+        monthly.set(month, (monthly.get(month) ?? 0) + 1);
+      return monthly;
+    },
+    new Map(),
+  );
+  const nationalCrashSeries = [...nationalCrashMonthly]
+    .sort(([a], [b]) => a - b)
+    .map(([month, total]) => ({
+      month: `${numberOf(nationalCrashSource?.source_year)}-${String(month).padStart(2, "0")}`,
+      crashes: total,
+    }));
+  const latestNationalCrash = nationalCrashSeries.at(-1);
 
   return {
     companyName: weekly[0]?.company_name ?? null,
@@ -567,22 +596,35 @@ export function buildCollisionDashboard(
       month: row.month.slice(0, 7),
       score: numberOf(row.weighted_storm_demand_score),
     })),
-    crashSeries: crashes.slice(-12).map((row) => ({
-      month: row.month.slice(0, 7),
-      crashes: numberOf(row.total_crashes),
-    })),
+    crashSeries: latestCrash
+      ? crashes.slice(-12).map((row) => ({
+          month: row.month.slice(0, 7),
+          crashes: numberOf(row.total_crashes),
+        }))
+      : nationalCrashSeries,
     crashes: {
       coverageStatus: latestCrash
         ? ("covered" as const)
+        : latestNationalCrash
+          ? ("national_fatal_context" as const)
         : crashSource?.last_sync_status === "loaded"
           ? ("outside_kansas_portfolio" as const)
           : ("source_unavailable" as const),
-      latestMonth: latestCrash?.month ?? null,
-      latestTotal: numberOf(latestCrash?.total_crashes ?? 0),
+      latestMonth: latestCrash?.month ?? latestNationalCrash?.month ?? null,
+      latestTotal: latestCrash
+        ? numberOf(latestCrash.total_crashes)
+        : (latestNationalCrash?.crashes ?? 0),
       latestRainOrSnow: numberOf(latestCrash?.rain_or_snow_crashes ?? 0),
       customerZipCount: numberOf(latestCrash?.customer_zip_count ?? 0),
       activeZipCount: numberOf(latestCrash?.crash_active_zip_count ?? 0),
-      refreshedAt: latestCrash?.crash_refreshed_at ?? null,
+      refreshedAt:
+        latestCrash?.crash_refreshed_at ??
+        nationalCrashSource?.imported_at ??
+        null,
+      nationalState: nationalCrashSource?.state_name ?? null,
+      nationalYear: nationalCrashSource
+        ? numberOf(nationalCrashSource.source_year)
+        : null,
     },
     weather: {
       latestMonth: weather.at(-1)?.month ?? null,
