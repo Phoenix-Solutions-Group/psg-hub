@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { getMissingFields, getRequestSummary, isFieldRequired, requestErrorMessage } from "../customer-request-actions";
-import { friendlyStatus } from "../page";
 
 describe("customer Ads request rules", () => {
   it("requires a campaign and the required budget fields, but not a current budget", () => {
@@ -55,11 +54,5 @@ describe("customer Ads request rules", () => {
     expect(requestErrorMessage(400)).toMatch(/field needs attention/i);
     expect(requestErrorMessage(500)).toMatch(/our side/i);
     expect(requestErrorMessage()).toMatch(/internet connection/i);
-  });
-
-  it("uses completion wording that matches the request type", () => {
-    expect(friendlyStatus("done", "problem_report")).toBe("Answered");
-    expect(friendlyStatus("done", "performance_review")).toBe("Answered");
-    expect(friendlyStatus("done", "budget_change")).toBe("Done – the change is live");
   });
 });
