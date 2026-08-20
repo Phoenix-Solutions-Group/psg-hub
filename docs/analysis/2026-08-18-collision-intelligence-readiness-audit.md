@@ -255,6 +255,12 @@ staging, model approval, scoring, and publication remain separate audited action
   expected pilot shop/horizon rows and correctly gates all four as `stale_source`. An
   isolated PostgreSQL fixture also verifies `published`, `model_not_approved`,
   `not_generated`, `model_mismatch`, `forecast_outdated`, and `stale_source` states.
+- A read-only audience audit found the legacy approved PS177 policy has no global
+  `customer` member. No forecast row is published, but the existing database check
+  counted any shop membership. The staged customer-audience migration adds shared
+  database triggers that prevent review, approval, or publication unless a linked
+  member has the global `customer` role; PSG staff memberships no longer clear the
+  gate. Production data remains unchanged pending separate migration approval.
   Cron health now fails when any mapped shop/horizon remains gated after scoring.
 - Unified mapped source and weekly-demand counts both reconcile to 3,420 repair orders;
   all are FileMaker rows and no legacy pilot rows are unioned.

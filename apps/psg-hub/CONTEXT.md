@@ -23,3 +23,21 @@ _Avoid_: National availability
 **Policy observation**:
 Evidence from a current PSG customer policy or broker confirmation that coverage was actually placed.
 _Avoid_: Appetite, quote
+
+## Collision demand intelligence
+
+**Forecast audience**:
+One or more shop-linked users whose PSG Hub global role is customer. PSG staff access does not make a shop a participating forecast audience.
+_Avoid_: Any shop member
+
+**Severe-weather signal**:
+A preliminary weather report that meets the governed severe threshold inside a historical repair-customer ZIP. It is not predicted damage, demand, or a claim.
+_Avoid_: Repair alert, claim alert
+
+**Weather review case**:
+The owned, acknowledged lifecycle record created when a severe-weather signal is accepted for follow-up.
+_Avoid_: Notification, weather event
+
+**Demand follow-through**:
+An unusual increase in observed shop repair arrivals during the pre-registered follow-up window after a severe-weather signal.
+_Avoid_: Confirmed storm damage, true positive
