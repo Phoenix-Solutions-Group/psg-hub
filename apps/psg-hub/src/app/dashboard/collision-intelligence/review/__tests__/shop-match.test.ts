@@ -88,5 +88,14 @@ describe("shop identity matching", () => {
   it("requires the verified Tracy's street and ZIP", () => {
     expect(matchesVerifiedShopLocation("PS229", shops[0])).toBe(false);
     expect(matchesVerifiedShopLocation("PS229", shops[1])).toBe(true);
+    expect(
+      rankShopMatches("Tracy’s Collision Center South", shops)
+        .filter((match) => matchesVerifiedShopLocation("PS229", match.shop))
+        .map((match) => match.shop.id),
+    ).toEqual(["body-shop"]);
+  });
+
+  it("rejects name-only mappings without governed address evidence", () => {
+    expect(matchesVerifiedShopLocation("PS1023", shops[2])).toBe(false);
   });
 });

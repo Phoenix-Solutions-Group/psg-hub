@@ -114,7 +114,7 @@ export function matchesVerifiedShopLocation(
   >,
 ) {
   const evidence = shopIdentityEvidence[sourceShopKey];
-  if (!evidence) return true;
+  if (!evidence) return false;
   return (
     normalizeStreet(shop.address_street ?? "") ===
       normalizeStreet(evidence.street) &&

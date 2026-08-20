@@ -153,6 +153,8 @@ const notices: Record<string, string> = {
     "The source or target shop was mapped by someone else. The queue has been refreshed.",
   mapping_location_mismatch:
     "That Hub shop does not have the verified address for this imported location. No mapping was changed.",
+  mapping_evidence_missing:
+    "This imported location does not have governed address evidence yet. No mapping was changed.",
   mapping_error: "The shop mapping could not be saved. No mapping was changed.",
 };
 
@@ -1351,7 +1353,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                   Pick the imported location first. We rank close names from the
                   live PSG Hub directory; search by shop name, parent account,
                   city, state, or ZIP when the first suggestions are ambiguous.
-                  A suggestion is never selected or saved automatically.
+                  Only a Hub shop whose stored address exactly matches governed
+                  source evidence can be connected. Nothing is saved without
+                  explicit superadmin confirmation.
                 </p>
               </div>
 
@@ -1512,6 +1516,20 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     PSG agreement and exact Hub location before saving.
                   </p>
                 </div>
+              ) : selectedShop ? (
+                <div
+                  role="status"
+                  className="rounded-lg border border-warning/50 bg-warning/10 p-4"
+                >
+                  <p className="font-heading font-semibold">
+                    Governed address evidence required
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-foreground/75">
+                    This imported location is not eligible for connection yet.
+                    Record an authoritative source plus the expected street,
+                    city, state, and ZIP before a Hub shop can be selected.
+                  </p>
+                </div>
               ) : null}
 
               {selectedForecastReadiness ? (
@@ -1564,7 +1582,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                 </div>
               ) : null}
 
-              {selectedShop &&
+              {selectedShopEvidence &&
               shopMatches.some((match) => !match.locationVerified) ? (
                 <div
                   role="note"
@@ -1576,7 +1594,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                 </div>
               ) : null}
 
-              {selectedShop && selectableShopMatches.length ? (
+              {selectedShopEvidence && selectableShopMatches.length ? (
                 <form
                   action="/api/collision-intelligence/shop-mapping-review"
                   method="post"
@@ -1592,7 +1610,11 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     <select
                       name="shop_id"
                       required
-                      defaultValue=""
+                      defaultValue={
+                        selectableShopMatches.length === 1
+                          ? selectableShopMatches[0].shop.id
+                          : ""
+                      }
                       className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 font-sans font-normal"
                     >
                       <option value="" disabled>
@@ -1612,8 +1634,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                             {match.shop.name ??
                               match.shop.slug ??
                               match.shop.id}{" "}
-                            — {match.score}/100 name match ·{" "}
-                            {location || "location not stored"} · parent{" "}
+                            — exact address match · {match.score}/100 name match
+                            · {location || "location not stored"} · parent{" "}
                             {match.shop.client?.name ?? "unknown"}
                           </option>
                         );
@@ -1678,11 +1700,13 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                   role="status"
                   className="rounded-md border border-border bg-secondary/40 p-4 text-sm leading-6 text-muted-foreground"
                 >
-                  {shopMatches.length
-                    ? "No available Hub shop has the verified street address for this imported location. Create or update the exact Hub location first."
-                    : shopSearch
-                      ? `No available Hub shops matched “${shopSearch}”. Try a shorter name, city, state, or ZIP.`
-                      : "No plausible name match was found. Search the Hub directory before creating a new location."}
+                  {!selectedShopEvidence
+                    ? "This source cannot be connected until governed address evidence is recorded. Name similarity alone is not accepted."
+                    : shopMatches.length
+                      ? "No available Hub shop has the verified street address for this imported location. Create or update the exact Hub location first."
+                      : shopSearch
+                        ? `No available Hub shops matched “${shopSearch}”. Try a shorter name, city, state, or ZIP.`
+                        : "No plausible name match was found. Search the Hub directory before creating a new location."}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">

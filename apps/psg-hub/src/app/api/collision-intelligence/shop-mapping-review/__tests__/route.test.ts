@@ -71,7 +71,45 @@ describe("POST collision shop mapping review", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it("calls the atomic approval RPC for a confirmed mapping", async () => {
+  it("calls the atomic approval RPC for a confirmed exact-address mapping", async () => {
+    user = { id: "superadmin-1" };
+    getDashboardAccess.mockResolvedValue({
+      role: "psg_superadmin",
+      shopIds: [],
+    });
+    maybeSingle.mockResolvedValue({
+      data: {
+        address_street: "1500 Center Park Road",
+        address_locality: "Lincoln",
+        address_region: "NE",
+        address_postal_code: "68512",
+      },
+      error: null,
+    });
+
+    const response = await POST(
+      request({
+        source_shop_key: "PS229",
+        shop_id: "11111111-1111-4111-8111-111111111111",
+        review_notes: "Confirmed legal operating identity from signed records.",
+        identity_confirmed: "confirmed",
+      }),
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toContain(
+      "result=mapping_approved",
+    );
+    expect(rpc).toHaveBeenCalledWith("approve_collision_shop_mapping", {
+      p_source_system: "filemaker_repair_customer",
+      p_source_shop_key: "PS229",
+      p_shop_id: "11111111-1111-4111-8111-111111111111",
+      p_actor_profile_id: "superadmin-1",
+      p_review_notes: "Confirmed legal operating identity from signed records.",
+    });
+  });
+
+  it("blocks a name-only mapping without governed address evidence", async () => {
     user = { id: "superadmin-1" };
     getDashboardAccess.mockResolvedValue({
       role: "psg_superadmin",
@@ -89,15 +127,10 @@ describe("POST collision shop mapping review", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toContain(
-      "result=mapping_approved",
+      "result=mapping_evidence_missing",
     );
-    expect(rpc).toHaveBeenCalledWith("approve_collision_shop_mapping", {
-      p_source_system: "filemaker_repair_customer",
-      p_source_shop_key: "PS773",
-      p_shop_id: "11111111-1111-4111-8111-111111111111",
-      p_actor_profile_id: "superadmin-1",
-      p_review_notes: "Confirmed legal operating identity from signed records.",
-    });
+    expect(from).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("blocks a known location from a Hub shop without its verified address", async () => {

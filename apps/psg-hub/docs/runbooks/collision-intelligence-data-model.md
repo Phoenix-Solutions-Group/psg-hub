@@ -128,7 +128,8 @@ Every displayed forecast must include:
 1. Export the approved FileMaker field allowlist.
 2. Import and reconcile source counts, hash, accepted rows, and rejected rows.
 3. Review insurer aliases; preserve the raw label.
-4. Verify the physical location and approve the shop mapping.
+4. Record authoritative address evidence, require an exact street/city/state/ZIP
+   match, and approve the shop mapping. Name similarity alone is blocked.
 5. Run the read-only four-horizon evaluator.
 6. Stage passing evidence for superadmin review; staging does not approve.
 7. Approve each horizon only after inspecting baseline improvement, holdout

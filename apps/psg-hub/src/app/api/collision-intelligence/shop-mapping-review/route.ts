@@ -79,31 +79,36 @@ export async function POST(request: Request) {
   }
 
   const service = createServiceClient();
-  if (shopIdentityEvidence[parsed.data.sourceShopKey]) {
-    const targetShop = await service
-      .from("shops")
-      .select(
-        "address_street,address_locality,address_region,address_postal_code",
-      )
-      .eq("id", parsed.data.shopId)
-      .maybeSingle();
-    if (targetShop.error) {
-      console.error(
-        "[collision-shop-mapping-review] target lookup failed:",
-        targetShop.error.message,
-      );
-      return redirectToQueue(request, "mapping_error");
-    }
-    if (
-      !targetShop.data ||
-      !matchesVerifiedShopLocation(parsed.data.sourceShopKey, targetShop.data)
-    ) {
-      return redirectToQueue(
-        request,
-        "mapping_location_mismatch",
-        parsed.data.sourceShopKey,
-      );
-    }
+  if (!shopIdentityEvidence[parsed.data.sourceShopKey]) {
+    return redirectToQueue(
+      request,
+      "mapping_evidence_missing",
+      parsed.data.sourceShopKey,
+    );
+  }
+  const targetShop = await service
+    .from("shops")
+    .select(
+      "address_street,address_locality,address_region,address_postal_code",
+    )
+    .eq("id", parsed.data.shopId)
+    .maybeSingle();
+  if (targetShop.error) {
+    console.error(
+      "[collision-shop-mapping-review] target lookup failed:",
+      targetShop.error.message,
+    );
+    return redirectToQueue(request, "mapping_error");
+  }
+  if (
+    !targetShop.data ||
+    !matchesVerifiedShopLocation(parsed.data.sourceShopKey, targetShop.data)
+  ) {
+    return redirectToQueue(
+      request,
+      "mapping_location_mismatch",
+      parsed.data.sourceShopKey,
+    );
   }
 
   const { error } = await service.rpc("approve_collision_shop_mapping", {
