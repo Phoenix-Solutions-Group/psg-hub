@@ -70,6 +70,21 @@ This completes the first manual import gate only. Forecast scoring, recurring ti
 activation, the pending production migrations, deployment, backup changes, and alert
 ownership remain separately controlled actions.
 
+## Read-only source preflight — 2026-08-20
+
+- The staged timer remained disabled while the bounded OData probe ran as the
+  non-login `psg-refresh` account. The probe reported 330,709 rows, exactly 15
+  allowlisted fields, and zero direct customer or agent PII fields.
+- FileMaker therefore contains 174 rows beyond the 330,535-row governed snapshot.
+  No export file was replaced, no Supabase connection was opened, and no import ran.
+- A separate read-only query for the mapped source name returned all 3,420 Shelton
+  Collision Repair rows and the same latest arrival, 2025-12-24. The prior governed
+  snapshot confirms that this exact shop name covers both observed raw key variants,
+  `PS177` and `ps177`.
+- The source delta does not unblock the mapped pilot's forecast. A future approved
+  import would update the governed snapshot, but this shop still fails the 14-day
+  repair-arrival gate.
+
 ## One-time FileMaker configuration
 
 The FileMaker administrator must:
