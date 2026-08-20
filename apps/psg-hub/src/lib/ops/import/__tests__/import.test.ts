@@ -366,3 +366,30 @@ describe("previewImport + toCommitRecord", () => {
     expect(rec.ro?.pay_type).toBe("customer");
   });
 });
+
+describe("demo import safety exclusions", () => {
+  it("excludes later duplicate repair orders with a visible source-row reason", () => {
+    const result = validateRecords(
+      "ro",
+      { ro_number: "RO", customer_last_name: "Last" },
+      [
+        { ro_number: "RIV-100", customer_last_name: "Garcia" },
+        { ro_number: "RIV-100", customer_last_name: "Garcia" },
+      ],
+    );
+    expect(result.valid).toBe(1);
+    expect(result.excluded).toBe(1);
+    expect(result.rows[1].excludedReasons).toEqual(["Duplicate RO number — matches row 1"]);
+  });
+
+  it("excludes a do-not-mail record before commit eligibility", () => {
+    const result = validateRecords(
+      "ro",
+      { ro_number: "RO", customer_last_name: "Last", do_not_mail: "Do Not Mail" },
+      [{ ro_number: "RIV-101", customer_last_name: "Wilson", do_not_mail: "Yes" }],
+    );
+    expect(result.valid).toBe(0);
+    expect(result.excluded).toBe(1);
+    expect(result.rows[0].excludedReasons).toEqual(["Do not mail — customer opted out"]);
+  });
+});
