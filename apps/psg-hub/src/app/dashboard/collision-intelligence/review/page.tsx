@@ -6,7 +6,14 @@ import { getDashboardAccess } from "@/lib/auth/shop-access";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { findInsurerNameMatches } from "./insurer-match";
-import { isForecastArrivalFresh, isMissingReviewView } from "./source-health";
+import {
+  buildForecastReadinessFallback,
+  isForecastArrivalFresh,
+  isMissingReviewView,
+  type ForecastPolicyRow,
+  type ForecastReadinessRow,
+  type ForecastRunRow,
+} from "./source-health";
 import {
   matchesVerifiedShopLocation,
   rankShopMatches,
@@ -108,11 +115,7 @@ type CrashSourceHealth = {
   last_sync_status: string;
 };
 
-type ForecastHealth = {
-  is_ready: boolean;
-  readiness_status: string;
-  generated_at: string | null;
-};
+type ForecastHealth = ForecastReadinessRow;
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -148,6 +151,31 @@ const notices: Record<string, string> = {
   mapping_location_mismatch:
     "That Hub shop does not have the verified address for this imported location. No mapping was changed.",
   mapping_error: "The shop mapping could not be saved. No mapping was changed.",
+};
+
+const forecastGateLabels: Record<string, string> = {
+  model_not_approved: "Model approval required",
+  not_generated: "Forecast not generated",
+  model_mismatch: "Forecast model does not match approval",
+  forecast_outdated: "Forecast is outdated",
+  stale_source: "Repair arrivals are stale",
+  insufficient_history: "Repair history is insufficient",
+  published: "Published",
+};
+
+const forecastGateActions: Record<string, string> = {
+  model_not_approved:
+    "Evaluate each horizon against the seasonal baseline, review its interval coverage, then approve only the models that pass.",
+  not_generated:
+    "Run the governed weekly forecast after the shop mapping, source freshness, and model approvals are confirmed.",
+  model_mismatch:
+    "Rerun the forecast with the currently approved horizon model before publication.",
+  forecast_outdated:
+    "Generate the current Monday forecast; an older forecast must not drive this week's decisions.",
+  stale_source:
+    "Refresh and reconcile the mapped FileMaker repair feed, then rerun the weekly forecast. Publication stays paused until the latest repair arrival is 14 days old or less.",
+  insufficient_history:
+    "Load enough completed weekly repair history, then rerun the chronological model evaluation.",
 };
 
 // ponytail: read-only evaluation snapshot; stage governed registry rows only after mapping.
@@ -238,7 +266,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       .limit(1),
     service
       .from("v_collision_forecast_readiness")
-      .select("is_ready,readiness_status,generated_at")
+      .select(
+        "shop_id,forecast_horizon_weeks,approved_model_key,forecast_model_key,forecast_origin_week,forecast_week,source_latest_arrival_date,source_age_days,forecast_status,is_ready,readiness_status,generated_at",
+      )
       .order("generated_at", { ascending: false, nullsFirst: false }),
     searchParams,
   ]);
@@ -279,6 +309,55 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         forecastResult.error?.message ??
         "Review queue failed",
     );
+  }
+
+  let forecastRows = (forecastResult.data ?? []).map((row) => ({
+    ...row,
+    status_reason: null,
+  })) as ForecastHealth[];
+
+  if (forecastHealthUnavailable) {
+    const mappedShopIds = (mappedShopResult.data ?? []).map(
+      (row) => row.shop_id as string,
+    );
+
+    if (mappedShopIds.length) {
+      // ponytail: temporary 500-row fallback while the readiness view release is pending.
+      const [weekOnePolicies, horizonPolicies, forecastRuns] =
+        await Promise.all([
+          service
+            .from("collision_forecast_model_registry")
+            .select("shop_id,model_key,promotion_status")
+            .in("shop_id", mappedShopIds),
+          service
+            .from("collision_forecast_horizon_registry")
+            .select("shop_id,forecast_horizon_weeks,model_key,promotion_status")
+            .in("shop_id", mappedShopIds),
+          service
+            .from("collision_demand_forecasts")
+            .select(
+              "shop_id,forecast_horizon_weeks,model_key,forecast_origin_week,forecast_week,source_latest_arrival_date,source_age_days,status,status_reason,generated_at",
+            )
+            .in("shop_id", mappedShopIds)
+            .order("forecast_origin_week", { ascending: false })
+            .order("generated_at", { ascending: false })
+            .limit(500),
+        ]);
+      const fallbackError =
+        weekOnePolicies.error ?? horizonPolicies.error ?? forecastRuns.error;
+
+      if (fallbackError)
+        throw new Error(
+          `Forecast readiness fallback failed: ${fallbackError.message}`,
+        );
+
+      forecastRows = buildForecastReadinessFallback(
+        mappedShopIds,
+        (weekOnePolicies.data ?? []) as ForecastPolicyRow[],
+        (horizonPolicies.data ?? []) as ForecastPolicyRow[],
+        (forecastRuns.data ?? []) as ForecastRunRow[],
+      );
+    }
   }
 
   const aliases = (aliasResult.data ?? []) as AliasCandidate[];
@@ -425,7 +504,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const stormSources = (stormSourceResult.data ?? []) as StormSourceHealth[];
   const crashSource = (crashSourceResult.data?.[0] ??
     null) as CrashSourceHealth | null;
-  const forecasts = (forecastResult.data ?? []) as ForecastHealth[];
+  const forecasts = forecastRows;
   const staleRepairFeeds = repairFeeds.filter((feed) => feed.is_stale).length;
   const staleShopArrivals = repairFeeds.filter(
     (feed) => !isForecastArrivalFresh(feed.latest_arrival_date),
@@ -440,14 +519,31 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const readyForecasts = forecasts.filter(
     (forecast) => forecast.is_ready,
   ).length;
+  const forecastsReady = Boolean(
+    forecasts.length && readyForecasts === forecasts.length,
+  );
   const forecastGateStates = [
     ...new Set(
       forecasts
         .filter((forecast) => !forecast.is_ready)
-        .map((forecast) => forecast.readiness_status.replaceAll("_", " ")),
+        .map(
+          (forecast) =>
+            forecastGateLabels[forecast.readiness_status] ??
+            forecast.readiness_status.replaceAll("_", " "),
+        ),
     ),
   ].join(", ");
   const latestForecast = forecasts.find((forecast) => forecast.generated_at);
+  const blockingForecast = forecasts.find((forecast) => !forecast.is_ready);
+  const approvedForecastPolicies = forecasts.filter(
+    (forecast) => forecast.approved_model_key,
+  ).length;
+  const mappedSourceShopCount = mappedShopIds.size;
+  const totalSourceShopCount = mappedSourceShopCount + shops.length;
+  const forecastNextAction = forecastsReady
+    ? "All mapped shop horizons have a current published forecast. Continue monitoring actual arrivals and interval coverage."
+    : (forecastGateActions[blockingForecast?.readiness_status ?? ""] ??
+      "Map an exact Hub shop before evaluating and publishing its forecasts.");
   const crashZipMatchPct =
     crashSource && crashSource.imported_row_count
       ? (crashSource.zip_matched_row_count / crashSource.imported_row_count) *
@@ -613,41 +709,25 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
           <SourceHealthCard
             title="Forecast readiness"
             status={
-              forecastHealthUnavailable
-                ? "Release pending"
-                : !forecasts.length
-                  ? "No mapped shops"
-                  : readyForecasts === forecasts.length
-                    ? "Ready"
-                    : "Gated"
+              !forecasts.length
+                ? "No mapped shops"
+                : forecastsReady
+                  ? "Ready"
+                  : "Gated"
             }
-            healthy={Boolean(
-              forecasts.length && readyForecasts === forecasts.length,
-            )}
+            healthy={forecastsReady}
           >
             <ReviewMetric
               label="Shop / horizon policies"
-              value={
-                forecastHealthUnavailable
-                  ? "—"
-                  : forecasts.length.toLocaleString()
-              }
+              value={forecasts.length.toLocaleString()}
             />
             <ReviewMetric
               label="Ready"
-              value={
-                forecastHealthUnavailable
-                  ? "—"
-                  : readyForecasts.toLocaleString()
-              }
+              value={readyForecasts.toLocaleString()}
             />
             <ReviewMetric
               label="Gate states"
-              value={
-                forecastHealthUnavailable
-                  ? "Release migration not applied"
-                  : forecastGateStates || "None"
-              }
+              value={forecastGateStates || "None"}
             />
             <ReviewMetric
               label="Last generated"
@@ -658,6 +738,63 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
               }
             />
           </SourceHealthCard>
+        </div>
+
+        <div
+          role="note"
+          className={
+            forecastsReady
+              ? "rounded-lg border border-success/40 bg-success/10 p-4"
+              : "rounded-lg border border-warning/50 bg-warning/10 p-4"
+          }
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="font-heading font-semibold">
+                Forecast publishing gate
+              </h3>
+              <p className="mt-1 max-w-4xl text-sm leading-6 text-foreground/75">
+                {forecastNextAction}
+              </p>
+            </div>
+            <Badge variant={forecastsReady ? "success" : "warning"}>
+              {forecastsReady ? "Publication ready" : "Publication blocked"}
+            </Badge>
+          </div>
+          <div className="mt-4 grid gap-4 border-t border-border pt-4 sm:grid-cols-2 lg:grid-cols-4">
+            <ReviewMetric
+              label="Mapped FileMaker shops"
+              value={`${mappedSourceShopCount} / ${totalSourceShopCount}`}
+            />
+            <ReviewMetric
+              label="Approved horizon models"
+              value={`${approvedForecastPolicies} / ${forecasts.length || 4 * mappedSourceShopCount}`}
+            />
+            <ReviewMetric
+              label="Current published forecasts"
+              value={`${readyForecasts} / ${forecasts.length || 4 * mappedSourceShopCount}`}
+            />
+            <ReviewMetric
+              label="Blocking source arrival"
+              value={
+                blockingForecast?.source_latest_arrival_date
+                  ? `${blockingForecast.source_latest_arrival_date} · ${blockingForecast.source_age_days ?? "?"} days old`
+                  : "—"
+              }
+            />
+          </div>
+          {blockingForecast?.status_reason ? (
+            <p className="mt-3 text-xs leading-5 text-muted-foreground">
+              System reason: {blockingForecast.status_reason}
+            </p>
+          ) : null}
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            {forecastHealthUnavailable
+              ? "Readiness is computed from the live mapping, model-registry, and forecast tables while the consolidated readiness view awaits release."
+              : "Readiness comes from the governed consolidated forecast view."}{" "}
+            Mapping another shop remains a separately audited identity decision;
+            never connect locations from name similarity alone.
+          </p>
         </div>
       </section>
 
@@ -784,7 +921,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         >
                           {directorySearchUnavailable
                             ? "The official directory search is unavailable. Choose an existing PSG name below or leave this label ungrouped."
-                            : directorySearchSuggestions.length || existing.length
+                            : directorySearchSuggestions.length ||
+                                existing.length
                               ? `Found ${directorySearchSuggestions.length} official and ${existing.length} existing PSG match${directorySearchSuggestions.length + existing.length === 1 ? "" : "es"} for “${registrySearch}”.`
                               : `No official or PSG matches found for “${registrySearch}”. Try the full legal name or leave this label ungrouped.`}
                         </p>
