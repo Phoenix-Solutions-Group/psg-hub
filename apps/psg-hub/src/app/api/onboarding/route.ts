@@ -11,11 +11,51 @@ type OnboardingBody = {
   phone?: string;
 };
 
+type ShopInsert = {
+  client_id: string;
+  name: string;
+  slug: string;
+  address_street: string | null;
+  address_locality: string | null;
+  address_region: string | null;
+  url: string | null;
+  telephone: string | null;
+};
+
+const MAX_SLUG_ATTEMPTS = 100;
+
 function slugify(name: string): string {
-  return name
+  return (
+    name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+      .replace(/^-|-$/g, "") || "shop"
+  );
+}
+
+async function insertShopWithUniqueSlug(
+  service: ReturnType<typeof createServiceClient>,
+  shop: Omit<ShopInsert, "slug">,
+) {
+  const baseSlug = slugify(shop.name);
+
+  for (let attempt = 1; attempt <= MAX_SLUG_ATTEMPTS; attempt += 1) {
+    const slug = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
+    const result = await service
+      .from("shops")
+      .insert({ ...shop, slug })
+      .select("id")
+      .single();
+
+    if (!result.error || result.error.code !== "23505") {
+      return result;
+    }
+  }
+
+  return {
+    data: null,
+    error: { message: "Unable to allocate a unique shop slug" },
+  };
 }
 
 export async function POST(request: Request) {
@@ -47,6 +87,29 @@ export async function POST(request: Request) {
   const service = createServiceClient();
   const websiteUrl = body.websiteUrl?.trim() || null;
 
+  const { data: existingMembership, error: existingMembershipErr } = await service
+    .from("shop_users")
+    .select("shop_id")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingMembershipErr) {
+    console.error(
+      "[onboarding] existing membership check failed:",
+      existingMembershipErr.message,
+    );
+    return NextResponse.json({ error: "Onboarding status check failed" }, { status: 500 });
+  }
+
+  if (existingMembership?.shop_id) {
+    return NextResponse.json({
+      shop_id: existingMembership.shop_id,
+      already_setup: true,
+      message: "Shop already set up",
+    });
+  }
+
   // 1. Create the owning client (shops.client_id is NOT NULL, FK -> clients).
   const { data: client, error: clientErr } = await service
     .from("clients")
@@ -61,20 +124,15 @@ export async function POST(request: Request) {
 
   // 2. Create the shop using LIVE shops columns (no website_url/phone/city/state/address).
   // On failure, compensate by deleting the orphan client.
-  const { data: shop, error: shopErr } = await service
-    .from("shops")
-    .insert({
-      client_id: client.id,
-      name: shopName,
-      slug: slugify(shopName),
-      address_street: body.address?.trim() || null,
-      address_locality: body.city?.trim() || null,
-      address_region: body.state?.trim() || null,
-      url: websiteUrl,
-      telephone: body.phone?.trim() || null,
-    })
-    .select("id")
-    .single();
+  const { data: shop, error: shopErr } = await insertShopWithUniqueSlug(service, {
+    client_id: client.id,
+    name: shopName,
+    address_street: body.address?.trim() || null,
+    address_locality: body.city?.trim() || null,
+    address_region: body.state?.trim() || null,
+    url: websiteUrl,
+    telephone: body.phone?.trim() || null,
+  });
 
   if (shopErr || !shop) {
     await service.from("clients").delete().eq("id", client.id);
