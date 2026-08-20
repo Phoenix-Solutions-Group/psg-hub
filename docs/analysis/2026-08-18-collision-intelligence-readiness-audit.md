@@ -1,9 +1,9 @@
 # Collision Intelligence Readiness Audit
 
-**Audited:** 2026-08-18; updated 2026-08-19
+**Audited:** 2026-08-18; updated 2026-08-20
 **Verdict:** pilot analytics foundation is implemented; the full project is not complete
 
-## 2026-08-19 update
+## 2026-08-20 update
 
 - The first governed FileMaker repair export/import is reconciled. FileMaker returned
   330,535 rows across 34 pages with exactly 15 allowlisted fields and zero direct
@@ -28,14 +28,14 @@
   candidates remain unapproved.
 - The review route is discoverable in dashboard navigation only for superadmins. The
   page and mutation endpoint retain independent server-side role checks.
-- Draft PR [#18](https://github.com/Phoenix-Solutions-Group/psg-hub/pull/18)
-  is clean and mergeable at signed head `b1e27b33`. Its current Vercel preview is
-  deployed at
+- The branch preview is deployed at
   `https://psg-hub-git-codex-collision-preview-20260819-psg-digital.vercel.app`.
+  Authenticated desktop and mobile review passes. The insurer review was also checked
+  against live data: searching `U S A A` returns its saved reporting name plus four
+  official NAIC legal entities and never saves a fuzzy result automatically.
   Unauthenticated HTTP checks confirm the collision route redirects to login. The
-  production happy-path E2E suite, migration-drift guard, staging guard, Vercel build,
-  and preview-comments checks pass. Authenticated deployed product approval and
-  production release remain separate gates.
+  earlier draft PR [#18](https://github.com/Phoenix-Solutions-Group/psg-hub/pull/18)
+  is closed; production release remains a separate gate.
 - A linked `supabase db push --dry-run` made no production changes and stopped on the
   shared project's historical migration-ledger drift. Five already-applied collision
   migrations have the same names under different timestamps; older sibling-app drift
@@ -50,7 +50,7 @@
 | ------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Clean, documented, privacy-safe data                                | First manual refresh reconciled; recurring operation gated | 330,533 FileMaker facts reconcile to 330,535 parsed rows and two recorded rejections; direct PII and raw identifiers are absent; the restricted export contains exactly 15 approved fields; hardened service is staged with timer disabled                             | Resolve the duplicate backup schedule, name an alert owner, prove restore recovery, apply storm provenance reconciliation, then separately approve recurring refresh |
 | Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; governed review workflow implemented  | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; carrier aliases and source-shop mappings require explicit superadmin approval and atomic audit evidence; 411,208 KDOT rows count-verified; 99.93% ZIP match                             | Review the highest-volume insurer candidates and approve additional shop mappings only after identity confirmation                                       |
-| Operational dashboard                                               | Local authenticated QA passed; deployed approval pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build plus authenticated desktop/mobile Chromium checks pass | Review the captures, deploy after the matching migrations are approved, and run an authenticated smoke test                                             |
+| Operational dashboard                                               | Authenticated branch-preview QA passed; production pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build plus authenticated desktop/mobile Chromium checks pass | Release only after the matching migrations are approved, then run a production authenticated smoke test                                                 |
 | ZIP-level weather and market alerts                                 | Review queue built                                 | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; daily cron configured locally; notifications explicitly off                                                                                                                                    | Deploy/smoke-test the cron, approve owner and lifecycle, and measure false positives before authorizing notifications                                    |
 | Weekly forecasts outperform a seasonal baseline                     | Multi-shop historical evidence; publication gated  | Trailing four-week beats seasonal across four horizons in the current-shop segment; independently promoted shop/horizon policies; current run correctly writes four `stale_source` rows with no prediction; 13-observation live scorecard is active                           | Restore current repair ingest, accrue observed forecasts, review live error/coverage, and approve models per mapped shop                                 |
 | Clear confidence and limitations                                    | Implemented for pilot                              | Dashboard freshness, promotion evidence, interval coverage, model scope, metric contract, and evaluation reports                                                                                                                                                              | Add the same disclosures to exports and scheduled alerts                                                                                                 |
@@ -262,8 +262,7 @@
 4. After 13 observed forecasts accrue per horizon, review the live monitoring status.
    Manual review is requested when rolling MAE loses to seasonal or 80% interval
    coverage falls below 70%; the scorecard never changes promotion automatically.
-5. Review and approve product/navigation in the deployed PR preview. Local authenticated
-   desktop/mobile captures and automated preview checks pass; authenticated deployed
-   review remains outstanding.
+5. Authenticated desktop/mobile review of the deployed branch preview passes. Keep
+   production deployment and its authenticated smoke test as separate release gates.
 6. Deploy separately, then smoke-test the Vercel cron and keep notifications disabled
    until an owner, acknowledgement lifecycle, and false-positive review are approved.
