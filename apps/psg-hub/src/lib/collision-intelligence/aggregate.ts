@@ -492,7 +492,7 @@ export function buildCollisionDashboard(
     0,
   );
   const unknownPaymentRepairOrders = weekly.reduce(
-    (sum, row) => sum + numberOf(row.unknown_payment_repair_orders),
+    (sum, row) => sum + numberOf(row.unknown_payment_repair_orders ?? 0),
     0,
   );
   const repairValueCents = weekly.reduce(

@@ -62,6 +62,11 @@
   later removed. These guards are verified locally and are not applied to production.
 - A read-only PS177 preflight exercises the mapped path: its historical evaluation
   passes, but its live member count is zero, so `review_staging_ready` is false.
+- The customer dashboard now offers an active-shop-scoped CSV report using the same
+  governed aggregate model as the screen. The export carries source freshness,
+  forecast intervals and held-out evidence, weather/crash caveats, unknown-payment
+  disclosure, and the explicit no-individual-crash/no-claim-volume limitation.
+  Scheduled notifications remain disabled and require their own reviewed disclosure.
 
 ### Fresh exact-address forecast candidates
 
@@ -92,7 +97,7 @@ staging, model approval, scoring, and publication remain separate audited action
 | Operational dashboard                                               | Authenticated branch-preview QA passed; production pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build plus authenticated desktop/mobile Chromium checks pass | Release only after the matching migrations are approved, then run a production authenticated smoke test                                                                    |
 | ZIP-level weather and market alerts                                 | Review queue built                                         | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; daily cron configured locally; notifications explicitly off                                                                                                                                                                                                          | Deploy/smoke-test the cron, approve owner and lifecycle, and measure false positives before authorizing notifications                                                      |
 | Weekly forecasts outperform a seasonal baseline                     | Two fresh candidates pass; publication gated               | PS228 and PS229 each beat the seasonal baseline across four horizons; PS229 improves MAE 20.1%–24.1% with 17.7%–18.7% WAPE and 80.4%–85.1% held-out-shop interval coverage; the existing mapped run remains correctly blocked as stale                                                                                                              | Confirm memberships and one exact shop mapping, stage and approve its four models, score a current forecast, then accrue observed forecasts and review live error/coverage |
-| Clear confidence and limitations                                    | Implemented for pilot                                      | Dashboard freshness, promotion evidence, interval coverage, model scope, metric contract, and evaluation reports                                                                                                                                                                                                                                    | Add the same disclosures to exports and scheduled alerts                                                                                                                   |
+| Clear confidence and limitations                                    | Implemented for dashboard and CSV pilot                    | Dashboard and active-shop CSV include freshness, promotion evidence, interval coverage, model scope, unknown-payment disclosure, metric contract, and evaluation reports                                                                                                                                                                            | Add and verify the same disclosures if scheduled alerts are later authorized                                                                                               |
 
 ## Live data coverage
 

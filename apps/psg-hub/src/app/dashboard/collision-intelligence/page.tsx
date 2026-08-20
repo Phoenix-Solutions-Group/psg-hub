@@ -74,12 +74,22 @@ export default async function CollisionIntelligencePage() {
             readiness.
           </p>
         </div>
-        <Link
-          href="/dashboard/analytics"
-          className="rounded-md border border-border px-3 py-2 font-heading text-sm font-medium transition-colors hover:bg-secondary"
-        >
-          Marketing analytics
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          {dashboard.companyName ? (
+            <a
+              href="/api/collision-intelligence/export"
+              className="rounded-md border border-border px-3 py-2 font-heading text-sm font-medium transition-colors hover:bg-secondary"
+            >
+              Download CSV report
+            </a>
+          ) : null}
+          <Link
+            href="/dashboard/analytics"
+            className="rounded-md border border-border px-3 py-2 font-heading text-sm font-medium transition-colors hover:bg-secondary"
+          >
+            Marketing analytics
+          </Link>
+        </div>
       </div>
 
       {!dashboard.companyName ? (
