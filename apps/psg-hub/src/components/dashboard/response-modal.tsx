@@ -24,6 +24,13 @@ export type ExistingResponse = {
   approved_at: string | null;
 };
 
+export type ReviewResponseComment = {
+  id: string;
+  body: string;
+  created_at: string;
+  author_name: string;
+};
+
 type Review = {
   id: string;
   author: string | null;
@@ -79,6 +86,10 @@ export function ResponseModal({
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
+  const [comments, setComments] = useState<ReviewResponseComment[]>([]);
+  const [commentBody, setCommentBody] = useState("");
+  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [commentMessage, setCommentMessage] = useState<string | null>(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const firstFocusableRef = useRef<HTMLButtonElement>(null);
@@ -101,6 +112,29 @@ export function ResponseModal({
       openerRef.current?.focus();
     };
   }, [onClose]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/reviews/${review.id}/comments`)
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load comments");
+        if (!cancelled) setComments(data.comments as ReviewResponseComment[]);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setCommentMessage(
+            error instanceof Error ? error.message : "Failed to load comments"
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCommentsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [review.id]);
 
   // Focus trap
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -197,6 +231,33 @@ export function ResponseModal({
     } catch {
       setMessage("Clipboard access denied.");
     }
+  }
+
+  async function addComment() {
+    const body = commentBody.trim();
+    if (!body) {
+      setCommentMessage("Enter a comment before adding it.");
+      return;
+    }
+    setCommentMessage(null);
+    startTransition(async () => {
+      const res = await fetch(`/api/reviews/${review.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body, responseId: draft?.id ?? null }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCommentMessage(data.error || "Failed to add comment");
+        return;
+      }
+      setComments((current) => [
+        ...current,
+        data.comment as ReviewResponseComment,
+      ]);
+      setCommentBody("");
+      setCommentMessage("Comment added for your team.");
+    });
   }
 
   return (
@@ -303,6 +364,75 @@ export function ResponseModal({
         {message && (
           <p className="mt-2 text-sm text-muted-foreground">{message}</p>
         )}
+
+        <section
+          className="mt-4 rounded-md border p-3"
+          aria-labelledby="team-comments-heading"
+        >
+          <h3 id="team-comments-heading" className="text-sm font-semibold">
+            Team comments
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Internal only. Adding a comment does not approve, reject,
+            regenerate, or publish this response.
+          </p>
+          <div className="mt-3 space-y-2" aria-live="polite">
+            {commentsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading comments…</p>
+            ) : comments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No team comments yet.
+              </p>
+            ) : (
+              comments.map((comment) => (
+                <div
+                  key={comment.id}
+                  className="rounded-md bg-muted/40 p-2 text-sm"
+                >
+                  <p className="whitespace-pre-wrap break-words">
+                    {comment.body}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {comment.author_name} ·{" "}
+                    {new Date(comment.created_at).toLocaleString()}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+          <label
+            htmlFor="team-comment-body"
+            className="mt-3 block text-sm font-medium"
+          >
+            Add comment
+          </label>
+          <textarea
+            id="team-comment-body"
+            value={commentBody}
+            onChange={(event) => setCommentBody(event.target.value)}
+            maxLength={2000}
+            rows={3}
+            className="mt-1 w-full rounded-md border bg-background p-2 text-sm"
+          />
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <span className="text-xs text-muted-foreground">
+              {commentBody.length} / 2,000
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addComment}
+              disabled={pending || !commentBody.trim()}
+            >
+              {pending ? "Adding…" : "Add comment"}
+            </Button>
+          </div>
+          {commentMessage && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              {commentMessage}
+            </p>
+          )}
+        </section>
 
         <div className="mt-4 flex flex-wrap gap-2">
           {!draft ? (
