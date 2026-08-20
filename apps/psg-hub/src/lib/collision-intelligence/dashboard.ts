@@ -93,7 +93,7 @@ export async function getCollisionDashboard(shopId: string) {
     service
       .from("collision_demand_forecasts")
       .select(
-        "forecast_origin_week,forecast_horizon_weeks,forecast_week,predicted_repair_orders,lower_repair_orders,upper_repair_orders,prediction_interval_pct,source_latest_arrival_date,source_age_days,status,status_reason,generated_at",
+        "forecast_origin_week,forecast_horizon_weeks,forecast_week,model_key,predicted_repair_orders,lower_repair_orders,upper_repair_orders,prediction_interval_pct,source_latest_arrival_date,source_age_days,status,status_reason,generated_at",
       )
       .eq("shop_id", shopId)
       .order("forecast_origin_week", { ascending: false })

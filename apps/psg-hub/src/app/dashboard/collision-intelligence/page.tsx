@@ -483,43 +483,83 @@ export default async function CollisionIntelligencePage() {
                 <CardTitle>Four-week operating forecast</CardTitle>
               </CardHeader>
               <CardContent>
-                {operationalForecast?.status === "published" &&
-                operationalForecast.predicted !== null ? (
+                {operationalForecasts.length ? (
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    {operationalForecasts.map((forecast) => (
-                      <div
-                        key={forecast.horizonWeeks}
-                        className="rounded-lg border border-success/30 bg-background/70 p-4"
-                      >
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Week {forecast.horizonWeeks} ·{" "}
-                          {formatDate(forecast.week)}
-                        </p>
-                        {forecast.status === "published" &&
-                        forecast.predicted !== null ? (
-                          <>
-                            <p className="mt-2 text-2xl font-bold tracking-tight">
-                              {forecast.predicted.toFixed(1)} repairs
+                    {operationalForecasts.map((forecast) => {
+                      const evidence = dashboard.modelEvidence.find(
+                        (candidate) =>
+                          candidate.horizonWeeks === forecast.horizonWeeks &&
+                          candidate.modelKey === forecast.modelKey,
+                      );
+
+                      return (
+                        <div
+                          key={forecast.horizonWeeks}
+                          className={
+                            forecast.status === "published"
+                              ? "rounded-lg border border-success/30 bg-background/70 p-4"
+                              : "rounded-lg border border-warning/40 bg-background/70 p-4"
+                          }
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Week {forecast.horizonWeeks} ·{" "}
+                              {formatDate(forecast.week)}
                             </p>
-                            <p className="mt-1 text-sm text-foreground/75">
-                              {forecast.intervalPct}% interval: {forecast.lower}
-                              –{forecast.upper}
+                            <Badge
+                              variant={
+                                forecast.status === "published"
+                                  ? "success"
+                                  : "warning"
+                              }
+                            >
+                              {forecast.status.replaceAll("_", " ")}
+                            </Badge>
+                          </div>
+                          {forecast.status === "published" &&
+                          forecast.predicted !== null ? (
+                            <>
+                              <p className="mt-2 text-2xl font-bold tracking-tight">
+                                {forecast.predicted.toFixed(1)} repairs
+                              </p>
+                              <p className="mt-1 text-sm text-foreground/75">
+                                {forecast.intervalPct}% interval:{" "}
+                                {forecast.lower}–{forecast.upper}
+                              </p>
+                            </>
+                          ) : null}
+                          <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                            Origin {formatDate(forecast.originWeek)} · Model{" "}
+                            {forecast.modelKey.replaceAll("_", " ")}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            Source arrivals through{" "}
+                            {forecast.sourceLatestArrivalDate
+                              ? formatDate(forecast.sourceLatestArrivalDate)
+                              : "unknown"}
+                            {forecast.sourceLatestArrivalDate
+                              ? ` · ${forecast.sourceAgeDays} days old`
+                              : ""}
+                          </p>
+                          {evidence ? (
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              Held-out evidence:{" "}
+                              {evidence.maeImprovementPct.toFixed(1)}% lower MAE
+                              · {evidence.validationCoveragePct.toFixed(1)}%
+                              interval coverage · {evidence.status}
                             </p>
-                          </>
-                        ) : (
-                          <p className="mt-2 text-sm text-foreground/75">
+                          ) : null}
+                          <p className="mt-2 text-xs leading-5 text-foreground/75">
                             {forecast.reason}
                           </p>
-                        )}
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div>
                     <p className="font-heading font-semibold">
-                      {operationalForecast?.status === "stale_source"
-                        ? "No recent shop arrivals"
-                        : "Forecast not ready"}
+                      Forecast not ready
                     </p>
                     <p className="mt-1 text-sm text-foreground/75">
                       {operationalForecast?.reason ??
@@ -527,6 +567,12 @@ export default async function CollisionIntelligencePage() {
                     </p>
                   </div>
                 )}
+                <p className="mt-4 text-xs leading-5 text-muted-foreground">
+                  These estimates predict aggregate shop repair arrivals—not
+                  individual crashes or insurer claim volume. Use the interval,
+                  source freshness, and held-out evidence before changing
+                  operations.
+                </p>
               </CardContent>
             </Card>
 

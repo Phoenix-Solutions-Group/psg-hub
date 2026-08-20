@@ -71,6 +71,7 @@ export type CollisionForecastStatusRow = {
   forecast_origin_week: string;
   forecast_horizon_weeks: Numeric;
   forecast_week: string;
+  model_key: string;
   predicted_repair_orders: Numeric;
   lower_repair_orders: Numeric;
   upper_repair_orders: Numeric;
@@ -523,6 +524,7 @@ export function buildCollisionDashboard(
       originWeek: forecast.forecast_origin_week,
       horizonWeeks: numberOf(forecast.forecast_horizon_weeks),
       week: forecast.forecast_week,
+      modelKey: forecast.model_key,
       predicted:
         forecast.predicted_repair_orders === null
           ? null
