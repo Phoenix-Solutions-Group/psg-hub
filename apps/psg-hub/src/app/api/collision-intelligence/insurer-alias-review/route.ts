@@ -60,6 +60,7 @@ export async function POST(request: Request) {
 
   const sourceLabel = text(formData, "source_label_normalized");
   const action = text(formData, "action");
+  const expectedStatus = text(formData, "expected_status") || "candidate";
   const canonicalTarget = text(formData, "canonical_target");
   const notes = text(formData, "review_notes");
 
@@ -71,6 +72,12 @@ export async function POST(request: Request) {
   }
   if (action !== "approve" && action !== "reject") {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  }
+  if (!["candidate", "approved", "rejected"].includes(expectedStatus)) {
+    return NextResponse.json(
+      { error: "Invalid review status" },
+      { status: 400 },
+    );
   }
   if (notes.length > 1000) {
     return NextResponse.json({ error: "Notes are too long" }, { status: 400 });
@@ -245,6 +252,9 @@ export async function POST(request: Request) {
           review_status: "rejected",
           canonical_insurer_key: null,
           canonical_insurer_name: null,
+          canonical_registry_source: null,
+          canonical_registry_type: null,
+          canonical_registry_id: null,
           review_notes: notes || null,
           reviewed_by: user.id,
           reviewed_at: reviewedAt,
@@ -254,7 +264,7 @@ export async function POST(request: Request) {
     .from("collision_insurer_alias_reviews")
     .update(patch)
     .eq("source_label_normalized", sourceLabel)
-    .eq("review_status", "candidate")
+    .eq("review_status", expectedStatus)
     .select("source_label_normalized")
     .maybeSingle();
   if (updateError) {

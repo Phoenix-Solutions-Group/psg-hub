@@ -5,10 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardAccess } from "@/lib/auth/shop-access";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import {
-  findInsurerNameMatches,
-  includeFocusedCandidate,
-} from "./insurer-match";
+import { findInsurerNameMatches, includeFocusedAlias } from "./insurer-match";
 import {
   buildForecastReadinessFallback,
   isForecastArrivalFresh,
@@ -381,16 +378,17 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const rankedAliases = (aliasResult.data ?? []) as AliasCandidate[];
   const focusedAlias = (focusedAliasResult.data ??
     null) as AliasCandidate | null;
-  const aliases = includeFocusedCandidate(rankedAliases, focusedAlias);
-  const requestedSearchAlias = aliases.find(
+  const aliases = rankedAliases;
+  const reviewAliases = includeFocusedAlias(rankedAliases, focusedAlias);
+  const requestedSearchAlias = reviewAliases.find(
     (alias) => alias.source_label_normalized === searchSource,
   );
   const registrySearch = requestedSearchAlias
     ? searchValue(params.registry_search).slice(0, 80)
     : "";
-  const registryResult = aliases.length
+  const registryResult = reviewAliases.length
     ? await service.rpc("collision_insurer_registry_matches", {
-        source_labels: aliases.map((alias) => alias.source_label_name),
+        source_labels: reviewAliases.map((alias) => alias.source_label_name),
         match_limit: 3,
       })
     : { data: [], error: null };
@@ -449,7 +447,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const insurerOptions = [...insurerOptionsByName.values()].sort((a, b) =>
     a.label.localeCompare(b.label),
   );
-  const aliasReviewItems = aliases.map((alias) => {
+  const aliasReviewItems = reviewAliases.map((alias) => {
     const automaticSuggestions =
       registrySuggestionsByLabel.get(alias.source_label_name) ?? [];
     const isSearchedAlias =
@@ -479,7 +477,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       )
     : aliasReviewItems[0];
   const shownAliasItems = activeAliasReviewItem ? [activeAliasReviewItem] : [];
-  const aliasReviewCount = aliasResult.count ?? aliases.length;
+  const aliasReviewCount = aliasResult.count ?? rankedAliases.length;
   const shops = (shopResult.data ?? []) as ShopCandidate[];
   const featuredShops = shops.slice(0, 8).map((shop) => ({
     ...shop,
@@ -899,11 +897,28 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     <CardTitle className="text-lg">
                       {alias.source_label_name}
                     </CardTitle>
-                    <Badge variant="warning">Needs review</Badge>
+                    <Badge
+                      variant={
+                        alias.review_status === "approved"
+                          ? "success"
+                          : alias.review_status === "candidate"
+                            ? "warning"
+                            : "outline"
+                      }
+                    >
+                      {alias.review_status === "approved"
+                        ? "Saved match"
+                        : alias.review_status === "candidate"
+                          ? "Needs review"
+                          : "Left ungrouped"}
+                    </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    This name was imported from FileMaker. Your decision changes
-                    reporting only; the source repair orders stay unchanged.
+                    {alias.review_status === "approved"
+                      ? `Currently grouped under “${alias.canonical_insurer_name}”. Choose a different name below to correct this saved match.`
+                      : alias.review_status === "rejected"
+                        ? "This FileMaker name was left ungrouped. Choose a reporting name below if that decision should change."
+                        : "This name was imported from FileMaker. Your decision changes reporting only; the source repair orders stay unchanged."}
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1000,6 +1015,11 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                       name="source_label_normalized"
                       value={alias.source_label_normalized}
                     />
+                    <input
+                      type="hidden"
+                      name="expected_status"
+                      value={alias.review_status}
+                    />
                     <div className="flex gap-3">
                       <span
                         aria-hidden="true"
@@ -1019,7 +1039,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                               className="mt-2 w-full min-w-0 rounded-md border border-border bg-background px-3 py-2 font-sans font-normal"
                             >
                               <option value="" disabled>
-                                Select an official or existing PSG name
+                                {alias.review_status === "candidate"
+                                  ? "Select an official or existing PSG name"
+                                  : "Select a replacement reporting name"}
                               </option>
                               {strong.length ? (
                                 <optgroup
@@ -1150,8 +1172,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                             Save the decision
                           </p>
                           <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                            This applies to “{alias.source_label_name}” across
-                            all source shops.
+                            {alias.review_status === "candidate"
+                              ? `This applies to “${alias.source_label_name}” across all source shops.`
+                              : `This replaces the saved decision for “${alias.source_label_name}” across all source shops.`}
                           </p>
                         </div>
                       </div>
@@ -1162,7 +1185,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                           value="approve"
                           className="rounded-md bg-primary px-3 py-2 font-heading text-sm font-medium text-primary-foreground hover:bg-primary/90"
                         >
-                          Save selected match
+                          {alias.review_status === "candidate"
+                            ? "Save selected match"
+                            : "Replace saved match"}
                         </button>
                         <button
                           type="submit"

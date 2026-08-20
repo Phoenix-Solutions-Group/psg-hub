@@ -151,7 +151,7 @@ describe("POST insurer alias review", () => {
     );
   });
 
-  it("resolves a selected master insurer on the server", async () => {
+  it("resolves a selected master insurer when replacing a saved match", async () => {
     user = { id: "superadmin-1" };
     getDashboardAccess.mockResolvedValue({
       role: "psg_superadmin",
@@ -167,6 +167,7 @@ describe("POST insurer alias review", () => {
     const response = await POST(
       request({
         action: "approve",
+        expected_status: "approved",
         source_label_normalized: "travelers ins",
         canonical_target: "master:11111111-1111-4111-8111-111111111111",
       }),

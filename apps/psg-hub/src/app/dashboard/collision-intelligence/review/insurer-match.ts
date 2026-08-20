@@ -1,11 +1,10 @@
 export type InsurerNameOption = { label: string; value: string };
 
-export function includeFocusedCandidate<
-  T extends { source_label_normalized: string; review_status: string },
+export function includeFocusedAlias<
+  T extends { source_label_normalized: string },
 >(candidates: T[], focused: T | null) {
   if (
     !focused ||
-    focused.review_status !== "candidate" ||
     candidates.some(
       (candidate) =>
         candidate.source_label_normalized === focused.source_label_normalized,

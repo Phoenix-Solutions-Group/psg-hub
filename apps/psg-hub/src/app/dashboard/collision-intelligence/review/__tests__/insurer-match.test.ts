@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  findInsurerNameMatches,
-  includeFocusedCandidate,
-} from "../insurer-match";
+import { findInsurerNameMatches, includeFocusedAlias } from "../insurer-match";
 
 const insurers = [
   { label: "Progressive Insurance Company", value: "progressive" },
@@ -24,18 +21,15 @@ describe("insurer name matching", () => {
     ]);
   });
 
-  it("keeps a requested candidate visible outside the ranked queue", () => {
+  it("keeps a requested saved alias visible outside the ranked queue", () => {
     const ranked = [
       { source_label_normalized: "progressive", review_status: "candidate" },
     ];
     const focused = {
       source_label_normalized: "u s a a",
-      review_status: "candidate",
+      review_status: "approved",
     };
 
-    expect(includeFocusedCandidate(ranked, focused)).toEqual([
-      focused,
-      ...ranked,
-    ]);
+    expect(includeFocusedAlias(ranked, focused)).toEqual([focused, ...ranked]);
   });
 });
