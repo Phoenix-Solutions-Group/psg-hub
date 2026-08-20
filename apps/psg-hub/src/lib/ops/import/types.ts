@@ -68,6 +68,8 @@ export type ValidatedRow = {
   errors: string[];
   /** Non-blocking notes (e.g. an address that was auto-corrected). */
   warnings: string[];
+  /** Safety/business-rule exclusions that must never be committed. */
+  excludedReasons?: string[];
 };
 
 export type ValidationSummary = {
@@ -75,6 +77,7 @@ export type ValidationSummary = {
   total: number;
   valid: number;
   invalid: number;
+  excluded: number;
   rows: ValidatedRow[];
   /** Canonical fields with no source column mapped. */
   unmappedRequired: string[];

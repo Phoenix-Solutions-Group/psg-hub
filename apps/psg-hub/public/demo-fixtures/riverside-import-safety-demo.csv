@@ -1,0 +1,5 @@
+RO Number,Customer First Name,Customer Last Name,Customer Email,Do Not Mail,Date In,Repair Amount
+RIV-DEMO-1001,Maria,Garcia,maria@example.test,No,2026-08-01,2450.00
+RIV-DEMO-1002,Jordan,,jordan@example.test,No,2026-08-02,1800.00
+RIV-DEMO-1001,Duplicate,Garcia,duplicate@example.test,No,2026-08-03,2450.00
+RIV-DEMO-1003,Sam,Wilson,sam@example.test,Yes,2026-08-04,3200.00
