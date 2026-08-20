@@ -39,6 +39,7 @@ FEATURE_SETS = {
 }
 
 MAX_INTERNAL_ZERO_WEEKS = 26
+INTERVAL_CALIBRATION_TARGET_PCT = 85
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -415,6 +416,7 @@ def interval_policy(
     if len(shops) < 2:
         return {
             "interval_multiplier": 1.0,
+            "interval_policy_calibration_target_pct": INTERVAL_CALIBRATION_TARGET_PCT,
             "interval_policy_calibration_shops": len(shops),
             "interval_policy_validation_shops": 0,
             "interval_policy_calibration_coverage_pct": interval_coverage(
@@ -438,12 +440,14 @@ def interval_policy(
         (
             multiplier
             for multiplier in multipliers
-            if interval_coverage(calibration, model_name, multiplier) >= 80
+            if interval_coverage(calibration, model_name, multiplier)
+            >= INTERVAL_CALIBRATION_TARGET_PCT
         ),
         multipliers[-1],
     )
     return {
         "interval_multiplier": selected,
+        "interval_policy_calibration_target_pct": INTERVAL_CALIBRATION_TARGET_PCT,
         "interval_policy_calibration_shops": len(calibration),
         "interval_policy_validation_shops": len(validation),
         "interval_policy_calibration_coverage_pct": interval_coverage(
@@ -744,9 +748,9 @@ def print_horizon_markdown(result: dict[str, Any]) -> None:
     print()
     print(
         "| Horizon | Eligible shops | Seasonal MAE | Trailing-4 MAE | "
-        "MAE improvement | Held-out-shop interval coverage |"
+        "MAE improvement | Interval scale | Held-out-shop interval coverage |"
     )
-    print("|---:|---:|---:|---:|---:|---:|")
+    print("|---:|---:|---:|---:|---:|---:|---:|")
     for horizon, horizon_result in result["horizons"].items():
         seasonal = horizon_result["models"]["seasonal_52_week"]
         recent = horizon_result["models"]["trailing_4_week"]
@@ -754,9 +758,15 @@ def print_horizon_markdown(result: dict[str, Any]) -> None:
             f"| {horizon} | {horizon_result['eligible_shops']} | "
             f"{seasonal['mae']:.2f} | {recent['mae']:.2f} | "
             f"{horizon_result['trailing_4_mae_improvement_pct']:.1f}% | "
+            f"{recent['interval_multiplier']:.2f}× | "
             f"{recent['interval_policy_validation_coverage_pct']:.1f}% |"
         )
     print()
+    print(
+        f"Nominal 80% intervals are calibrated to "
+        f"{INTERVAL_CALIBRATION_TARGET_PCT}% coverage on calibration shops before "
+        "held-out-shop validation."
+    )
     print(
         "Trailing four-week demand beats seasonal at every horizon: "
         f"**{result['trailing_4_beats_seasonal_at_every_horizon']}**."
@@ -806,9 +816,16 @@ def self_test() -> None:
     assert multishop["champion"] == "trailing_4_week"
     assert multishop["eligible_shops"] == 1
     assert multishop["models"]["trailing_4_week"]["mae"] == 0
-    direct = summarize_direct_shop(evaluate_direct_shop(weekly, 10, 10))
+    direct_result = evaluate_direct_shop(weekly, 10, 10)
+    direct = summarize_direct_shop(direct_result)
     assert direct["scope"] == "filemaker_shop"
     assert direct["models"]["trailing_4_week"]["interval_80_coverage_pct"] == 100
+    assert (
+        interval_policy([direct_result], "trailing_4_week")[
+            "interval_policy_calibration_target_pct"
+        ]
+        == 85
+    )
     varying = [{**row, "repair_orders": index} for index, row in enumerate(weekly)]
     horizon_three = rows_for_horizon(varying, 3)
     assert horizon_three[10]["trailing_4_week_average"] == 5.5
