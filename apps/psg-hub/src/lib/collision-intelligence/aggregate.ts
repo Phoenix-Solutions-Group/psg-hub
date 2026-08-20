@@ -487,6 +487,10 @@ export function buildCollisionDashboard(
     (forecast) =>
       forecast.status === "published" && forecast.predicted !== null,
   );
+  const performance = recentPerformance(weekly);
+  const recentWeeklyPace = performance
+    ? performance.workload.current / performance.windowWeeks
+    : null;
   const peakForecast = publishedForecasts.reduce<
     (typeof publishedForecasts)[number] | null
   >(
@@ -503,9 +507,29 @@ export function buildCollisionDashboard(
         : lowest,
     null,
   );
-  const highWeatherSignals = alertRows.filter(
+  const highWeatherAlerts = alertRows.filter(
     (alert) => alert.alert_level === "high",
-  ).length;
+  );
+  const highWeatherSignals = highWeatherAlerts.length;
+  const highestWeatherExposure = [...highWeatherAlerts].sort(
+    (a, b) =>
+      numberOf(b.historical_repair_orders) -
+      numberOf(a.historical_repair_orders),
+  )[0];
+  const capacitySignal =
+    recentWeeklyPace === null
+      ? null
+      : publishedForecasts.find(
+          (forecast) =>
+            forecast.lower !== null && forecast.lower > recentWeeklyPace,
+        );
+  const marketingSignal =
+    recentWeeklyPace === null
+      ? null
+      : publishedForecasts.find(
+          (forecast) =>
+            forecast.upper !== null && forecast.upper < recentWeeklyPace,
+        );
   const topVehicle = vehicleRows[0];
   const topInsurer = insurerRows[0];
   const latestSpcSource = spcSourceRows[0];
@@ -530,7 +554,7 @@ export function buildCollisionDashboard(
       firstWeek: weekly[0]?.week_start ?? null,
       latestWeek: weekly.at(-1)?.week_start ?? null,
     },
-    recentPerformance: recentPerformance(weekly),
+    recentPerformance: performance,
     seasonality: seasonality(seasonalityRows),
     weeklySeries: [...forecastRows]
       .sort((a, b) => a.week_start.localeCompare(b.week_start))
@@ -583,39 +607,67 @@ export function buildCollisionDashboard(
     operationalForecasts,
     operationalForecast: operationalForecasts[0] ?? null,
     planningGuidance: [
-      peakForecast
+      capacitySignal && recentWeeklyPace !== null
         ? {
             area: "Staffing & scheduling",
-            status: "ready" as const,
-            title: `Capacity check for week ${peakForecast.horizonWeeks}`,
-            week: peakForecast.week,
-            detail: `The ${peakForecast.intervalPct}% upper range reaches ${peakForecast.upper} repairs. Compare that with booked slots and technician capacity before changing shifts or intake.`,
+            status: "review" as const,
+            title: `Capacity pressure in week ${capacitySignal.horizonWeeks}`,
+            week: capacitySignal.week,
+            detail: `The entire ${capacitySignal.intervalPct}% range (${capacitySignal.lower}–${capacitySignal.upper}) is above the latest complete 13-week average of ${recentWeeklyPace.toFixed(1)} repairs per week. Check booked slots and technician capacity now; change shifts or intake only if the schedule confirms the gap.`,
           }
-        : {
-            area: "Staffing & scheduling",
-            status: "blocked" as const,
-            title: "Forecast decisions paused",
-            week: null,
-            detail:
-              operationalForecasts[0]?.reason ??
-              "No governed operating forecast is available.",
-          },
-      lowForecast
+        : peakForecast
+          ? {
+              area: "Staffing & scheduling",
+              status: "ready" as const,
+              title:
+                recentWeeklyPace === null
+                  ? `Capacity check for week ${peakForecast.horizonWeeks}`
+                  : "No capacity pressure confirmed",
+              week: peakForecast.week,
+              detail:
+                recentWeeklyPace === null
+                  ? `The ${peakForecast.intervalPct}% upper range reaches ${peakForecast.upper} repairs. Compare that with booked slots and technician capacity before changing shifts or intake.`
+                  : `The highest ${peakForecast.intervalPct}% range (${peakForecast.lower}–${peakForecast.upper}) does not sit fully above the latest complete 13-week average of ${recentWeeklyPace.toFixed(1)} repairs per week. Keep the current staffing plan and monitor booked slots.`,
+            }
+          : {
+              area: "Staffing & scheduling",
+              status: "blocked" as const,
+              title: "Forecast decisions paused",
+              week: null,
+              detail:
+                operationalForecasts[0]?.reason ??
+                "No governed operating forecast is available.",
+            },
+      marketingSignal && recentWeeklyPace !== null
         ? {
             area: "Marketing",
-            status: "ready" as const,
-            title: `Demand checkpoint for week ${lowForecast.horizonWeeks}`,
-            week: lowForecast.week,
-            detail: `The point forecast is ${lowForecast.predicted?.toFixed(1)} repairs (${lowForecast.lower}–${lowForecast.upper}). Confirm booked work before changing campaign timing or spend.`,
+            status: "review" as const,
+            title: `Demand gap in week ${marketingSignal.horizonWeeks}`,
+            week: marketingSignal.week,
+            detail: `The entire ${marketingSignal.intervalPct}% range (${marketingSignal.lower}–${marketingSignal.upper}) is below the latest complete 13-week average of ${recentWeeklyPace.toFixed(1)} repairs per week. Confirm booked work; if the gap remains, review campaign timing and spend.`,
           }
-        : {
-            area: "Marketing",
-            status: "blocked" as const,
-            title: "Forecast trigger unavailable",
-            week: null,
-            detail:
-              "Use observed repair history only; do not change campaign timing from a stale or unpublished forecast.",
-          },
+        : lowForecast
+          ? {
+              area: "Marketing",
+              status: "ready" as const,
+              title:
+                recentWeeklyPace === null
+                  ? `Demand checkpoint for week ${lowForecast.horizonWeeks}`
+                  : "No demand gap confirmed",
+              week: lowForecast.week,
+              detail:
+                recentWeeklyPace === null
+                  ? `The point forecast is ${lowForecast.predicted?.toFixed(1)} repairs (${lowForecast.lower}–${lowForecast.upper}). Confirm booked work before changing campaign timing or spend.`
+                  : `The lowest ${lowForecast.intervalPct}% range (${lowForecast.lower}–${lowForecast.upper}) does not sit fully below the latest complete 13-week average of ${recentWeeklyPace.toFixed(1)} repairs per week. Hold campaign changes until booked work confirms a shortfall.`,
+            }
+          : {
+              area: "Marketing",
+              status: "blocked" as const,
+              title: "Forecast trigger unavailable",
+              week: null,
+              detail:
+                "Use observed repair history only; do not change campaign timing from a stale or unpublished forecast.",
+            },
       topVehicle
         ? {
             area: "Parts & training",
@@ -642,12 +694,12 @@ export function buildCollisionDashboard(
       {
         area: "Weather response",
         status: highWeatherSignals ? ("review" as const) : ("ready" as const),
-        title: highWeatherSignals
-          ? `${highWeatherSignals} high preliminary signal${highWeatherSignals === 1 ? "" : "s"}`
+        title: highestWeatherExposure
+          ? `Review ZIP ${highestWeatherExposure.zip_code} first`
           : "No high preliminary signals",
         week: null,
-        detail: highWeatherSignals
-          ? "Review the affected customer ZIPs for intake readiness. A weather report is not evidence of vehicle damage or a claim."
+        detail: highestWeatherExposure
+          ? `${numberOf(highestWeatherExposure.historical_repair_orders).toLocaleString()} historical repair orders came from this ZIP; ${highWeatherSignals} high preliminary weather signal${highWeatherSignals === 1 ? " is" : "s are"} active across the customer market. Prepare intake coverage, but do not treat a weather report as vehicle damage or a claim.`
           : "Continue monitoring the 72-hour customer-ZIP queue; notifications remain disabled.",
       },
     ].filter((guidance) => guidance !== null),

@@ -246,7 +246,8 @@ describe("collision intelligence aggregation", () => {
         }),
         expect.objectContaining({
           area: "Weather response",
-          title: "1 high preliminary signal",
+          title: "Review ZIP 67037 first",
+          detail: expect.stringContaining("14 historical repair orders"),
         }),
       ]),
     );
@@ -360,7 +361,36 @@ describe("collision intelligence aggregation", () => {
       [],
       [],
       [],
-      [],
+      [
+        {
+          forecast_origin_week: "2025-07-07",
+          forecast_horizon_weeks: 1,
+          forecast_week: "2025-07-07",
+          predicted_repair_orders: 16,
+          lower_repair_orders: 14,
+          upper_repair_orders: 18,
+          prediction_interval_pct: 80,
+          source_latest_arrival_date: "2025-07-06",
+          source_age_days: 1,
+          status: "published",
+          status_reason: "Approved model and current source.",
+          generated_at: "2025-07-07T06:00:00Z",
+        },
+        {
+          forecast_origin_week: "2025-07-07",
+          forecast_horizon_weeks: 2,
+          forecast_week: "2025-07-14",
+          predicted_repair_orders: 8,
+          lower_repair_orders: 6,
+          upper_repair_orders: 10,
+          prediction_interval_pct: 80,
+          source_latest_arrival_date: "2025-07-06",
+          source_age_days: 1,
+          status: "published",
+          status_reason: "Approved model and current source.",
+          generated_at: "2025-07-07T06:00:00Z",
+        },
+      ],
       [],
       [],
       [],
@@ -388,6 +418,22 @@ describe("collision intelligence aggregation", () => {
         changePct: -20,
       },
     });
+    expect(dashboard.planningGuidance).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          area: "Staffing & scheduling",
+          status: "review",
+          title: "Capacity pressure in week 1",
+          detail: expect.stringContaining("13-week average of 12.0"),
+        }),
+        expect.objectContaining({
+          area: "Marketing",
+          status: "review",
+          title: "Demand gap in week 2",
+          detail: expect.stringContaining("13-week average of 12.0"),
+        }),
+      ]),
+    );
   });
 
   it("compares seasonality only across complete source years", () => {
