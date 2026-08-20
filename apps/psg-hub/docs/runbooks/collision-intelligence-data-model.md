@@ -90,7 +90,8 @@ policy says otherwise. The service key stays server-side.
 The standard evaluation requires a seasonal lag plus 52 calibration weeks and
 52 chronological holdout weeks. The initial coverage check therefore requires
 at least 156 calendar weeks, after which the evaluator still excludes long
-internal gaps.
+internal gaps. Promotion evidence must name a completed Monday cutoff; later,
+potentially partial source weeks are excluded from every horizon.
 
 The dashboard's historical baseline card uses that same minimum frame but is
 exploratory only. Model approval depends on the separately stored, four-horizon

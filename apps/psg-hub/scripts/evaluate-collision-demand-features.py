@@ -243,6 +243,15 @@ def latest_observed_segment(
     return segment, excluded_gap_weeks
 
 
+def evaluation_rows(
+    rows: list[dict[str, Any]], latest_week_cutoff: str | None
+) -> list[dict[str, Any]]:
+    """Freeze evaluation at a completed Monday while requiring sources to reach it."""
+    if latest_week_cutoff is None:
+        return rows
+    return [row for row in rows if row["week_start"] <= latest_week_cutoff]
+
+
 def evaluate_model(
     training: list[dict[str, Any]],
     calibration: list[dict[str, Any]],
@@ -745,6 +754,7 @@ def build_promotion_candidate(
                 ],
                 "evaluation_scope": (
                     f"{source_shop_key} chronological holdout; nominal 80% interval "
+                    f"evaluated through {horizon_result['latest_week_cutoff']} and "
                     f"calibrated to {policy['interval_policy_calibration_target_pct']}% "
                     f"on {policy['interval_policy_calibration_shops']} current source "
                     f"shops and validated on "
@@ -1006,6 +1016,10 @@ def self_test() -> None:
     assert abs(model({"x": 10}) - 32) < 1e-5
     assert prior_month("2026-01-12") == "2025-12-01"
     assert quantile([1, 2, 3, 4, 5], 0.8) == 4
+    assert evaluation_rows(
+        [{"week_start": "2026-08-03"}, {"week_start": "2026-08-10"}],
+        "2026-08-03",
+    ) == [{"week_start": "2026-08-03"}]
     assert error_metrics([10, 12], [9, 14])["mae"] == 1.5
     weekly = [
         {
@@ -1098,7 +1112,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if not 1 <= args.forecast_horizons <= 4:
         raise ValueError("--forecast-horizons must be between 1 and 4")
     if args.latest_week_cutoff:
-        date.fromisoformat(args.latest_week_cutoff)
+        cutoff = date.fromisoformat(args.latest_week_cutoff)
+        today = datetime.now(timezone.utc).date()
+        current_monday = today - timedelta(days=today.weekday())
+        if cutoff.weekday() != 0 or cutoff >= current_monday:
+            raise ValueError(
+                "--latest-week-cutoff must be a completed Monday before the current week"
+            )
     promotion_candidate = (args.promotion_candidate or "").strip().upper()
     if args.stage_review and not promotion_candidate:
         raise ValueError("--stage-review requires --promotion-candidate")
@@ -1129,6 +1149,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "order": "week_start.asc",
             },
         )
+        rows = evaluation_rows(rows, args.latest_week_cutoff)
         if args.forecast_horizons > 1:
             return evaluate_direct_shop_horizons(
                 rows,
@@ -1156,6 +1177,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "order": "source_shop_key.asc,week_start.asc",
             },
         )
+        rows = evaluation_rows(rows, args.latest_week_cutoff)
         if args.forecast_horizons > 1 or promotion_candidate:
             result = evaluate_filemaker_horizons(
                 rows,
@@ -1222,7 +1244,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--review-notes")
     parser.add_argument("--project-id", default="gylkkzmcmbdftxieyabw")
     parser.add_argument("--all-filemaker", action="store_true")
-    parser.add_argument("--latest-week-cutoff")
+    parser.add_argument(
+        "--latest-week-cutoff",
+        help=(
+            "require source history to reach this completed Monday and exclude "
+            "all later, potentially partial weeks from evaluation"
+        ),
+    )
     parser.add_argument("--holdout-weeks", type=int, default=52)
     parser.add_argument("--calibration-weeks", type=int, default=52)
     parser.add_argument("--forecast-horizons", type=int, default=1)
