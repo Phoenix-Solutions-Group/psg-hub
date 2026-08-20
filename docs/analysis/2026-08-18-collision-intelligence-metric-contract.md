@@ -61,6 +61,9 @@ the authenticated user's membership before the service client is called.
 
 Insurance-paid share divides known insurance-paid repairs by all repair orders. Unknown
 payment types remain in that denominator and are disclosed beside the insured count.
+Hub-native rows use the same exact-alias contract as the importer, with canonical
+`repair_orders.pay_type` as a fallback. FileMaker facts retain their import-time
+classification; neither path infers insurance from a carrier name.
 
 The recent operating trend compares the latest 13 completed source weeks with the
 preceding 13. It excludes the newest potentially partial source week, treats missing

@@ -14,7 +14,12 @@
 // An unrecognized pay-type string is NULL, never a bogus bucket.
 
 /** Canonical pay-type buckets — mirrors the repair_orders.pay_type CHECK. */
-export const PAY_TYPES = ["insurance", "customer", "internal", "warranty"] as const;
+export const PAY_TYPES = [
+  "insurance",
+  "customer",
+  "internal",
+  "warranty",
+] as const;
 export type PayType = (typeof PAY_TYPES)[number];
 
 /**
@@ -22,7 +27,9 @@ export type PayType = (typeof PAY_TYPES)[number];
  * Accepts a number or a human string ("$1,234.56", " 1234.56 "). Returns null
  * for null/undefined/empty/non-finite input — NEVER 0 for a missing amount.
  */
-export function dollarsToCents(v: number | string | null | undefined): number | null {
+export function dollarsToCents(
+  v: number | string | null | undefined,
+): number | null {
   if (v == null) return null;
   let n: number;
   if (typeof v === "number") {
@@ -53,10 +60,18 @@ const PAY_TYPE_ALIASES: Readonly<Record<string, PayType>> = {
   claim: "insurance",
   "3rd party": "insurance",
   "third party": "insurance",
+  "customer insurance": "insurance",
+  "claimant (other insurance)": "insurance",
+  "claimant other insurance": "insurance",
+  "ins pay which party unknown": "insurance",
+  "insurance pay which party unknown": "insurance",
+  claiment: "insurance",
+  claimat: "insurance",
   // customer — self-pay / retail
   customer: "customer",
   cust: "customer",
   "customer pay": "customer",
+  "cash customer pay": "customer",
   cp: "customer",
   self: "customer",
   retail: "customer",
@@ -75,7 +90,9 @@ const PAY_TYPE_ALIASES: Readonly<Record<string, PayType>> = {
  * matches no alias (constraint-safe; honest — no invented bucket). Case- and
  * surrounding-whitespace-insensitive, exact-alias match (see PAY_TYPE_ALIASES).
  */
-export function normalizePayType(raw: string | null | undefined): PayType | null {
+export function normalizePayType(
+  raw: string | null | undefined,
+): PayType | null {
   if (raw == null) return null;
   const key = raw.trim().toLowerCase();
   if (key === "") return null;
