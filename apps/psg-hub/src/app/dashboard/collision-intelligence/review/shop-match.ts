@@ -7,7 +7,7 @@ export type ShopDirectoryEntry = {
   address_region: string | null;
   address_postal_code: string | null;
   client: { name: string } | null;
-  members?: Array<{ count: number }>;
+  members?: Array<{ user_id: string }>;
 };
 
 export type ShopIdentityEvidence = {
@@ -19,8 +19,14 @@ export type ShopIdentityEvidence = {
   sources: Array<[string, string]>;
 };
 
-export function shopMemberCount(shop: Pick<ShopDirectoryEntry, "members">) {
-  return shop.members?.[0]?.count ?? 0;
+export function shopMemberCount(
+  shop: Pick<ShopDirectoryEntry, "members">,
+  customerProfileIds: ReadonlySet<string>,
+) {
+  return (
+    shop.members?.filter((member) => customerProfileIds.has(member.user_id))
+      .length ?? 0
+  );
 }
 
 // ponytail: two verified pilot locations; move to governed identity rows when review coverage expands.

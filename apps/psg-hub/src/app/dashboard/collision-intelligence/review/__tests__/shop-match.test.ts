@@ -101,7 +101,19 @@ describe("shop identity matching", () => {
   });
 
   it("treats a missing membership aggregate as an empty customer audience", () => {
-    expect(shopMemberCount(shops[0])).toBe(0);
-    expect(shopMemberCount({ members: [{ count: 2 }] })).toBe(2);
+    const customerProfileIds = new Set(["customer-1", "customer-2"]);
+
+    expect(shopMemberCount(shops[0], customerProfileIds)).toBe(0);
+    expect(
+      shopMemberCount(
+        {
+          members: [
+            { user_id: "customer-1" },
+            { user_id: "staff-1" },
+          ],
+        },
+        customerProfileIds,
+      ),
+    ).toBe(1);
   });
 });

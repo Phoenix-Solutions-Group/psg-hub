@@ -88,7 +88,10 @@ export default async function UsersAdminPage({ searchParams }: Props) {
     service.from("profiles").select("id, display_name"),
     service.from("app_user_roles").select("profile_id, role"),
     service.from("shop_users").select("user_id, shop_id, role"),
-    service.from("shops").select("id, name, slug").order("name", { ascending: true }),
+    service
+      .from("shops")
+      .select("id, name, slug, client_id")
+      .order("name", { ascending: true }),
     service.from("subscriptions").select("shop_id, tier, status"),
   ]);
 
@@ -117,6 +120,7 @@ export default async function UsersAdminPage({ searchParams }: Props) {
       id,
       name: ((s.name as string | null) ?? (s.slug as string | null) ?? id).trim(),
       slug: (s.slug as string | null) ?? null,
+      clientId: (s.client_id as string | null) ?? null,
       tier: sub?.tier ?? null,
       tierLabel: sub?.tier ? ADMIN_TIER_LABELS[sub.tier] : "No subscription tier set",
       subscriptionStatus: sub?.status ?? null,

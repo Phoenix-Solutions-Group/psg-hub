@@ -24,6 +24,7 @@ export type ManagedShop = {
   id: string;
   name: string;
   slug: string | null;
+  clientId: string | null;
   tier: AdminTier | null;
   tierLabel: string;
   subscriptionStatus: string | null;
@@ -54,17 +55,49 @@ export function UserAccessManager({
   initialShopId?: string | null;
 }) {
   const initialShop = shops.find((shop) => shop.id === initialShopId) ?? null;
+  const suggestedUserIds = useMemo(() => {
+    if (!initialShop?.clientId) return new Set<string>();
+    const relatedShopIds = new Set(
+      shops
+        .filter(
+          (shop) =>
+            shop.clientId === initialShop.clientId && shop.id !== initialShop.id,
+        )
+        .map((shop) => shop.id),
+    );
+    return new Set(
+      users
+        .filter(
+          (user) =>
+            user.role === "customer" &&
+            !user.memberships.some(
+              (membership) => membership.shopId === initialShop.id,
+            ) &&
+            user.memberships.some((membership) =>
+              relatedShopIds.has(membership.shopId),
+            ),
+        )
+        .map((user) => user.profileId),
+    );
+  }, [initialShop, shops, users]);
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u) =>
-      [u.displayName, u.email ?? "", u.profileId]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [query, users]);
+    return users
+      .filter(
+        (user) =>
+          !q ||
+          [user.displayName, user.email ?? "", user.profileId]
+            .join(" ")
+            .toLowerCase()
+            .includes(q),
+      )
+      .sort(
+        (left, right) =>
+          Number(suggestedUserIds.has(right.profileId)) -
+          Number(suggestedUserIds.has(left.profileId)),
+      );
+  }, [query, suggestedUserIds, users]);
 
   return (
     <section className="space-y-6">
@@ -80,6 +113,13 @@ export function UserAccessManager({
             Invite the intended customer or add this shop to an existing user.
             The shop is preselected below; saved access changes are audited.
           </p>
+          {suggestedUserIds.size ? (
+            <p className="mt-1 text-sm leading-6 text-foreground/75">
+              {suggestedUserIds.size} existing customer {suggestedUserIds.size === 1 ? "has" : "accounts have"}{" "}
+              access to another shop under the same client account and {suggestedUserIds.size === 1 ? "is" : "are"}{" "}
+              listed first. Confirm the intended audience before saving.
+            </p>
+          ) : null}
           <Link
             href="/dashboard/collision-intelligence/review#forecast-model-review"
             className="mt-2 inline-block text-sm text-muted-foreground hover:text-ember"
@@ -115,6 +155,7 @@ export function UserAccessManager({
               user={user}
               shops={shops}
               initialShopId={initialShop?.id ?? null}
+              relatedShopAccess={suggestedUserIds.has(user.profileId)}
             />
           ))}
           {filtered.length === 0 && (
@@ -284,10 +325,12 @@ function UserAccessCard({
   user,
   shops,
   initialShopId,
+  relatedShopAccess,
 }: {
   user: ManagedUser;
   shops: ManagedShop[];
   initialShopId: string | null;
+  relatedShopAccess: boolean;
 }) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(user.displayName);
@@ -336,6 +379,9 @@ function UserAccessCard({
           <div className="text-sm text-muted-foreground">{user.email ?? user.profileId}</div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {relatedShopAccess ? (
+            <Badge variant="outline">Related shop access</Badge>
+          ) : null}
           <Badge variant="secondary">
             {user.role ? ADMIN_APP_ROLE_LABELS[user.role] : "No role"}
           </Badge>

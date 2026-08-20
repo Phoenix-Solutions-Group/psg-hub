@@ -50,6 +50,20 @@ was champion for 27. No current shop selected the seasonal baseline at horizon 1
 |       3 |         3.89 |           3.09 |           20.4% |           30.0% |                           78.8% |
 |       4 |         3.89 |           3.13 |           19.6% |           30.3% |                           78.6% |
 
+### South Lincoln pilot candidate
+
+A read-only production evaluation on 2026-08-20 used FileMaker source `PS229`
+through the completed week of 2026-08-03. The seasonal/recent blend beat the
+52-week seasonal baseline at all four horizons: 24.0%, 23.2%, 24.1%, and 20.1%
+lower MAE. Its held-out-shop interval coverage was 80.4%, 83.0%, 83.0%, and
+85.1%, respectively, so all four horizons clear the current review threshold.
+
+The evidence is not staged or approved. `PS229` remains unmapped, and the exact
+South Lincoln Hub shop at 1500 Center Park Road has no customer member. Related
+Tracy's shops do have an existing customer member; User Access now ranks that
+same-client customer first for explicit, audited assignment without granting access
+automatically. PSG staff memberships do not clear the forecast audience gate.
+
 Trailing-4 beats seasonal at all four aggregate horizons. For PS177 specifically,
 trailing-4 remains the shop champion for horizons 1–3; the seasonal/recent blend is
 the horizon-4 champion. The promoted PS177 intervals are therefore horizon-specific:

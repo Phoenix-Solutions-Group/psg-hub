@@ -243,6 +243,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     insuranceCompanyResult,
     shopResult,
     hubShopResult,
+    customerRoleResult,
     mappedShopResult,
     repairSourceResult,
     repairFeedResult,
@@ -288,9 +289,13 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     service
       .from("shops")
       .select(
-        "id,name,slug,address_street,address_locality,address_region,address_postal_code,client:clients(name),members:shop_users(count)",
+        "id,name,slug,address_street,address_locality,address_region,address_postal_code,client:clients(name),members:shop_users(user_id)",
       )
       .order("name", { ascending: true }),
+    service
+      .from("app_user_roles")
+      .select("profile_id")
+      .eq("role", "customer"),
     service
       .from("collision_shop_mappings")
       .select("shop_id")
@@ -352,6 +357,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     insuranceCompanyResult.error ||
     shopResult.error ||
     hubShopResult.error ||
+    customerRoleResult.error ||
     mappedShopResult.error ||
     repairSourceResult.error ||
     repairFeedResult.error ||
@@ -368,6 +374,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         insuranceCompanyResult.error?.message ??
         shopResult.error?.message ??
         hubShopResult.error?.message ??
+        customerRoleResult.error?.message ??
         mappedShopResult.error?.message ??
         repairSourceResult.error?.message ??
         repairFeedResult.error?.message ??
@@ -572,6 +579,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   );
   const hubShops = (hubShopResult.data ??
     []) as unknown as ShopDirectoryEntry[];
+  const customerProfileIds = new Set(
+    (customerRoleResult.data ?? []).map((row) => row.profile_id as string),
+  );
   const availableHubShops = hubShops.filter(
     (shop) => !mappedShopIds.has(shop.id),
   );
@@ -587,7 +597,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       ),
     ].sort((a, b) => a.forecast_horizon_weeks - b.forecast_horizon_weeks);
     const shop = hubShops.find((candidate) => candidate.id === weekOne.shop_id);
-    const memberCount = shop ? shopMemberCount(shop) : 0;
+    const memberCount = shop
+      ? shopMemberCount(shop, customerProfileIds)
+      : 0;
 
     return {
       shopId: weekOne.shop_id,
@@ -1934,7 +1946,10 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         Select a candidate after verifying its identity
                       </option>
                       {selectableShopMatches.map((match) => {
-                        const memberCount = shopMemberCount(match.shop);
+                        const memberCount = shopMemberCount(
+                          match.shop,
+                          customerProfileIds,
+                        );
                         const location = [
                           match.shop.address_street,
                           match.shop.address_locality,
@@ -1968,7 +1983,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
 
                   {selectableShopMatches.length > 0 &&
                   selectableShopMatches.every(
-                    (match) => shopMemberCount(match.shop) === 0,
+                    (match) =>
+                      shopMemberCount(match.shop, customerProfileIds) === 0,
                   ) ? (
                     <div
                       role="note"
@@ -1986,7 +2002,11 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                       <div className="mt-2 flex flex-wrap gap-3 text-sm">
                         {selectableShopMatches
                           .filter(
-                            (match) => shopMemberCount(match.shop) === 0,
+                            (match) =>
+                              shopMemberCount(
+                                match.shop,
+                                customerProfileIds,
+                              ) === 0,
                           )
                           .map((match) => (
                             <Link
