@@ -350,7 +350,9 @@ test.describe("google ads — customer-facing hub", () => {
       await page.getByRole("button", { name: "Request a change" }).click();
       await page.getByLabel("Request type").selectOption(request.type);
       if (!["new_campaign", "performance_review", "problem_report"].includes(request.type)) {
-        await page.getByLabel("Campaign").selectOption({ label: "E2E Collision Repair Leads" });
+        await page
+          .getByRole("combobox", { name: "Campaign", exact: true })
+          .selectOption({ label: "E2E Collision Repair Leads" });
       }
       for (const [label, value] of Object.entries(request.fields)) {
         await page.getByLabel(label).fill(value);
@@ -358,7 +360,9 @@ test.describe("google ads — customer-facing hub", () => {
       await page.getByRole("button", { name: "Review request" }).click();
       await page.getByText("I understand this is a request").click();
       await page.getByRole("button", { name: "Send for PSG review" }).click();
-      await expect(page.getByRole("status")).toContainText("Nothing changed in Google Ads");
+      await expect(
+        page.getByRole("status").filter({ hasText: "Nothing changed in Google Ads" }),
+      ).toBeVisible();
     }
 
     const { data: submitted } = await admin
@@ -383,7 +387,7 @@ test.describe("google ads — customer-facing hub", () => {
     await page.getByRole("button", { name: "Send detail" }).click();
     await expect(page.getByText("Detail sent to PSG.")).toBeVisible();
 
-    await expect(page.getByText("Pending report state")).toBeVisible();
+    await expect(page.getByText("Next report", { exact: true })).toBeVisible();
     await expect(page.getByText("E2E Google Ads report")).toBeVisible();
     await expect(page.getByRole("link", { name: "Download report (PDF)" })).toBeVisible();
 
