@@ -197,23 +197,21 @@ export async function getCollisionDashboard(shopId: string) {
 
   let nationalCrashRows: CollisionNationalCrashRow[] = [];
   let nationalCrashSourceRows: CollisionNationalCrashSourceRow[] = [];
-  const topCustomerZip = customerZips.data?.[0]?.customer_zip;
+  const topCustomerState = customerZips.data?.[0]?.customer_state;
 
-  if (!crashes.data?.length && topCustomerZip) {
-    const zipMapping = await service
-      .from("zcta_zip_mapping")
+  if (!crashes.data?.length && topCustomerState) {
+    const stateReference = await service
+      .from("state_references")
       .select("state_name")
-      .eq("zip_code", topCustomerZip)
-      .order("reporting_year", { ascending: false })
-      .limit(1)
+      .eq("state_abbr", topCustomerState)
       .maybeSingle();
 
-    if (zipMapping.error)
+    if (stateReference.error)
       throw new Error(
-        `Collision national crash geography query failed: ${zipMapping.error.message}`,
+        `Collision national crash geography query failed: ${stateReference.error.message}`,
       );
 
-    const stateName = zipMapping.data?.state_name;
+    const stateName = stateReference.data?.state_name;
     if (stateName) {
       const [nationalCrashes, nationalCrashSource] = await Promise.all([
         service
