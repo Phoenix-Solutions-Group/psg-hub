@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const SHOP_ID = "11111111-1111-1111-1111-111111111111";
 const REQUEST_ID = "33333333-3333-3333-3333-333333333333";
+const CAMPAIGN_ID = "22222222-2222-4222-8222-222222222222";
 
 let membership: { role: string } | null;
 let insertedRow: Record<string, unknown> | null;
 let insertError: { message: string } | null;
 let auditEvents: Array<Record<string, unknown>>;
+let campaignLookup: { data: { name: string } | null; error: { message: string } | null };
 
 function chain(result: unknown) {
   const builder: Record<string, unknown> = {};
@@ -33,8 +37,8 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
-    from: () =>
-      chain({
+    from: (table: string) =>
+      chain(table === "google_ads_campaigns" ? campaignLookup : {
         data: { id: REQUEST_ID, shop_id: SHOP_ID, status: "submitted" },
         error: insertError,
       }),
@@ -75,9 +79,19 @@ beforeEach(() => {
   insertedRow = null;
   insertError = null;
   auditEvents = [];
+  campaignLookup = { data: { name: "Database campaign name" }, error: null };
 });
 
 describe("private Google Ads request submission", () => {
+  it("keeps legacy campaign adjustment rows valid during the staged migration", () => {
+    const migration = readFileSync(
+      join(process.cwd(), "supabase/migrations/20260820143000_google_ads_reviewed_requests.sql"),
+      "utf8",
+    );
+
+    expect(migration).toMatch(/check \(request_type in \([\s\S]*'campaign_adjustment'/);
+  });
+
   it.each([
     ["budget_change", "riverside-search", "Collision Repair Search"],
     ["campaign_status_change", "riverside-local", "Riverside Local Services"],
@@ -122,6 +136,33 @@ describe("private Google Ads request submission", () => {
 
     expect(response.status).toBe(422);
     expect(insertedRow).toBeNull();
+  });
+
+  it("rejects a campaign that does not belong to the selected shop", async () => {
+    campaignLookup = { data: null, error: null };
+
+    const response = await route.POST(
+      request(validBody("budget_change", CAMPAIGN_ID, "Another shop campaign")),
+      { params: Promise.resolve({ shopId: SHOP_ID }) },
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toEqual({ error: "Campaign not found" });
+    expect(insertedRow).toBeNull();
+    expect(auditEvents).toEqual([]);
+  });
+
+  it("uses the tenant campaign name from the database instead of browser input", async () => {
+    const response = await route.POST(
+      request(validBody("budget_change", CAMPAIGN_ID, "Untrusted browser name")),
+      { params: Promise.resolve({ shopId: SHOP_ID }) },
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertedRow).toMatchObject({
+      campaign_id: CAMPAIGN_ID,
+      campaign_name: "Database campaign name",
+    });
   });
 
   it("returns 403 before inserting for a read-only role", async () => {

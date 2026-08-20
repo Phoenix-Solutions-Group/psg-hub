@@ -12,6 +12,11 @@ import { createServiceClient } from "@/lib/supabase/service";
 export const runtime = "nodejs";
 
 const UUID_RE = /^[0-9a-fA-F-]{36}$/;
+const PREVIEW_CAMPAIGN_NAMES: Record<string, string> = {
+  "riverside-search": "Collision Repair Search",
+  "riverside-local": "Riverside Local Services",
+  "riverside-brand": "Riverside Brand Search",
+};
 
 async function requireShopMember(shopId: string) {
   const supabase = await createClient();
@@ -86,8 +91,32 @@ export async function POST(
 
   try {
     const parsed = createGoogleAdsRequestSchema.parse(body);
-    const row = toCreateRow(shopId, gate.userId, parsed);
     const service = createServiceClient();
+    let campaignName: string | null = null;
+
+    if (parsed.campaignId) {
+      campaignName = PREVIEW_CAMPAIGN_NAMES[parsed.campaignId] ?? null;
+
+      if (!campaignName) {
+        const { data: campaign, error: campaignError } = await service
+          .from("google_ads_campaigns")
+          .select("name")
+          .eq("id", parsed.campaignId)
+          .eq("shop_id", shopId)
+          .maybeSingle();
+
+        if (campaignError) {
+          console.error("[google-ads/requests POST] campaign lookup failed:", campaignError.message);
+          return NextResponse.json({ error: "Request creation failed" }, { status: 500 });
+        }
+        if (!campaign) {
+          return NextResponse.json({ error: "Campaign not found" }, { status: 422 });
+        }
+        campaignName = campaign.name;
+      }
+    }
+
+    const row = toCreateRow(shopId, gate.userId, { ...parsed, campaignName });
     const { data, error } = await service
       .from("google_ads_customer_requests")
       .insert(row)
