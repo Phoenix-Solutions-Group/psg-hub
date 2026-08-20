@@ -16,6 +16,11 @@ type CampaignRow = {
   name: string;
 };
 
+export function adsPageHeading(shopName: string | null | undefined): string {
+  const normalized = shopName?.trim();
+  return normalized ? `${normalized} Google Ads` : "Your Google Ads";
+}
+
 export default async function AdsPage({ searchParams }: Props) {
   const supabase = await createClient();
   const params = await searchParams;
@@ -52,7 +57,12 @@ export default async function AdsPage({ searchParams }: Props) {
     return <TierGateCard shopId={shopId} />;
   }
 
-  const [{ data: accounts }, { data: campaigns }] = await Promise.all([
+  const [{ data: shop }, { data: accounts }, { data: campaigns }] = await Promise.all([
+    supabase
+      .from("shops")
+      .select("name")
+      .eq("id", shopId)
+      .maybeSingle(),
     supabase
       .from("google_ads_accounts")
       .select("id, customer_id, status, linked_at, last_error")
@@ -69,10 +79,10 @@ export default async function AdsPage({ searchParams }: Props) {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-lg font-semibold">Google Ads</h1>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Customer advertising</p>
+        <h1 className="mt-1 text-xl font-semibold">{adsPageHeading(shop?.name)}</h1>
         <p className="text-sm text-muted-foreground">
-          Connect your Google Ads account to bring paid performance into your
-          analytics.
+          Review the advertising accounts connected for this shop and ask PSG for help. Sending a request does not change a live campaign or its budget.
         </p>
       </div>
       <AccountsTable

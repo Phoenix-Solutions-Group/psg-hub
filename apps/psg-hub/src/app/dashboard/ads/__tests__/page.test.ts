@@ -37,7 +37,7 @@ vi.mock("@/lib/tier/gate", () => ({
   shopHasTier: vi.fn(async () => mockTierMeets),
 }));
 
-const AdsPage = (await import("@/app/dashboard/ads/page")).default;
+const { default: AdsPage, adsPageHeading } = await import("@/app/dashboard/ads/page");
 
 function run(shop_id?: string) {
   return AdsPage({ searchParams: Promise.resolve(shop_id ? { shop_id } : {}) });
@@ -52,6 +52,10 @@ beforeEach(() => {
 });
 
 describe("AdsPage shop resolution", () => {
+  it("names the authorized shop in the customer review heading", () => {
+    expect(adsPageHeading("Riverside Collision")).toBe("Riverside Collision Google Ads");
+    expect(adsPageHeading(null)).toBe("Your Google Ads");
+  });
   it("uses the active shop when no explicit shop is supplied", async () => {
     mockActiveShopId = "shopB";
     await expect(run()).rejects.toThrow("REDIRECT:/dashboard/ads?shop_id=shopB");
