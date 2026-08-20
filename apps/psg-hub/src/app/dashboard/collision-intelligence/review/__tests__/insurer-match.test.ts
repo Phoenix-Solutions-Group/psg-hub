@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { findInsurerNameMatches, includeFocusedAlias } from "../insurer-match";
+import {
+  findInsurerNameMatches,
+  groupRegistryMatches,
+  includeFocusedAlias,
+} from "../insurer-match";
 
 const insurers = [
   { label: "Progressive Insurance Company", value: "progressive" },
@@ -31,5 +35,16 @@ describe("insurer name matching", () => {
     };
 
     expect(includeFocusedAlias(ranked, focused)).toEqual([focused, ...ranked]);
+  });
+
+  it("does not present weak registry names as usable matches", () => {
+    const strong = { label: "USAA", match_score: 100 };
+    const possible = { label: "United Auto", match_score: 74 };
+    const unrelated = { label: "Essilorluxottica USA", match_score: 60 };
+
+    expect(groupRegistryMatches([strong, possible, unrelated])).toEqual({
+      strong: [strong],
+      possible: [possible],
+    });
   });
 });

@@ -49,3 +49,14 @@ export function findInsurerNameMatches(
     })
     .slice(0, limit);
 }
+
+export function groupRegistryMatches<T extends { match_score: number }>(
+  suggestions: T[],
+) {
+  return {
+    strong: suggestions.filter(({ match_score }) => match_score >= 80),
+    possible: suggestions.filter(
+      ({ match_score }) => match_score >= 70 && match_score < 80,
+    ),
+  };
+}
