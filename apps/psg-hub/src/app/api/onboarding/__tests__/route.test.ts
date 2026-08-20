@@ -32,7 +32,10 @@ function serviceClient() {
               select: vi.fn().mockReturnValue({
                 single: vi
                   .fn()
-                  .mockResolvedValue({ data: { id: "client-new" }, error: null }),
+                  .mockResolvedValue({
+                    data: { id: "client-new" },
+                    error: null,
+                  }),
               }),
             };
           }),
@@ -147,9 +150,10 @@ describe("POST /api/onboarding", () => {
         address: "1 Main St",
         city: "Lincoln",
         state: "NE",
+        postalCode: "68512",
         websiteUrl: "https://acme.example.com",
         phone: "402-555-1212",
-      })
+      }),
     );
     expect(res.status).toBe(200);
     const json = (await res.json()) as { shop_id: string };
@@ -170,6 +174,7 @@ describe("POST /api/onboarding", () => {
       address_street: "1 Main St",
       address_locality: "Lincoln",
       address_region: "NE",
+      address_postal_code: "68512",
       url: "https://acme.example.com",
       telephone: "402-555-1212",
     });
@@ -186,6 +191,17 @@ describe("POST /api/onboarding", () => {
     expect(roleInsertPayload).toEqual({ profile_id: "u1", role: "customer" });
     expect(clientsDelete).not.toHaveBeenCalled();
     expect(shopsDelete).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid ZIP before creating a client", async () => {
+    mockUser = { id: "u1" };
+    const res = await POST(
+      req({ shopName: "Acme Collision", postalCode: "6851" }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(clientInsertPayload).toBeNull();
+    expect(shopInsertPayload).toBeNull();
   });
 
   it("does not downgrade an existing role", async () => {
