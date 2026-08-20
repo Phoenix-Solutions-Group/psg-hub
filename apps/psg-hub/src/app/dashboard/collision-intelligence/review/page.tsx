@@ -120,6 +120,29 @@ type CrashSourceHealth = {
 
 type ForecastHealth = ForecastReadinessRow;
 
+type ForecastModelPolicy = {
+  shop_id: string;
+  forecast_horizon_weeks: number;
+  model_key: string;
+  promotion_status: "review";
+  seasonal_baseline_mae: number;
+  model_mae: number;
+  mae_improvement_pct: number;
+  holdout_start: string;
+  holdout_end: string;
+  interval_half_width: number;
+  interval_validation_coverage_pct: number;
+  evaluation_scope: string;
+  evaluated_at: string;
+};
+
+type ForecastModelWeekOne = Omit<
+  ForecastModelPolicy,
+  "forecast_horizon_weeks"
+> & {
+  source_shop_key: string;
+};
+
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -156,6 +179,18 @@ const notices: Record<string, string> = {
   mapping_evidence_missing:
     "This imported location does not have governed address evidence yet. No mapping was changed.",
   mapping_error: "The shop mapping could not be saved. No mapping was changed.",
+  forecast_model_approved:
+    "All four forecast policies were approved. No forecast was generated or published; run the governed scorer separately after confirming source freshness.",
+  forecast_model_rejected:
+    "The staged forecast evidence was rejected and retired. No forecast was changed.",
+  forecast_model_conflict:
+    "That forecast review changed before this decision was saved. The queue has been refreshed.",
+  forecast_model_gate_failed:
+    "The staged evidence no longer clears every promotion gate. No model was approved.",
+  forecast_model_release_pending:
+    "Forecast decisions are read-only until the reviewed database migration is applied.",
+  forecast_model_error:
+    "The forecast model decision could not be saved. No policy or forecast was changed.",
 };
 
 const forecastGateLabels: Record<string, string> = {
@@ -209,6 +244,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     stormSourceResult,
     crashSourceResult,
     forecastResult,
+    modelWeekOneResult,
+    modelHorizonResult,
   ] = await Promise.all([
     service
       .from("v_collision_insurer_alias_review_queue")
@@ -278,6 +315,20 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         "shop_id,forecast_horizon_weeks,approved_model_key,forecast_model_key,forecast_origin_week,forecast_week,source_latest_arrival_date,source_age_days,forecast_status,is_ready,readiness_status,generated_at",
       )
       .order("generated_at", { ascending: false, nullsFirst: false }),
+    service
+      .from("collision_forecast_model_registry")
+      .select(
+        "shop_id,source_shop_key,model_key,promotion_status,seasonal_baseline_mae,model_mae,mae_improvement_pct,holdout_start,holdout_end,interval_half_width,interval_validation_coverage_pct,evaluation_scope,evaluated_at",
+      )
+      .eq("promotion_status", "review")
+      .order("evaluated_at", { ascending: false }),
+    service
+      .from("collision_forecast_horizon_registry")
+      .select(
+        "shop_id,forecast_horizon_weeks,model_key,promotion_status,seasonal_baseline_mae,model_mae,mae_improvement_pct,holdout_start,holdout_end,interval_half_width,interval_validation_coverage_pct,evaluation_scope,evaluated_at",
+      )
+      .eq("promotion_status", "review")
+      .order("forecast_horizon_weeks", { ascending: true }),
   ]);
 
   const stormHealthUnavailable = isMissingReviewView(
@@ -301,7 +352,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     repairFeedResult.error ||
     (stormSourceResult.error && !stormHealthUnavailable) ||
     crashSourceResult.error ||
-    (forecastResult.error && !forecastHealthUnavailable)
+    (forecastResult.error && !forecastHealthUnavailable) ||
+    modelWeekOneResult.error ||
+    modelHorizonResult.error
   ) {
     throw new Error(
       aliasResult.error?.message ??
@@ -316,6 +369,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         stormSourceResult.error?.message ??
         crashSourceResult.error?.message ??
         forecastResult.error?.message ??
+        modelWeekOneResult.error?.message ??
+        modelHorizonResult.error?.message ??
         "Review queue failed",
     );
   }
@@ -480,9 +535,36 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const mappedShopIds = new Set(
     (mappedShopResult.data ?? []).map((row) => row.shop_id as string),
   );
-  const availableHubShops = (
-    (hubShopResult.data ?? []) as unknown as ShopDirectoryEntry[]
-  ).filter((shop) => !mappedShopIds.has(shop.id));
+  const hubShops = (hubShopResult.data ??
+    []) as unknown as ShopDirectoryEntry[];
+  const availableHubShops = hubShops.filter(
+    (shop) => !mappedShopIds.has(shop.id),
+  );
+  const modelHorizonReviews = (modelHorizonResult.data ??
+    []) as ForecastModelPolicy[];
+  const modelReviews = (
+    (modelWeekOneResult.data ?? []) as ForecastModelWeekOne[]
+  ).map((weekOne) => {
+    const policies = [
+      { ...weekOne, forecast_horizon_weeks: 1 },
+      ...modelHorizonReviews.filter(
+        (policy) => policy.shop_id === weekOne.shop_id,
+      ),
+    ].sort((a, b) => a.forecast_horizon_weeks - b.forecast_horizon_weeks);
+    const shop = hubShops.find((candidate) => candidate.id === weekOne.shop_id);
+
+    return {
+      shopId: weekOne.shop_id,
+      shopName: shop?.name ?? shop?.slug ?? weekOne.shop_id,
+      sourceShopKey: weekOne.source_shop_key,
+      policies,
+      complete:
+        policies.length === 4 &&
+        policies.every(
+          (policy, index) => policy.forecast_horizon_weeks === index + 1,
+        ),
+    };
+  });
   const requestedShopKey = searchValue(params.shop_source).toUpperCase();
   const selectedShop =
     shops.find((shop) => shop.source_shop_key === requestedShopKey) ??
@@ -610,6 +692,12 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
             className="font-medium text-primary underline-offset-4 hover:underline"
           >
             Shop connections · {shops.length} pending
+          </Link>
+          <Link
+            href="#forecast-model-review"
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Forecast models · {modelReviews.length} pending
           </Link>
           <Link
             href="#source-health-heading"
@@ -841,6 +929,182 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
             never connect locations from name similarity alone.
           </p>
         </div>
+      </section>
+
+      <section
+        id="forecast-model-review"
+        aria-labelledby="forecast-model-review-heading"
+        className="space-y-3"
+      >
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2
+              id="forecast-model-review-heading"
+              className="text-lg font-semibold"
+            >
+              Review forecast models
+            </h2>
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              Decide only after all four weekly horizons beat the shop&apos;s
+              52-week seasonal MAE and clear the held-out interval-coverage
+              gate. Approval registers model policy; it does not score or
+              publish a forecast.
+            </p>
+          </div>
+          <Badge variant={modelReviews.length ? "warning" : "secondary"}>
+            {modelReviews.length} pending
+          </Badge>
+        </div>
+
+        {modelReviews.length ? (
+          <div className="space-y-4">
+            {modelReviews.map((review) => (
+              <Card key={review.shopId}>
+                <CardHeader className="border-b border-border pb-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <CardTitle>{review.shopName}</CardTitle>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        FileMaker source {review.sourceShopKey} · staged for
+                        manual review
+                      </p>
+                    </div>
+                    <Badge
+                      variant={review.complete ? "warning" : "destructive"}
+                    >
+                      {review.complete
+                        ? "4 horizons ready"
+                        : "Evidence incomplete"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-5 pt-6">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {review.policies.map((policy) => (
+                      <div
+                        key={policy.forecast_horizon_weeks}
+                        className="rounded-lg border border-border p-4"
+                      >
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Forecast week {policy.forecast_horizon_weeks}
+                        </p>
+                        <p className="mt-1 font-heading font-semibold capitalize">
+                          {policy.model_key.replaceAll("_", " ")}
+                        </p>
+                        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                          MAE {policy.model_mae.toFixed(2)} vs seasonal{" "}
+                          {policy.seasonal_baseline_mae.toFixed(2)} ·{" "}
+                          {policy.mae_improvement_pct.toFixed(1)}% lower
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          80% range ±{policy.interval_half_width.toFixed(0)}
+                          repairs ·{" "}
+                          {policy.interval_validation_coverage_pct.toFixed(1)}%
+                          held-out coverage
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          Holdout {policy.holdout_start}–{policy.holdout_end}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <details className="rounded-md border border-border bg-secondary/30 p-3 text-xs leading-5 text-muted-foreground">
+                    <summary className="cursor-pointer font-heading font-semibold text-foreground">
+                      Evaluation scope
+                    </summary>
+                    <ul className="mt-2 space-y-2">
+                      {review.policies.map((policy) => (
+                        <li key={policy.forecast_horizon_weeks}>
+                          Week {policy.forecast_horizon_weeks}:{" "}
+                          {policy.evaluation_scope}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+
+                  {review.complete ? (
+                    <form
+                      action="/api/collision-intelligence/forecast-model-review"
+                      method="post"
+                      className="space-y-4 rounded-lg border border-border p-4"
+                    >
+                      <input
+                        type="hidden"
+                        name="shop_id"
+                        value={review.shopId}
+                      />
+                      <label className="block text-sm font-medium">
+                        Review notes
+                        <textarea
+                          name="review_notes"
+                          required
+                          minLength={20}
+                          maxLength={1000}
+                          rows={3}
+                          placeholder="Record the evidence reviewed and why these four policies should be approved or rejected."
+                          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                        />
+                      </label>
+                      <label className="flex items-start gap-2 text-sm leading-6">
+                        <input
+                          type="checkbox"
+                          name="evidence_confirmed"
+                          value="confirmed"
+                          required
+                          className="mt-1"
+                        />
+                        <span>
+                          I reviewed all four horizons and verified the seasonal
+                          MAE improvement, holdout window, and at least 80%
+                          held-out interval coverage.
+                        </span>
+                      </label>
+                      <div className="flex flex-wrap gap-3 border-t border-border pt-4">
+                        <button
+                          type="submit"
+                          name="decision"
+                          value="approve"
+                          className="rounded-md bg-primary px-4 py-2 font-heading text-sm font-medium text-primary-foreground"
+                        >
+                          Approve four models
+                        </button>
+                        <button
+                          type="submit"
+                          name="decision"
+                          value="reject"
+                          className="rounded-md border border-destructive/40 px-4 py-2 font-heading text-sm font-medium text-destructive"
+                        >
+                          Reject staged evidence
+                        </button>
+                      </div>
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        Both decisions are atomic and audited. Approval still
+                        requires a separate current forecast run; stale repair
+                        arrivals remain blocked.
+                      </p>
+                    </form>
+                  ) : (
+                    <p
+                      role="status"
+                      className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm"
+                    >
+                      Restage one complete set of weeks 1–4 before making a
+                      decision. No partial approval is allowed.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="pt-6 text-sm text-muted-foreground">
+              No four-horizon model evidence is waiting for review. Mapping,
+              evaluation, and staging remain separate audited steps.
+            </CardContent>
+          </Card>
+        )}
       </section>
 
       <section aria-labelledby="alias-review-heading" className="space-y-3">

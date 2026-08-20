@@ -136,8 +136,9 @@ Every displayed forecast must include:
    match, and approve the shop mapping. Name similarity alone is blocked.
 5. Run the read-only four-horizon evaluator.
 6. Stage passing evidence for superadmin review; staging does not approve.
-7. Approve each horizon only after inspecting baseline improvement, holdout
-   scope, and interval coverage.
+7. In **Data Quality & Matching → Review forecast models**, inspect the complete
+   four-horizon set, record substantive notes, and approve or reject it
+   atomically. Approval registers model policy but does not score or publish.
 8. Run the weekly scorer and confirm freshness/readiness before publication.
 9. Monitor actuals, MAE, WAPE, and interval coverage; review drift manually.
 
