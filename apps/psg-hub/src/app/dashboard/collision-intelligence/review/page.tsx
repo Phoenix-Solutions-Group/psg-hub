@@ -72,8 +72,14 @@ type ShopCandidate = {
   source_shop_key: string;
   source_shop_name: string;
   repair_orders: number;
+  first_arrival_date: string | null;
   repair_orders_2026: number;
   latest_arrival_date: string | null;
+  insured_repair_orders: number;
+  repair_value_cents: number;
+  insurer_count: number;
+  customer_zip_count: number;
+  quality_flagged_rows: number;
 };
 
 type RepairSourceHealth = {
@@ -194,7 +200,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     service
       .from("v_collision_filemaker_shop_summary")
       .select(
-        "source_shop_key,source_shop_name,repair_orders,repair_orders_2026,latest_arrival_date",
+        "source_shop_key,source_shop_name,repair_orders,first_arrival_date,repair_orders_2026,latest_arrival_date,insured_repair_orders,repair_value_cents,insurer_count,customer_zip_count,quality_flagged_rows",
       )
       .is("shop_id", null)
       .order("repair_orders_2026", { ascending: false })
@@ -383,6 +389,10 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const selectedForecastEvidence = selectedShop
     ? pilotForecastEvidence[selectedShop.source_shop_key]
     : null;
+  const selectedInsuredShare =
+    selectedShop && selectedShop.repair_orders
+      ? (selectedShop.insured_repair_orders / selectedShop.repair_orders) * 100
+      : 0;
   const shopSearch = selectedShop
     ? searchValue(params.shop_search).slice(0, 80)
     : "";
@@ -1152,6 +1162,36 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         : "Stale or missing"}
                     </Badge>
                   </div>
+                  <div className="mt-4 grid gap-4 border-t border-border pt-4 sm:grid-cols-2 lg:grid-cols-5">
+                    <ReviewMetric
+                      label="Insured repairs"
+                      value={`${selectedShop.insured_repair_orders.toLocaleString()} (${selectedInsuredShare.toFixed(1)}%)`}
+                    />
+                    <ReviewMetric
+                      label="Repair value"
+                      value={currency.format(
+                        selectedShop.repair_value_cents / 100,
+                      )}
+                    />
+                    <ReviewMetric
+                      label="Customer ZIPs"
+                      value={selectedShop.customer_zip_count.toLocaleString()}
+                    />
+                    <ReviewMetric
+                      label="Insurer labels"
+                      value={selectedShop.insurer_count.toLocaleString()}
+                    />
+                    <ReviewMetric
+                      label="Quality flags"
+                      value={selectedShop.quality_flagged_rows.toLocaleString()}
+                    />
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                    Coverage {selectedShop.first_arrival_date ?? "unknown"} to{" "}
+                    {selectedShop.latest_arrival_date ?? "unknown"}. These are
+                    privacy-safe repair-order aggregates—not insurer claim
+                    counts. Insurer labels remain subject to the review above.
+                  </p>
                 </div>
               ) : null}
 
