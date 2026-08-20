@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getDashboardAccess = vi.fn();
 const rpc = vi.fn();
+const maybeSingle = vi.fn();
+const eq = vi.fn(() => ({ maybeSingle }));
+const select = vi.fn(() => ({ eq }));
+const from = vi.fn(() => ({ select }));
 let user: { id: string } | null = null;
 
 vi.mock("@/lib/auth/shop-access", () => ({ getDashboardAccess }));
@@ -11,7 +15,7 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 vi.mock("@/lib/supabase/service", () => ({
-  createServiceClient: vi.fn(() => ({ rpc })),
+  createServiceClient: vi.fn(() => ({ from, rpc })),
 }));
 
 const { POST } =
@@ -31,6 +35,10 @@ beforeEach(() => {
   rpc
     .mockReset()
     .mockResolvedValue({ data: { mapping_status: "mapped" }, error: null });
+  from.mockClear();
+  select.mockClear();
+  eq.mockClear();
+  maybeSingle.mockReset();
   getDashboardAccess.mockReset();
 });
 
@@ -90,5 +98,38 @@ describe("POST collision shop mapping review", () => {
       p_actor_profile_id: "superadmin-1",
       p_review_notes: "Confirmed legal operating identity from signed records.",
     });
+  });
+
+  it("blocks a known location from a Hub shop without its verified address", async () => {
+    user = { id: "superadmin-1" };
+    getDashboardAccess.mockResolvedValue({
+      role: "psg_superadmin",
+      shopIds: [],
+    });
+    maybeSingle.mockResolvedValue({
+      data: {
+        address_street: null,
+        address_locality: null,
+        address_region: null,
+        address_postal_code: null,
+      },
+      error: null,
+    });
+
+    const response = await POST(
+      request({
+        source_shop_key: "PS229",
+        shop_id: "11111111-1111-4111-8111-111111111111",
+        review_notes: "Confirmed legal operating identity from signed records.",
+        identity_confirmed: "confirmed",
+      }),
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toContain(
+      "result=mapping_location_mismatch",
+    );
+    expect(response.headers.get("location")).toContain("shop_source=PS229");
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

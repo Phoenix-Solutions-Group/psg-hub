@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  matchesVerifiedShopLocation,
   normalizeShopMatchText,
   rankShopMatches,
   type ShopDirectoryEntry,
@@ -10,6 +11,7 @@ const shops: ShopDirectoryEntry[] = [
     id: "collision-center",
     name: "Tracy's Collision Center",
     slug: "tracys-collision-center",
+    address_street: null,
     address_locality: null,
     address_region: null,
     address_postal_code: null,
@@ -19,15 +21,17 @@ const shops: ShopDirectoryEntry[] = [
     id: "body-shop",
     name: "Tracy's Body Shop",
     slug: "tracys-body-shop",
+    address_street: "1500 Center Park Rd",
     address_locality: "Lincoln",
     address_region: "NE",
-    address_postal_code: "68502",
+    address_postal_code: "68512",
     client: { name: "Tracy's Body Shop" },
   },
   {
     id: "wallace",
     name: "Wallace Collision Center",
     slug: "wallace-collision-center",
+    address_street: "1010 N Main St",
     address_locality: "Ottawa",
     address_region: "KS",
     address_postal_code: "66067",
@@ -79,5 +83,10 @@ describe("shop identity matching", () => {
 
     expect(match.shop.id).toBe("wallace");
     expect(match.score).toBeGreaterThanOrEqual(80);
+  });
+
+  it("requires the verified Tracy's street and ZIP", () => {
+    expect(matchesVerifiedShopLocation("PS229", shops[0])).toBe(false);
+    expect(matchesVerifiedShopLocation("PS229", shops[1])).toBe(true);
   });
 });

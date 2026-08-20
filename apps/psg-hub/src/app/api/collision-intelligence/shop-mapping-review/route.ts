@@ -3,6 +3,10 @@ import { z } from "zod";
 import { getDashboardAccess } from "@/lib/auth/shop-access";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import {
+  matchesVerifiedShopLocation,
+  shopIdentityEvidence,
+} from "@/app/dashboard/collision-intelligence/review/shop-match";
 
 const destination = "/dashboard/collision-intelligence/review";
 const mappingSchema = z.object({
@@ -17,9 +21,17 @@ function text(formData: FormData, name: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function redirectToQueue(request: Request, result: string) {
+function redirectToQueue(
+  request: Request,
+  result: string,
+  sourceShopKey?: string,
+) {
   const url = new URL(destination, request.url);
   url.searchParams.set("result", result);
+  if (sourceShopKey) {
+    url.searchParams.set("shop_source", sourceShopKey);
+    url.hash = "shop-match";
+  }
   return NextResponse.redirect(url, 303);
 }
 
@@ -67,6 +79,33 @@ export async function POST(request: Request) {
   }
 
   const service = createServiceClient();
+  if (shopIdentityEvidence[parsed.data.sourceShopKey]) {
+    const targetShop = await service
+      .from("shops")
+      .select(
+        "address_street,address_locality,address_region,address_postal_code",
+      )
+      .eq("id", parsed.data.shopId)
+      .maybeSingle();
+    if (targetShop.error) {
+      console.error(
+        "[collision-shop-mapping-review] target lookup failed:",
+        targetShop.error.message,
+      );
+      return redirectToQueue(request, "mapping_error");
+    }
+    if (
+      !targetShop.data ||
+      !matchesVerifiedShopLocation(parsed.data.sourceShopKey, targetShop.data)
+    ) {
+      return redirectToQueue(
+        request,
+        "mapping_location_mismatch",
+        parsed.data.sourceShopKey,
+      );
+    }
+  }
+
   const { error } = await service.rpc("approve_collision_shop_mapping", {
     p_source_system: "filemaker_repair_customer",
     p_source_shop_key: parsed.data.sourceShopKey,

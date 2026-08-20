@@ -6,7 +6,12 @@ import { getDashboardAccess } from "@/lib/auth/shop-access";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isForecastArrivalFresh, isMissingReviewView } from "./source-health";
-import { rankShopMatches, type ShopDirectoryEntry } from "./shop-match";
+import {
+  matchesVerifiedShopLocation,
+  rankShopMatches,
+  shopIdentityEvidence,
+  type ShopDirectoryEntry,
+} from "./shop-match";
 
 type Props = {
   searchParams: Promise<{
@@ -133,38 +138,9 @@ const notices: Record<string, string> = {
     "Shop mapping approved. Its repair history is now available to authorized members of that PSG Hub shop.",
   mapping_conflict:
     "The source or target shop was mapped by someone else. The queue has been refreshed.",
+  mapping_location_mismatch:
+    "That Hub shop does not have the verified address for this imported location. No mapping was changed.",
   mapping_error: "The shop mapping could not be saved. No mapping was changed.",
-};
-
-// ponytail: pilot evidence; move to governed identity records when review coverage expands.
-const shopIdentityEvidence: Record<
-  string,
-  { address: string; checkedAt: string; sources: Array<[string, string]> }
-> = {
-  PS228: {
-    address: "4538 Cornhusker Hwy, Lincoln, NE 68504",
-    checkedAt: "Aug 20, 2026",
-    sources: [
-      [
-        "BBB business profile",
-        "https://www.bbb.org/us/ne/lincoln/profile/auto-body-repair-and-painting/tracys-collision-center-0714-207000414",
-      ],
-      [
-        "GM Collision Repair Network",
-        "https://www.gmparts.com/content/dam/gmparts/na/us/en/index/technical-resources/collision-repair-network/02-pdfs/GM_CRN_CT6_Specialty%20Active_8.23.pdf",
-      ],
-    ],
-  },
-  PS229: {
-    address: "1500 Center Park Rd, Lincoln, NE 68512",
-    checkedAt: "Aug 20, 2026",
-    sources: [
-      [
-        "BBB business profile",
-        "https://www.bbb.org/us/ne/lincoln/profile/auto-body-repair-and-painting/tracys-collision-center-0714-207000414/addressId/70387",
-      ],
-    ],
-  },
 };
 
 export default async function CollisionDataReviewPage({ searchParams }: Props) {
@@ -218,7 +194,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     service
       .from("shops")
       .select(
-        "id,name,slug,address_locality,address_region,address_postal_code,client:clients(name)",
+        "id,name,slug,address_street,address_locality,address_region,address_postal_code,client:clients(name)",
       )
       .order("name", { ascending: true }),
     service
@@ -403,8 +379,17 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         selectedShop.source_shop_name,
         availableHubShops,
         shopSearch,
-      )
+      ).map((match) => ({
+        ...match,
+        locationVerified: matchesVerifiedShopLocation(
+          selectedShop.source_shop_key,
+          match.shop,
+        ),
+      }))
     : [];
+  const selectableShopMatches = shopMatches.filter(
+    (match) => match.locationVerified,
+  );
   const repairSource = (repairSourceResult.data?.[0] ??
     null) as RepairSourceHealth | null;
   const repairFeeds = (repairFeedResult.data ?? []) as RepairFeedHealth[];
@@ -1114,6 +1099,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                       key={shop.id}
                       value={[
                         shop.name ?? shop.slug ?? shop.id,
+                        shop.address_street,
                         shop.address_locality,
                         shop.address_region,
                         shop.address_postal_code,
@@ -1166,7 +1152,10 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     Public location evidence
                   </p>
                   <p className="mt-1 text-sm text-foreground/75">
-                    {selectedShopEvidence.address}
+                    {selectedShopEvidence.street},{" "}
+                    {selectedShopEvidence.locality},{" "}
+                    {selectedShopEvidence.region}{" "}
+                    {selectedShopEvidence.postalCode}
                   </p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     Checked {selectedShopEvidence.checkedAt}. Sources:{" "}
@@ -1189,7 +1178,19 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                 </div>
               ) : null}
 
-              {selectedShop && shopMatches.length ? (
+              {selectedShop &&
+              shopMatches.some((match) => !match.locationVerified) ? (
+                <div
+                  role="note"
+                  className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm leading-6"
+                >
+                  Name-only matches with a missing or different street address
+                  are excluded. Update or create the exact Hub location before
+                  connecting these repair records.
+                </div>
+              ) : null}
+
+              {selectedShop && selectableShopMatches.length ? (
                 <form
                   action="/api/collision-intelligence/shop-mapping-review"
                   method="post"
@@ -1211,8 +1212,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                       <option value="" disabled>
                         Select a candidate after verifying its identity
                       </option>
-                      {shopMatches.map((match) => {
+                      {selectableShopMatches.map((match) => {
                         const location = [
+                          match.shop.address_street,
                           match.shop.address_locality,
                           match.shop.address_region,
                           match.shop.address_postal_code,
@@ -1237,7 +1239,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     </span>
                   </label>
 
-                  {shopMatches.some((match) => match.locationWarning) ? (
+                  {selectableShopMatches.some(
+                    (match) => match.locationWarning,
+                  ) ? (
                     <div
                       role="note"
                       className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm leading-6"
@@ -1288,9 +1292,11 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                   role="status"
                   className="rounded-md border border-border bg-secondary/40 p-4 text-sm leading-6 text-muted-foreground"
                 >
-                  {shopSearch
-                    ? `No available Hub shops matched “${shopSearch}”. Try a shorter name, city, state, or ZIP.`
-                    : "No plausible name match was found. Search the Hub directory before creating a new location."}
+                  {shopMatches.length
+                    ? "No available Hub shop has the verified street address for this imported location. Create or update the exact Hub location first."
+                    : shopSearch
+                      ? `No available Hub shops matched “${shopSearch}”. Try a shorter name, city, state, or ZIP.`
+                      : "No plausible name match was found. Search the Hub directory before creating a new location."}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">

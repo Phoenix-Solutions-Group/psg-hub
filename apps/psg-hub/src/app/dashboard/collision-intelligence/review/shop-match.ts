@@ -2,10 +2,54 @@ export type ShopDirectoryEntry = {
   id: string;
   name: string | null;
   slug: string | null;
+  address_street: string | null;
   address_locality: string | null;
   address_region: string | null;
   address_postal_code: string | null;
   client: { name: string } | null;
+};
+
+export type ShopIdentityEvidence = {
+  street: string;
+  locality: string;
+  region: string;
+  postalCode: string;
+  checkedAt: string;
+  sources: Array<[string, string]>;
+};
+
+// ponytail: two verified pilot locations; move to governed identity rows when review coverage expands.
+export const shopIdentityEvidence: Record<string, ShopIdentityEvidence> = {
+  PS228: {
+    street: "4538 Cornhusker Hwy",
+    locality: "Lincoln",
+    region: "NE",
+    postalCode: "68504",
+    checkedAt: "Aug 20, 2026",
+    sources: [
+      [
+        "BBB business profile",
+        "https://www.bbb.org/us/ne/lincoln/profile/auto-body-repair-and-painting/tracys-collision-center-0714-207000414",
+      ],
+      [
+        "GM Collision Repair Network",
+        "https://www.gmparts.com/content/dam/gmparts/na/us/en/index/technical-resources/collision-repair-network/02-pdfs/GM_CRN_CT6_Specialty%20Active_8.23.pdf",
+      ],
+    ],
+  },
+  PS229: {
+    street: "1500 Center Park Rd",
+    locality: "Lincoln",
+    region: "NE",
+    postalCode: "68512",
+    checkedAt: "Aug 20, 2026",
+    sources: [
+      [
+        "BBB business profile",
+        "https://www.bbb.org/us/ne/lincoln/profile/auto-body-repair-and-painting/tracys-collision-center-0714-207000414/addressId/70387",
+      ],
+    ],
+  },
 };
 
 export type RankedShopMatch = {
@@ -53,6 +97,30 @@ export function normalizeShopMatchText(value: string) {
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+export function matchesVerifiedShopLocation(
+  sourceShopKey: string,
+  shop: Pick<
+    ShopDirectoryEntry,
+    | "address_street"
+    | "address_locality"
+    | "address_region"
+    | "address_postal_code"
+  >,
+) {
+  const evidence = shopIdentityEvidence[sourceShopKey];
+  if (!evidence) return true;
+  return (
+    normalizeShopMatchText(shop.address_street ?? "") ===
+      normalizeShopMatchText(evidence.street) &&
+    normalizeShopMatchText(shop.address_locality ?? "") ===
+      normalizeShopMatchText(evidence.locality) &&
+    normalizeShopMatchText(shop.address_region ?? "") ===
+      normalizeShopMatchText(evidence.region) &&
+    normalizeShopMatchText(shop.address_postal_code ?? "") ===
+      normalizeShopMatchText(evidence.postalCode)
+  );
 }
 
 function tokenSet(value: string) {
@@ -124,6 +192,7 @@ function directorySearchScore(query: string, shop: ShopDirectoryEntry) {
       shop.name,
       shop.client?.name,
       shop.slug,
+      shop.address_street,
       shop.address_locality,
       shop.address_region,
       shop.address_postal_code,
