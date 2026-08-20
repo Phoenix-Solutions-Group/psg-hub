@@ -47,13 +47,18 @@
 - The two legacy collision example RPCs have fixed-search-path, service-role-only
   hardening staged and rollback-tested. This is a third pending collision migration;
   it is not applied to production.
+- A fourth pending migration corrects weather coverage semantics. The live view
+  currently treats a ZIP-month with no storm event as missing coverage and averages
+  17.15% for the mapped shop. Loaded ZIP boundaries cover 99.36% of its historical
+  repair volume; the corrected view reports that geographic coverage while retaining
+  zero exposure for event-free months. Production remains unchanged.
 
 ## Requirement status
 
 | Goal requirement                                                    | Status                                             | Current evidence                                                                                                                                                                                                                                                              | Remaining work                                                                                                                                           |
 | ------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Clean, documented, privacy-safe data                                | First manual refresh reconciled; recurring operation gated | 330,533 FileMaker facts reconcile to 330,535 parsed rows and two recorded rejections; direct PII and raw identifiers are absent; the restricted export contains exactly 15 approved fields; hardened service is staged with timer disabled                             | Resolve the duplicate backup schedule, name an alert owner, prove restore recovery, apply storm provenance reconciliation, then separately approve recurring refresh |
-| Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; governed review workflow implemented  | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; carrier aliases and source-shop mappings require explicit superadmin approval and atomic audit evidence; 411,208 KDOT rows count-verified; 99.93% ZIP match                             | Review the highest-volume insurer candidates and approve additional shop mappings only after identity confirmation                                       |
+| Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; weather correction staged             | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; 411,208 KDOT rows are count-verified with a 99.93% crash ZIP match; the corrected weather definition measures 99.36% repair-weighted boundary coverage rather than event presence | Apply the reviewed weather migration; review insurer candidates and approve shop mappings only after identity confirmation                              |
 | Operational dashboard                                               | Authenticated branch-preview QA passed; production pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build plus authenticated desktop/mobile Chromium checks pass | Release only after the matching migrations are approved, then run a production authenticated smoke test                                                 |
 | ZIP-level weather and market alerts                                 | Review queue built                                 | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; daily cron configured locally; notifications explicitly off                                                                                                                                    | Deploy/smoke-test the cron, approve owner and lifecycle, and measure false positives before authorizing notifications                                    |
 | Weekly forecasts outperform a seasonal baseline                     | Multi-shop historical evidence; publication gated  | Trailing four-week beats seasonal across four horizons in the current-shop segment; independently promoted shop/horizon policies; current run correctly writes four `stale_source` rows with no prediction; 13-observation live scorecard is active                           | Restore current repair ingest, accrue observed forecasts, review live error/coverage, and approve models per mapped shop                                 |
@@ -92,13 +97,18 @@
   Seven SPC batches reconcile; the 3,986-event August 1–16 batch currently lacks its
   source-ledger row. The branch migration repairs that row and makes future drift fail
   cron health, but production remains unchanged.
-- 135 of 143 valid pilot customer ZIPs have some weather history.
-- Weather metrics are historical-repair-weighted and include coverage percentages.
+- 137 of 143 valid pilot customer ZIPs have loaded boundaries, covering 99.36% of
+  historical repair volume. 135 ZIPs have at least one observed storm-event month.
+- The live view's 17.15% average incorrectly measures monthly event presence as
+  weather coverage. The staged correction uses loaded ZIP boundaries for coverage,
+  treats absent event rows as zero observed events, and preserves the weighted event
+  scores. Its synthetic local transaction passes at 75% boundary coverage with one
+  covered zero-event ZIP and one uncovered ZIP.
 - The latest preliminary SPC report is 2026-08-19.
 - `weather_cache` is empty and is not a current dashboard or forecast input. Severe
   weather analysis uses governed storm-event/ZIP data; average temperature and
   precipitation analysis remains a separate future data-source decision.
-- The 72-hour customer-ZIP review view currently returns four candidates, including
+- The 72-hour customer-ZIP review view currently returns six candidates, including
   one high signal. This count changes as the rolling window advances.
 
 ### Crash data
@@ -248,14 +258,14 @@
    relocate the failing duplicate 3:00 AM backup, prove backup/restore recovery, and
    name the person or channel that receives refresh failures. Keep the daily refresh
    timer disabled until those controls are approved and verified.
-2. After separate production approval, apply the storm source-reconciliation and
-   forecast-readiness migrations, then deploy the matching cron health checks. Apply
-   the collision example-function hardening in the same controlled release. Because
+2. After separate production approval, apply the storm source-reconciliation,
+   forecast-readiness, example-function hardening, and weather-coverage corrections,
+   then deploy the matching cron health checks. Because
    the shared migration ledger is divergent, use
    individually reviewed migration execution after approval rather than `db push`,
    `migration repair`, or `db pull`. Confirm every NCEI/SPC batch is reconciled, every
-   mapped shop/horizon has an explainable state, and browser roles cannot read the
-   service-only views or example RPCs.
+   mapped shop/horizon has an explainable state, weather coverage equals loaded
+   boundary coverage, and browser roles cannot read the service-only views or RPCs.
 3. Use `/dashboard/collision-intelligence/review` as a superadmin to review the
    highest-volume insurer aliases and source-shop mappings. Mapping approval requires
    target selection, written identity evidence, and explicit confirmation, and it is

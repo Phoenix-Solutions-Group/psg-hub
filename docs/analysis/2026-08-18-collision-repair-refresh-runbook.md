@@ -211,6 +211,7 @@ approval, apply these reviewed files in order through the migration runner:
 1. `20260819195103_collision_storm_source_reconciliation.sql`
 2. `20260819201319_collision_forecast_readiness.sql`
 3. `20260819210842_harden_collision_example_functions.sql`
+4. `20260820215207_fix_collision_weather_coverage.sql`
 
 The current production preconditions are: 3,986 provisional events and no matching
 source-ledger row for `noaa_spc_preliminary-20260801-20260817`; neither new view exists;
@@ -226,12 +227,15 @@ Postflight must prove:
    only `service_role` reads;
 4. both example RPCs have `search_path=pg_catalog, public`, deny execution to `public`,
    `anon`, and `authenticated`, and allow `service_role`; and
-5. the Supabase security advisor no longer reports the two collision example-function
+5. weather coverage equals repair volume in ZIPs with loaded boundaries while missing
+   ZIP-month event rows contribute zero exposure; and
+6. the Supabase security advisor no longer reports the two collision example-function
    search-path warnings.
 
-The three-file release was applied together in a local transaction and rolled back.
-Both views passed their grant checks and the readiness view returned the four expected
-pilot horizons. The local database ledger itself remains intentionally unrepaired.
+The first three files were applied together in a local transaction and rolled back.
+The weather correction passed a separate synthetic local transaction. All views pass
+their grant checks, and the readiness view returned the four expected pilot horizons.
+The local database ledger itself remains intentionally unrepaired.
 
 ## Schedule and monitoring
 
