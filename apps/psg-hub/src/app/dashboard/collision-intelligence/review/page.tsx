@@ -143,6 +143,15 @@ const notices: Record<string, string> = {
   mapping_error: "The shop mapping could not be saved. No mapping was changed.",
 };
 
+// ponytail: read-only evaluation snapshot; stage governed registry rows only after mapping.
+const pilotForecastEvidence: Record<
+  string,
+  { improvement: string; interval: string }
+> = {
+  PS228: { improvement: "13.9–16.6%", interval: "±4–6 repair orders" },
+  PS229: { improvement: "7.1–23.0%", interval: "±7–8 repair orders" },
+};
+
 export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const supabase = await createClient();
   const {
@@ -370,6 +379,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     null;
   const selectedShopEvidence = selectedShop
     ? shopIdentityEvidence[selectedShop.source_shop_key]
+    : null;
+  const selectedForecastEvidence = selectedShop
+    ? pilotForecastEvidence[selectedShop.source_shop_key]
     : null;
   const shopSearch = selectedShop
     ? searchValue(params.shop_search).slice(0, 80)
@@ -1174,6 +1186,33 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     ))}
                     . Use this to distinguish North from South, then confirm the
                     PSG agreement and exact Hub location before saving.
+                  </p>
+                </div>
+              ) : null}
+
+              {selectedForecastEvidence ? (
+                <div
+                  role="note"
+                  className="rounded-lg border border-success/40 bg-success/10 p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-heading font-semibold">
+                      Pre-mapping forecast evaluation
+                    </p>
+                    <Badge variant="success">Passed 4 of 4 horizons</Badge>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-foreground/75">
+                    The selected models improved weekly-arrival MAE by{" "}
+                    {selectedForecastEvidence.improvement} versus the 52-week
+                    seasonal baseline. Prediction intervals are approximately{" "}
+                    {selectedForecastEvidence.interval}.
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Read-only evaluation: 52-week calibration and chronological
+                    holdout through Aug 10, 2026; held-out-shop interval
+                    coverage was 80.1–83.7%. This evidence does not approve or
+                    publish a forecast. A confirmed shop mapping and separate
+                    model review are still required.
                   </p>
                 </div>
               ) : null}
