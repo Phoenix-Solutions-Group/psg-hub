@@ -679,7 +679,7 @@ def evaluate_direct_shop_horizons(
 
 
 def build_promotion_candidate(
-    result: dict[str, Any], source_shop_key: str
+    result: dict[str, Any], source_shop_key: str, shop_member_count: int | None
 ) -> dict[str, Any]:
     horizons = []
     mapped = False
@@ -765,13 +765,16 @@ def build_promotion_candidate(
     evaluation_passed = len(horizons) == 4 and all(
         horizon["promotion_ready"] for horizon in horizons
     )
+    shop_audience_ready = mapped and (shop_member_count or 0) > 0
     return {
         "scope": "filemaker_promotion_candidate",
         "source_shop_key": source_shop_key,
         "source_shop_name": source_shop_name,
         "mapped": mapped,
+        "shop_member_count": shop_member_count,
+        "shop_audience_ready": shop_audience_ready,
         "evaluation_passed": evaluation_passed,
-        "review_staging_ready": evaluation_passed and mapped,
+        "review_staging_ready": evaluation_passed and shop_audience_ready,
         "promotion_status": "review",
         "horizons": horizons,
         "limitation": (
@@ -791,7 +794,8 @@ def stage_promotion_review(
 ) -> dict[str, Any]:
     if not candidate["review_staging_ready"]:
         raise ValueError(
-            "Review staging requires four passing horizons and a confirmed shop mapping"
+            "Review staging requires four passing horizons, a confirmed shop mapping, "
+            "and at least one customer shop member"
         )
     try:
         actor = str(uuid.UUID(actor_profile_id or ""))
@@ -968,9 +972,15 @@ def print_promotion_candidate_markdown(result: dict[str, Any]) -> None:
     print(f"# {result['source_shop_name']} Forecast Promotion Candidate")
     print()
     print(
-        "Evaluation: **{}**; shop mapping: **{}**; review staging: **{}**.".format(
+        "Evaluation: **{}**; shop mapping: **{}**; shop audience: **{}**; "
+        "review staging: **{}**.".format(
             "passed" if result["evaluation_passed"] else "blocked",
             "confirmed" if result["mapped"] else "pending",
+            (
+                f"{result['shop_member_count']} assigned"
+                if result["shop_member_count"] is not None
+                else "pending mapping"
+            ),
             "ready" if result["review_staging_ready"] else "not ready",
         )
     )
@@ -1071,26 +1081,36 @@ def self_test() -> None:
     assert current_segment[0]["repair_orders_lag_52_weeks"] is None
     assert current_segment[52]["repair_orders_lag_52_weeks"] == 20
     assert evaluate_direct_shop(gapped, 52, 52) is None
-    candidate = build_promotion_candidate(
-        evaluate_filemaker_horizons(
-            weekly
-            + [
-                {
-                    **row,
-                    "source_shop_key": "TEST2",
-                    "source_shop_name": "Test Shop 2",
-                }
-                for row in weekly
-            ],
-            holdout_weeks=10,
-            calibration_weeks=10,
-            horizons=4,
-        ),
-        "TEST",
+    promotion_evaluation = evaluate_filemaker_horizons(
+        weekly
+        + [
+            {
+                **row,
+                "source_shop_key": "TEST2",
+                "source_shop_name": "Test Shop 2",
+            }
+            for row in weekly
+        ],
+        holdout_weeks=10,
+        calibration_weeks=10,
+        horizons=4,
     )
+    candidate = build_promotion_candidate(promotion_evaluation, "TEST", None)
     assert candidate["evaluation_passed"] is True
     assert candidate["review_staging_ready"] is False
     assert len(candidate["horizons"]) == 4
+    mapped_evaluation = json.loads(json.dumps(promotion_evaluation))
+    for horizon_result in mapped_evaluation["horizons"].values():
+        for shop in horizon_result["shops"]:
+            if shop["source_shop_key"] == "TEST":
+                shop["mapped"] = True
+    empty_audience = build_promotion_candidate(mapped_evaluation, "TEST", 0)
+    assert empty_audience["mapped"] is True
+    assert empty_audience["shop_audience_ready"] is False
+    assert empty_audience["review_staging_ready"] is False
+    assert build_promotion_candidate(mapped_evaluation, "TEST", 1)[
+        "review_staging_ready"
+    ] is True
     try:
         stage_promotion_review(
             "https://example.supabase.co",
@@ -1186,11 +1206,35 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 4 if promotion_candidate else args.forecast_horizons,
                 args.latest_week_cutoff,
             )
-            candidate = (
-                build_promotion_candidate(result, promotion_candidate)
-                if promotion_candidate
-                else result
-            )
+            candidate = result
+            if promotion_candidate:
+                mapped_shop_id = next(
+                    (
+                        row.get("shop_id")
+                        for row in rows
+                        if row["source_shop_key"] == promotion_candidate
+                        and row.get("shop_id")
+                    ),
+                    None,
+                )
+                shop_member_count = None
+                if mapped_shop_id:
+                    shop_rows = fetch_rows(
+                        url,
+                        key,
+                        "shops",
+                        {
+                            "select": "id,members:shop_users(count)",
+                            "id": f"eq.{mapped_shop_id}",
+                            "limit": "1",
+                        },
+                    )
+                    if len(shop_rows) != 1:
+                        raise ValueError("Mapped Hub shop is unavailable")
+                    shop_member_count = int(shop_rows[0]["members"][0]["count"])
+                candidate = build_promotion_candidate(
+                    result, promotion_candidate, shop_member_count
+                )
             return (
                 stage_promotion_review(
                     url,
