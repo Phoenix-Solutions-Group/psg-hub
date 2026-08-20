@@ -33,21 +33,19 @@ export default async function AdsPage({ searchParams }: Props) {
     redirect("/login");
   }
 
+  const { shops, activeShopId } = await getActiveShopContext(user.id);
   const shopId = params.shop_id;
   if (!shopId) {
-    const { activeShopId } = await getActiveShopContext(user.id);
     if (!activeShopId) {
       redirect("/dashboard");
     }
     redirect(`/dashboard/ads?shop_id=${activeShopId}`);
   }
 
-  const { data: membership } = await supabase
-    .from("shop_users")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("shop_id", shopId)
-    .maybeSingle();
+  // getActiveShopContext enumerates memberships with the service client, then
+  // constrains selection to those memberships. shop_users is RLS default-deny,
+  // so querying it again with the user client incorrectly rejects valid owners.
+  const membership = shops.find((shop) => shop.id === shopId);
 
   if (!membership) {
     redirect("/dashboard");

@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({ redirect }));
 type User = { id: string } | null;
 let mockUser: User = null;
 let mockActiveShopId: string | null = null;
-let mockExplicitMembership: { role: string } | null = null;
+let mockShops: Array<{ id: string; name: string; role: string }> = [];
 let mockTierMeets = false;
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -28,7 +28,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/shop/context", () => ({
   getActiveShopContext: vi.fn(async () => ({
-    shops: [],
+    shops: mockShops,
     activeShopId: mockActiveShopId,
   })),
 }));
@@ -47,7 +47,7 @@ beforeEach(() => {
   redirect.mockClear();
   mockUser = { id: "u1" };
   mockActiveShopId = null;
-  mockExplicitMembership = null;
+  mockShops = [];
   mockTierMeets = false;
 });
 
@@ -70,7 +70,7 @@ describe("AdsPage shop resolution", () => {
   });
 
   it("accepts an explicit member shop without redirecting", async () => {
-    mockExplicitMembership = { role: "owner" };
+    mockShops = [{ id: "shopB", name: "Riverside Collision", role: "owner" }];
     const result = await run("shopB");
     expect(result).toBeTruthy();
     expect(redirect).not.toHaveBeenCalled();
