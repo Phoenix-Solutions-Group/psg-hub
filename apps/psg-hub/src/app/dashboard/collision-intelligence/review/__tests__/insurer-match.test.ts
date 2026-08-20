@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { findInsurerNameMatches } from "../insurer-match";
+import {
+  findInsurerNameMatches,
+  includeFocusedCandidate,
+} from "../insurer-match";
 
 const insurers = [
   { label: "Progressive Insurance Company", value: "progressive" },
@@ -18,6 +21,21 @@ describe("insurer name matching", () => {
   it("matches a partial company name and returns no unrelated names", () => {
     expect(findInsurerNameMatches(insurers, "Progressive")).toEqual([
       insurers[0],
+    ]);
+  });
+
+  it("keeps a requested candidate visible outside the ranked queue", () => {
+    const ranked = [
+      { source_label_normalized: "progressive", review_status: "candidate" },
+    ];
+    const focused = {
+      source_label_normalized: "u s a a",
+      review_status: "candidate",
+    };
+
+    expect(includeFocusedCandidate(ranked, focused)).toEqual([
+      focused,
+      ...ranked,
     ]);
   });
 });

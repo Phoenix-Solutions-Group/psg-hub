@@ -5,7 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardAccess } from "@/lib/auth/shop-access";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { findInsurerNameMatches } from "./insurer-match";
+import {
+  findInsurerNameMatches,
+  includeFocusedCandidate,
+} from "./insurer-match";
 import {
   buildForecastReadinessFallback,
   isForecastArrivalFresh,
@@ -34,6 +37,8 @@ type Props = {
 type AliasCandidate = {
   source_label_normalized: string;
   source_label_name: string;
+  review_status: "candidate" | "approved" | "rejected";
+  canonical_insurer_name: string | null;
   source_shop_count: number;
   repair_orders: number;
   repair_value_cents: number;
@@ -198,8 +203,11 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   if (access.role !== "psg_superadmin") redirect("/dashboard");
 
   const service = createServiceClient();
+  const params = await searchParams;
+  const searchSource = searchValue(params.search_source);
   const [
     aliasResult,
+    focusedAliasResult,
     approvedInsurerResult,
     insuranceCompanyResult,
     shopResult,
@@ -210,16 +218,25 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     stormSourceResult,
     crashSourceResult,
     forecastResult,
-    params,
   ] = await Promise.all([
     service
       .from("v_collision_insurer_alias_review_queue")
       .select(
-        "source_label_normalized,source_label_name,source_shop_count,repair_orders,repair_value_cents,latest_arrival_date",
+        "source_label_normalized,source_label_name,review_status,canonical_insurer_name,source_shop_count,repair_orders,repair_value_cents,latest_arrival_date",
+        { count: "exact" },
       )
       .eq("review_status", "candidate")
       .order("repair_orders", { ascending: false })
       .limit(20),
+    searchSource
+      ? service
+          .from("v_collision_insurer_alias_review_queue")
+          .select(
+            "source_label_normalized,source_label_name,review_status,canonical_insurer_name,source_shop_count,repair_orders,repair_value_cents,latest_arrival_date",
+          )
+          .eq("source_label_normalized", searchSource)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
     service
       .from("collision_insurer_alias_reviews")
       .select("canonical_insurer_key,canonical_insurer_name")
@@ -270,7 +287,6 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         "shop_id,forecast_horizon_weeks,approved_model_key,forecast_model_key,forecast_origin_week,forecast_week,source_latest_arrival_date,source_age_days,forecast_status,is_ready,readiness_status,generated_at",
       )
       .order("generated_at", { ascending: false, nullsFirst: false }),
-    searchParams,
   ]);
 
   const stormHealthUnavailable = isMissingReviewView(
@@ -284,6 +300,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
 
   if (
     aliasResult.error ||
+    focusedAliasResult.error ||
     approvedInsurerResult.error ||
     insuranceCompanyResult.error ||
     shopResult.error ||
@@ -297,6 +314,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   ) {
     throw new Error(
       aliasResult.error?.message ??
+        focusedAliasResult.error?.message ??
         approvedInsurerResult.error?.message ??
         insuranceCompanyResult.error?.message ??
         shopResult.error?.message ??
@@ -360,8 +378,10 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     }
   }
 
-  const aliases = (aliasResult.data ?? []) as AliasCandidate[];
-  const searchSource = searchValue(params.search_source);
+  const rankedAliases = (aliasResult.data ?? []) as AliasCandidate[];
+  const focusedAlias = (focusedAliasResult.data ??
+    null) as AliasCandidate | null;
+  const aliases = includeFocusedCandidate(rankedAliases, focusedAlias);
   const requestedSearchAlias = aliases.find(
     (alias) => alias.source_label_normalized === searchSource,
   );
@@ -453,6 +473,13 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       existing: findInsurerNameMatches(insurerOptions, matchQuery),
     };
   });
+  const activeAliasReviewItem = searchSource
+    ? aliasReviewItems.find(
+        ({ alias }) => alias.source_label_normalized === searchSource,
+      )
+    : aliasReviewItems[0];
+  const shownAliasItems = activeAliasReviewItem ? [activeAliasReviewItem] : [];
+  const aliasReviewCount = aliasResult.count ?? aliases.length;
   const shops = (shopResult.data ?? []) as ShopCandidate[];
   const featuredShops = shops.slice(0, 8).map((shop) => ({
     ...shop,
@@ -573,6 +600,29 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
             counts.
           </p>
         </div>
+        <nav
+          aria-label="Data review sections"
+          className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-y border-border py-3 text-sm"
+        >
+          <Link
+            href="#alias-review-heading"
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Insurer names · {aliasReviewCount} pending
+          </Link>
+          <Link
+            href="#shop-review-heading"
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Shop connections · {shops.length} pending
+          </Link>
+          <Link
+            href="#source-health-heading"
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Data feed status
+          </Link>
+        </nav>
       </div>
 
       {notice ? (
@@ -802,16 +852,17 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="alias-review-heading" className="text-lg font-semibold">
-              Review imported insurer names
+              Match insurer names
             </h2>
             <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              FileMaker labels stay unchanged. Choose how each label should
-              appear and roll up in reports: search the official directory,
-              confirm one insurer, then save the decision.
+              Review one FileMaker label at a time. Start with the suggested
+              official NAIC records and PSG reporting names; search only when
+              you need a different option. Saving changes report grouping, not
+              the source repair orders.
             </p>
           </div>
           <Badge variant="warning">
-            {aliases.length} {aliases.length === 1 ? "name" : "names"} need
+            {aliasReviewCount} {aliasReviewCount === 1 ? "name" : "names"} need
             review
           </Badge>
         </div>
@@ -823,22 +874,33 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
           </p>
         ) : null}
 
-        {aliases.length ? (
-          <div className="grid gap-4 xl:grid-cols-2">
-            {aliasReviewItems.map(({ alias, strong, possible, existing }) => (
+        {aliasReviewCount ? (
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+            {searchSource && !activeAliasReviewItem ? (
+              <div
+                role="status"
+                className="rounded-md border border-border bg-secondary/40 p-3 text-sm leading-6"
+              >
+                {focusedAlias?.review_status === "approved"
+                  ? `“${focusedAlias.source_label_name}” is already grouped under “${focusedAlias.canonical_insurer_name}”. Choose another name from the queue.`
+                  : focusedAlias?.review_status === "rejected"
+                    ? `“${focusedAlias.source_label_name}” was reviewed and left ungrouped. Choose another name from the queue.`
+                    : "That imported name is not in the current review queue. Choose another name below."}
+              </div>
+            ) : null}
+            {shownAliasItems.map(({ alias, strong, possible, existing }) => (
               <Card
                 key={alias.source_label_normalized}
                 id={`insurer-${alias.source_label_normalized.replaceAll(" ", "-")}`}
-                className={
-                  alias.source_label_normalized === searchSource
-                    ? "border-primary"
-                    : undefined
-                }
+                className="border-primary"
               >
                 <CardHeader className="border-b border-border pb-4">
-                  <CardTitle className="text-lg">
-                    {alias.source_label_name}
-                  </CardTitle>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <CardTitle className="text-lg">
+                      {alias.source_label_name}
+                    </CardTitle>
+                    <Badge variant="warning">Needs review</Badge>
+                  </div>
                   <p className="text-sm text-muted-foreground">
                     This name was imported from FileMaker. Your decision changes
                     reporting only; the source repair orders stay unchanged.
@@ -867,14 +929,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                   <form
                     action={`/dashboard/collision-intelligence/review#insurer-${alias.source_label_normalized.replaceAll(" ", "-")}`}
                     method="get"
-                    className="flex gap-3 rounded-md bg-secondary/60 p-3"
+                    className="rounded-md border border-border bg-secondary/40 p-3"
                   >
-                    <span
-                      aria-hidden="true"
-                      className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary font-heading text-xs font-semibold text-primary-foreground"
-                    >
-                      1
-                    </span>
                     <input
                       type="hidden"
                       name="search_source"
@@ -885,11 +941,15 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         htmlFor={`registry-search-${alias.source_label_normalized.replaceAll(" ", "-")}`}
                         className="block font-heading text-sm font-semibold"
                       >
-                        Search insurer records
+                        Search for a different name{" "}
+                        <span className="font-sans font-normal text-muted-foreground">
+                          (optional)
+                        </span>
                       </label>
                       <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                        Search the official NAIC directory and existing PSG
-                        reporting names by legal name, brand, or abbreviation.
+                        If the suggested names do not fit, search the official
+                        NAIC directory and existing PSG reporting names by legal
+                        name, brand, or abbreviation.
                       </p>
                       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                         <input
@@ -910,7 +970,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                           type="submit"
                           className="rounded-md border border-border bg-background px-3 py-2 font-heading text-sm font-medium hover:bg-accent"
                         >
-                          Find matches
+                          Search insurer records
                         </button>
                       </div>
                       {alias.source_label_normalized === searchSource &&
@@ -945,12 +1005,12 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         aria-hidden="true"
                         className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary font-heading text-xs font-semibold text-primary-foreground"
                       >
-                        2
+                        1
                       </span>
                       <div className="min-w-0 flex-1 space-y-3">
                         <div>
                           <label className="block font-heading text-sm font-semibold">
-                            Confirm one insurer
+                            Choose the reporting name
                             <select
                               name="canonical_target"
                               required
@@ -1026,15 +1086,16 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                             className="mt-2 text-xs leading-5 text-muted-foreground"
                           >
                             Match the most specific entity supported by the
-                            source record; do not guess. Registry status and
-                            name similarity do not prove a state-specific
-                            license.
+                            repair order. Official NAIC records and existing PSG
+                            names are listed separately. A name score is a
+                            search aid, not proof that two companies are the
+                            same.
                           </p>
                         </div>
                         {strong[0] || existing[0] ? (
                           <div className="rounded-md bg-accent p-3 text-xs leading-5">
                             <p className="font-heading font-semibold">
-                              Closest matches to compare
+                              Name-based suggestions — not preselected
                             </p>
                             {strong[0] ? (
                               <p className="text-muted-foreground">
@@ -1082,7 +1143,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                           aria-hidden="true"
                           className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary font-heading text-xs font-semibold text-primary-foreground"
                         >
-                          3
+                          2
                         </span>
                         <div>
                           <p className="font-heading text-sm font-semibold">
@@ -1101,7 +1162,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                           value="approve"
                           className="rounded-md bg-primary px-3 py-2 font-heading text-sm font-medium text-primary-foreground hover:bg-primary/90"
                         >
-                          Save confirmed match
+                          Save selected match
                         </button>
                         <button
                           type="submit"
@@ -1118,6 +1179,50 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                 </CardContent>
               </Card>
             ))}
+
+            <aside
+              aria-labelledby="insurer-queue-heading"
+              className="overflow-hidden rounded-lg border border-border bg-card"
+            >
+              <div className="border-b border-border p-4">
+                <h3
+                  id="insurer-queue-heading"
+                  className="font-heading font-semibold"
+                >
+                  Review queue
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Showing {aliases.length} of {aliasReviewCount}, highest repair
+                  volume first.
+                </p>
+              </div>
+              <nav aria-label="Insurer names awaiting review">
+                <ul className="max-h-[36rem] divide-y divide-border overflow-y-auto">
+                  {aliases.map((alias) => {
+                    const isActive =
+                      alias.source_label_normalized ===
+                      activeAliasReviewItem?.alias.source_label_normalized;
+                    return (
+                      <li key={alias.source_label_normalized}>
+                        <Link
+                          href={`?search_source=${encodeURIComponent(alias.source_label_normalized)}#insurer-${alias.source_label_normalized.replaceAll(" ", "-")}`}
+                          aria-current={isActive ? "true" : undefined}
+                          className={`block px-4 py-3 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${isActive ? "bg-accent" : ""}`}
+                        >
+                          <span className="block font-heading text-sm font-medium">
+                            {alias.source_label_name}
+                          </span>
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            {alias.repair_orders.toLocaleString()} repair orders
+                            · {alias.source_shop_count.toLocaleString()} shops
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </nav>
+            </aside>
           </div>
         ) : (
           <Card>
