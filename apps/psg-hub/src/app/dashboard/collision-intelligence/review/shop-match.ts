@@ -19,6 +19,10 @@ export type ShopIdentityEvidence = {
   sources: Array<[string, string]>;
 };
 
+export function shopMemberCount(shop: Pick<ShopDirectoryEntry, "members">) {
+  return shop.members?.[0]?.count ?? 0;
+}
+
 // ponytail: two verified pilot locations; move to governed identity rows when review coverage expands.
 export const shopIdentityEvidence: Record<string, ShopIdentityEvidence> = {
   PS228: {

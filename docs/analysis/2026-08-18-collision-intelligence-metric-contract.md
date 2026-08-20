@@ -146,7 +146,8 @@ must still have enough post-gap history for calibration and holdout before promo
 model must beat its shop's registered seasonal MAE. `collision_demand_forecasts`
 stores forecast origin, target week, horizon, selected model, empirical 80% interval
 policy, source age, publication status, later actual volume, and absolute error. The
-scorer:
+staging and approval gates require at least one customer member assigned to the Hub
+shop; rejection remains available if that audience is later removed. The scorer:
 
 - predicts up to four Monday-start weeks from one shared origin and information
   cutoff;

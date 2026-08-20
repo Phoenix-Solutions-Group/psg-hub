@@ -75,6 +75,15 @@ begin
       using errcode = 'object_not_in_prerequisite_state';
   end if;
 
+  if not exists (
+    select 1
+    from public.shop_users membership
+    where membership.shop_id = v_mapping.shop_id
+  ) then
+    raise exception 'At least one customer shop member is required before model review'
+      using errcode = 'check_violation';
+  end if;
+
   perform 1
   from public.collision_forecast_model_registry registry
   where registry.shop_id = v_mapping.shop_id
@@ -285,7 +294,7 @@ end;
 $$;
 
 comment on function public.stage_collision_forecast_model_review(text, text, jsonb, uuid, text) is
-  'Service-only atomic staging of four evaluated shop horizons for manual review. Never approves models or publishes forecasts.';
+  'Service-only atomic staging of four evaluated shop horizons for a mapped shop with a customer audience. Never approves models or publishes forecasts.';
 
 revoke execute on function public.stage_collision_forecast_model_review(text, text, jsonb, uuid, text)
   from public, anon, authenticated;

@@ -42,6 +42,24 @@ begin
     raise exception 'Service role cannot decide staged model evidence';
   end if;
 
+  if pg_catalog.strpos(
+    pg_catalog.pg_get_functiondef(
+      'public.stage_collision_forecast_model_review(text,text,jsonb,uuid,text)'::regprocedure
+    ),
+    'from public.shop_users membership'
+  ) = 0 then
+    raise exception 'Model review staging does not enforce a customer shop audience';
+  end if;
+
+  if pg_catalog.strpos(
+    pg_catalog.pg_get_functiondef(
+      'public.review_collision_forecast_models(uuid,text,uuid,text)'::regprocedure
+    ),
+    'from public.shop_users membership'
+  ) = 0 then
+    raise exception 'Model approval does not enforce a customer shop audience';
+  end if;
+
   begin
     perform public.stage_collision_forecast_model_review(
       'unsupported_source',

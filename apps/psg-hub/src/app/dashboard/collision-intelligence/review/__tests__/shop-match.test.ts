@@ -3,6 +3,7 @@ import {
   matchesVerifiedShopLocation,
   normalizeShopMatchText,
   rankShopMatches,
+  shopMemberCount,
   type ShopDirectoryEntry,
 } from "../shop-match";
 
@@ -97,5 +98,10 @@ describe("shop identity matching", () => {
 
   it("rejects name-only mappings without governed address evidence", () => {
     expect(matchesVerifiedShopLocation("PS1023", shops[2])).toBe(false);
+  });
+
+  it("treats a missing membership aggregate as an empty customer audience", () => {
+    expect(shopMemberCount(shops[0])).toBe(0);
+    expect(shopMemberCount({ members: [{ count: 2 }] })).toBe(2);
   });
 });

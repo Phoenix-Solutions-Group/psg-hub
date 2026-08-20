@@ -22,6 +22,7 @@ import {
 import {
   matchesVerifiedShopLocation,
   rankShopMatches,
+  shopMemberCount,
   shopIdentityEvidence,
   type ShopDirectoryEntry,
 } from "./shop-match";
@@ -190,7 +191,7 @@ const notices: Record<string, string> = {
   forecast_model_conflict:
     "That forecast review changed before this decision was saved. The queue has been refreshed.",
   forecast_model_gate_failed:
-    "The staged evidence no longer clears every promotion gate. No model was approved.",
+    "The staged evidence or shop audience no longer clears every promotion gate. No model was approved.",
   forecast_model_release_pending:
     "Forecast decisions are read-only until the reviewed database migration is applied.",
   forecast_model_error:
@@ -586,11 +587,14 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       ),
     ].sort((a, b) => a.forecast_horizon_weeks - b.forecast_horizon_weeks);
     const shop = hubShops.find((candidate) => candidate.id === weekOne.shop_id);
+    const memberCount = shop ? shopMemberCount(shop) : 0;
 
     return {
       shopId: weekOne.shop_id,
       shopName: shop?.name ?? shop?.slug ?? weekOne.shop_id,
       sourceShopKey: weekOne.source_shop_key,
+      memberCount,
+      audienceReady: memberCount > 0,
       policies,
       complete:
         policies.length === 4 &&
@@ -1004,11 +1008,17 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                       </p>
                     </div>
                     <Badge
-                      variant={review.complete ? "warning" : "destructive"}
+                      variant={
+                        review.complete && review.audienceReady
+                          ? "warning"
+                          : "destructive"
+                      }
                     >
-                      {review.complete
-                        ? "4 horizons ready"
-                        : "Evidence incomplete"}
+                      {!review.complete
+                        ? "Evidence incomplete"
+                        : review.audienceReady
+                          ? "4 horizons ready"
+                          : "Shop audience missing"}
                     </Badge>
                   </div>
                 </CardHeader>
@@ -1057,6 +1067,18 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     </ul>
                   </details>
 
+                  {!review.audienceReady ? (
+                    <p
+                      role="status"
+                      className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm leading-6"
+                    >
+                      This shop has {review.memberCount} customer members.
+                      Assign at least one intended customer user before
+                      approving its forecast policy. You may still reject the
+                      staged evidence.
+                    </p>
+                  ) : null}
+
                   {review.complete ? (
                     <form
                       action="/api/collision-intelligence/forecast-model-review"
@@ -1099,7 +1121,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                           type="submit"
                           name="decision"
                           value="approve"
-                          className="rounded-md bg-primary px-4 py-2 font-heading text-sm font-medium text-primary-foreground"
+                          disabled={!review.audienceReady}
+                          className="rounded-md bg-primary px-4 py-2 font-heading text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Approve four models
                         </button>
@@ -1904,7 +1927,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         Select a candidate after verifying its identity
                       </option>
                       {selectableShopMatches.map((match) => {
-                        const memberCount = match.shop.members?.[0]?.count ?? 0;
+                        const memberCount = shopMemberCount(match.shop);
                         const location = [
                           match.shop.address_street,
                           match.shop.address_locality,
@@ -1936,8 +1959,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     </span>
                   </label>
 
-                  {selectableShopMatches.every(
-                    (match) => (match.shop.members?.[0]?.count ?? 0) === 0,
+                  {selectableShopMatches.length > 0 &&
+                  selectableShopMatches.every(
+                    (match) => shopMemberCount(match.shop) === 0,
                   ) ? (
                     <div
                       role="note"

@@ -56,6 +56,10 @@
   candidates. PS228 and PS229 both pass the historical promotion gates; PS229 is the
   stronger first pilot. Neither source is mapped, and both target Hub shops currently
   have zero shop members, so no evidence was staged and no forecast was written.
+- The review UI now shows each exact target's customer-member count. The pending
+  staging and approval functions also require at least one assigned customer member;
+  model rejection remains available if the audience is later removed. These guards
+  are verified locally and are not applied to production.
 
 ### Fresh exact-address forecast candidates
 

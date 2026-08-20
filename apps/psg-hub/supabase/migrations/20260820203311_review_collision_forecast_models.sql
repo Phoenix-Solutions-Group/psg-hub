@@ -81,6 +81,15 @@ begin
       using errcode = 'object_not_in_prerequisite_state';
   end if;
 
+  if v_decision = 'approve' and not exists (
+    select 1
+    from public.shop_users membership
+    where membership.shop_id = p_shop_id
+  ) then
+    raise exception 'At least one customer shop member is required before model approval'
+      using errcode = 'check_violation';
+  end if;
+
   if v_decision = 'approve' and (
     v_week_one.model_mae >= v_week_one.seasonal_baseline_mae
     or v_week_one.mae_improvement_pct <= 0
@@ -155,7 +164,7 @@ end;
 $$;
 
 comment on function public.review_collision_forecast_models(uuid, text, uuid, text) is
-  'Service-only atomic decision on four staged shop forecast policies. Never scores or publishes forecasts.';
+  'Service-only atomic decision on four staged shop forecast policies. Approval requires a customer shop audience; rejection remains available. Never scores or publishes forecasts.';
 
 revoke execute on function public.review_collision_forecast_models(uuid, text, uuid, text)
   from public, anon, authenticated;
