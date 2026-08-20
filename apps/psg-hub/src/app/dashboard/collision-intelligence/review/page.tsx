@@ -5,16 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardAccess } from "@/lib/auth/shop-access";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import {
-  isForecastArrivalFresh,
-  isMissingReviewView,
-} from "./source-health";
+import { isForecastArrivalFresh, isMissingReviewView } from "./source-health";
+import { rankShopMatches, type ShopDirectoryEntry } from "./shop-match";
 
 type Props = {
   searchParams: Promise<{
     result?: string | string[];
     registry_search?: string | string[];
     search_source?: string | string[];
+    shop_search?: string | string[];
+    shop_source?: string | string[];
   }>;
 };
 
@@ -69,12 +69,6 @@ type ShopCandidate = {
   repair_orders: number;
   repair_orders_2026: number;
   latest_arrival_date: string | null;
-};
-
-type HubShop = {
-  id: string;
-  name: string | null;
-  slug: string | null;
 };
 
 type RepairSourceHealth = {
@@ -191,7 +185,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       .order("repair_orders", { ascending: false }),
     service
       .from("shops")
-      .select("id,name,slug")
+      .select(
+        "id,name,slug,address_locality,address_region,address_postal_code,client:clients(name)",
+      )
       .order("name", { ascending: true }),
     service
       .from("collision_shop_mappings")
@@ -354,9 +350,24 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const mappedShopIds = new Set(
     (mappedShopResult.data ?? []).map((row) => row.shop_id as string),
   );
-  const availableHubShops = ((hubShopResult.data ?? []) as HubShop[]).filter(
-    (shop) => !mappedShopIds.has(shop.id),
-  );
+  const availableHubShops = (
+    (hubShopResult.data ?? []) as unknown as ShopDirectoryEntry[]
+  ).filter((shop) => !mappedShopIds.has(shop.id));
+  const requestedShopKey = searchValue(params.shop_source).toUpperCase();
+  const selectedShop =
+    shops.find((shop) => shop.source_shop_key === requestedShopKey) ??
+    featuredShops[0] ??
+    null;
+  const shopSearch = selectedShop
+    ? searchValue(params.shop_search).slice(0, 80)
+    : "";
+  const shopMatches = selectedShop
+    ? rankShopMatches(
+        selectedShop.source_shop_name,
+        availableHubShops,
+        shopSearch,
+      )
+    : [];
   const repairSource = (repairSourceResult.data?.[0] ??
     null) as RepairSourceHealth | null;
   const repairFeeds = (repairFeedResult.data ?? []) as RepairFeedHealth[];
@@ -919,7 +930,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         <Card>
           <CardContent>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-sm">
+              <table className="w-full min-w-[760px] text-left text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th scope="col" className="pb-3 pr-4">
@@ -936,6 +947,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     </th>
                     <th scope="col" className="pb-3 pl-4">
                       Forecast input
+                    </th>
+                    <th scope="col" className="pb-3 pl-4">
+                      Match
                     </th>
                   </tr>
                 </thead>
@@ -959,107 +973,246 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                       </td>
                       <td className="py-3 pl-4">
                         <Badge
-                          variant={shop.hasFreshArrivals ? "success" : "warning"}
+                          variant={
+                            shop.hasFreshArrivals ? "success" : "warning"
+                          }
                         >
                           {shop.hasFreshArrivals
                             ? "Fresh arrivals"
                             : "Stale or missing"}
                         </Badge>
                       </td>
+                      <td className="py-3 pl-4">
+                        <Link
+                          href={`?shop_source=${encodeURIComponent(shop.source_shop_key)}#shop-match`}
+                          className="font-medium text-primary underline underline-offset-4"
+                        >
+                          Review matches
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <form
-              action="/api/collision-intelligence/shop-mapping-review"
-              method="post"
-              className="mt-6 space-y-4 border-t border-border pt-5"
+            <div
+              id="shop-match"
+              className="mt-6 scroll-mt-6 space-y-5 border-t border-border pt-5"
             >
               <div>
-                <h3 className="font-heading font-semibold">Connect one shop</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  This makes the imported repair history visible to authorized
-                  members of the selected PSG Hub shop. Each PSG Hub shop can
-                  have only one active FileMaker connection.
+                <h3 className="font-heading font-semibold">
+                  Find the exact Hub shop
+                </h3>
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+                  Pick the imported location first. We rank close names from the
+                  live PSG Hub directory; search by shop name, parent account,
+                  city, state, or ZIP when the first suggestions are ambiguous.
+                  A suggestion is never selected or saved automatically.
                 </p>
               </div>
-              <div className="grid gap-4 md:grid-cols-2">
+
+              <form
+                action="/dashboard/collision-intelligence/review"
+                method="get"
+                className="grid gap-4 rounded-lg bg-secondary/40 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end"
+              >
                 <label className="text-sm font-medium">
-                  Imported FileMaker shop
+                  1. Imported FileMaker location
                   <select
-                    name="source_shop_key"
+                    name="shop_source"
                     required
-                    defaultValue=""
+                    defaultValue={selectedShop?.source_shop_key ?? ""}
                     className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
                   >
                     <option value="" disabled>
-                      Select a verified source shop
+                      Select an imported location
                     </option>
                     {shops.map((shop) => (
                       <option
                         key={shop.source_shop_key}
                         value={shop.source_shop_key}
                       >
-                        {shop.source_shop_name} ({shop.source_shop_key}) —{" "}
-                        {shop.repair_orders_2026.toLocaleString()} repairs in
-                        2026; last {shop.latest_arrival_date ?? "unknown"}
+                        {shop.source_shop_name} ({shop.source_shop_key})
                       </option>
                     ))}
                   </select>
                 </label>
                 <label className="text-sm font-medium">
-                  Existing PSG Hub shop
-                  <select
-                    name="shop_id"
-                    required
-                    defaultValue=""
+                  2. Search the Hub directory
+                  <input
+                    type="search"
+                    name="shop_search"
+                    defaultValue={shopSearch}
+                    list="hub-shop-directory"
+                    maxLength={80}
+                    placeholder="Name, parent account, city, state, or ZIP"
                     className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
-                  >
-                    <option value="" disabled>
-                      Select the confirmed target shop
-                    </option>
-                    {availableHubShops.map((shop) => (
-                      <option key={shop.id} value={shop.id}>
-                        {shop.name ?? shop.slug ?? shop.id}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </label>
-              </div>
-              <label className="block text-sm font-medium">
-                Identity evidence
-                <textarea
-                  name="review_notes"
-                  required
-                  minLength={20}
-                  maxLength={1000}
-                  rows={3}
-                  placeholder="Describe the signed agreement, customer confirmation, or other evidence used to verify this identity."
-                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
-                />
-              </label>
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  name="identity_confirmed"
-                  value="confirmed"
-                  required
-                  className="mt-1"
-                />
-                <span>
-                  I confirmed that these records belong to this exact legal and
-                  operating shop—not a name-similar business.
-                </span>
-              </label>
-              <button
-                type="submit"
-                disabled={!shops.length || !availableHubShops.length}
-                className="rounded-md bg-primary px-3 py-2 font-heading text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Connect shop and repair history
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  className="rounded-md border border-border bg-background px-3 py-2 font-heading text-sm font-medium hover:bg-accent"
+                >
+                  Search Hub shops
+                </button>
+                <datalist id="hub-shop-directory">
+                  {availableHubShops.map((shop) => (
+                    <option
+                      key={shop.id}
+                      value={[
+                        shop.name ?? shop.slug ?? shop.id,
+                        shop.address_locality,
+                        shop.address_region,
+                        shop.address_postal_code,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    />
+                  ))}
+                </datalist>
+              </form>
+
+              {selectedShop ? (
+                <div className="rounded-lg border border-border p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Imported location under review
+                      </p>
+                      <p className="mt-1 font-heading text-lg font-semibold">
+                        {selectedShop.source_shop_name}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedShop.source_shop_key} ·{" "}
+                        {selectedShop.repair_orders_2026.toLocaleString()}{" "}
+                        repair orders in 2026 · latest arrival{" "}
+                        {selectedShop.latest_arrival_date ?? "unknown"}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={
+                        isForecastArrivalFresh(selectedShop.latest_arrival_date)
+                          ? "success"
+                          : "warning"
+                      }
+                    >
+                      {isForecastArrivalFresh(selectedShop.latest_arrival_date)
+                        ? "Forecast-current"
+                        : "Stale or missing"}
+                    </Badge>
+                  </div>
+                </div>
+              ) : null}
+
+              {selectedShop && shopMatches.length ? (
+                <form
+                  action="/api/collision-intelligence/shop-mapping-review"
+                  method="post"
+                  className="space-y-5"
+                >
+                  <input
+                    type="hidden"
+                    name="source_shop_key"
+                    value={selectedShop.source_shop_key}
+                  />
+                  <label className="block font-heading font-semibold">
+                    3. Choose only the verified location
+                    <select
+                      name="shop_id"
+                      required
+                      defaultValue=""
+                      className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 font-sans font-normal"
+                    >
+                      <option value="" disabled>
+                        Select a candidate after verifying its identity
+                      </option>
+                      {shopMatches.map((match) => {
+                        const location = [
+                          match.shop.address_locality,
+                          match.shop.address_region,
+                          match.shop.address_postal_code,
+                        ]
+                          .filter(Boolean)
+                          .join(" ");
+                        return (
+                          <option key={match.shop.id} value={match.shop.id}>
+                            {match.shop.name ??
+                              match.shop.slug ??
+                              match.shop.id}{" "}
+                            — {match.score}/100 name match ·{" "}
+                            {location || "location not stored"} · parent{" "}
+                            {match.shop.client?.name ?? "unknown"}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <span className="mt-2 block font-sans text-xs font-normal leading-5 text-muted-foreground">
+                      The list is ranked, not approved. Compare the parent
+                      account and physical location before selecting one.
+                    </span>
+                  </label>
+
+                  {shopMatches.some((match) => match.locationWarning) ? (
+                    <div
+                      role="note"
+                      className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm leading-6"
+                    >
+                      A similar company name is not enough. Do not connect a
+                      North or South FileMaker location to a generic Hub shop
+                      unless that Hub record represents the same physical
+                      location. Create the missing Hub location first when
+                      necessary.
+                    </div>
+                  ) : null}
+
+                  <label className="block text-sm font-medium">
+                    4. Identity evidence
+                    <textarea
+                      name="review_notes"
+                      required
+                      minLength={20}
+                      maxLength={1000}
+                      rows={3}
+                      placeholder="Example: Confirmed the street address and PSG customer agreement for this exact location."
+                      className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                    />
+                  </label>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="identity_confirmed"
+                      value="confirmed"
+                      required
+                      className="mt-1"
+                    />
+                    <span>
+                      I confirmed that these records belong to this exact
+                      physical shop—not only a name-similar company or another
+                      location in the same group.
+                    </span>
+                  </label>
+                  <button
+                    type="submit"
+                    className="rounded-md bg-primary px-3 py-2 font-heading text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                  >
+                    Confirm shop connection
+                  </button>
+                </form>
+              ) : selectedShop ? (
+                <div
+                  role="status"
+                  className="rounded-md border border-border bg-secondary/40 p-4 text-sm leading-6 text-muted-foreground"
+                >
+                  {shopSearch
+                    ? `No available Hub shops matched “${shopSearch}”. Try a shorter name, city, state, or ZIP.`
+                    : "No plausible name match was found. Search the Hub directory before creating a new location."}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No unmatched FileMaker shops are available for review.
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
       </section>
