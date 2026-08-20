@@ -35,6 +35,19 @@ type InsurerOption = {
   value: string;
 };
 
+type RegistrySuggestion = {
+  source_label: string;
+  source: string;
+  record_type: "group" | "company";
+  registry_id: string;
+  display_name: string;
+  group_code: string | null;
+  company_code: string | null;
+  state_of_domicile: string | null;
+  match_score: number;
+  source_release: string;
+};
+
 type ShopCandidate = {
   source_shop_key: string;
   source_shop_name: string;
@@ -232,6 +245,33 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   }
 
   const aliases = (aliasResult.data ?? []) as AliasCandidate[];
+  const registryResult = aliases.length
+    ? await service.rpc("collision_insurer_registry_matches", {
+        source_labels: aliases.map((alias) => alias.source_label_name),
+        match_limit: 3,
+      })
+    : { data: [], error: null };
+  const registryUnavailable =
+    registryResult.error?.code === "PGRST202" &&
+    registryResult.error.message?.includes(
+      "collision_insurer_registry_matches",
+    );
+  if (registryResult.error && !registryUnavailable) {
+    throw new Error(registryResult.error.message);
+  }
+  const registrySuggestionsByLabel = new Map<string, RegistrySuggestion[]>();
+  for (const suggestion of (registryResult.data ??
+    []) as RegistrySuggestion[]) {
+    const suggestions =
+      registrySuggestionsByLabel.get(suggestion.source_label) ?? [];
+    suggestions.push(suggestion);
+    registrySuggestionsByLabel.set(suggestion.source_label, suggestions);
+  }
+  const aliasReviewItems = aliases.map((alias) => ({
+    alias,
+    registrySuggestions:
+      registrySuggestionsByLabel.get(alias.source_label_name) ?? [],
+  }));
   const insurerOptionsByName = new Map<string, InsurerOption>();
   for (const insurer of (insuranceCompanyResult.data ??
     []) as InsuranceCompany[]) {
@@ -505,9 +545,16 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
           <Badge variant="warning">Decision required</Badge>
         </div>
 
+        {registryUnavailable ? (
+          <p className="rounded-md border border-border bg-secondary/40 p-3 text-xs leading-5 text-muted-foreground">
+            Official registry suggestions are temporarily unavailable. Existing
+            PSG names remain available.
+          </p>
+        ) : null}
+
         {aliases.length ? (
           <div className="grid gap-4 xl:grid-cols-2">
-            {aliases.map((alias) => (
+            {aliasReviewItems.map(({ alias, registrySuggestions }) => (
               <Card key={alias.source_label_normalized}>
                 <CardHeader className="border-b border-border pb-4">
                   <CardTitle className="text-lg">
@@ -558,15 +605,26 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         className="mt-1 w-full min-w-0 rounded-md border border-border bg-background px-3 py-2 font-normal"
                       >
                         <option value="" disabled>
-                          Select a verified reporting name
+                          Choose a suggested or existing insurer
                         </option>
-                        <optgroup label="Start a new standard name">
-                          <option value="source">
-                            Use “{alias.source_label_name}” as the standard
-                          </option>
-                        </optgroup>
+                        {registrySuggestions.length ? (
+                          <optgroup label="Closest NAIC registry matches">
+                            {registrySuggestions.map((suggestion) => (
+                              <option
+                                key={`${suggestion.source}:${suggestion.record_type}:${suggestion.registry_id}`}
+                                value={`registry:${suggestion.source}:${suggestion.record_type}:${suggestion.registry_id}`}
+                              >
+                                {suggestion.display_name} —{" "}
+                                {suggestion.match_score}%
+                                {suggestion.record_type === "group"
+                                  ? ` · NAIC group ${suggestion.group_code}`
+                                  : ` · NAIC company ${suggestion.company_code}`}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ) : null}
                         {insurerOptions.length ? (
-                          <optgroup label="Match an existing standard name">
+                          <optgroup label="Existing PSG reporting names">
                             {insurerOptions.map((insurer) => (
                               <option key={insurer.value} value={insurer.value}>
                                 {insurer.label}
@@ -574,15 +632,32 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                             ))}
                           </optgroup>
                         ) : null}
+                        <optgroup label="Start a new PSG reporting name">
+                          <option value="source">
+                            Use “{alias.source_label_name}” exactly as shown
+                          </option>
+                        </optgroup>
                       </select>
                     </label>
+                    {registrySuggestions[0] ? (
+                      <div className="rounded-md border border-border bg-secondary/40 p-3 text-xs leading-5">
+                        <p className="font-medium">Closest official match</p>
+                        <p className="text-muted-foreground">
+                          {registrySuggestions[0].display_name} ·{" "}
+                          {registrySuggestions[0].match_score}% name similarity
+                          · NAIC {registrySuggestions[0].record_type}{" "}
+                          {registrySuggestions[0].registry_id}
+                        </p>
+                      </div>
+                    ) : null}
                     <p
                       id={`insurer-match-help-${alias.source_label_normalized}`}
                       className="text-xs leading-5 text-muted-foreground"
                     >
-                      Choose an existing name whenever it is the same legal
-                      insurer. Start a new standard only when the imported name
-                      above is the complete name reports should use.
+                      NAIC suggestions are active national registry records and
+                      name-similarity hints—not proof of a state-specific
+                      license. Confirm the insurer or group before saving, or
+                      choose an existing PSG reporting name.
                     </p>
                     <p className="text-xs leading-5 text-muted-foreground">
                       Can’t find the right insurer? Add it to the{" "}

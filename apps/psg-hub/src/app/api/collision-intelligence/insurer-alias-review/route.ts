@@ -7,6 +7,8 @@ const destination = "/dashboard/collision-intelligence/review";
 const canonicalKeyPattern = /^[a-z0-9]+(?: [a-z0-9]+)*$/;
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const registryTargetPattern =
+  /^registry:([a-z0-9_]+):(group|company):([0-9]+)$/;
 
 function canonicalKey(name: string) {
   return name
@@ -105,6 +107,9 @@ export async function POST(request: Request) {
 
   let canonicalInsurerKey = "";
   let canonicalInsurerName = "";
+  let canonicalRegistrySource: string | null = null;
+  let canonicalRegistryType: string | null = null;
+  let canonicalRegistryId: string | null = null;
   if (action === "approve") {
     if (canonicalTarget === "source") {
       canonicalInsurerName = evidence.source_label_name.trim();
@@ -132,6 +137,30 @@ export async function POST(request: Request) {
       if (!insurer) return redirectToQueue(request, "target_missing");
       canonicalInsurerName = insurer.name.trim();
       canonicalInsurerKey = canonicalKey(canonicalInsurerName);
+    } else if (registryTargetPattern.test(canonicalTarget)) {
+      const [, registrySource, registryType, registryId] =
+        canonicalTarget.match(registryTargetPattern) ?? [];
+      const { data: insurer, error: insurerError } = await service
+        .from("collision_insurer_registry")
+        .select("source,record_type,registry_id,display_name")
+        .eq("source", registrySource)
+        .eq("record_type", registryType)
+        .eq("registry_id", registryId)
+        .eq("is_current", true)
+        .maybeSingle();
+      if (insurerError) {
+        console.error(
+          "[insurer-alias-review] registry insurer lookup failed:",
+          insurerError.message,
+        );
+        return redirectToQueue(request, "error");
+      }
+      if (!insurer) return redirectToQueue(request, "target_missing");
+      canonicalInsurerName = insurer.display_name.trim();
+      canonicalInsurerKey = canonicalKey(canonicalInsurerName);
+      canonicalRegistrySource = insurer.source;
+      canonicalRegistryType = insurer.record_type;
+      canonicalRegistryId = insurer.registry_id;
     } else if (canonicalTarget.startsWith("approved:")) {
       const insurerKey = canonicalTarget.slice("approved:".length);
       if (!canonicalKeyPattern.test(insurerKey) || insurerKey.length > 200) {
@@ -142,7 +171,9 @@ export async function POST(request: Request) {
       }
       const { data: insurer, error: insurerError } = await service
         .from("collision_insurer_alias_reviews")
-        .select("canonical_insurer_key,canonical_insurer_name")
+        .select(
+          "canonical_insurer_key,canonical_insurer_name,canonical_registry_source,canonical_registry_type,canonical_registry_id",
+        )
         .eq("review_status", "approved")
         .eq("canonical_insurer_key", insurerKey)
         .limit(1)
@@ -157,6 +188,9 @@ export async function POST(request: Request) {
       if (!insurer) return redirectToQueue(request, "target_missing");
       canonicalInsurerKey = insurer.canonical_insurer_key?.trim() ?? "";
       canonicalInsurerName = insurer.canonical_insurer_name?.trim() ?? "";
+      canonicalRegistrySource = insurer.canonical_registry_source;
+      canonicalRegistryType = insurer.canonical_registry_type;
+      canonicalRegistryId = insurer.canonical_registry_id;
     } else {
       return NextResponse.json(
         { error: "Invalid insurer selection" },
@@ -200,6 +234,9 @@ export async function POST(request: Request) {
           review_status: "approved",
           canonical_insurer_key: canonicalInsurerKey,
           canonical_insurer_name: canonicalInsurerName,
+          canonical_registry_source: canonicalRegistrySource,
+          canonical_registry_type: canonicalRegistryType,
+          canonical_registry_id: canonicalRegistryId,
           review_notes: notes || null,
           reviewed_by: user.id,
           reviewed_at: reviewedAt,

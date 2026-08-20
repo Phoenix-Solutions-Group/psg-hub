@@ -11,6 +11,15 @@ let masterInsurer: { name: string } | null = null;
 let approvedInsurer: {
   canonical_insurer_key: string;
   canonical_insurer_name: string;
+  canonical_registry_source: string | null;
+  canonical_registry_type: string | null;
+  canonical_registry_id: string | null;
+} | null = null;
+let registryInsurer: {
+  source: string;
+  record_type: "group" | "company";
+  registry_id: string;
+  display_name: string;
 } | null = null;
 const upsert = vi.fn();
 const update = vi.fn();
@@ -37,6 +46,16 @@ vi.mock("@/lib/supabase/service", () => ({
           eq: vi.fn().mockReturnThis(),
           maybeSingle: vi.fn(async () => ({
             data: masterInsurer,
+            error: null,
+          })),
+        };
+      }
+      if (table === "collision_insurer_registry") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn(async () => ({
+            data: registryInsurer,
             error: null,
           })),
         };
@@ -81,6 +100,7 @@ beforeEach(() => {
   updated = null;
   masterInsurer = null;
   approvedInsurer = null;
+  registryInsurer = null;
   upsert.mockReset();
   upsert.mockResolvedValue({ error: null });
   update.mockReset();
@@ -157,6 +177,44 @@ describe("POST insurer alias review", () => {
       expect.objectContaining({
         canonical_insurer_key: "travelers insurance",
         canonical_insurer_name: "Travelers Insurance",
+      }),
+    );
+  });
+
+  it("resolves a selected NAIC registry match on the server", async () => {
+    user = { id: "superadmin-1" };
+    getDashboardAccess.mockResolvedValue({
+      role: "psg_superadmin",
+      shopIds: [],
+    });
+    evidence = {
+      source_label_normalized: "progressive insurance",
+      source_label_name: "Progressive Insurance",
+    };
+    registryInsurer = {
+      source: "naic_loc",
+      record_type: "group",
+      registry_id: "155",
+      display_name: "Progressive Group",
+    };
+    updated = { source_label_normalized: "progressive insurance" };
+
+    const response = await POST(
+      request({
+        action: "approve",
+        source_label_normalized: "progressive insurance",
+        canonical_target: "registry:naic_loc:group:155",
+      }),
+    );
+
+    expect(response.status).toBe(303);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canonical_insurer_key: "progressive group",
+        canonical_insurer_name: "Progressive Group",
+        canonical_registry_source: "naic_loc",
+        canonical_registry_type: "group",
+        canonical_registry_id: "155",
       }),
     );
   });
