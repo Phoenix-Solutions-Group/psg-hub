@@ -59,6 +59,9 @@ the authenticated user's membership before the service client is called.
 | Cycle time                   | Calendar days from `date_in` through `date_out`; negative values fail quality review                                                                                                            |
 | Weekly demand                | Repair orders grouped into PostgreSQL Monday-start weeks                                                                                                                                        |
 
+Insurance-paid share divides known insurance-paid repairs by all repair orders. Unknown
+payment types remain in that denominator and are disclosed beside the insured count.
+
 The recent operating trend compares the latest 13 completed source weeks with the
 preceding 13. It excludes the newest potentially partial source week, treats missing
 weeks as zero demand and value, reports insurance-paid arrivals under the same window,

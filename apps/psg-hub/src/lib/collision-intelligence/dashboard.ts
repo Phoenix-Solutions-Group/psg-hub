@@ -53,7 +53,7 @@ export async function getCollisionDashboard(shopId: string) {
     service
       .from("v_collision_weekly_demand")
       .select(
-        "company_name,week_start,repair_orders,insured_repair_orders,repair_value_cents,average_cycle_days,cycle_time_observations",
+        "company_name,week_start,repair_orders,insured_repair_orders,unknown_payment_repair_orders,repair_value_cents,average_cycle_days,cycle_time_observations",
       )
       .eq("shop_id", shopId)
       .order("week_start", { ascending: true }),

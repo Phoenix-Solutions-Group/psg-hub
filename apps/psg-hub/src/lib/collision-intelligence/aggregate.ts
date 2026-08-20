@@ -5,6 +5,7 @@ export type CollisionWeeklyRow = {
   week_start: string;
   repair_orders: Numeric;
   insured_repair_orders: Numeric;
+  unknown_payment_repair_orders?: Numeric;
   repair_value_cents: Numeric;
   average_cycle_days: Numeric;
   cycle_time_observations: Numeric;
@@ -490,6 +491,10 @@ export function buildCollisionDashboard(
     (sum, row) => sum + numberOf(row.insured_repair_orders),
     0,
   );
+  const unknownPaymentRepairOrders = weekly.reduce(
+    (sum, row) => sum + numberOf(row.unknown_payment_repair_orders),
+    0,
+  );
   const repairValueCents = weekly.reduce(
     (sum, row) => sum + numberOf(row.repair_value_cents),
     0,
@@ -620,6 +625,7 @@ export function buildCollisionDashboard(
     summary: {
       repairOrders,
       insuredRepairOrders,
+      unknownPaymentRepairOrders,
       insuredSharePct: repairOrders
         ? (100 * insuredRepairOrders) / repairOrders
         : 0,

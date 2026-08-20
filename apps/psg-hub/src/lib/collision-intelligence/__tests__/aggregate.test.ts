@@ -26,6 +26,7 @@ describe("collision intelligence aggregation", () => {
           week_start: "2025-01-06",
           repair_orders: 2,
           insured_repair_orders: 1,
+          unknown_payment_repair_orders: 1,
           repair_value_cents: 100_00,
           average_cycle_days: 10,
           cycle_time_observations: 1,
@@ -35,6 +36,7 @@ describe("collision intelligence aggregation", () => {
           week_start: "2025-01-13",
           repair_orders: 3,
           insured_repair_orders: 3,
+          unknown_payment_repair_orders: 0,
           repair_value_cents: 400_00,
           average_cycle_days: 20,
           cycle_time_observations: 2,
@@ -224,6 +226,7 @@ describe("collision intelligence aggregation", () => {
     expect(dashboard.summary).toMatchObject({
       repairOrders: 5,
       insuredRepairOrders: 4,
+      unknownPaymentRepairOrders: 1,
       insuredSharePct: 80,
       repairValue: 500,
       averageRepairAmount: 100,

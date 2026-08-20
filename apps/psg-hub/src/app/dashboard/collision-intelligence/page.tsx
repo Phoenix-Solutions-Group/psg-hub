@@ -173,7 +173,7 @@ export default async function CollisionIntelligencePage() {
             <MetricCard
               label="Insurance-paid"
               value={`${summary.insuredSharePct.toFixed(1)}%`}
-              detail={`${summary.insuredRepairOrders.toLocaleString()} repair orders`}
+              detail={`${summary.insuredRepairOrders.toLocaleString()} repair orders${summary.unknownPaymentRepairOrders ? ` · ${summary.unknownPaymentRepairOrders.toLocaleString()} with unknown payment type` : ""}`}
             />
             <MetricCard
               label="Repair value"
