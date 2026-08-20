@@ -1,0 +1,40 @@
+begin;
+
+do $$
+begin
+  if pg_catalog.has_function_privilege(
+    'anon',
+    'public.stage_collision_forecast_model_review(text,text,jsonb,uuid,text)',
+    'execute'
+  ) or pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.stage_collision_forecast_model_review(text,text,jsonb,uuid,text)',
+    'execute'
+  ) then
+    raise exception 'Model review staging must remain service-role-only';
+  end if;
+
+  if not pg_catalog.has_function_privilege(
+    'service_role',
+    'public.stage_collision_forecast_model_review(text,text,jsonb,uuid,text)',
+    'execute'
+  ) then
+    raise exception 'Service role cannot stage model review evidence';
+  end if;
+
+  begin
+    perform public.stage_collision_forecast_model_review(
+      'unsupported_source',
+      'PS1',
+      '[]'::jsonb,
+      '00000000-0000-4000-8000-000000000000'::uuid,
+      'This call must fail before any mutation occurs.'
+    );
+    raise exception 'Unsupported source unexpectedly passed';
+  exception
+    when invalid_parameter_value then null;
+  end;
+end;
+$$;
+
+rollback;

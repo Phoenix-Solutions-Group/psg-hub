@@ -10,6 +10,7 @@ import math
 import re
 import urllib.parse
 import urllib.request
+import uuid
 from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
@@ -40,6 +41,11 @@ FEATURE_SETS = {
 
 MAX_INTERNAL_ZERO_WEEKS = 26
 INTERVAL_CALIBRATION_TARGET_PCT = 85
+PROMOTION_MIN_VALIDATION_COVERAGE_PCT = 80
+PROMOTION_MODEL_KEYS = {
+    "trailing_4_week": "trailing4_v1",
+    "seasonal_recent_blend": "seasonal_recent_blend_v1",
+}
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -87,6 +93,21 @@ def fetch_rows_paged(
         rows.extend(page)
         if len(page) < page_size:
             return rows
+
+
+def post_json(url: str, key: str, path: str, payload: dict[str, Any]) -> Any:
+    request = urllib.request.Request(
+        f"{url.rstrip('/')}/rest/v1/{path.lstrip('/')}",
+        data=json.dumps(payload).encode(),
+        method="POST",
+        headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=120) as response:
+        return json.loads(response.read())
 
 
 def number(value: Any) -> float:
@@ -648,6 +669,146 @@ def evaluate_direct_shop_horizons(
     }
 
 
+def build_promotion_candidate(
+    result: dict[str, Any], source_shop_key: str
+) -> dict[str, Any]:
+    horizons = []
+    mapped = False
+    source_shop_name = source_shop_key
+    for horizon, horizon_result in result["horizons"].items():
+        shop = next(
+            (
+                candidate
+                for candidate in horizon_result["shops"]
+                if candidate["source_shop_key"] == source_shop_key
+            ),
+            None,
+        )
+        if not shop:
+            raise ValueError(
+                f"{source_shop_key} is not eligible under the current history and "
+                "latest-week gates"
+            )
+        mapped = mapped or shop["mapped"]
+        source_shop_name = shop.get("source_shop_name") or source_shop_key
+        seasonal_mae = shop["models"]["seasonal_52_week"]["mae"]
+        eligible_models = []
+        for model_name, model_key in PROMOTION_MODEL_KEYS.items():
+            model = shop["models"][model_name]
+            policy = horizon_result["models"][model_name]
+            validation_coverage = (
+                policy["interval_policy_validation_coverage_pct"] or 0
+            )
+            if (
+                model["mae"] < seasonal_mae
+                and validation_coverage >= PROMOTION_MIN_VALIDATION_COVERAGE_PCT
+            ):
+                eligible_models.append((model["mae"], model_name, model_key))
+        if not eligible_models:
+            horizons.append(
+                {
+                    "forecast_horizon_weeks": int(horizon),
+                    "promotion_ready": False,
+                    "reason": (
+                        "No supported model both beats the shop seasonal baseline and "
+                        "clears the held-out-shop interval coverage gate."
+                    ),
+                }
+            )
+            continue
+        _, model_name, model_key = min(eligible_models)
+        model = shop["models"][model_name]
+        policy = horizon_result["models"][model_name]
+        interval_multiplier = policy["interval_multiplier"]
+        base_interval_half_width = model["interval_80_half_width"]
+        improvement = 100 * (seasonal_mae - model["mae"]) / seasonal_mae
+        horizons.append(
+            {
+                "forecast_horizon_weeks": int(horizon),
+                "promotion_ready": True,
+                "model_key": model_key,
+                "seasonal_baseline_mae": seasonal_mae,
+                "model_mae": model["mae"],
+                "model_wape_pct": model["wape_pct"],
+                "mae_improvement_pct": improvement,
+                "calibration_weeks": horizon_result["calibration_weeks_per_shop"],
+                "holdout_weeks": horizon_result["holdout_weeks_per_shop"],
+                "holdout_start": shop["holdout_start"],
+                "holdout_end": shop["holdout_end"],
+                "base_interval_half_width": base_interval_half_width,
+                "interval_multiplier": interval_multiplier,
+                "interval_half_width": math.ceil(
+                    base_interval_half_width * interval_multiplier
+                ),
+                "interval_validation_coverage_pct": policy[
+                    "interval_policy_validation_coverage_pct"
+                ],
+                "evaluation_scope": (
+                    f"{source_shop_key} chronological holdout; nominal 80% interval "
+                    f"calibrated to {policy['interval_policy_calibration_target_pct']}% "
+                    f"on {policy['interval_policy_calibration_shops']} current source "
+                    f"shops and validated on "
+                    f"{policy['interval_policy_validation_shops']} held-out shops."
+                ),
+            }
+        )
+    evaluation_passed = len(horizons) == 4 and all(
+        horizon["promotion_ready"] for horizon in horizons
+    )
+    return {
+        "scope": "filemaker_promotion_candidate",
+        "source_shop_key": source_shop_key,
+        "source_shop_name": source_shop_name,
+        "mapped": mapped,
+        "evaluation_passed": evaluation_passed,
+        "review_staging_ready": evaluation_passed and mapped,
+        "promotion_status": "review",
+        "horizons": horizons,
+        "limitation": (
+            "This predicts aggregate shop repair arrivals, not individual crashes or "
+            "insurer claim volume. Evaluation evidence does not approve or publish a "
+            "forecast."
+        ),
+    }
+
+
+def stage_promotion_review(
+    url: str,
+    key: str,
+    candidate: dict[str, Any],
+    actor_profile_id: str | None,
+    review_notes: str | None,
+) -> dict[str, Any]:
+    if not candidate["review_staging_ready"]:
+        raise ValueError(
+            "Review staging requires four passing horizons and a confirmed shop mapping"
+        )
+    try:
+        actor = str(uuid.UUID(actor_profile_id or ""))
+    except ValueError as error:
+        raise ValueError("--actor-profile-id must be a UUID") from error
+    notes = (review_notes or "").strip()
+    if not 20 <= len(notes) <= 1000:
+        raise ValueError("--review-notes must contain 20 to 1000 characters")
+    staged = post_json(
+        url,
+        key,
+        "rpc/stage_collision_forecast_model_review",
+        {
+            "p_source_system": "filemaker_repair_customer",
+            "p_source_shop_key": candidate["source_shop_key"],
+            "p_horizons": candidate["horizons"],
+            "p_actor_profile_id": actor,
+            "p_review_notes": notes,
+        },
+    )
+    return {
+        "scope": "filemaker_promotion_review_staged",
+        **staged,
+        "limitation": candidate["limitation"],
+    }
+
+
 def print_markdown(result: dict[str, Any]) -> None:
     print("# Crash and Weather Feature Evaluation")
     print()
@@ -793,6 +954,52 @@ def print_direct_horizon_markdown(result: dict[str, Any]) -> None:
         )
 
 
+def print_promotion_candidate_markdown(result: dict[str, Any]) -> None:
+    print(f"# {result['source_shop_name']} Forecast Promotion Candidate")
+    print()
+    print(
+        "Evaluation: **{}**; shop mapping: **{}**; review staging: **{}**.".format(
+            "passed" if result["evaluation_passed"] else "blocked",
+            "confirmed" if result["mapped"] else "pending",
+            "ready" if result["review_staging_ready"] else "not ready",
+        )
+    )
+    print()
+    print(
+        "| Horizon | Model | Seasonal MAE | Model MAE | Improvement | "
+        "80% interval | Held-out-shop coverage |"
+    )
+    print("|---:|---|---:|---:|---:|---:|---:|")
+    for horizon in result["horizons"]:
+        if not horizon["promotion_ready"]:
+            print(
+                f"| {horizon['forecast_horizon_weeks']} | blocked | — | — | — | — | — |"
+            )
+            continue
+        print(
+            f"| {horizon['forecast_horizon_weeks']} | {horizon['model_key']} | "
+            f"{horizon['seasonal_baseline_mae']:.2f} | "
+            f"{horizon['model_mae']:.2f} | "
+            f"{horizon['mae_improvement_pct']:.1f}% | "
+            f"±{horizon['interval_half_width']} | "
+            f"{horizon['interval_validation_coverage_pct']:.1f}% |"
+        )
+    print()
+    print(result["limitation"])
+
+
+def print_staged_review_markdown(result: dict[str, Any]) -> None:
+    print("# Forecast Model Review Staged")
+    print()
+    print(
+        f"{result['source_shop_key']} has {result['staged_horizons']} horizons in "
+        f"**{result['promotion_status']}**. Forecasts published: "
+        f"**{result['forecasts_published']}**."
+    )
+    print()
+    print(result["limitation"])
+
+
 def self_test() -> None:
     rows = [{"x": value, "repair_orders": 2 + 3 * value} for value in range(1, 10)]
     model = fit_ridge(rows, ("x",), penalty=1e-8)
@@ -850,6 +1057,37 @@ def self_test() -> None:
     assert current_segment[0]["repair_orders_lag_52_weeks"] is None
     assert current_segment[52]["repair_orders_lag_52_weeks"] == 20
     assert evaluate_direct_shop(gapped, 52, 52) is None
+    candidate = build_promotion_candidate(
+        evaluate_filemaker_horizons(
+            weekly
+            + [
+                {
+                    **row,
+                    "source_shop_key": "TEST2",
+                    "source_shop_name": "Test Shop 2",
+                }
+                for row in weekly
+            ],
+            holdout_weeks=10,
+            calibration_weeks=10,
+            horizons=4,
+        ),
+        "TEST",
+    )
+    assert candidate["evaluation_passed"] is True
+    assert candidate["review_staging_ready"] is False
+    assert len(candidate["horizons"]) == 4
+    try:
+        stage_promotion_review(
+            "https://example.supabase.co",
+            "test-key",
+            candidate,
+            "00000000-0000-4000-8000-000000000001",
+            "Synthetic evaluation evidence for the self-test.",
+        )
+        raise AssertionError("Unmapped promotion evidence must not be staged")
+    except ValueError as error:
+        assert "confirmed shop mapping" in str(error)
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
@@ -861,6 +1099,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("--forecast-horizons must be between 1 and 4")
     if args.latest_week_cutoff:
         date.fromisoformat(args.latest_week_cutoff)
+    promotion_candidate = (args.promotion_candidate or "").strip().upper()
+    if args.stage_review and not promotion_candidate:
+        raise ValueError("--stage-review requires --promotion-candidate")
+    if promotion_candidate:
+        if not re.fullmatch(r"PS[0-9]+", promotion_candidate):
+            raise ValueError("--promotion-candidate must match PS followed by digits")
+        if not args.latest_week_cutoff:
+            raise ValueError("--promotion-candidate requires --latest-week-cutoff")
     env = load_env(Path(args.env_file))
     url = env["NEXT_PUBLIC_SUPABASE_URL"]
     key = env["SUPABASE_SERVICE_ROLE_KEY"]
@@ -897,7 +1143,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "long internal coverage gaps"
             )
         return summarize_direct_shop(result)
-    if args.all_filemaker:
+    if args.all_filemaker or promotion_candidate:
         rows = fetch_rows_paged(
             url,
             key,
@@ -910,13 +1156,29 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "order": "source_shop_key.asc,week_start.asc",
             },
         )
-        if args.forecast_horizons > 1:
-            return evaluate_filemaker_horizons(
+        if args.forecast_horizons > 1 or promotion_candidate:
+            result = evaluate_filemaker_horizons(
                 rows,
                 args.holdout_weeks,
                 args.calibration_weeks,
-                args.forecast_horizons,
+                4 if promotion_candidate else args.forecast_horizons,
                 args.latest_week_cutoff,
+            )
+            candidate = (
+                build_promotion_candidate(result, promotion_candidate)
+                if promotion_candidate
+                else result
+            )
+            return (
+                stage_promotion_review(
+                    url,
+                    key,
+                    candidate,
+                    args.actor_profile_id,
+                    args.review_notes,
+                )
+                if promotion_candidate and args.stage_review
+                else candidate
             )
         return evaluate_filemaker_shops(
             rows, args.holdout_weeks, args.calibration_weeks, args.latest_week_cutoff
@@ -954,6 +1216,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--env-file")
     parser.add_argument("--shop-id")
     parser.add_argument("--source-shop-key")
+    parser.add_argument("--promotion-candidate")
+    parser.add_argument("--stage-review", action="store_true")
+    parser.add_argument("--actor-profile-id")
+    parser.add_argument("--review-notes")
     parser.add_argument("--project-id", default="gylkkzmcmbdftxieyabw")
     parser.add_argument("--all-filemaker", action="store_true")
     parser.add_argument("--latest-week-cutoff")
@@ -978,6 +1244,10 @@ if __name__ == "__main__":
             print_horizon_markdown(result)
         elif result.get("scope") == "filemaker_shop_horizons":
             print_direct_horizon_markdown(result)
+        elif result.get("scope") == "filemaker_promotion_candidate":
+            print_promotion_candidate_markdown(result)
+        elif result.get("scope") == "filemaker_promotion_review_staged":
+            print_staged_review_markdown(result)
         elif result.get("scope") == "filemaker_multishop":
             print_multishop_markdown(result)
         elif result.get("scope") == "filemaker_shop":
