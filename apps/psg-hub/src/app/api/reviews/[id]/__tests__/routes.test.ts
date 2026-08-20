@@ -287,6 +287,14 @@ describe("POST /api/reviews/[id]/comments", () => {
     expect(res.status).toBe(400);
   });
 
+  it("400 when comment exceeds 2,000 characters", async () => {
+    mockUser = { id: "u1" };
+    const res = await commentPOST(req({ body: "x".repeat(2001) }), {
+      params: Promise.resolve({ id: "r1" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("400 when response id belongs to another review", async () => {
     mockUser = { id: "u1" };
     mockReview = baseReview;

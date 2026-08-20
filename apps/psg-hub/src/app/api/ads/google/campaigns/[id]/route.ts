@@ -1,18 +1,9 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { assertAdsTier } from "@/lib/google-ads/tier";
 import { updateCampaign } from "@/lib/google-ads/campaigns";
 import { AdsApiError } from "@/lib/google-ads/types";
-
-const DEFAULT_MAX_MICROS = 500_000_000;
-
-function envMaxMicros(): number {
-  const v = process.env.ADS_MAX_DAILY_MICROS;
-  if (!v) return DEFAULT_MAX_MICROS;
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_MICROS;
-}
+import { requireOpsFn } from "@/lib/auth/ops-access";
 
 function errorFromAdsApi(err: AdsApiError): NextResponse {
   const map: Record<string, number> = {
@@ -39,22 +30,22 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const gate = await requireOpsFn("ads_mutations");
+  if (!gate.ok) return gate.response;
   const { id: campaignId } = await params;
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
   let body: PutBody;
   try {
     body = (await request.json()) as PutBody;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  if (typeof body.daily_budget_micros === "number") {
+    return NextResponse.json(
+      { error: "Direct budget changes are unsupported; use Ads Mutation Studio" },
+      { status: 400 }
+    );
   }
 
   const service = createServiceClient();
@@ -82,71 +73,12 @@ export async function PUT(
     throw err;
   }
 
-  const { data: membership } = await supabase
-    .from("shop_users")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("shop_id", existing.shop_id)
-    .maybeSingle();
-
-  if (!membership) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const role = membership.role as "owner" | "manager" | "viewer";
-  if (role !== "owner" && role !== "manager") {
-    return NextResponse.json(
-      { error: "Owners or managers only" },
-      { status: 403 }
-    );
-  }
-
-  // First-enable gate: paused → enabled requires owner
-  if (
-    body.status === "enabled" &&
-    existing.status === "paused" &&
-    role !== "owner"
-  ) {
-    return NextResponse.json(
-      { error: "Enabling a campaign requires owner role" },
-      { status: 403 }
-    );
-  }
-
-  // Budget change constraints
-  if (typeof body.daily_budget_micros === "number") {
-    const cur = existing.daily_budget_micros as number;
-    if (cur > 0) {
-      const delta = Math.abs(body.daily_budget_micros - cur) / cur;
-      if (delta > 0.5) {
-        return NextResponse.json(
-          {
-            error: "Daily budget change exceeds 50% in 24h window",
-            current: cur,
-            requested: body.daily_budget_micros,
-          },
-          { status: 409 }
-        );
-      }
-    }
-
-    const cap = envMaxMicros();
-    if (body.daily_budget_micros > cap) {
-      return NextResponse.json(
-        { error: `daily_budget_micros exceeds cap ${cap}`, cap },
-        { status: 400 }
-      );
-    }
-  }
-
   try {
     await updateCampaign({
       shopId: existing.shop_id as string,
-      userId: user.id,
+      userId: gate.userId,
       externalResourceName: existing.external_resource_name as string,
       status: body.status,
-      dailyBudgetMicros: body.daily_budget_micros,
-      budgetResourceName: null,
     });
   } catch (err) {
     if (err instanceof AdsApiError) return errorFromAdsApi(err);
@@ -157,8 +89,6 @@ export async function PUT(
     updated_at: new Date().toISOString(),
   };
   if (body.status) patch.status = body.status;
-  if (typeof body.daily_budget_micros === "number")
-    patch.daily_budget_micros = body.daily_budget_micros;
 
   const { data: updated, error: upErr } = await service
     .from("google_ads_campaigns")
@@ -180,16 +110,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const gate = await requireOpsFn("ads_mutations");
+  if (!gate.ok) return gate.response;
   const { id: campaignId } = await params;
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
   const service = createServiceClient();
   const { data: existing, error: exErr } = await service
@@ -214,27 +137,10 @@ export async function DELETE(
     throw err;
   }
 
-  const { data: membership } = await supabase
-    .from("shop_users")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("shop_id", existing.shop_id)
-    .maybeSingle();
-
-  if (!membership) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  if (membership.role !== "owner") {
-    return NextResponse.json(
-      { error: "Only owners can delete campaigns" },
-      { status: 403 }
-    );
-  }
-
   try {
     await updateCampaign({
       shopId: existing.shop_id as string,
-      userId: user.id,
+      userId: gate.userId,
       externalResourceName: existing.external_resource_name as string,
       status: "removed",
     });

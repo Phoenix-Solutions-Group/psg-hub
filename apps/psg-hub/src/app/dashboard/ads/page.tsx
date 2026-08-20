@@ -4,11 +4,22 @@ import { getActiveShopContext } from "@/lib/shop/context";
 import { shopHasTier } from "@/lib/tier/gate";
 import { TierGateCard } from "./tier-gate-card";
 import { AccountsTable } from "./accounts-table";
+import { CustomerRequestActions } from "./customer-request-actions";
 import type { ShopRole } from "@/lib/ads/view-state";
 
 type Props = {
   searchParams: Promise<{ shop_id?: string }>;
 };
+
+type CampaignRow = {
+  id: string;
+  name: string;
+};
+
+export function adsPageHeading(shopName: string | null | undefined): string {
+  const normalized = shopName?.trim();
+  return normalized ? `${normalized} Google Ads` : "Your Google Ads";
+}
 
 export default async function AdsPage({ searchParams }: Props) {
   const supabase = await createClient();
@@ -22,10 +33,6 @@ export default async function AdsPage({ searchParams }: Props) {
     redirect("/login");
   }
 
-  // Resolve shop_id: an explicit param wins (and is membership-validated below);
-  // otherwise default to the active-shop context (07-03) so a switched shop is
-  // honored here instead of reverting to owner-first. The cookie only SELECTS
-  // among authorized shops — it never authorizes.
   const shopId = params.shop_id;
   if (!shopId) {
     const { activeShopId } = await getActiveShopContext(user.id);
@@ -35,7 +42,6 @@ export default async function AdsPage({ searchParams }: Props) {
     redirect(`/dashboard/ads?shop_id=${activeShopId}`);
   }
 
-  // Load role for this shop
   const { data: membership } = await supabase
     .from("shop_users")
     .select("role")
@@ -47,31 +53,36 @@ export default async function AdsPage({ searchParams }: Props) {
     redirect("/dashboard");
   }
 
-  // Tier check: shared gate (Performance subscription OR override allowlist).
   if (!(await shopHasTier(shopId, "performance"))) {
     return <TierGateCard shopId={shopId} />;
   }
 
-  // Phase 10 / 10-01: the Google Ads tables are now provisioned (migration
-  // 20260608000000), so surface the real accounts state. Read via the
-  // user-session client — RLS (google_ads_accounts_select: shop_id IN
-  // user_shop_ids()) clamps tenancy. An unlinked shop gets the empty state +
-  // "Link Google Ads" CTA from <AccountsTable>. Campaign metrics ingest + the
-  // campaign management view land in 10-02; campaign MUTATION stays out of scope
-  // (v1.2 Ads Mutation Studio, D52/D66 — Python on Vercel Sandbox).
-  const { data: accounts } = await supabase
-    .from("google_ads_accounts")
-    .select("id, customer_id, status, linked_at, last_error")
-    .eq("shop_id", shopId)
-    .order("linked_at", { ascending: false });
+  const [{ data: shop }, { data: accounts }, { data: campaigns }] = await Promise.all([
+    supabase
+      .from("shops")
+      .select("name")
+      .eq("id", shopId)
+      .maybeSingle(),
+    supabase
+      .from("google_ads_accounts")
+      .select("id, customer_id, status, linked_at, last_error")
+      .eq("shop_id", shopId)
+      .order("linked_at", { ascending: false }),
+    supabase
+      .from("google_ads_campaigns")
+      .select("id, name")
+      .eq("shop_id", shopId)
+      .neq("status", "removed")
+      .order("name"),
+  ]);
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-lg font-semibold">Google Ads</h1>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Customer advertising</p>
+        <h1 className="mt-1 text-xl font-semibold">{adsPageHeading(shop?.name)}</h1>
         <p className="text-sm text-muted-foreground">
-          Connect your Google Ads account to bring paid performance into your
-          analytics.
+          Review the advertising accounts connected for this shop and ask PSG for help. Sending a request does not change a live campaign or its budget.
         </p>
       </div>
       <AccountsTable
@@ -79,6 +90,23 @@ export default async function AdsPage({ searchParams }: Props) {
         shopId={shopId}
         userRole={membership.role as ShopRole}
       />
+      {(accounts?.length ?? 0) > 0 ? (
+        <section aria-labelledby="request-heading" className="space-y-4">
+          <h2 id="request-heading" className="text-lg font-semibold">
+            Ask PSG for help
+          </h2>
+          <div className="rounded-md border border-border p-4">
+            <CustomerRequestActions
+              shopId={shopId}
+              campaigns={((campaigns ?? []) as CampaignRow[]).map((campaign) => ({
+                id: campaign.id,
+                name: campaign.name,
+              }))}
+              canSubmit={["owner", "manager"].includes(membership.role)}
+            />
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
