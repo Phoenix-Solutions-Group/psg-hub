@@ -687,24 +687,122 @@ export default async function CollisionIntelligencePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>How to use this dashboard</CardTitle>
+              <CardTitle>How to use and interpret this data</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Operational guidance first; expand the data guide for exact
+                definitions, sources, freshness rules, and limits.
+              </p>
             </CardHeader>
-            <CardContent className="grid gap-4 text-sm text-muted-foreground md:grid-cols-3">
-              <p>
-                <strong className="text-foreground">Staffing:</strong> use
-                weekly arrivals and recent workload for short-range capacity
-                conversations.
-              </p>
-              <p>
-                <strong className="text-foreground">Market context:</strong> use
-                KDOT crashes and storm exposure as watchlists, then confirm
-                current conditions.
-              </p>
-              <p>
-                <strong className="text-foreground">Limits:</strong> this pilot
-                predicts repair demand for one shop, not individual crashes or
-                insurer claims.
-              </p>
+            <CardContent className="space-y-5 text-sm text-muted-foreground">
+              <div className="grid gap-4 md:grid-cols-3">
+                <p>
+                  <strong className="text-foreground">Staffing:</strong> use
+                  weekly arrivals and recent workload for short-range capacity
+                  conversations.
+                </p>
+                <p>
+                  <strong className="text-foreground">Market context:</strong>{" "}
+                  use KDOT crashes and storm exposure as watchlists, then
+                  confirm current conditions.
+                </p>
+                <p>
+                  <strong className="text-foreground">Limits:</strong> this
+                  pilot predicts shop repair demand, not individual crashes or
+                  insurer claim volume.
+                </p>
+              </div>
+
+              <details className="rounded-lg border border-border p-4">
+                <summary className="cursor-pointer font-heading font-semibold text-foreground">
+                  Definitions, sources, privacy, and limits
+                </summary>
+                <dl className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <dt className="font-heading font-semibold text-foreground">
+                      Repair arrivals
+                    </dt>
+                    <dd className="mt-1">
+                      Accepted FileMaker repair records for the confirmed shop,
+                      grouped into Monday-start weeks by arrival date. A repair
+                      is counted once in the reconciled source snapshot.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-heading font-semibold text-foreground">
+                      Insurance-paid
+                    </dt>
+                    <dd className="mt-1">
+                      Derived only from explicit FileMaker pay-type categories.
+                      Unknown values remain in total repairs but are never
+                      guessed as insured work or insurer claim volume.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-heading font-semibold text-foreground">
+                      Repair value and cycle time
+                    </dt>
+                    <dd className="mt-1">
+                      Repair value sums source repair dollars. Cycle time is
+                      completion date minus arrival date and averages only rows
+                      with valid observations.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-heading font-semibold text-foreground">
+                      Insurer, ZIP, vehicle, and season
+                    </dt>
+                    <dd className="mt-1">
+                      PII-free aggregates from the loaded repair snapshot.
+                      Insurer names are normalized and human-reviewed; ZIPs are
+                      reduced to five digits; seasons compare complete years.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-heading font-semibold text-foreground">
+                      Weather and ZIP alerts
+                    </dt>
+                    <dd className="mt-1">
+                      NOAA storm exposure is weighted by historical repairs in
+                      customer ZIPs. The 72-hour queue uses preliminary SPC
+                      reports and NWS severe thresholds; it is a review signal,
+                      not proof of damage or a claim.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-heading font-semibold text-foreground">
+                      Crash context
+                    </dt>
+                    <dd className="mt-1">
+                      Official KDOT crashes cover qualifying Kansas customer
+                      ZIPs and exclude the current partial month. Missing local
+                      coverage is shown as unavailable, never as zero crashes.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-heading font-semibold text-foreground">
+                      Four-week forecast
+                    </dt>
+                    <dd className="mt-1">
+                      Predicts weekly shop repair arrivals. Each horizon must
+                      beat its seasonal historical MAE before approval and
+                      carries an 80% operating interval. Publication pauses when
+                      the shop&apos;s latest arrival is more than 14 days old.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-heading font-semibold text-foreground">
+                      Privacy and freshness
+                    </dt>
+                    <dd className="mt-1">
+                      Stored facts exclude names, street addresses, email,
+                      phone, birthdates, claim numbers, raw repair-order
+                      numbers, and raw serials. The source snapshot is stale
+                      after 36 hours; shop-arrival freshness is tracked
+                      separately.
+                    </dd>
+                  </div>
+                </dl>
+              </details>
             </CardContent>
           </Card>
         </>
