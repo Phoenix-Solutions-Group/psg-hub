@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { invoiceDocumentData } from "../invoice-detail";
+import { invoiceDocumentData, invoiceRemainingBalance } from "../invoice-detail";
 
 describe("invoiceDocumentData", () => {
   it("extracts safe PDF-style financial detail", () => {
@@ -22,5 +22,18 @@ describe("invoiceDocumentData", () => {
     expect(invoiceDocumentData(null)).toEqual({
       dueDate: null, subtotal: null, tax: null, total: null, lines: [],
     });
+  });
+});
+
+describe("invoiceRemainingBalance", () => {
+  it("shows zero for paid and void invoices instead of the original invoice amount", () => {
+    expect(invoiceRemainingBalance("paid", 250000, {})).toBe(0);
+    expect(invoiceRemainingBalance("void", 75000, {})).toBe(0);
+  });
+
+  it("uses Stripe's remaining amount when it is present", () => {
+    expect(
+      invoiceRemainingBalance("open", 125000, { amount_remaining: 50000 })
+    ).toBe(50000);
   });
 });
