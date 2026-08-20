@@ -2,9 +2,11 @@
 
 - Issue: PSG-3038 (parent PSG-3034, ancestor PSG-2947)
 - Owner: Drew, Paid Media Director
-- Date: 2026-08-20
+- Date: 2026-08-20 (§8 decisions written in 2026-08-20, PSG-3044 → PSG-3048)
 - Consumers: Uma (design, PSG-3039), Ada (engineering, PSG-3040), Tess (verification, PSG-3041)
 - Status: requirements — not a design, not an implementation plan
+- **Product decisions: settled.** All ten open questions were ruled on by Steve. §8 is
+  decided text, not options. Design and build proceed against it.
 
 ---
 
@@ -103,28 +105,34 @@ the intent: requests come from `owner` or `manager`.
 
 Every field below must carry the plain-English meaning in the UI, not just the label.
 "Source" is the system of record. Anything marked **PSG-authored** does not exist in the
-data today and needs a place to live (see §6 decisions).
+data today and needs a place to live (see the settled decisions in §8).
 
 ### 2.1 Page-level
 
 | Field | Source | What the owner is told |
 | --- | --- | --- |
 | Numbers current as of | `metrics_synced_at` / latest snapshot `synced_at` | "These numbers were last updated from Google on <date, time>." |
-| Reporting window | Fixed 30-day trailing window | "Everything below covers the last 30 days." |
-| Settling notice | Derived (always shown) | "The last 3 days are still filling in. Google keeps counting leads for up to 30 days after a click, so recent numbers usually go **up**, not down." |
+| Reporting window | Fixed 30-day trailing window ending today (**D9**) | Print the real dates in words: "Everything below covers **Jul 21 – Aug 20**." Never make the customer work out what "last 30 days" means. |
+| Settling notice | Derived (always shown) | "The last 3 days are still filling in. Google keeps counting leads for up to 30 days after a click, so recent numbers usually go **up**, not down." The **most recent 3 days must be visibly marked** as still filling in (**D9**). |
+| Response time promise | Fixed copy (**D5**) | Verbatim: "We'll confirm we've got your request within **one business day**, and give you an answer within **two**." The page must state that this counts **business days only**. |
 | Connection health | `google_ads_accounts.status` | See §5 states. |
 
 The settling notice is not optional. Conversion lag and same-day incompleteness are the
 single biggest source of "your report is wrong" arguments with SMB clients. State it
 before the customer finds it.
 
+**Hidden accounts may not hide spend (D1).** Only the PSG-designated primary account's
+numbers are shown. If a non-primary linked account carries real spend, that raises an
+internal flag to the account manager — it must never silently disappear from the
+customer's totals.
+
 ### 2.2 The five headline numbers
 
 | Field | Source | Plain-English meaning | Accuracy rule |
 | --- | --- | --- | --- |
 | **Spend** | `analytics_snapshots` `metrics.spend`, summed over window | "What Google charged you for ads in the last 30 days." | Must say **ad spend only — does not include PSG's management fee.** |
-| **Leads** | `metrics.conversions` | "People who called, filled in a form, or asked for an estimate because of an ad." | Show only when conversion tracking is verified. Otherwise show `Unconfirmed` + the reason. Already implemented in `buildGoogleAdsDashboard`. |
-| **Cost per lead** | Spend ÷ Leads | "What each lead cost you." | Same tracking gate as Leads. Never compute from unverified conversions. |
+| **Leads** | `metrics.conversions` | "People who called, filled in a form, or asked for an estimate because of an ad." | Two gates. (1) **D8:** if the shop has no defined lead definition, show **"not set up yet"** — never a number. (2) Otherwise show only when conversion tracking is verified; if not, show `Unconfirmed` + the reason. Already partly implemented in `buildGoogleAdsDashboard`. |
+| **Cost per lead** | Spend ÷ Leads | "What each lead cost you." | Same two gates as Leads (**D8** first). Never compute from an undefined or unverified lead. |
 | **Clicks** | `metrics.clicks` | "People who clicked your ad and landed on your site." | — |
 | **Impressions** | `metrics.impressions` | "How many times your ad was shown." Must add: "This is visibility, not customers." | Never present as a success metric on its own. |
 
@@ -137,15 +145,15 @@ behavior and must be preserved.
 | Field | Source | Plain-English meaning | Accuracy rule |
 | --- | --- | --- | --- |
 | Campaign name | `google_ads_campaigns.name` | The Google Ads name, e.g. "Collision Repair Search". | Show as-is. |
-| What it's for | **PSG-authored** one-liner | "Brings in collision repair jobs from people searching in your area." | Required. A raw Google campaign name is meaningless to an owner. |
+| What it's for | **PSG-authored** one-liner, written and approved by the account manager (**D7**) | "Brings in collision repair jobs from people searching in your area." | Required. A raw Google campaign name is meaningless to an owner. An AI draft is allowed as a starting point but nothing publishes until the account manager approves it. **If there is no approved description, the campaign still appears** and this cell reads **"Description coming — ask your account manager"** — never hide a campaign the customer is paying for. |
 | Status | `google_ads_campaigns.status` | Translate: `enabled` → **Running**, `paused` → **Paused by PSG**, `removed` → **Ended**. | **Defect:** current code renders the raw enum in a badge. Never show `enabled`/`removed` to a customer. |
-| Daily budget | `daily_budget_micros ÷ 1,000,000` | "The most Google will normally spend on this campaign in a day." | Must be accompanied by: "Google can spend up to twice this on a busy day and less on a slow one, but it will not exceed <daily × 30.4> in a month." This is real Google behavior and owners call about it. |
-| Monthly budget equivalent | Derived (`daily × 30.4`) | "About $X per month at this setting." | Label as approximate. |
+| **Monthly budget — the headline number** (**D6**) | Derived (`daily × 30.4`) | "About **$X per month** at this setting." | **This is the big number on the campaign card.** Owners think in months, not days. Label as approximate. |
+| Daily budget — supporting detail (**D6**) | `daily_budget_micros ÷ 1,000,000` | "That works out to about $Y a day." | Shown **beneath** the monthly figure, smaller. Must be accompanied by: "Google can spend up to twice this on a busy day and less on a slow one, but it will not exceed <monthly total> in a month." This is real Google behavior and owners call about it. Leading with the daily number invites "why did you spend $94 yesterday when I said $50?" every month. |
 | Spend this window | Campaign `metrics.cost_micros` | "What this campaign cost in the last 30 days." | **Defect:** the campaign-level `metrics` blob carries no window label and comes from a different source than the headline Spend tile. The two can disagree. Both must be labelled with the same explicit window, or the campaign card must be driven from the same snapshot source. |
-| Leads this window | Campaign `metrics.conversions` | "Leads this campaign brought in." | Same tracking gate as the Leads tile. |
+| Leads this window | Campaign `metrics.conversions` | "Leads this campaign brought in." | Same two gates as the Leads tile — **D8** first: no lead definition → "not set up yet", not a number. |
 | Clicks this window | Campaign `metrics.clicks` | "Clicks on this campaign's ads." | — |
 | Where ads show | **PSG-authored** service area summary | "Riverside plus 15 miles." | Required for the "change my area" request to make sense. |
-| What counts as a lead | **PSG-authored** conversion-action list | "Phone calls over 60 seconds, estimate form submissions." | Required. Without it "Leads" is an unaudited number. |
+| What counts as a lead | **PSG-authored** conversion-action list, owned by the Tracking & Attribution Analyst (**D8**) | "Phone calls over 60 seconds, estimate form submissions." | Required. **If it is not defined for this shop, show "not set up yet" here and show no Leads number anywhere on the page.** A blank is honest; a number we cannot defend in front of a customer is not. |
 
 ### 2.4 Ranking rule for "Best-performing"
 
@@ -194,14 +202,24 @@ Required on **every** request, regardless of type:
 
 | # | Request | Required inputs | What the customer is warned about |
 | --- | --- | --- | --- |
-| R1 | **Change my budget** | Campaign; current daily budget (prefilled, read-only); requested new daily budget (USD, numeric); reason; when they want it | "Big budget swings restart Google's learning and results usually dip for 1–2 weeks. PSG will tell you if that applies." |
+| R1 | **Change my budget** | Campaign; current budget (prefilled, read-only, **monthly leading per D6**); requested new budget; reason; when they want it | "Big budget swings restart Google's learning and results usually dip for 1–2 weeks. PSG will tell you if that applies." |
 | R2 | **Pause or restart a campaign** | Campaign; pause or restart; reason; date; if pausing, until-when or "until I say otherwise" | "Pausing loses the history Google uses to find customers. Restarting is not instant." |
-| R3 | **Promote a service or seasonal offer** (new campaign) | Service; the offer/message; area to cover; start and end date; budget guidance; landing page; phone number | "New campaigns may change your monthly scope — PSG will confirm cost before anything starts." |
+| R3 | **Talk to us about a new campaign** (**D10** — this is the button label) | Service; the offer/message; area to cover; start and end date; budget guidance; landing page; phone number | "New campaigns usually change your monthly scope and price, so your account manager will pick this up with you directly. PSG will confirm cost before anything starts." |
 | R4 | **Change what an ad says** | Campaign; what's wrong; the exact new wording; why | "Google reviews new ad text, usually about one business day. Claims have to be ones you can back up." |
 | R5 | **Change where ads show** | Campaign; current area (prefilled); requested cities / ZIPs / radius | "Widening the area spreads the same budget thinner unless the budget changes too." |
 | R6 | **Change the phone number or landing page** | Campaign; new number and/or new URL | "PSG has to re-check call and form tracking before leads count correctly again." Routes to Tracking & Attribution. |
 | R7 | **Ask for a performance review** | The question; the period | No change is made. This is a question, not a campaign edit. |
-| R8 | **Report a problem** | What's wrong; an example; when it happened | Acknowledged same business day. |
+| R8 | **Report a problem** | What's wrong; an example; when it happened | Confirmed within one business day, answered within two (**D5**). |
+
+**Budget request routing (D3, D4).** Every budget request is handled on one of three
+paths, and the path is set by the request itself:
+
+| Request | Path |
+| --- | --- |
+| Increase of **more than 25%** or **more than $500/month** (whichever bar is hit first) | Two named PSG approvers — account manager plus a director. The second approval is **asynchronous**; no meeting is scheduled for it. |
+| Any smaller increase | One named PSG approver, with a written record on the request. |
+| Any decrease **above zero** | Fast path — one approver, actioned the same business day, no two-person gate regardless of size. |
+| A decrease **to zero** | Not a budget change — this is a **stop**. Routes to the account manager as a pause/cancel conversation, because it affects billing and the contract. |
 
 ### 3.1 Never customer-self-service
 
@@ -211,6 +229,12 @@ asks, it becomes an R7 conversation with a PSG specialist:
 bidding strategy; match types; negative keyword lists; audience and targeting internals;
 conversion action configuration; manager-account linking; Google billing and payment
 method; anything that spends money the moment it is saved.
+
+**Removing self-service is not the same as removing the ability to ask (D10).** A new
+campaign is not self-service, but the page keeps a visible **"Talk to us about a new
+campaign"** button that opens the handoff to the account manager. The same principle
+applies to everything in this section: no dead ends, always a way to start the
+conversation.
 
 ### 3.2 Defects in the current request form
 
@@ -237,10 +261,14 @@ confirmation. The summary shows, in this order:
 3. **What would change** — `from <current value>` → `to <requested value>`. For requests
    with no numeric change, the description.
 4. **What this costs today** — always: *"Nothing changes right now. Your spending is not
-   affected by sending this."* For R1 additionally: *"If PSG agrees, your maximum daily
-   spend would go from $X to $Y — roughly $Z more over 30 days."*
+   affected by sending this."* For R1 additionally, monthly first per **D6**: *"If PSG
+   agrees, your monthly maximum would go from $X to $Y — about $Z more a month (roughly
+   $A a day instead of $B)."*
 5. **What happens next** — *"PSG reviews this. Nothing in your live Google Ads account
-   changes until a PSG specialist makes the change and confirms it back to you."*
+   changes until a PSG specialist makes the change and confirms it back to you."* Followed
+   by the published promise from **D5**, verbatim: *"We'll confirm we've got your request
+   within one business day, and give you an answer within two."* — with "business days
+   only" stated.
 6. **Confirmation checkbox** — *"I understand this is a request. PSG will review it
    before anything changes."* Submit stays disabled until ticked.
 
@@ -297,8 +325,12 @@ required explicit customer ID, high-risk changes gated on a board-confirmation U
 an operator-controlled allowlist, and a full before/after audit log. Nothing in this
 customer feature may weaken, bypass, or re-expose that path.
 
-**S5 — Spend changes need two people.** A budget increase above the threshold in D3
-requires a PSG account manager plus a director. Recorded on the request.
+**S5 — Spend changes need a named approver, and big increases need two (D3, D4).** An
+increase of **more than 25%** or **more than $500/month** — whichever bar is hit first —
+requires a PSG account manager **plus** a director, recorded on the request. Every smaller
+increase still requires one named approver and a written record. The second approval is
+asynchronous. Decreases above zero take the one-approver fast path (**D4**); a decrease
+**to zero** is a stop, not a budget change, and routes to the account manager.
 
 **S6 — "Done" means verified live.** A request is only marked done after the change is
 confirmed present in the next Google Ads sync — not when a PSG person says they did it.
@@ -323,11 +355,21 @@ changed in Google, and when — retained and retrievable.
 
 ## 7. Handoff
 
+**All ten product decisions in §8 are settled — design and build against them, not against
+the earlier recommendations.** The six that change what appears on screen are **D5, D6,
+D7(b), D8, D9, D10**.
+
 **Uma (PSG-3039, design):** design against §2 (field list + meanings), §3 (request types
 and inputs), §4 (the summary screen — this is the most important new screen), and §5
 (nine states, each needing real copy). The customer-facing page should be about
-performance and requests; the linked-accounts table with raw customer IDs and error
-strings belongs in an ops or settings surface, pending D2.
+performance and requests; per **D2** the linked-accounts table with raw customer IDs and
+error strings moves to a PSG-only settings surface and does not appear here. Layout
+consequences of the decisions: monthly budget is the headline with daily beneath it
+(**D6**); the real date range appears in words with the last 3 days marked (**D9**);
+campaigns without an approved description still render, with placeholder copy (**D7**);
+shops with no lead definition show "not set up yet" where a Leads number would be
+(**D8**); the "Talk to us about a new campaign" button stays visible (**D10**); and the
+D5 promise is published on the page verbatim.
 
 **Ada (PSG-3040, engineering):** **§1a is the blocker and comes first** — close the three
 customer-reachable mutation endpoints before anything else on this feature moves. Then
@@ -335,7 +377,13 @@ customer-reachable mutation endpoints before anything else on this feature moves
 divergence, and the corrections in §2.3 (raw status enum, unlabelled campaign metric
 window), §2.4 (ranking claim), §3.2 (request-type enum, budget-notes field), §4 (summary +
 confirmation) and §5 (states). Note the richer Ads page is not on `main` — decide whether
-it merges forward or is rebuilt from this spec before estimating.
+it merges forward or is rebuilt from this spec before estimating. Data work the §8
+decisions create: a per-shop **primary account** designation plus an internal flag when a
+non-primary account has spend (**D1**); an approved-description field with a draft/approved
+distinction on the campaign record (**D7**); a per-shop lead-definition record that gates
+every leads figure and can be genuinely absent (**D8**); and approval metadata on the
+request row — approver identity, second approver where **D3** requires one, and the
+decrease-to-zero routing from **D4**.
 
 **Tess (PSG-3041, verification):** §6 is the checklist. S1, S1a, S4, and S8 must be proven
 by test, not inspection. The specific test that matters: authenticate as a shop `owner`
@@ -344,17 +392,177 @@ directly, with no UI. Both must be refused.
 
 ---
 
-## 8. Decisions only Steve can make
+## 8. Decisions — settled
 
-| # | Decision | Options | Drew's recommendation |
-| --- | --- | --- | --- |
-| D1 | A shop has more than one linked Google Ads account (Riverside shows three). Which numbers do we show? | Roll all up / PSG designates one primary / show a picker | PSG designates one primary account; others hidden from the customer. |
-| D2 | Should a customer see and manage account linking at all on this page? | Keep it / move to Settings / make it PSG-only | Move it off the customer Ads page. Owners don't act on a customer ID, and "Disconnect" is a foot-gun that silently stops all reporting. |
-| D3 | Two-person approval threshold for a budget increase. | Any increase / >25% / >$500 per month | >25% **or** >$500/month, whichever comes first. |
-| D4 | Do budget decreases move faster than increases? | Same SLA / faster | Faster. A decrease is low-risk and refusing to act quickly on a customer's own money reads badly. |
-| D5 | Published response SLA for a request. | None / acknowledge only / acknowledge + decide | Acknowledge same business day, decision within two. Publish it on the page. |
-| D6 | Do we show the daily budget number at all? | Yes / no / monthly only | Yes, with the "up to 2× on a busy day, capped monthly" explanation. It's their money; hiding it costs trust. |
-| D7 | Who writes the per-campaign plain-English purpose line, and where is it stored? | PSG account manager in a new field / auto-generated / omit | PSG account manager, stored on the campaign record. Not auto-generated — a wrong description is worse than none. |
-| D8 | Who defines and maintains the per-shop "what counts as a lead" list? | Tracking analyst / account manager / omit | Tracking & Attribution Analyst owns it; shown on the page. Without it, "Leads" is unauditable. |
-| D9 | Reporting window default. | 30 days ending today / 30 days ending 3 days ago | 30 days ending today, with the settling notice. Simpler to explain than a shifted window. |
-| D10 | Is "request a new campaign" (R3) self-service, or does it become a sales conversation? | Self-service request / route to account manager | Route to the account manager — a new campaign usually changes scope and price. |
+These ten questions are **closed**. Steve ruled on all ten on 2026-08-20 (PSG-3044,
+follow-through PSG-3048). They are no longer open options and are not up for
+re-litigation in design or build. Where the reasoning is useful to whoever builds it, it
+is kept below the decision.
+
+Eight were confirmed as recommended; **D5** (published response time) and **D6** (which
+budget number leads) were changed. Seven carry an addition that is part of the decision.
+
+**Decisions that change what appears on screen — read these first if you are designing or
+building:** D5, D6, D7(b), D8, D9, D10.
+
+| # | Decision | Settled as |
+| --- | --- | --- |
+| D1 | Multiple linked accounts | One PSG-designated primary account; others hidden. Hidden spend must raise an internal flag. |
+| D2 | Account linking on the customer page | Removed. Moves to Settings, PSG-only. |
+| D3 | Two-person approval threshold | Increase >25% **or** >$500/month, whichever triggers first. Every increase needs one named approver. |
+| D4 | Decreases move faster | Yes — one approver, same business day. Decrease **to zero** routes to the account manager instead. |
+| D5 | Published response time | "Confirm within one business day, answer within two." Business days, stated on the page. |
+| D6 | Budget numbers | Show both. **Monthly is the headline**; daily sits beneath as supporting detail. |
+| D7 | Campaign description | Account manager writes and approves it. AI draft allowed as a starting point only. Campaigns with no approved description still appear. |
+| D8 | "What counts as a lead" | Tracking & Attribution Analyst owns it, shown on the page. **No definition → no Leads number.** |
+| D9 | Reporting window | Last 30 days ending today, dates printed in words, last 3 days marked as still filling in. |
+| D10 | Request a new campaign | Routes to the account manager — but a visible "Talk to us about a new campaign" button stays. |
+
+---
+
+### D1 — One primary account; hidden accounts may not hide spend
+
+**Decided.** Where a shop has more than one linked Google Ads account, PSG designates one
+as primary. The customer page shows the primary account's numbers only. The other linked
+accounts are not shown to the customer.
+
+**Part of the decision:** hiding an account must never hide **spend**. If a non-primary
+linked account carries real spend, that raises an internal flag to the account manager —
+it may not silently vanish from the customer's totals. A page that under-reports a
+customer's own spend is worse than a page that shows three confusing account numbers.
+
+*Note for whoever builds it:* at least one of Riverside's three accounts is the
+cross-client contamination in §1b. The "three accounts" case there is partly a bug, not a
+real product situation — fix §1b before treating Riverside as the reference case.
+
+### D2 — Account linking comes off the customer page
+
+**Decided as recommended, no change.** Linked-account management moves to Settings and is
+PSG-only. It does not appear on the customer Ads page in any form.
+
+An owner cannot act on a raw customer ID, and "Disconnect" sitting one click away from a
+customer who cannot tell what it does silently stops all of their reporting. That is not
+something we ship.
+
+### D3 — Two-person approval on budget increases
+
+**Decided, with the wording tightened for whoever builds it.** "Whichever comes first"
+was ambiguous; the rule is:
+
+> Two-person approval is required when a monthly budget increase is **more than 25%** OR
+> **more than $500/month** — whichever bar is hit first (the lower of the two).
+
+**Part of the decision:**
+- Every increase, **including ones below the threshold**, still requires one named PSG
+  approver and a written record on the request.
+- The second approver is **asynchronous** — no meeting, no scheduled call. If the
+  two-person check ever starts costing us the D5 answer time, the process is wrong, not
+  the published promise.
+
+### D4 — Budget decreases move faster
+
+**Decided as recommended.** A decrease needs one approver, is actioned the same business
+day, and carries no two-person gate regardless of size. It is the customer's money and we
+should never look reluctant about giving it back.
+
+**Carve-out, part of the decision:** a decrease **to zero** is not a budget change, it is
+a stop. It routes to the account manager as a pause/cancel conversation, because it
+affects billing and the contract. Every other decrease goes on the fast path.
+
+### D5 — Published response time (CHANGED from the recommendation)
+
+**Changed.** We do **not** publish "acknowledge same business day." We cannot hit that for
+a request submitted at 6pm on a Friday, and a published promise we miss is worse than a
+slower one we always keep.
+
+**Publish this on the page, verbatim:**
+
+> We'll confirm we've got your request within **one business day**, and give you an
+> answer within **two**.
+
+The clock counts **business days only**, and the page says so in those words. This is
+deliberate under-promising — we will usually beat it, and beating a published promise is
+free goodwill.
+
+### D6 — Show the daily budget, but lead with the monthly figure (CHANGED)
+
+**Changed.** Yes, show the daily budget — hiding it costs trust. But the actual decision
+is which number is the headline, and it is the **monthly** one: **shop owners think in
+months, not days.**
+
+On screen:
+- The **monthly** figure is the big number.
+- The **daily** figure sits underneath it as supporting detail.
+- The plain-English note stays with the daily figure: Google may spend up to about twice
+  the daily amount on a busy day and less on a slow one, but will not exceed the monthly
+  total.
+
+Leading with a daily number invites "why did you spend $94 yesterday when I said $50?"
+every single month.
+
+### D7 — The account manager writes the campaign description
+
+**Decided as recommended.** The PSG account manager writes the one-line plain-English
+purpose for each campaign. It is stored on the campaign record. A wrong description is
+worse than none.
+
+**Part of the decision, two parts:**
+
+**(a) AI draft as a starting point only.** A draft may be auto-generated, but nothing
+publishes until the account manager has edited and approved it. That keeps the accuracy
+guarantee while making the work cheap enough that it actually gets done.
+
+**(b) A campaign with no approved description still appears.** It is shown with
+**"Description coming — ask your account manager"** in place of the purpose line. We never
+hide a campaign the customer is paying for just because we have not written the sentence
+yet.
+
+### D8 — Lead definition owned by Tracking; no definition means no number
+
+**Decided as recommended.** The Tracking & Attribution Analyst owns and maintains the
+per-shop "what counts as a lead" definition, and it is shown on the page.
+
+**Part of the decision, and this is the one that matters:** if a shop has **no defined
+lead definition**, we do **not** show a Leads number for that shop. We show **"not set up
+yet."**
+
+Without a definition the count is unauditable, so the conclusion is that we do not print
+it. A blank is honest; a number we cannot defend in front of a customer is not. This
+applies to the Leads tile, cost-per-lead, and every per-campaign leads figure.
+
+### D9 — Last 30 days ending today, with the real dates printed
+
+**Decided as recommended.** The default reporting window is the last 30 days ending today,
+with the settling notice. Simpler to explain than a shifted window.
+
+**Part of the decision:**
+- Print the **actual date range in words** on the page — e.g. "Jul 21 – Aug 20".
+- **Mark the most recent 3 days as still filling in.**
+
+Nobody should have to work out what "last 30 days" means, or wonder why yesterday looks
+weak.
+
+### D10 — New campaigns go through the account manager, but the ask stays visible
+
+**Decided as recommended.** "Request a new campaign" routes to the account manager. A new
+campaign usually changes scope and price, so it is a conversation.
+
+**Part of the decision:** it must **not** be a dead end. A visible button — **"Talk to us
+about a new campaign"** — stays on the page and opens the handoff to the account manager.
+Removing self-service is what we want; removing the customer's ability to ask is not.
+
+---
+
+### Where these decisions land in the rest of this spec
+
+| Decision | Sections it governs |
+| --- | --- |
+| D1 | §2.1 (page-level), §5.8 (partially healthy) |
+| D2 | §2.7, §7 (Uma) — linked-accounts table leaves the customer page |
+| D3, D4 | §3 R1, §6 S5 |
+| D5 | §2.1 (page-level promise), §4 step 5 |
+| D6 | §2.3 (budget rows) |
+| D7 | §2.3 ("What it's for") |
+| D8 | §2.2 (Leads, cost per lead), §2.3 ("What counts as a lead", "Leads this window"), §5.4 |
+| D9 | §2.1 (reporting window, settling notice) |
+| D10 | §3 R3, §3.1 |
