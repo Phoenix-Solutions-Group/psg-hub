@@ -33,6 +33,20 @@ function click(element: Element | null) {
 }
 
 describe("CustomerRequestActions dialog", () => {
+  it("uses a bottom sheet on phones and does not flag the campaign before review is attempted", () => {
+    flushSync(() => root.render(<CustomerRequestActions shopId="shop-1" canSubmit campaigns={[{ id: "campaign-1", name: "Search" }]} />));
+    click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Request a change")!);
+
+    const dialog = container.querySelector("dialog")!;
+    const campaign = dialog.querySelector("select[aria-invalid]");
+    expect(dialog.className).toContain("m-0 mt-auto");
+    expect(dialog.className).toContain("sm:m-auto");
+    expect(campaign).toBeNull();
+
+    click(Array.from(dialog.querySelectorAll("button")).find((button) => button.textContent === "Review request")!);
+    expect(dialog.querySelectorAll("select")[1]?.getAttribute("aria-invalid")).toBe("true");
+  });
+
   it("opens on the heading, closes with Escape, and restores the trigger focus", async () => {
     flushSync(() => root.render(<CustomerRequestActions shopId="shop-1" canSubmit campaigns={[{ id: "campaign-1", name: "Search" }]} />));
     const trigger = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Request a change")!;

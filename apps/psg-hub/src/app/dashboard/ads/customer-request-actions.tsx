@@ -62,6 +62,21 @@ export function requestErrorMessage(status?: number): string {
   return "We could not reach PSG. Check your internet connection and try again.";
 }
 
+export function isFieldRequired(kind: RequestKind, field: Field, values: Record<string, string>): boolean {
+  if (field.optional || kind === "destination_change") return false;
+  if (kind === "campaign_status_change" && field.key === "pauseUntil") {
+    return values.action?.trim().toLowerCase() === "pause";
+  }
+  return true;
+}
+
+export function getRequestSummary(kind: RequestKind, values: Record<string, string>): Array<{ label: string; value: string }> {
+  const request = REQUESTS.find((item) => item.kind === kind) ?? REQUESTS[0];
+  return request.fields
+    .map((field) => ({ label: field.label, value: values[field.key]?.trim() ?? "" }))
+    .filter((item) => item.value);
+}
+
 export function CustomerRequestActions({ shopId, campaigns, canSubmit }: Props) {
   const router = useRouter();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -73,12 +88,13 @@ export function CustomerRequestActions({ shopId, campaigns, canSubmit }: Props) 
   const [campaignId, setCampaignId] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
   const [acknowledged, setAcknowledged] = useState(false);
+  const [reviewAttempted, setReviewAttempted] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const selected = REQUESTS.find((request) => request.kind === kind) ?? REQUESTS[0];
   const campaign = campaigns.find((item) => item.id === campaignId);
   const missingFields = getMissingFields(kind, values, Boolean(campaign));
-  const summary = useMemo(() => selected.fields.map((field) => ({ label: field.label, value: values[field.key] ?? "" })), [selected, values]);
+  const summary = useMemo(() => getRequestSummary(kind, values), [kind, values]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -108,7 +124,7 @@ export function CustomerRequestActions({ shopId, campaigns, canSubmit }: Props) 
       focusables[plan.focusIndex]?.focus();
     }
   }, []);
-  function resetFor(next: RequestKind) { setKind(next); setValues({}); setCampaignId(""); setAcknowledged(false); setMessage(null); }
+  function resetFor(next: RequestKind) { setKind(next); setValues({}); setCampaignId(""); setAcknowledged(false); setReviewAttempted(false); setMessage(null); }
   function submit() {
     setMessage(null);
     startTransition(async () => {
@@ -133,16 +149,16 @@ export function CustomerRequestActions({ shopId, campaigns, canSubmit }: Props) 
     <p className="text-sm text-muted-foreground">Nothing you submit here changes a live campaign or your spending. PSG reviews every request first.</p>
     {canSubmit ? <Button ref={triggerRef} className="min-h-11 w-full sm:w-auto" onClick={() => setOpen(true)}>Request a change</Button> : <p className="rounded-md border bg-muted/40 p-3 text-sm">A shop owner or manager can send requests to PSG. Ask one of them to submit this change for your shop.</p>}
     {!open ? <p role="status" className="text-sm font-medium">{message}</p> : null}
-    <dialog ref={dialogRef} aria-labelledby="ads-request-title" onKeyDown={trapFocus} onCancel={(event) => { event.preventDefault(); close(); }} onClick={(event) => { if (event.target === event.currentTarget) close(); }} className="m-auto max-h-[92vh] w-full max-w-none overflow-y-auto rounded-t-lg bg-background p-5 text-foreground shadow-xl backdrop:bg-black/50 sm:max-w-2xl sm:rounded-lg sm:p-6">
+    <dialog ref={dialogRef} aria-labelledby="ads-request-title" onKeyDown={trapFocus} onCancel={(event) => { event.preventDefault(); close(); }} onClick={(event) => { if (event.target === event.currentTarget) close(); }} className="m-0 mt-auto max-h-[92vh] w-full max-w-none overflow-y-auto rounded-t-lg bg-background p-5 text-foreground shadow-xl backdrop:bg-black/50 sm:m-auto sm:max-w-2xl sm:rounded-lg sm:p-6">
       <div>
         <div className="flex items-start justify-between gap-4"><div><p className="text-sm text-muted-foreground">Step {step} of 2</p><h3 ref={headingRef} tabIndex={-1} id="ads-request-title" className="text-xl font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50">{step === 1 ? "Tell PSG what you need" : "Review your request"}</h3></div><Button variant="ghost" size="icon" className="min-h-11 min-w-11" aria-label="Close request" onClick={close}><X /></Button></div>
         {step === 1 ? <div className="mt-5 space-y-4">
           <label className="block space-y-1"><span className="text-sm font-medium">Request type</span><select className="min-h-11 w-full rounded-md border border-input bg-background px-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/50" value={kind} onChange={(event) => resetFor(event.target.value as RequestKind)}>{REQUESTS.map((request) => <option key={request.kind} value={request.kind}>{request.label}</option>)}</select></label>
-          {selected.campaign ? <label className="block space-y-1"><span className="text-sm font-medium">Campaign</span><select aria-invalid={!campaignId || undefined} className="min-h-11 w-full rounded-md border border-input bg-background px-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/50" value={campaignId} onChange={(event) => setCampaignId(event.target.value)}><option value="">Choose a campaign</option>{campaigns.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label> : null}
-          {selected.fields.map((field) => <label key={field.key} className="block space-y-1"><span className="text-sm font-medium">{field.label}</span><Input className="min-h-11" required={!field.optional} type={field.type ?? "text"} placeholder={field.placeholder} value={values[field.key] ?? ""} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))} /></label>)}
+          {selected.campaign ? <label className="block space-y-1"><span className="text-sm font-medium">Campaign</span><select aria-invalid={reviewAttempted && !campaignId ? true : undefined} className="min-h-11 w-full rounded-md border border-input bg-background px-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/50" value={campaignId} onChange={(event) => setCampaignId(event.target.value)}><option value="">Choose a campaign</option>{campaigns.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label> : null}
+          {selected.fields.map((field) => <label key={field.key} className="block space-y-1"><span className="text-sm font-medium">{field.label}</span><Input className="min-h-11" required={isFieldRequired(kind, field, values)} type={field.type ?? "text"} placeholder={field.placeholder} value={values[field.key] ?? ""} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))} /></label>)}
           <p className="rounded-md bg-muted p-3 text-sm">{selected.warning}</p>
           {missingFields.length ? <p className="text-sm text-destructive">Still needed: {missingFields.join(", ")}.</p> : null}
-          <Button className="min-h-11 w-full sm:w-auto" disabled={missingFields.length > 0} onClick={() => setStep(2)}>Review request</Button>
+          <Button className="min-h-11 w-full sm:w-auto" onClick={() => { setReviewAttempted(true); if (!missingFields.length) setStep(2); }}>Review request</Button>
         </div> : <div className="mt-5 space-y-4">
           <dl className="divide-y rounded-md border"><div className="p-3"><dt className="text-xs text-muted-foreground">{"What you're asking for"}</dt><dd className="font-medium">{selected.label}</dd></div><div className="p-3"><dt className="text-xs text-muted-foreground">Which campaign</dt><dd>{campaign?.name ?? "Not about a specific campaign"}</dd></div>{summary.map((item) => <div className="p-3" key={item.label}><dt className="text-xs text-muted-foreground">{item.label}</dt><dd className="whitespace-pre-wrap break-words">{item.value}</dd></div>)}</dl>
           <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm"><p className="font-medium">Nothing changes right now. Your spending is not affected by sending this.</p><p className="mt-2">PSG reviews this. Nothing in your live Google Ads account changes until a PSG specialist makes the change and confirms it back to you.</p><p className="mt-2">{"PSG reviews every request. We'll reply here as soon as a specialist has looked at it, and you'll see the status update on this page."}</p></div>

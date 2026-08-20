@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getMissingFields, requestErrorMessage } from "../customer-request-actions";
+import { getMissingFields, getRequestSummary, isFieldRequired, requestErrorMessage } from "../customer-request-actions";
 import { friendlyStatus } from "../page";
 
 describe("customer Ads request rules", () => {
@@ -24,10 +24,30 @@ describe("customer Ads request rules", () => {
     expect(getMissingFields("destination_change", {}, true)).toEqual(["A new phone number or landing page"]);
   });
 
+  it("marks conditional fields as required only when the form rule requires them", () => {
+    expect(isFieldRequired("destination_change", { key: "phoneNumber", label: "New phone number", type: "tel" }, {})).toBe(false);
+    expect(isFieldRequired("destination_change", { key: "landingPage", label: "New landing page", type: "url" }, {})).toBe(false);
+    expect(isFieldRequired("campaign_status_change", { key: "pauseUntil", label: "If pausing, until when?" }, { action: "Restart" })).toBe(false);
+    expect(isFieldRequired("campaign_status_change", { key: "pauseUntil", label: "If pausing, until when?" }, { action: "Pause" })).toBe(true);
+  });
+
   it("keeps new-campaign end date and destinations optional", () => {
     expect(getMissingFields("new_campaign", {
       service: "Collision repair", offer: "Free estimate", area: "Riverside", startDate: "2026-09-01", budgetGuidance: "2000",
     }, false)).toEqual([]);
+  });
+
+  it("omits blank optional new-campaign values from review and submission details", () => {
+    expect(getRequestSummary("new_campaign", {
+      service: "Collision repair", offer: "Free estimate", area: "Riverside", startDate: "2026-09-01", budgetGuidance: "2000",
+      endDate: "", landingPage: "   ", phoneNumber: "",
+    })).toEqual([
+      { label: "Service to promote", value: "Collision repair" },
+      { label: "Offer or message", value: "Free estimate" },
+      { label: "Area to cover", value: "Riverside" },
+      { label: "Start date", value: "2026-09-01" },
+      { label: "Monthly budget guidance", value: "2000" },
+    ]);
   });
 
   it("distinguishes permission, validation, server, and network failures", () => {
