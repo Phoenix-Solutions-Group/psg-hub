@@ -147,6 +147,33 @@ describe("AdsPage shop resolution", () => {
     expect(html).not.toContain("Tedesco");
   });
 
+  it("explains who can submit instead of showing staff an unusable action", async () => {
+    mockUser = { id: "u1", email: "test@psghub.me" };
+    mockExplicitMembership = { role: "staff" };
+    mockTierMeets = true;
+    mockShopName = "Riverside Collision";
+
+    const html = renderToStaticMarkup(await run("riverside"));
+
+    expect(html).toContain("A shop owner or manager can send requests to PSG");
+    expect(html).not.toContain(">Request a change</button>");
+  });
+
+  it("uses customer wording for campaign and report states", async () => {
+    mockUser = { id: "u1", email: "test@psghub.me" };
+    mockExplicitMembership = { role: "owner" };
+    mockTierMeets = true;
+    mockShopName = "Riverside Collision";
+
+    const html = renderToStaticMarkup(await run("riverside"));
+
+    expect(html).toContain("Running");
+    expect(html).toContain("Your next report is with PSG for review");
+    expect(html).toContain("No reports yet");
+    expect(html).not.toContain("Pending report state:");
+    expect(html).not.toContain("Ready report state:");
+  });
+
   it("preserves the unlinked-account screen outside the private preview", async () => {
     mockUser = { id: "u1", email: "customer@example.com" };
     mockExplicitMembership = { role: "owner" };
