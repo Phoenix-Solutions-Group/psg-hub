@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardAccess } from "@/lib/auth/shop-access";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { findInsurerNameMatches } from "./insurer-match";
 import { isForecastArrivalFresh, isMissingReviewView } from "./source-health";
 import {
   matchesVerifiedShopLocation,
@@ -325,24 +326,6 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     suggestions.push(suggestion);
     registrySuggestionsByLabel.set(suggestion.source_label, suggestions);
   }
-  const aliasReviewItems = aliases.map((alias) => {
-    const automaticSuggestions =
-      registrySuggestionsByLabel.get(alias.source_label_name) ?? [];
-    const registrySuggestions =
-      alias.source_label_normalized ===
-      requestedSearchAlias?.source_label_normalized
-        ? directorySearchSuggestions
-        : automaticSuggestions;
-    return {
-      alias,
-      strong: registrySuggestions.filter(
-        (suggestion) => suggestion.match_score >= 80,
-      ),
-      possible: registrySuggestions.filter(
-        (suggestion) => suggestion.match_score < 80,
-      ),
-    };
-  });
   const insurerOptionsByName = new Map<string, InsurerOption>();
   for (const insurer of (insuranceCompanyResult.data ??
     []) as InsuranceCompany[]) {
@@ -367,6 +350,30 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const insurerOptions = [...insurerOptionsByName.values()].sort((a, b) =>
     a.label.localeCompare(b.label),
   );
+  const aliasReviewItems = aliases.map((alias) => {
+    const automaticSuggestions =
+      registrySuggestionsByLabel.get(alias.source_label_name) ?? [];
+    const isSearchedAlias =
+      alias.source_label_normalized ===
+      requestedSearchAlias?.source_label_normalized;
+    const registrySuggestions = isSearchedAlias
+      ? directorySearchSuggestions
+      : automaticSuggestions;
+    const matchQuery =
+      isSearchedAlias && registrySearch
+        ? registrySearch
+        : alias.source_label_name;
+    return {
+      alias,
+      strong: registrySuggestions.filter(
+        (suggestion) => suggestion.match_score >= 80,
+      ),
+      possible: registrySuggestions.filter(
+        (suggestion) => suggestion.match_score < 80,
+      ),
+      existing: findInsurerNameMatches(insurerOptions, matchQuery),
+    };
+  });
   const shops = (shopResult.data ?? []) as ShopCandidate[];
   const featuredShops = shops.slice(0, 8).map((shop) => ({
     ...shop,
@@ -681,7 +688,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
 
         {aliases.length ? (
           <div className="grid gap-4 xl:grid-cols-2">
-            {aliasReviewItems.map(({ alias, strong, possible }) => (
+            {aliasReviewItems.map(({ alias, strong, possible, existing }) => (
               <Card
                 key={alias.source_label_normalized}
                 id={`insurer-${alias.source_label_normalized.replaceAll(" ", "-")}`}
@@ -741,11 +748,11 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         htmlFor={`registry-search-${alias.source_label_normalized.replaceAll(" ", "-")}`}
                         className="block font-heading text-sm font-semibold"
                       >
-                        Find the insurer
+                        Search insurer records
                       </label>
                       <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                        Search the NAIC directory by legal name, brand, or
-                        abbreviation. Existing PSG names appear in step 2.
+                        Search the official NAIC directory and existing PSG
+                        reporting names by legal name, brand, or abbreviation.
                       </p>
                       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                         <input
@@ -766,7 +773,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                           type="submit"
                           className="rounded-md border border-border bg-background px-3 py-2 font-heading text-sm font-medium hover:bg-accent"
                         >
-                          Search official directory
+                          Find matches
                         </button>
                       </div>
                       {alias.source_label_normalized === searchSource &&
@@ -777,9 +784,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         >
                           {directorySearchUnavailable
                             ? "The official directory search is unavailable. Choose an existing PSG name below or leave this label ungrouped."
-                            : directorySearchSuggestions.length
-                              ? `Showing ${directorySearchSuggestions.length} official registry match${directorySearchSuggestions.length === 1 ? "" : "es"} for “${registrySearch}”.`
-                              : `No official registry matches found for “${registrySearch}”. Try the full legal name or leave this label ungrouped.`}
+                            : directorySearchSuggestions.length || existing.length
+                              ? `Found ${directorySearchSuggestions.length} official and ${existing.length} existing PSG match${directorySearchSuggestions.length + existing.length === 1 ? "" : "es"} for “${registrySearch}”.`
+                              : `No official or PSG matches found for “${registrySearch}”. Try the full legal name or leave this label ungrouped.`}
                         </p>
                       ) : null}
                     </div>
@@ -805,7 +812,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                       <div className="min-w-0 flex-1 space-y-3">
                         <div>
                           <label className="block font-heading text-sm font-semibold">
-                            Confirm the reporting name
+                            Confirm one insurer
                             <select
                               name="canonical_target"
                               required
@@ -855,9 +862,16 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                                   ))}
                                 </optgroup>
                               ) : null}
-                              {insurerOptions.length ? (
-                                <optgroup label="Existing PSG reporting names">
-                                  {insurerOptions.map((insurer) => (
+                              {existing.length ? (
+                                <optgroup
+                                  label={
+                                    alias.source_label_normalized ===
+                                      searchSource && registrySearch
+                                      ? `Existing PSG matches for “${registrySearch}”`
+                                      : "Existing PSG name matches"
+                                  }
+                                >
+                                  {existing.map((insurer) => (
                                     <option
                                       key={insurer.value}
                                       value={insurer.value}
@@ -879,16 +893,23 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                             license.
                           </p>
                         </div>
-                        {strong[0] ? (
+                        {strong[0] || existing[0] ? (
                           <div className="rounded-md bg-accent p-3 text-xs leading-5">
                             <p className="font-heading font-semibold">
-                              Best name match
+                              Closest matches to compare
                             </p>
-                            <p className="text-muted-foreground">
-                              {strong[0].display_name} · {strong[0].match_score}
-                              % name match · NAIC {strong[0].record_type}{" "}
-                              {strong[0].registry_id}
-                            </p>
+                            {strong[0] ? (
+                              <p className="text-muted-foreground">
+                                Official: {strong[0].display_name} ·{" "}
+                                {strong[0].match_score}% name match · NAIC{" "}
+                                {strong[0].record_type} {strong[0].registry_id}
+                              </p>
+                            ) : null}
+                            {existing[0] ? (
+                              <p className="text-muted-foreground">
+                                PSG database: {existing[0].label}
+                              </p>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
