@@ -72,6 +72,10 @@
   4.39%, only a 0.50-point lift. Even ZIPs with 25+ prior repairs improve just 2.16
   points over their matched exposure control. The UI now says `Severe threshold met`
   rather than implying repair demand, and notifications remain disabled.
+- Forecast and mapping review cards with an empty customer audience now link to the
+  existing audited User Access workflow with the exact Hub shop preselected for both
+  invitations and existing-user assignments. The workflow does not guess the intended
+  customer or create a membership automatically.
 
 ### Fresh exact-address forecast candidates
 

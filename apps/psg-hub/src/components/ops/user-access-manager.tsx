@@ -47,10 +47,13 @@ export type ManagedUser = {
 export function UserAccessManager({
   users,
   shops,
+  initialShopId = null,
 }: {
   users: ManagedUser[];
   shops: ManagedShop[];
+  initialShopId?: string | null;
 }) {
+  const initialShop = shops.find((shop) => shop.id === initialShopId) ?? null;
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -65,7 +68,28 @@ export function UserAccessManager({
 
   return (
     <section className="space-y-6">
-      <InviteUserForm shops={shops} />
+      {initialShop ? (
+        <div
+          role="status"
+          className="rounded-lg border border-warning/50 bg-warning/10 p-4"
+        >
+          <p className="font-heading font-semibold">
+            Preparing customer access for {initialShop.name}
+          </p>
+          <p className="mt-1 text-sm leading-6 text-foreground/75">
+            Invite the intended customer or add this shop to an existing user.
+            The shop is preselected below; saved access changes are audited.
+          </p>
+          <Link
+            href="/dashboard/collision-intelligence/review#forecast-model-review"
+            className="mt-2 inline-block text-sm text-muted-foreground hover:text-ember"
+          >
+            Return to forecast review
+          </Link>
+        </div>
+      ) : null}
+
+      <InviteUserForm shops={shops} initialShopId={initialShop?.id ?? null} />
 
       <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -86,7 +110,12 @@ export function UserAccessManager({
 
         <div className="space-y-3">
           {filtered.map((user) => (
-            <UserAccessCard key={user.profileId} user={user} shops={shops} />
+            <UserAccessCard
+              key={user.profileId}
+              user={user}
+              shops={shops}
+              initialShopId={initialShop?.id ?? null}
+            />
           ))}
           {filtered.length === 0 && (
             <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
@@ -100,11 +129,17 @@ export function UserAccessManager({
   );
 }
 
-function InviteUserForm({ shops }: { shops: ManagedShop[] }) {
+function InviteUserForm({
+  shops,
+  initialShopId,
+}: {
+  shops: ManagedShop[];
+  initialShopId: string | null;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AdminAppRole>("customer");
-  const [shopId, setShopId] = useState("");
+  const [shopId, setShopId] = useState(initialShopId ?? "");
   const [shopRole, setShopRole] = useState<ShopMemberRole>("viewer");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -245,15 +280,26 @@ function InviteUserForm({ shops }: { shops: ManagedShop[] }) {
   );
 }
 
-function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop[] }) {
+function UserAccessCard({
+  user,
+  shops,
+  initialShopId,
+}: {
+  user: ManagedUser;
+  shops: ManagedShop[];
+  initialShopId: string | null;
+}) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(user.displayName);
   const [email, setEmail] = useState(user.email ?? "");
   const [role, setRole] = useState<AdminAppRole>(user.role ?? "customer");
-  const [shopId, setShopId] = useState(shops[0]?.id ?? "");
+  const [shopId, setShopId] = useState(initialShopId ?? shops[0]?.id ?? "");
   const [shopRole, setShopRole] = useState<ShopMemberRole>("viewer");
-  const [tierShopId, setTierShopId] = useState(shops[0]?.id ?? "");
-  const [tier, setTier] = useState<AdminTier | null>(shops[0]?.tier ?? null);
+  const [tierShopId, setTierShopId] = useState(
+    initialShopId ?? shops[0]?.id ?? ""
+  );
+  const initialTierShop = shops.find((shop) => shop.id === initialShopId) ?? shops[0];
+  const [tier, setTier] = useState<AdminTier | null>(initialTierShop?.tier ?? null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 

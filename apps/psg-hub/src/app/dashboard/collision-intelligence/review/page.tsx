@@ -1075,7 +1075,14 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                       This shop has {review.memberCount} customer members.
                       Assign at least one intended customer user before
                       approving its forecast policy. You may still reject the
-                      staged evidence.
+                      staged evidence. {" "}
+                      <Link
+                        href={`/ops/admin/users?shop_id=${encodeURIComponent(review.shopId)}`}
+                        className="font-medium underline underline-offset-2"
+                      >
+                        Manage {review.shopName} members
+                      </Link>
+                      .
                     </p>
                   ) : null}
 
@@ -1976,6 +1983,21 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         as an operational shop dashboard. PSG staff access is
                         unchanged.
                       </p>
+                      <div className="mt-2 flex flex-wrap gap-3 text-sm">
+                        {selectableShopMatches
+                          .filter(
+                            (match) => shopMemberCount(match.shop) === 0,
+                          )
+                          .map((match) => (
+                            <Link
+                              key={match.shop.id}
+                              href={`/ops/admin/users?shop_id=${encodeURIComponent(match.shop.id)}`}
+                              className="font-medium underline underline-offset-2"
+                            >
+                              Manage {match.shop.name ?? match.shop.slug ?? "shop"} members
+                            </Link>
+                          ))}
+                      </div>
                     </div>
                   ) : null}
 

@@ -82,4 +82,22 @@ describe("UserAccessManager", () => {
     expect(html).toContain(">Growth</option>");
     expect(html).toContain(">Performance</option>");
   });
+
+  it("preselects a forecast target for invites and existing-user assignments", () => {
+    const html = renderToStaticMarkup(
+      <UserAccessManager
+        users={users}
+        shops={shops}
+        initialShopId={shops[1].id}
+      />
+    );
+
+    expect(html).toContain("Preparing customer access for Tedesco Auto Body");
+    expect(html).toContain(
+      'href="/dashboard/collision-intelligence/review#forecast-model-review"'
+    );
+    expect(html.match(/value="33333333-3333-4333-8333-333333333333" selected=""/g)).toHaveLength(
+      3
+    );
+  });
 });
