@@ -13,6 +13,7 @@ import { findRiversideDemoContentItem } from "@/lib/bsm/riverside-demo-content";
 import { Badge } from "@/components/ui/badge";
 import { ContentPreview } from "@/components/dashboard/content-preview";
 import { ApprovalActions } from "@/components/dashboard/approval-actions";
+import { customerPublicationStatus } from "@/components/dashboard/content-table";
 
 const statusColors: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
@@ -96,7 +97,7 @@ export default async function ContentDetailPage({
                   variant="secondary"
                   className={statusColors[reviewItem.status] || ""}
                 >
-                  {reviewItem.status.replace(/_/g, " ")}
+                  {customerPublicationStatus(reviewItem.status)}
                 </Badge>
                 <span className="text-sm text-muted-foreground">
                   {reviewItem.contentType.replace(/_/g, " ")}
@@ -151,7 +152,7 @@ export default async function ContentDetailPage({
               variant="secondary"
               className={statusColors[item.status] || ""}
             >
-              {item.status.replace(/_/g, " ")}
+              {customerPublicationStatus(item.status)}
             </Badge>
             <span className="text-sm text-muted-foreground">
               {item.content_type.replace(/_/g, " ")}

@@ -34,6 +34,7 @@ export function dashboardNav(
         ]
       : []),
     { href: "/dashboard/audit", label: "SEO Audit" },
+    { href: "/dashboard/local-reach", label: "Local Reach" },
     { href: "/dashboard/content", label: "Content" },
     { href: "/dashboard/approvals", label: "Approvals" },
     { href: "/dashboard/reviews", label: "Reviews" },

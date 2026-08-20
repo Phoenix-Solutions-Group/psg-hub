@@ -39,6 +39,10 @@ function formatType(type: string) {
   return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+export function customerPublicationStatus(status: string) {
+  return status === "published" ? "Published" : "Draft";
+}
+
 export function ContentTable({ items }: { items: ContentItem[] }) {
   if (items.length === 0) {
     return (
@@ -80,7 +84,7 @@ export function ContentTable({ items }: { items: ContentItem[] }) {
                 variant="secondary"
                 className={statusColors[item.status] || ""}
               >
-                {formatType(item.status)}
+                {customerPublicationStatus(item.status)}
               </Badge>
             </TableCell>
             <TableCell className="text-muted-foreground">

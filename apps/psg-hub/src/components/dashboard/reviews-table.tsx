@@ -319,6 +319,7 @@ export function ReviewsTable({
 
       {activeReview && (
         <ResponseModal
+          key={activeReview.id}
           review={{
             id: activeReview.id,
             author: activeReview.author,
@@ -330,7 +331,7 @@ export function ReviewsTable({
           existing={activeExisting}
           onClose={() => setActiveReview(null)}
           onSaved={(next) =>
-            setResponses((prev) => ({ ...prev, [next.id]: next }))
+            setResponses((prev) => ({ ...prev, [activeReview.id]: next }))
           }
         />
       )}

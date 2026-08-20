@@ -118,4 +118,26 @@ describe("BsmContentApprovalReviewPage uploaded file rendering", () => {
       expect(html).not.toContain("Open file in a new tab");
     }
   });
+
+  it("opens generated content through the private customer preview when no dedicated preview URL exists", async () => {
+    getBsmCustomerReviewItem.mockResolvedValueOnce({
+      ...baseItem,
+      contentType: "generated_page",
+      currentVersion: {
+        id: baseItem.currentVersionId,
+        versionNumber: 1,
+        originalFilename: null,
+        contentType: "text/html",
+        storagePath: null,
+        previewType: "url",
+        sourceMetadata: { generatedPagePath: "/generated/missing-page" },
+        createdAt: "2026-07-30T12:00:00.000Z",
+      },
+    });
+
+    const html = await renderPage();
+
+    expect(html).toContain(`href="/dashboard/content/${baseItem.id}"`);
+    expect(html).not.toContain("/generated/missing-page");
+  });
 });
