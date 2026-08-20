@@ -136,6 +136,37 @@ const notices: Record<string, string> = {
   mapping_error: "The shop mapping could not be saved. No mapping was changed.",
 };
 
+// ponytail: pilot evidence; move to governed identity records when review coverage expands.
+const shopIdentityEvidence: Record<
+  string,
+  { address: string; checkedAt: string; sources: Array<[string, string]> }
+> = {
+  PS228: {
+    address: "4538 Cornhusker Hwy, Lincoln, NE 68504",
+    checkedAt: "Aug 20, 2026",
+    sources: [
+      [
+        "BBB business profile",
+        "https://www.bbb.org/us/ne/lincoln/profile/auto-body-repair-and-painting/tracys-collision-center-0714-207000414",
+      ],
+      [
+        "GM Collision Repair Network",
+        "https://www.gmparts.com/content/dam/gmparts/na/us/en/index/technical-resources/collision-repair-network/02-pdfs/GM_CRN_CT6_Specialty%20Active_8.23.pdf",
+      ],
+    ],
+  },
+  PS229: {
+    address: "1500 Center Park Rd, Lincoln, NE 68512",
+    checkedAt: "Aug 20, 2026",
+    sources: [
+      [
+        "BBB business profile",
+        "https://www.bbb.org/us/ne/lincoln/profile/auto-body-repair-and-painting/tracys-collision-center-0714-207000414/addressId/70387",
+      ],
+    ],
+  },
+};
+
 export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const supabase = await createClient();
   const {
@@ -361,6 +392,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     shops.find((shop) => shop.source_shop_key === requestedShopKey) ??
     featuredShops[0] ??
     null;
+  const selectedShopEvidence = selectedShop
+    ? shopIdentityEvidence[selectedShop.source_shop_key]
+    : null;
   const shopSearch = selectedShop
     ? searchValue(params.shop_search).slice(0, 80)
     : "";
@@ -1120,6 +1154,38 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         : "Stale or missing"}
                     </Badge>
                   </div>
+                </div>
+              ) : null}
+
+              {selectedShopEvidence ? (
+                <div
+                  role="note"
+                  className="rounded-lg border border-primary/30 bg-primary/5 p-4"
+                >
+                  <p className="font-heading font-semibold">
+                    Public location evidence
+                  </p>
+                  <p className="mt-1 text-sm text-foreground/75">
+                    {selectedShopEvidence.address}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Checked {selectedShopEvidence.checkedAt}. Sources:{" "}
+                    {selectedShopEvidence.sources.map(([label, url], index) => (
+                      <span key={url}>
+                        {index ? " · " : ""}
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-primary underline underline-offset-4"
+                        >
+                          {label}
+                        </a>
+                      </span>
+                    ))}
+                    . Use this to distinguish North from South, then confirm the
+                    PSG agreement and exact Hub location before saving.
+                  </p>
                 </div>
               ) : null}
 
