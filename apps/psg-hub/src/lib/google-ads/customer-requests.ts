@@ -23,6 +23,19 @@ export const GOOGLE_ADS_REQUEST_STATUSES = [
 export type GoogleAdsRequestType = (typeof GOOGLE_ADS_REQUEST_TYPES)[number];
 export type GoogleAdsRequestStatus = (typeof GOOGLE_ADS_REQUEST_STATUSES)[number];
 
+export const RIVERSIDE_PREVIEW_CAMPAIGN_IDS = [
+  "riverside-search",
+  "riverside-local",
+  "riverside-brand",
+] as const;
+
+const campaignIdSchema = z.string().refine(
+  (value) =>
+    z.uuid().safeParse(value).success ||
+    RIVERSIDE_PREVIEW_CAMPAIGN_IDS.some((previewId) => previewId === value),
+  { message: "Campaign must be a valid campaign ID" },
+);
+
 const requestValueSchema = z.record(
   z.string().trim().min(1).max(80),
   z.union([z.string().trim().max(2000), z.number().finite(), z.boolean(), z.null()]),
@@ -30,7 +43,7 @@ const requestValueSchema = z.record(
 
 export const createGoogleAdsRequestSchema = z.object({
   requestType: z.enum(GOOGLE_ADS_REQUEST_TYPES),
-  campaignId: z.string().uuid().nullish(),
+  campaignId: campaignIdSchema.nullish(),
   campaignName: z.string().trim().max(200).nullish(),
   title: z.string().trim().min(3).max(160),
   details: z.string().trim().min(10).max(5000),
@@ -74,11 +87,18 @@ export function toCreateRow(
   actorProfileId: string,
   input: z.infer<typeof createGoogleAdsRequestSchema>,
 ) {
+  const campaignId = RIVERSIDE_PREVIEW_CAMPAIGN_IDS.some(
+    (previewId) => previewId === input.campaignId,
+  )
+    ? null
+    : input.campaignId ?? null;
+
   return {
     shop_id: shopId,
     requested_by_profile_id: actorProfileId,
     request_type: input.requestType,
-    campaign_id: input.campaignId ?? null,
+    // Preview campaigns are display-only and have no tenant database row to reference.
+    campaign_id: campaignId,
     campaign_name: input.campaignName || null,
     title: input.title,
     details: input.details,
