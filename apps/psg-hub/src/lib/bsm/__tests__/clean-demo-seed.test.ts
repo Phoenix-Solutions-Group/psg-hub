@@ -253,8 +253,51 @@ describe("clean BSM demo seed", () => {
   it("builds representative, non-payable invoices for the approved demo shop", () => {
     const rows = buildRiversideDemoInvoiceRows("12345678-demo-shop");
 
-    expect(rows.map((row) => row.status)).toEqual(["open", "paid", "void"]);
-    expect(rows.map((row) => row.amount_due)).toEqual([125000, 250000, 75000]);
+    expect(rows.map(({ number, status, amount_due, amount_paid, raw }) => ({
+      number,
+      status,
+      amountDue: amount_due,
+      amountPaid: amount_paid,
+      dueDate: raw.due_date,
+      subtotal: raw.subtotal,
+      tax: raw.tax,
+      total: raw.total,
+      amountRemaining: raw.amount_remaining,
+    }))).toEqual([
+      {
+        number: "RIV-DEMO-1003",
+        status: "open",
+        amountDue: 125000,
+        amountPaid: 0,
+        dueDate: "2026-08-30T23:59:59.000Z",
+        subtotal: 115000,
+        tax: 10000,
+        total: 125000,
+        amountRemaining: 125000,
+      },
+      {
+        number: "RIV-DEMO-1002",
+        status: "paid",
+        amountDue: 250000,
+        amountPaid: 250000,
+        dueDate: "2026-07-30T23:59:59.000Z",
+        subtotal: 250000,
+        tax: 0,
+        total: 250000,
+        amountRemaining: 0,
+      },
+      {
+        number: "RIV-DEMO-1001",
+        status: "void",
+        amountDue: 75000,
+        amountPaid: 0,
+        dueDate: "2026-06-30T23:59:59.000Z",
+        subtotal: 75000,
+        tax: 0,
+        total: 75000,
+        amountRemaining: 0,
+      },
+    ]);
     expect(rows.every((row) => row.shop_id === "12345678-demo-shop")).toBe(true);
     expect(rows.every((row) => row.hosted_invoice_url === null)).toBe(true);
     expect(rows.every((row) => row.invoice_pdf === null)).toBe(true);
@@ -265,8 +308,10 @@ describe("clean BSM demo seed", () => {
       )
     ).toBe(true);
     expect(rows.every((row) => row.raw.lines.length > 0)).toBe(true);
-    expect(rows.map((row) => row.raw.amount_remaining)).toEqual([125000, 0, 0]);
-    expect(rows.map((row) => row.raw.total)).toEqual([125000, 250000, 75000]);
+    expect(rows.every((row) =>
+      row.raw.lines.reduce((sum, line) => sum + line.amount, 0) === row.raw.subtotal
+      && row.raw.subtotal + row.raw.tax === row.raw.total
+    )).toBe(true);
   });
 
   it("builds Riverside direct-mail priors from aggregate rows instead of invented counts", () => {
