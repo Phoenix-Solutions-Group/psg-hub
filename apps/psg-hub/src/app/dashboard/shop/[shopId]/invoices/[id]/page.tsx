@@ -18,7 +18,10 @@ import {
   statusBadgeVariant,
   isPayable,
 } from "@/lib/billing/format";
-import { invoiceDocumentData } from "@/lib/billing/invoice-detail";
+import {
+  invoiceDocumentData,
+  invoiceRemainingBalance,
+} from "@/lib/billing/invoice-detail";
 
 /**
  * PSG-59 — Stripe-native invoice detail. RLS-clamped read (invoices_select); the
@@ -88,6 +91,11 @@ export default async function ShopInvoiceDetailPage({ params }: Props) {
     .maybeSingle<{ name: string }>();
 
   const document = invoiceDocumentData(invoice.raw);
+  const remainingBalance = invoiceRemainingBalance(
+    invoice.status,
+    invoice.amount_due,
+    invoice.raw
+  );
 
   const { data: paymentRows } = await supabase
     .from("payments")
@@ -158,7 +166,7 @@ export default async function ShopInvoiceDetailPage({ params }: Props) {
           {document.tax != null && <Total label="Taxes and adjustments" value={document.tax} currency={invoice.currency} />}
           <Total label="Total" value={document.total ?? invoice.amount_due + invoice.amount_paid} currency={invoice.currency} strong />
           <Total label="Amount paid" value={invoice.amount_paid} currency={invoice.currency} />
-          <Total label="Balance due" value={invoice.amount_due} currency={invoice.currency} strong />
+          <Total label="Remaining balance" value={remainingBalance} currency={invoice.currency} strong />
         </div>
       </section>
 
