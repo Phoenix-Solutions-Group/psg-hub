@@ -133,7 +133,8 @@ function validateRow(
     errors.push(`ZIP is malformed: "${zipVal}"`);
   }
 
-  return { index, values, errors, warnings };
+  const excludedReasons = values.do_not_mail === true ? ["Do not mail — customer opted out"] : [];
+  return { index, values, errors, warnings, excludedReasons };
 }
 
 export function validateRecords(
@@ -143,12 +144,23 @@ export function validateRecords(
 ): ValidationSummary {
   const unmappedRequired = missingRequiredMappings(kind, mapping);
   const rows = records.map((r, i) => validateRow(kind, i + 1, r));
-  const valid = rows.filter((r) => r.errors.length === 0).length;
+  const numberKey = kind === "ro" ? "ro_number" : "estimate_number";
+  const firstSeen = new Map<string, number>();
+  for (const row of rows) {
+    const value = String(row.values[numberKey] ?? "").trim().toLowerCase();
+    if (!value) continue;
+    const firstRow = firstSeen.get(value);
+    if (firstRow) (row.excludedReasons ??= []).push(`Duplicate ${kind === "ro" ? "RO" : "estimate"} number — matches row ${firstRow}`);
+    else firstSeen.set(value, row.index);
+  }
+  const valid = rows.filter((r) => r.errors.length === 0 && (r.excludedReasons?.length ?? 0) === 0).length;
+  const excluded = rows.filter((r) => (r.excludedReasons?.length ?? 0) > 0).length;
   return {
     kind,
     total: rows.length,
     valid,
-    invalid: rows.length - valid,
+    invalid: rows.filter((r) => r.errors.length > 0).length,
+    excluded,
     rows,
     unmappedRequired,
   };

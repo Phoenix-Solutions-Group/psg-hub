@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getOpsAccess, hasOpsFn } from "@/lib/auth/ops-access";
@@ -17,6 +18,10 @@ import { TemplateGateCard, type TemplateGateRow } from "@/components/ops/templat
 // approve/release/revoke + seed-test routes. Gated by manage_production.
 
 export default async function TemplateGatePage() {
+  const requestHeaders = await headers();
+  const hostname = (requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "").split(":")[0];
+  const boardSafeMode = hostname === "demo.psgweb.me";
+  const buildId = (process.env.VERCEL_GIT_COMMIT_SHA ?? "local").slice(0, 12);
   const supabase = await createClient();
   const {
     data: { user },
@@ -73,9 +78,19 @@ export default async function TemplateGatePage() {
         </p>
       </div>
 
+      <section className={`rounded-lg border p-4 ${boardSafeMode ? "border-emerald-300 bg-emerald-50" : "border-border"}`}>
+        <h2 className="font-heading text-sm font-semibold">Board review safety</h2>
+        <p className="mt-1 text-sm">
+          {boardSafeMode
+            ? "Safe review mode is on. This demo cannot release a template for live mailing or create a paid Lob mail order. Test proofs are free and are not mailed."
+            : "Standard operations mode. Live release remains protected by named approval and release gates."}
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground">Main-branch build: {buildId}</p>
+      </section>
+
       <div className="space-y-5">
         {rows.map((row) => (
-          <TemplateGateCard key={row.key} row={row} />
+          <TemplateGateCard key={row.key} row={row} boardSafeMode={boardSafeMode} />
         ))}
       </div>
     </div>
