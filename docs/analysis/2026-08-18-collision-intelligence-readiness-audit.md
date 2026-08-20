@@ -28,10 +28,14 @@
   candidates remain unapproved.
 - The review route is discoverable in dashboard navigation only for superadmins. The
   page and mutation endpoint retain independent server-side role checks.
-- The prior feature-branch revision is deployed to a Vercel preview. Unauthenticated
-  browser and HTTP checks confirm the page redirects to login and the mutation returns 401. The source-health addition is build-verified but not deployed because it depends
-  on the unapplied reconciliation migration; authenticated product approval and
-  production deployment remain separate gates.
+- Draft PR [#18](https://github.com/Phoenix-Solutions-Group/psg-hub/pull/18)
+  is clean and mergeable at signed head `b1e27b33`. Its current Vercel preview is
+  deployed at
+  `https://psg-hub-git-codex-collision-preview-20260819-psg-digital.vercel.app`.
+  Unauthenticated HTTP checks confirm the collision route redirects to login. The
+  production happy-path E2E suite, migration-drift guard, staging guard, Vercel build,
+  and preview-comments checks pass. Authenticated deployed product approval and
+  production release remain separate gates.
 - A linked `supabase db push --dry-run` made no production changes and stopped on the
   shared project's historical migration-ledger drift. Five already-applied collision
   migrations have the same names under different timestamps; older sibling-app drift
@@ -197,8 +201,11 @@
 - Unified mapped source and weekly-demand counts both reconcile to 3,420 repair orders;
   all are FileMaker rows and no legacy pilot rows are unioned.
 - Weekly cycle denominator reconciles to 3,420 observations and 14.8 days.
-- Unit test, TypeScript, targeted ESLint, Python self-check, and production Next.js
-  build pass.
+- Python self-checks, targeted ESLint, 3,331 unit tests, the production Next.js build,
+  and the 60-test CI browser suite pass. The standalone `pnpm typecheck` currently
+  reports named-capture-group errors in the newly inherited Riverside seed test from
+  `main`; the production build's TypeScript phase and all PR checks pass, and no
+  collision file is implicated.
 - A deterministic zero-PII fixture exercises 460 repair orders across 120 source
   weeks through the real local login flow. Nine required dashboard-section
   assertions, desktop and mobile Chromium captures, and WCAG A/AA checks pass with
@@ -255,6 +262,8 @@
 4. After 13 observed forecasts accrue per horizon, review the live monitoring status.
    Manual review is requested when rolling MAE loses to seasonal or 80% interval
    coverage falls below 70%; the scorecard never changes promotion automatically.
-5. Review and approve product/navigation using the verified desktop and mobile captures.
+5. Review and approve product/navigation in the deployed PR preview. Local authenticated
+   desktop/mobile captures and automated preview checks pass; authenticated deployed
+   review remains outstanding.
 6. Deploy separately, then smoke-test the Vercel cron and keep notifications disabled
    until an owner, acknowledgement lifecycle, and false-positive review are approved.
