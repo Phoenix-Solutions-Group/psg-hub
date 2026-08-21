@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   addAssignedReviewerAnnotation: vi.fn(),
   getAssignedReviewerWorkspace: vi.fn(),
   setGuestThreadStatus: vi.fn(),
-  submitAssignedReviewerRound: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -24,7 +23,6 @@ vi.mock("@/lib/bsm/review-workspace", () => ({
   getGuestReviewWorkspace: vi.fn(),
   reopenGuestReviewRound: vi.fn(),
   setGuestThreadStatus: mocks.setGuestThreadStatus,
-  submitAssignedReviewerRound: mocks.submitAssignedReviewerRound,
   submitGuestReviewRound: vi.fn(),
 }));
 
@@ -49,10 +47,9 @@ describe("assigned reviewer routes", () => {
     vi.clearAllMocks();
     mocks.getAssignedReviewerWorkspace.mockResolvedValue({ project: { id: PROJECT_ID } });
     mocks.addAssignedReviewerAnnotation.mockResolvedValue({ id: "comment-1" });
-    mocks.submitAssignedReviewerRound.mockResolvedValue({ status: "submitted" });
   });
 
-  it("loads, comments, and submits through the logged-in reviewer identity", async () => {
+  it("loads and comments through the logged-in reviewer identity", async () => {
     const sessionResponse = await loadSession(request("/api/bsm/review-workspace/session", { projectId: PROJECT_ID }));
     expect(sessionResponse.status).toBe(200);
     expect(mocks.getAssignedReviewerWorkspace).toHaveBeenCalledWith(PROJECT_ID, USER_ID);
@@ -73,16 +70,14 @@ describe("assigned reviewer routes", () => {
       actorProfileId: USER_ID,
       body: "Please adjust this.",
     }));
+  });
 
+  it("rejects review decisions from assigned reviewers", async () => {
     const submitResponse = await submitReview(request("/api/bsm/review-workspace/submit", {
       projectId: PROJECT_ID,
       decisions: [{ reviewItemId: "77777777-7777-4777-8777-777777777777", versionId: "88888888-8888-4888-8888-888888888888", decision: "approved" }],
     }));
-    expect(submitResponse.status).toBe(201);
-    expect(mocks.submitAssignedReviewerRound).toHaveBeenCalledWith(expect.objectContaining({
-      projectId: PROJECT_ID,
-      actorProfileId: USER_ID,
-    }));
+    expect(submitResponse.status).toBe(403);
   });
 
   it("forbids thread management and submission reopen controls", async () => {

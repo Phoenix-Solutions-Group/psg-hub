@@ -334,11 +334,6 @@ export type SubmitGuestReviewRoundInput = {
   decisions: Array<{ reviewItemId: string; versionId: string; decision: "approved" | "changes_requested"; message?: string | null }>;
 };
 
-export type SubmitAssignedReviewerRoundInput = Omit<SubmitGuestReviewRoundInput, "sessionHash"> & {
-  projectId: string;
-  actorProfileId: string;
-};
-
 export type ReopenGuestReviewRoundInput = {
   sessionHash: string;
 };
@@ -1950,13 +1945,15 @@ async function updateRoundCompletionAfterSubmission(
 ): Promise<{ completed: boolean; outcome: "approved" | "changes_requested" | null }> {
   const { data: invitations, error: invitationsError } = await client
     .from("bsm_content_review_invitations")
-    .select("id, status, revoked_at, submitted_at")
+    .select("id, reviewer_profile_id, status, revoked_at, submitted_at")
     .eq("round_id", input.roundId)
     .eq("project_id", input.projectId)
     .eq("shop_id", input.shopId);
   if (invitationsError) throw new Error(`Could not load review round invitations: ${invitationsError.message}`);
 
-  const activeInvitations = ((invitations ?? []) as Array<Record<string, unknown>>).filter(isActiveInvitation);
+  const activeInvitations = ((invitations ?? []) as Array<Record<string, unknown>>).filter(
+    (row) => row.reviewer_profile_id == null && isActiveInvitation(row),
+  );
   if (activeInvitations.length === 0 || activeInvitations.some((row) => !row.submitted_at && row.status !== "submitted")) {
     return { completed: false, outcome: null };
   }
@@ -2739,7 +2736,7 @@ async function downloadReviewWorkspaceFile(
       processed_storage_bucket,
       processed_storage_path,
       processed_content_type,
-      item:bsm_content_review_items!inner(id)
+      item:bsm_content_review_items!bsm_content_review_versions_review_item_id_fkey!inner(id)
     `)
     .eq("id", input.versionId)
     .eq("review_item_id", input.reviewItemId)
@@ -2940,15 +2937,6 @@ export async function submitGuestReviewRound(
     roundCompleted: completion.completed,
     outcome: completion.outcome,
   };
-}
-
-export async function submitAssignedReviewerRound(
-  input: SubmitAssignedReviewerRoundInput,
-  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
-) {
-  const client = resolveClient(deps.client);
-  const access = await requireAssignedReviewerAccess(client, input.projectId, input.actorProfileId);
-  return submitGuestReviewRound({ ...input, sessionHash: "" }, { ...deps, client, access });
 }
 
 export async function reopenGuestReviewRound(
