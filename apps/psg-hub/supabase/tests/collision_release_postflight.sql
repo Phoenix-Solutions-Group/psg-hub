@@ -18,6 +18,33 @@ with required_migrations(name) as (
     ('collision_shop_identity_evidence')
 ), required_relations(object_name, relation_kind, require_rls, require_invoker) as (
   values
+    ('public.accident_density', 'r', true, false),
+    ('public.accident_import_sources', 'r', true, false),
+    ('public.accident_market_daypart_rollup', 'r', true, false),
+    ('public.accident_market_rollup', 'r', true, false),
+    ('public.accident_market_zip_rollup', 'r', true, false),
+    ('public.accidents', 'p', true, false),
+    ('public.accidents_2016', 'r', true, false),
+    ('public.accidents_2017', 'r', true, false),
+    ('public.accidents_2018', 'r', true, false),
+    ('public.accidents_2019', 'r', true, false),
+    ('public.accidents_2020', 'r', true, false),
+    ('public.accidents_2021', 'r', true, false),
+    ('public.accidents_2022', 'r', true, false),
+    ('public.accidents_2023', 'r', true, false),
+    ('public.accidents_2024', 'r', true, false),
+    ('public.accidents_2025', 'r', true, false),
+    ('public.accidents_2026', 'r', true, false),
+    ('public.accidents_2027', 'r', true, false),
+    ('public.accidents_default', 'r', true, false),
+    ('public.nhtsa_dataset_sources', 'r', true, false),
+    ('public.nhtsa_crashes', 'r', true, false),
+    ('public.nhtsa_vehicles', 'r', true, false),
+    ('public.nhtsa_persons', 'r', true, false),
+    ('public.storm_event_sources', 'r', true, false),
+    ('public.storm_events', 'r', true, false),
+    ('public.storm_zip_monthly', 'r', true, false),
+    ('public.zipcode_boundaries', 'r', true, false),
     ('public.collision_shop_insurance_appetite_evidence', 'r', true, false),
     ('public.collision_weather_alert_cases', 'r', true, false),
     ('public.collision_forecast_candidate_evaluations', 'r', true, false),
@@ -28,10 +55,17 @@ with required_migrations(name) as (
     ('public.v_collision_repair_orders', 'v', false, true),
     ('public.v_collision_weather_alert_case_evidence', 'v', false, true),
     ('public.v_collision_weather_alert_monitoring', 'v', false, true)
+), required_sequences(sequence_name) as (
+  values
+    ('public.accident_import_sources_id_seq'),
+    ('public.collision_demand_forecasts_id_seq'),
+    ('public.storm_event_sources_id_seq'),
+    ('public.storm_events_id_seq')
 ), required_functions(signature) as (
   values
     ('public.collision_targeting_examples(text,integer,integer)'),
     ('public.storm_demand_examples(integer,integer)'),
+    ('public.refresh_accident_market_rollups()'),
     ('public.collision_insurer_match_key(text)'),
     ('public.stage_collision_forecast_model_review(text,text,jsonb,uuid,text)'),
     ('public.review_collision_forecast_models(uuid,text,uuid,text)'),
@@ -41,6 +75,12 @@ with required_migrations(name) as (
     ('public.close_collision_weather_alert_case(uuid,uuid,text,text,uuid)'),
     ('public.record_collision_forecast_candidate_evaluation(text,text,date,text,text,jsonb)'),
     ('public.review_collision_shop_identity_evidence(text,text,text,text,text,text,text,text,uuid,text)')
+), required_indexes(index_name, table_name) as (
+  values
+    (
+      'public.collision_insurer_alias_reviews_registry_idx',
+      'public.collision_insurer_alias_reviews'
+    )
 ), required_triggers(trigger_name, table_name) as (
   values
     ('collision_forecast_model_customer_audience', 'public.collision_forecast_model_registry'),
@@ -70,13 +110,38 @@ with required_migrations(name) as (
         or coalesce(class.reloptions, array[]::text[]) @> array['security_invoker=true']
       )
       and not pg_catalog.has_table_privilege('anon', class.oid, 'select')
+      and not pg_catalog.has_table_privilege('anon', class.oid, 'insert')
+      and not pg_catalog.has_table_privilege('anon', class.oid, 'update')
+      and not pg_catalog.has_table_privilege('anon', class.oid, 'delete')
+      and not pg_catalog.has_table_privilege('anon', class.oid, 'truncate')
       and not pg_catalog.has_table_privilege('authenticated', class.oid, 'select')
+      and not pg_catalog.has_table_privilege('authenticated', class.oid, 'insert')
+      and not pg_catalog.has_table_privilege('authenticated', class.oid, 'update')
+      and not pg_catalog.has_table_privilege('authenticated', class.oid, 'delete')
+      and not pg_catalog.has_table_privilege('authenticated', class.oid, 'truncate')
       and pg_catalog.has_table_privilege('service_role', class.oid, 'select'),
       false
     ) as passed
   from required_relations relation
   left join pg_catalog.pg_class class
     on class.oid = pg_catalog.to_regclass(relation.object_name)
+), sequence_checks as (
+  select
+    'sequence'::text as check_type,
+    required.sequence_name as check_name,
+    coalesce(
+      not pg_catalog.has_sequence_privilege('anon', class.oid, 'usage')
+      and not pg_catalog.has_sequence_privilege('anon', class.oid, 'select')
+      and not pg_catalog.has_sequence_privilege('anon', class.oid, 'update')
+      and not pg_catalog.has_sequence_privilege('authenticated', class.oid, 'usage')
+      and not pg_catalog.has_sequence_privilege('authenticated', class.oid, 'select')
+      and not pg_catalog.has_sequence_privilege('authenticated', class.oid, 'update')
+      and pg_catalog.has_sequence_privilege('service_role', class.oid, 'usage'),
+      false
+    ) as passed
+  from required_sequences required
+  left join pg_catalog.pg_class class
+    on class.oid = pg_catalog.to_regclass(required.sequence_name)
 ), function_checks as (
   select
     'function'::text as check_type,
@@ -96,6 +161,66 @@ with required_migrations(name) as (
   from required_functions required
   left join pg_catalog.pg_proc function
     on function.oid = pg_catalog.to_regprocedure(required.signature)
+), index_checks as (
+  select
+    'index'::text as check_type,
+    required.index_name as check_name,
+    coalesce(
+      index.indrelid = pg_catalog.to_regclass(required.table_name)
+      and index.indisvalid
+      and index.indisready
+      and index.indnkeyatts = 3
+      and index.indpred is null
+      and pg_catalog.pg_get_indexdef(index.indexrelid, 1, true) =
+        'canonical_registry_source'
+      and pg_catalog.pg_get_indexdef(index.indexrelid, 2, true) =
+        'canonical_registry_type'
+      and pg_catalog.pg_get_indexdef(index.indexrelid, 3, true) =
+        'canonical_registry_id',
+      false
+    ) as passed
+  from required_indexes required
+  left join pg_catalog.pg_index index
+    on index.indexrelid = pg_catalog.to_regclass(required.index_name)
+), privilege_checks as (
+  select
+    'privilege'::text as check_type,
+    'refresh_accident_market_rollups_service_access'::text as check_name,
+    pg_catalog.has_table_privilege(
+      'service_role',
+      'public.accidents',
+      'select'
+    )
+    and pg_catalog.has_table_privilege(
+      'service_role',
+      'public.accident_market_daypart_rollup',
+      'insert'
+    )
+    and pg_catalog.has_table_privilege(
+      'service_role',
+      'public.accident_market_daypart_rollup',
+      'truncate'
+    )
+    and pg_catalog.has_table_privilege(
+      'service_role',
+      'public.accident_market_rollup',
+      'insert'
+    )
+    and pg_catalog.has_table_privilege(
+      'service_role',
+      'public.accident_market_rollup',
+      'truncate'
+    )
+    and pg_catalog.has_table_privilege(
+      'service_role',
+      'public.accident_market_zip_rollup',
+      'insert'
+    )
+    and pg_catalog.has_table_privilege(
+      'service_role',
+      'public.accident_market_zip_rollup',
+      'truncate'
+    ) as passed
 ), trigger_checks as (
   select
     'trigger'::text as check_type,
@@ -178,7 +303,10 @@ with required_migrations(name) as (
 ), checks as (
   select * from migration_checks
   union all select * from relation_checks
+  union all select * from sequence_checks
   union all select * from function_checks
+  union all select * from index_checks
+  union all select * from privilege_checks
   union all select * from trigger_checks
   union all select * from data_checks
 )

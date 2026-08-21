@@ -42,8 +42,39 @@ revoke all on function public.collision_insurer_match_key(text)
 grant execute on function public.collision_insurer_match_key(text)
   to service_role;
 
+create index if not exists collision_insurer_alias_reviews_registry_idx
+  on public.collision_insurer_alias_reviews (
+    canonical_registry_source,
+    canonical_registry_type,
+    canonical_registry_id
+  );
+
 update public.collision_insurer_registry
 set match_key = public.collision_insurer_match_key(display_name)
 where match_key is distinct from public.collision_insurer_match_key(display_name);
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_catalog.pg_index index
+    where index.indexrelid =
+      to_regclass('public.collision_insurer_alias_reviews_registry_idx')
+      and index.indrelid = 'public.collision_insurer_alias_reviews'::regclass
+      and index.indisvalid
+      and index.indisready
+      and index.indnkeyatts = 3
+      and index.indpred is null
+      and pg_catalog.pg_get_indexdef(index.indexrelid, 1, true) =
+        'canonical_registry_source'
+      and pg_catalog.pg_get_indexdef(index.indexrelid, 2, true) =
+        'canonical_registry_type'
+      and pg_catalog.pg_get_indexdef(index.indexrelid, 3, true) =
+        'canonical_registry_id'
+  ) then
+    raise exception 'insurer registry foreign key requires a valid covering index';
+  end if;
+end
+$$;
 
 commit;

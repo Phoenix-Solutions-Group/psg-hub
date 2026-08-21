@@ -261,8 +261,11 @@ provisional events still lack a matching source-ledger row for
 `noaa_spc_preliminary-20260801-20260817`; the readiness/reconciliation views,
 body-shop appetite table, forecast-review RPCs, weather-review lifecycle, customer
 audience guard, and two governed evidence tables are absent; the weather view still
-uses event-presence coverage; and both legacy example RPCs retain mutable search paths
-and browser-role execution. None of the 13 migration names appears in the live ledger.
+uses event-presence coverage; all three legacy collision/accident RPCs retain mutable
+search paths and browser-role execution; and 27 legacy accident, NHTSA, storm, and ZIP
+source relations plus four sequences retain browser-role grants. RLS blocks ordinary
+rows but does not protect `TRUNCATE`. None of the 13 migration names appears in the live
+ledger.
 
 Postflight must prove:
 
@@ -270,25 +273,30 @@ Postflight must prove:
    reconciliation view reports it reconciled;
 2. forecast readiness returns four rows per mapped shop, one for each horizon, with an
    explainable readiness state;
-3. both views use `security_invoker=true`, deny `anon` and `authenticated`, and allow
-   only `service_role` reads;
-4. both example RPCs have `search_path=pg_catalog, public`, deny execution to `public`,
-   `anon`, and `authenticated`, and allow `service_role`; and
-5. weather coverage equals repair volume in ZIPs with loaded boundaries while missing
+3. every governed view uses `security_invoker=true`, denies `anon` and `authenticated`,
+   and allows only `service_role` reads;
+4. all 27 legacy source relations deny browser reads, writes, deletes, and `TRUNCATE`,
+   and all four collision-source sequences deny browser usage, reads, and updates;
+5. `collision_targeting_examples`, `storm_demand_examples`, and
+   `refresh_accident_market_rollups` have `search_path=pg_catalog, public`, deny
+   execution to `public`, `anon`, and `authenticated`, and allow `service_role`;
+6. weather coverage equals repair volume in ZIPs with loaded boundaries while missing
    ZIP-month event rows contribute zero exposure; and
-6. candidate-evaluation and shop-identity tables remain service-role-only, their
+7. candidate-evaluation and shop-identity tables remain service-role-only, their
    mutation RPCs deny browser roles, and shop mapping rejects missing or mismatched
    governed address evidence; and
-7. shop-insurance appetite evidence remains service-role-only and acronym matching
-   treats spaced carrier initials consistently without auto-approving an alias;
-8. forecast staging and review RPCs require a confirmed mapping, four evaluated
+8. shop-insurance appetite evidence remains service-role-only, acronym matching treats
+   spaced carrier initials consistently without auto-approving an alias, and the
+   registry foreign key has a valid covering index;
+9. forecast staging and review RPCs require a confirmed mapping, four evaluated
    horizons, a PSG superadmin reviewer, written notes, and a real customer audience;
-9. payment classification preserves insurance, non-insurance, and unknown as separate
+10. payment classification preserves insurance, non-insurance, and unknown as separate
    governed categories in `v_collision_repair_orders`;
-10. weather cases can be acknowledged and closed only through service-role RPCs,
+11. weather cases can be acknowledged and closed only through service-role RPCs,
     retain their pre-registered control, and do not enable notifications; and
-11. the Supabase security advisor no longer reports the two collision example-function
-    search-path warnings.
+12. the Supabase security advisor no longer reports the three collision/accident
+    function search-path warnings. Remaining service-only RLS/no-policy notices are
+    accepted only when the privilege checks above pass.
 
 Run the committed read-only verifier before and after the release:
 
@@ -298,16 +306,20 @@ psql "$SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 \
 ```
 
 The single result must report `ready = true` and an empty `failures` array. The
-2026-08-20 pre-release execution against `gylkkzmcmbdftxieyabw` ran 43 checks and
-failed 37, including every missing migration name, relation, trigger, and service-only
-function plus the unreconciled SPC source batch. KDOT source/import counts, completed
-ZIP resolution, and both blocked-forecast invariants already pass. This is the
-expected before-state, not a release failure.
+2026-08-20 pre-release execution against `gylkkzmcmbdftxieyabw` now runs 77 checks and
+fails 70, including every missing migration name, governed relation, trigger,
+service-only function, legacy browser grant, source sequence, the missing insurer
+foreign-key index, and the unreconciled SPC source batch. KDOT source/import counts,
+completed ZIP resolution, and both blocked-forecast invariants already pass. This is
+the expected before-state, not a release failure.
 
-The first three files were applied together in a local transaction and rolled back.
-The weather correction passed a separate synthetic local transaction. All views pass
-their grant checks, and the readiness view returned the four expected pilot horizons.
-The local database ledger itself remains intentionally unrepaired.
+The first three release files were previously applied together in a local transaction
+and rolled back. The expanded hardening file separately passed and rolled back with all
+three functions fixed, browser privileges removed from representative accident/storm
+relations, and all four source sequences service-only. The insurer acronym migration's
+covering index and `U S A A` normalization passed in an isolated transaction and rolled
+back. The weather correction passed a separate synthetic local transaction. The local
+database ledger itself remains intentionally unrepaired.
 
 ## Schedule and monitoring
 

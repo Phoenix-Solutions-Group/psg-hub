@@ -62,9 +62,10 @@
   migration names remain unapplied. The refresh runbook now lists
   the complete timestamp-ordered release set and postflight contract; production is
   unchanged.
-- The two legacy collision example RPCs have fixed-search-path, service-role-only
-  hardening staged and rollback-tested. This is a third pending collision migration;
-  it is not applied to production.
+- Three legacy collision/accident RPCs and the browser grants on legacy accident,
+  NHTSA, storm, and ZIP source relations now have service-role-only hardening staged
+  and rollback-tested. This is the third pending collision migration; it is not applied
+  to production.
 - A fourth pending migration corrects weather coverage semantics. The live view
   currently treats a ZIP-month with no storm event as missing coverage and averages
   17.15% for the mapped shop. Loaded ZIP boundaries cover 99.36% of its historical
@@ -259,19 +260,31 @@ staging, model approval, scoring, and publication remain separate audited action
   years (2020–2024). June leads average repair arrivals at 55.0; October leads average
   repair value at $261,387.39. These are repair-order patterns, not crash or claim
   volumes.
-- Security advisor: the three new `rls_enabled_no_policy` notices are informational
-  and intentional for service-only repair facts, source ledger, and mapping table; no
-  anonymous or authenticated policy was added.
-- The remaining collision-scoped security warnings were traced to two unused legacy
-  example RPCs. The staged migration fixes their `search_path`, revokes execution from
-  `public`, `anon`, and `authenticated`, preserves `service_role`, and contains a
-  database assertion for both properties. A local transaction applied the migration
-  and rolled it back successfully.
+- A read-only Supabase advisor baseline found 40 collision/accident/weather security
+  notices: 37 informational RLS-without-policy notices and three mutable-search-path
+  warnings. Eleven collision/KDOT tables already deny browser roles and intentionally
+  rely on service-only access rather than end-user policies.
+- The other source relations are not accepted as informational yet. Twenty-seven
+  legacy accident, NHTSA, storm, and ZIP relations still grant browser roles direct
+  reads, writes, deletes, and `TRUNCATE`; four related sequences also retain browser
+  grants. RLS does not protect `TRUNCATE`. The staged hardening migration revokes those
+  grants and asserts service-role access before release.
+- The three warnings belong to `collision_targeting_examples`,
+  `storm_demand_examples`, and `refresh_accident_market_rollups`. The staged migration
+  fixes their `search_path`, revokes execution from `public`, `anon`, and
+  `authenticated`, preserves `service_role`, and contains database assertions for both
+  properties. A local transaction applied the migration and rolled it back successfully.
 - The pre-existing `v_collision_targeting_zip_annual` security-definer error was
   removed; the view is now invoker-security and service-role-only.
-- Performance advisor: covering indexes were added for both mapping foreign keys.
-  Informational unused-index notices remain for newly created fact indexes before
-  sustained product traffic.
+- The collision-scoped performance baseline contains 47 informational notices. The one
+  actionable release finding—a missing covering index for the insurer-registry foreign
+  key—is now staged in the already-pending acronym migration and rollback-tested. The
+  13 no-primary-key notices belong to excluded legacy accident partitions, and 33
+  unused-index notices remain observational until a sustained production workload can
+  justify deletion.
+- Advisor references: [RLS enabled without a policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy),
+  [mutable function search path](https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable),
+  and [unindexed foreign key](https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys).
 - Source ledger counts reconcile to 330,535 parsed, 330,533 accepted, and two rejected.
   The prior source is `superseded`, has zero remaining facts, and an identical-file
   rerun was skipped without a second import.
