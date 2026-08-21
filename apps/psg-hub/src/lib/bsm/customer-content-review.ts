@@ -68,12 +68,13 @@ async function requireCustomerAccess(
   const service = createServiceClient();
   const { data: item, error } = await service
     .from("bsm_content_review_items")
-    .select("id, shop_id, title, status, content_type, admin_context_note, current_version_id, updated_at")
+    .select("id, shop_id, project_id, title, status, content_type, admin_context_note, current_version_id, updated_at")
     .eq("id", reviewItemId)
     .maybeSingle();
 
   if (error) throw new BsmCustomerReviewError(500, error.message);
   if (!item) throw new BsmCustomerReviewError(404, "Not found");
+  if (item.project_id) throw new BsmCustomerReviewError(404, "Use the assigned Review Workspace");
 
   const { data: membership, error: membershipError } = await client
     .from("shop_users")

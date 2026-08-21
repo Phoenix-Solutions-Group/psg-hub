@@ -71,6 +71,7 @@ export type UpdateReviewWorkspaceProjectInput = {
 export type ReviewWorkspaceReviewerContactInput = {
   email: string;
   name?: string | null;
+  profileId?: string | null;
 };
 
 export type StartReviewWorkspaceInput = {
@@ -117,6 +118,13 @@ export type GuestSessionAccess = {
   submittedAt: string | null;
 };
 
+export type AssignedReviewerAccess = Omit<GuestSessionAccess, "sessionId"> & {
+  sessionId: null;
+  actorProfileId: string;
+};
+
+type ReviewerAccess = GuestSessionAccess | AssignedReviewerAccess;
+
 type ReviewWorkspaceCommentKind = "pin" | "highlight" | "clarification_reply" | "psg_reply" | "system_note";
 
 export type ReviewWorkspaceTextSelection = {
@@ -145,6 +153,16 @@ export type AddGuestThreadReplyInput = {
   sessionHash: string;
   threadId: string;
   body: string;
+};
+
+export type AddAssignedReviewerAnnotationInput = Omit<AddGuestAnnotationInput, "sessionHash"> & {
+  projectId: string;
+  actorProfileId: string;
+};
+
+export type AddAssignedReviewerThreadReplyInput = Omit<AddGuestThreadReplyInput, "sessionHash"> & {
+  projectId: string;
+  actorProfileId: string;
 };
 
 export type AddStaffThreadReplyInput = {
@@ -307,6 +325,11 @@ export type StaffReviewWorkspaceResult = {
 export type SubmitGuestReviewRoundInput = {
   sessionHash: string;
   decisions: Array<{ reviewItemId: string; versionId: string; decision: "approved" | "changes_requested"; message?: string | null }>;
+};
+
+export type SubmitAssignedReviewerRoundInput = Omit<SubmitGuestReviewRoundInput, "sessionHash"> & {
+  projectId: string;
+  actorProfileId: string;
 };
 
 export type ReopenGuestReviewRoundInput = {
@@ -715,6 +738,7 @@ export async function startReviewWorkspaceRound(
   const reviewers = input.reviewers.map((reviewer) => ({
     email: cleanEmail(reviewer.email),
     name: cleanOptionalText("reviewerName", reviewer.name, 160),
+    profileId: reviewer.profileId ? assertUuid("reviewerProfileId", reviewer.profileId) : null,
   }));
   const dedupedReviewers = reviewers.filter(
     (reviewer, index, rows) => rows.findIndex((candidate) => candidate.email === reviewer.email) === index,
@@ -832,6 +856,7 @@ export async function startReviewWorkspaceRound(
       shop_id: access.shopId,
       reviewer_email: reviewer.email,
       reviewer_name: reviewer.name,
+      reviewer_profile_id: reviewer.profileId,
       status: "sent",
       token_hash: hashSecret(inviteToken),
       code_hash: hashSecret(inviteCode),
@@ -850,6 +875,7 @@ export async function startReviewWorkspaceRound(
         round_id: roundId,
         reviewer_email: reviewer.email,
         reviewer_name: reviewer.name,
+        profile_id: reviewer.profileId,
         reviewer_role: "reviewer",
         notification_preference: "email",
         submission_status: "not_started",
@@ -1641,6 +1667,80 @@ export async function requireGuestReviewSession(
   };
 }
 
+export async function requireAssignedReviewerAccess(
+  client: ReviewWorkspaceDbClient,
+  projectId: string,
+  actorProfileId: string,
+): Promise<AssignedReviewerAccess> {
+  const safeProjectId = assertUuid("projectId", projectId);
+  const safeActorProfileId = assertUuid("actorProfileId", actorProfileId);
+  const { data: project, error: projectError } = await client
+    .from("bsm_content_review_projects")
+    .select("id, shop_id, current_round_id, status, deleted_at")
+    .eq("id", safeProjectId)
+    .maybeSingle();
+  if (projectError) throw new Error(`Could not load assigned Review Workspace: ${projectError.message}`);
+  if (!project || project.deleted_at || !project.current_round_id || !["active", "inviting"].includes(project.status as string)) {
+    throw new ReviewWorkspaceInputError(403, "An active reviewer assignment is required");
+  }
+
+  const roundId = project.current_round_id as string;
+  const shopId = project.shop_id as string;
+  const [{ data: invitation, error: invitationError }, { data: membership, error: membershipError }] = await Promise.all([
+    client
+      .from("bsm_content_review_invitations")
+      .select("id, project_id, round_id, shop_id, reviewer_profile_id, reviewer_email, reviewer_name, status, submitted_at, expires_at, revoked_at")
+      .eq("project_id", safeProjectId)
+      .eq("round_id", roundId)
+      .eq("shop_id", shopId)
+      .eq("reviewer_profile_id", safeActorProfileId)
+      .in("status", ["sent", "viewed", "submitted"])
+      .is("revoked_at", null)
+      .maybeSingle(),
+    client.from("shop_users").select("shop_id").eq("shop_id", shopId).eq("user_id", safeActorProfileId).maybeSingle(),
+  ]);
+  if (invitationError) throw new Error(`Could not load assigned reviewer invitation: ${invitationError.message}`);
+  if (membershipError) throw new Error(`Could not verify reviewer shop membership: ${membershipError.message}`);
+  if (
+    !membership || !invitation ||
+    invitation.revoked_at ||
+    !["sent", "viewed", "submitted"].includes(invitation.status as string) ||
+    new Date(invitation.expires_at as string).getTime() <= Date.now()
+  ) {
+    throw new ReviewWorkspaceInputError(403, "An active reviewer assignment is required");
+  }
+
+  const invitationId = invitation.id as string;
+  const { data: reviewer, error: reviewerError } = await client
+    .from("bsm_content_review_reviewers")
+    .select("invitation_id, round_id, shop_id, profile_id, reviewer_email, reviewer_name, reviewer_role, submission_status, submitted_at, removed_at")
+    .eq("invitation_id", invitationId)
+    .eq("round_id", roundId)
+    .eq("shop_id", shopId)
+    .eq("profile_id", safeActorProfileId)
+    .eq("reviewer_role", "reviewer")
+    .is("removed_at", null)
+    .limit(1)
+    .maybeSingle();
+  if (reviewerError) throw new Error(`Could not load assigned reviewer: ${reviewerError.message}`);
+  if (!reviewer || reviewer.removed_at || reviewer.reviewer_role !== "reviewer") {
+    throw new ReviewWorkspaceInputError(403, "An active reviewer assignment is required");
+  }
+
+  return {
+    invitationId,
+    sessionId: null,
+    projectId: safeProjectId,
+    roundId,
+    shopId,
+    reviewerEmail: invitation.reviewer_email as string,
+    reviewerName: (invitation.reviewer_name as string | null) ?? null,
+    invitationStatus: invitation.status as string,
+    submittedAt: (invitation.submitted_at as string | null) ?? null,
+    actorProfileId: safeActorProfileId,
+  };
+}
+
 async function requireRoundDocumentAccess(
   client: ReviewWorkspaceDbClient,
   access: Pick<GuestSessionAccess, "roundId" | "projectId" | "shopId">,
@@ -1677,7 +1777,7 @@ type ReviewWorkspaceThreadRow = {
 
 async function requireGuestThread(
   client: ReviewWorkspaceDbClient,
-  access: GuestSessionAccess,
+  access: ReviewerAccess,
   threadId: string,
 ): Promise<ReviewWorkspaceThreadRow> {
   const { data, error } = await client
@@ -1822,10 +1922,11 @@ async function updateRoundCompletionAfterSubmission(
 
 export async function addGuestReviewAnnotation(
   input: AddGuestAnnotationInput,
-  deps: { client?: ReviewWorkspaceDbClient } = {},
+  deps: { client?: ReviewWorkspaceDbClient; access?: ReviewerAccess } = {},
 ) {
   const client = resolveClient(deps.client);
-  const access = await requireGuestReviewSession(client, input.sessionHash);
+  const access = deps.access ?? await requireGuestReviewSession(client, input.sessionHash);
+  const actorProfileId = "actorProfileId" in access ? access.actorProfileId : null;
   if (access.invitationStatus === "submitted" || access.submittedAt) {
     throw new ReviewWorkspaceInputError(409, "This review round was already submitted");
   }
@@ -1870,7 +1971,7 @@ export async function addGuestReviewAnnotation(
       review_item_id: reviewItemId,
       version_id: versionId,
       thread_id: threadId,
-      author_profile_id: null,
+      author_profile_id: actorProfileId,
       body,
       visibility: "shop_and_psg",
       comment_kind: anchorKind,
@@ -1897,7 +1998,7 @@ export async function addGuestReviewAnnotation(
     review_item_id: reviewItemId,
     version_id: versionId,
     event_type: "review_workspace_annotation_drafted",
-    actor_profile_id: null,
+    actor_profile_id: actorProfileId,
     payload_jsonb: {
       projectId: access.projectId,
       roundId: access.roundId,
@@ -2066,12 +2167,22 @@ export async function addStaffReviewAnnotation(
   return data;
 }
 
-export async function addGuestThreadReply(
-  input: AddGuestThreadReplyInput,
-  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+export async function addAssignedReviewerAnnotation(
+  input: AddAssignedReviewerAnnotationInput,
+  deps: { client?: ReviewWorkspaceDbClient } = {},
 ) {
   const client = resolveClient(deps.client);
-  const access = await requireGuestReviewSession(client, input.sessionHash);
+  const access = await requireAssignedReviewerAccess(client, input.projectId, input.actorProfileId);
+  return addGuestReviewAnnotation({ ...input, sessionHash: "" }, { client, access });
+}
+
+export async function addGuestThreadReply(
+  input: AddGuestThreadReplyInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date; access?: ReviewerAccess } = {},
+) {
+  const client = resolveClient(deps.client);
+  const access = deps.access ?? await requireGuestReviewSession(client, input.sessionHash);
+  const actorProfileId = "actorProfileId" in access ? access.actorProfileId : null;
   if (access.invitationStatus === "submitted" || access.submittedAt) {
     throw new ReviewWorkspaceInputError(409, "This review round was already submitted");
   }
@@ -2091,7 +2202,7 @@ export async function addGuestThreadReply(
       review_item_id: thread.review_item_id,
       version_id: thread.version_id,
       thread_id: thread.id,
-      author_profile_id: null,
+      author_profile_id: actorProfileId,
       body,
       visibility: "shop_and_psg",
       comment_kind: "clarification_reply",
@@ -2114,10 +2225,19 @@ export async function addGuestThreadReply(
     review_item_id: thread.review_item_id,
     version_id: thread.version_id,
     event_type: "review_workspace_thread_replied",
-    actor_profile_id: null,
+    actor_profile_id: actorProfileId,
     payload_jsonb: { projectId: access.projectId, roundId: access.roundId, invitationId: access.invitationId, threadId: thread.id, commentId, actorRole: "client" },
   });
   return data;
+}
+
+export async function addAssignedReviewerThreadReply(
+  input: AddAssignedReviewerThreadReplyInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+) {
+  const client = resolveClient(deps.client);
+  const access = await requireAssignedReviewerAccess(client, input.projectId, input.actorProfileId);
+  return addGuestThreadReply({ ...input, sessionHash: "" }, { ...deps, client, access });
 }
 
 export async function addStaffThreadReply(
@@ -2227,10 +2347,10 @@ export async function setStaffThreadStatus(
 
 export async function getGuestReviewWorkspace(
   sessionHash: string,
-  deps: { client?: ReviewWorkspaceDbClient } = {},
+  deps: { client?: ReviewWorkspaceDbClient; access?: ReviewerAccess } = {},
 ): Promise<GuestReviewWorkspace> {
   const client = resolveClient(deps.client);
-  const access = await requireGuestReviewSession(client, sessionHash);
+  const access = deps.access ?? await requireGuestReviewSession(client, sessionHash);
 
   const [{ data: project }, { data: round }, { data: docs }, { data: comments }, { data: threads }, { data: decisions }] = await Promise.all([
     client.from("bsm_content_review_projects").select("id, title, description, status").eq("id", access.projectId).single(),
@@ -2246,6 +2366,7 @@ export async function getGuestReviewWorkspace(
       .select("id, invitation_id, round_id, review_item_id, version_id, thread_id, author_profile_id, body, comment_kind, pin_number, draft_status, viewport, x_ratio, y_ratio, selection_jsonb, created_at")
       .eq("project_id", access.projectId)
       .eq("shop_id", access.shopId)
+      .eq("visibility", "shop_and_psg")
       .order("created_at", { ascending: true }),
     client
       .from("bsm_content_review_comment_threads")
@@ -2340,7 +2461,7 @@ export async function getGuestReviewWorkspace(
           ? version.generated_page_path
           : null;
       const privateProofUrl = fileProofTarget(version)
-        ? `/api/bsm/review-workspace/file?sessionHash=${encodeURIComponent(sessionHash)}&reviewItemId=${encodeURIComponent(row.review_item_id as string)}&versionId=${encodeURIComponent(row.version_id as string)}`
+        ? `/api/bsm/review-workspace/file?${"actorProfileId" in access ? `projectId=${encodeURIComponent(access.projectId)}` : `sessionHash=${encodeURIComponent(sessionHash)}`}&reviewItemId=${encodeURIComponent(row.review_item_id as string)}&versionId=${encodeURIComponent(row.version_id as string)}`
         : null;
       const sectionId = (item?.section_id as string | null) ?? null;
       return {
@@ -2348,7 +2469,7 @@ export async function getGuestReviewWorkspace(
         versionId: row.version_id as string,
         versionNumber: typeof version?.version_number === "number" ? version.version_number : null,
         title: (item?.title as string | null) ?? "Review document",
-        note: (item?.admin_context_note as string | null) ?? null,
+        note: null,
         processingStatus: (item?.processing_status as string | null) ?? "pending",
         sectionTitle: sectionId ? sectionTitles.get(sectionId) ?? null : null,
         originalFilename: (version?.original_filename as string | null) ?? null,
@@ -2364,7 +2485,7 @@ export async function getGuestReviewWorkspace(
       if (!threadId) return [];
       const thread = threadsById.get(threadId);
       const authorProfileId = typeof row.author_profile_id === "string" ? row.author_profile_id : null;
-      const authorRole = row.comment_kind === "psg_reply" || authorProfileId ? "psg" as const : "client" as const;
+      const authorRole = row.comment_kind === "psg_reply" ? "psg" as const : "client" as const;
       return [{
       id: row.id as string,
       reviewItemId: row.review_item_id as string,
@@ -2398,12 +2519,22 @@ export async function getGuestReviewWorkspace(
   };
 }
 
+export async function getAssignedReviewerWorkspace(
+  projectId: string,
+  actorProfileId: string,
+  deps: { client?: ReviewWorkspaceDbClient } = {},
+): Promise<GuestReviewWorkspace> {
+  const client = resolveClient(deps.client);
+  const access = await requireAssignedReviewerAccess(client, projectId, actorProfileId);
+  return getGuestReviewWorkspace("", { client, access });
+}
+
 export async function getGuestReviewWorkspaceFileDownload(
   input: { sessionHash: string; reviewItemId: string; versionId: string },
-  deps: { client?: ReviewWorkspaceDbClient } = {},
+  deps: { client?: ReviewWorkspaceDbClient; access?: ReviewerAccess } = {},
 ): Promise<GuestReviewWorkspaceFileDownload> {
   const client = resolveClient(deps.client);
-  const access = await requireGuestReviewSession(client, input.sessionHash);
+  const access = deps.access ?? await requireGuestReviewSession(client, input.sessionHash);
   const reviewItemId = assertUuid("reviewItemId", input.reviewItemId);
   const versionId = assertUuid("versionId", input.versionId);
   await requireRoundDocumentAccess(client, access, reviewItemId, versionId);
@@ -2414,6 +2545,15 @@ export async function getGuestReviewWorkspaceFileDownload(
     reviewItemId,
     versionId,
   });
+}
+
+export async function getAssignedReviewerWorkspaceFileDownload(
+  input: { projectId: string; actorProfileId: string; reviewItemId: string; versionId: string },
+  deps: { client?: ReviewWorkspaceDbClient } = {},
+): Promise<GuestReviewWorkspaceFileDownload> {
+  const client = resolveClient(deps.client);
+  const access = await requireAssignedReviewerAccess(client, input.projectId, input.actorProfileId);
+  return getGuestReviewWorkspaceFileDownload({ ...input, sessionHash: "" }, { client, access });
 }
 
 export async function getStaffReviewWorkspaceFileDownload(
@@ -2493,10 +2633,11 @@ async function downloadReviewWorkspaceFile(
 
 export async function submitGuestReviewRound(
   input: SubmitGuestReviewRoundInput,
-  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date; access?: ReviewerAccess } = {},
 ) {
   const client = resolveClient(deps.client);
-  const access = await requireGuestReviewSession(client, input.sessionHash);
+  const access = deps.access ?? await requireGuestReviewSession(client, input.sessionHash);
+  const actorProfileId = "actorProfileId" in access ? access.actorProfileId : null;
   const now = deps.now ?? new Date();
   if (!Array.isArray(input.decisions) || input.decisions.length === 0) {
     throw new ReviewWorkspaceInputError(400, "At least one decision is required");
@@ -2581,7 +2722,7 @@ export async function submitGuestReviewRound(
       submission_revision: submissionRevision,
       decision: decision.decision,
       message: cleanOptionalText("message", decision.message, 2000),
-      actor_profile_id: null,
+      actor_profile_id: actorProfileId,
       actor_role: "customer",
       submitted_at: now.toISOString(),
       locked_at: now.toISOString(),
@@ -2627,7 +2768,7 @@ export async function submitGuestReviewRound(
     shop_id: access.shopId,
     review_item_id: null,
     event_type: "review_workspace_round_submitted",
-    actor_profile_id: null,
+    actor_profile_id: actorProfileId,
     payload_jsonb: {
       projectId: access.projectId,
       roundId: access.roundId,
@@ -2648,6 +2789,15 @@ export async function submitGuestReviewRound(
     roundCompleted: completion.completed,
     outcome: completion.outcome,
   };
+}
+
+export async function submitAssignedReviewerRound(
+  input: SubmitAssignedReviewerRoundInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+) {
+  const client = resolveClient(deps.client);
+  const access = await requireAssignedReviewerAccess(client, input.projectId, input.actorProfileId);
+  return submitGuestReviewRound({ ...input, sessionHash: "" }, { ...deps, client, access });
 }
 
 export async function reopenGuestReviewRound(

@@ -7,6 +7,7 @@ import {
   type ApprovedContentArchiveRow,
 } from "@/components/dashboard/approved-content-archive-table";
 import { listApprovedContentArchiveRows } from "@/lib/bsm/approved-content-archive";
+import { createServiceClient } from "@/lib/supabase/service";
 
 // PSG-245 / Wave 2 (G-d) — per-shop approval queue. Lists the active shop's
 // pending agent-proposed actions for an owner/manager to preview, confirm, then
@@ -32,6 +33,7 @@ export default async function ApprovalsPage() {
   }> = [];
   let recentCount = 0;
   let approvedArchive: ApprovedContentArchiveRow[] = [];
+  let assignedWorkspaces: Array<{ projectId: string; title: string; submittedAt: string | null }> = [];
 
   if (user) {
     const { activeShopId } = await getActiveShopContext(user.id);
@@ -68,11 +70,45 @@ export default async function ApprovalsPage() {
         .from("bsm_content_review_items")
         .select("id, title, status, content_type, admin_context_note, updated_at")
         .eq("shop_id", activeShopId)
+        .is("project_id", null)
         .in("status", ["draft", "sent", "in_review", "updates_requested"])
         .order("updated_at", { ascending: false });
       bsmContentReviews = (reviewItems ?? []) as typeof bsmContentReviews;
 
       approvedArchive = await listApprovedContentArchiveRows(supabase, activeShopId);
+
+      const service = createServiceClient();
+      const { data: invitations } = await service
+        .from("bsm_content_review_invitations")
+        .select("id, project_id, round_id, submitted_at, project:bsm_content_review_projects!inner(title, status, current_round_id)")
+        .eq("shop_id", activeShopId)
+        .eq("reviewer_profile_id", user.id)
+        .in("status", ["sent", "viewed", "submitted"])
+        .is("revoked_at", null)
+        .gt("expires_at", new Date().toISOString());
+      const invitationRows = (invitations ?? []) as Array<Record<string, unknown>>;
+      const invitationIds = invitationRows.map((row) => row.id as string);
+      const { data: reviewers } = invitationIds.length
+        ? await service
+            .from("bsm_content_review_reviewers")
+            .select("invitation_id")
+            .eq("shop_id", activeShopId)
+            .eq("profile_id", user.id)
+            .eq("reviewer_role", "reviewer")
+            .is("removed_at", null)
+            .in("invitation_id", invitationIds)
+        : { data: [] };
+      const assignedInvitationIds = new Set((reviewers ?? []).map((row) => row.invitation_id as string));
+      assignedWorkspaces = invitationRows.flatMap((row) => {
+        if (!assignedInvitationIds.has(row.id as string)) return [];
+        const project = Array.isArray(row.project) ? row.project[0] : row.project;
+        if (!project || project.current_round_id !== row.round_id || !["active", "inviting"].includes(project.status as string)) return [];
+        return [{
+          projectId: row.project_id as string,
+          title: project.title as string,
+          submittedAt: (row.submitted_at as string | null) ?? null,
+        }];
+      });
     }
   }
 
@@ -104,6 +140,33 @@ export default async function ApprovalsPage() {
           ))}
         </div>
       )}
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Assigned Review Workspaces</h2>
+          <p className="text-sm text-muted-foreground">
+            Comment, reply, and submit decisions on Review Workspaces assigned directly to you.
+          </p>
+        </div>
+        {assignedWorkspaces.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-8 text-center">
+            <p className="text-sm text-muted-foreground">No Review Workspaces are assigned to you.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {assignedWorkspaces.map((workspace) => (
+              <Link
+                key={workspace.projectId}
+                href={`/dashboard/approvals/review-workspace/${workspace.projectId}`}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border p-4 hover:border-ember"
+              >
+                <span className="font-heading font-semibold">{workspace.title}</span>
+                <span className="text-xs font-medium text-muted-foreground">{workspace.submittedAt ? "Submitted" : "Review needed"}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="space-y-3">
         <div>

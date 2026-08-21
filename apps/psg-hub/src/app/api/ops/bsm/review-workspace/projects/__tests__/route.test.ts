@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
+  listUsers: vi.fn(),
   startReviewWorkspaceRound: vi.fn(),
   updateInvitation: vi.fn(),
 }));
@@ -12,6 +13,7 @@ vi.mock("@/lib/auth/ops-access", () => ({
 vi.mock("@/lib/mail/sendgrid", () => ({ sendEmail: mocks.sendEmail }));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
+    auth: { admin: { listUsers: mocks.listUsers } },
     from: () => ({
       update: (payload: Record<string, unknown>) => ({
         eq: async (_column: string, id: string) => {
@@ -48,6 +50,10 @@ describe("review workspace invitation delivery", () => {
         inviteCode: "123456",
       }],
     });
+    mocks.listUsers.mockResolvedValue({
+      data: { users: [{ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", email: "owner@example.com" }] },
+      error: null,
+    });
     mocks.sendEmail.mockResolvedValue({ statusCode: 202, messageId: "message-1" });
   });
 
@@ -68,6 +74,9 @@ describe("review workspace invitation delivery", () => {
       to: { name: "Shop Owner", email: "owner@example.com" },
       clickTracking: false,
       text: expect.stringContaining("One-time code: 123456"),
+    }));
+    expect(mocks.startReviewWorkspaceRound).toHaveBeenCalledWith(expect.objectContaining({
+      reviewers: [{ email: "owner@example.com", name: "Shop Owner", profileId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }],
     }));
     expect(mocks.updateInvitation).toHaveBeenCalledWith(expect.objectContaining({
       status: "sent",

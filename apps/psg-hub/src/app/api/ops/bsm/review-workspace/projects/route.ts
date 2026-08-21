@@ -52,12 +52,20 @@ export async function POST(request: Request): Promise<Response> {
       if (!bsmReviewWorkspaceInternalEnabled()) {
         return NextResponse.json({ error: "The reviewer workspace is disabled in this environment." }, { status: 409 });
       }
+      const service = createServiceClient();
+      // ponytail: one auth page covers current PSG scale; paginate when the account directory exceeds 1,000 users.
+      const { data: userPage, error: userError } = await service.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (userError) throw new Error(`Could not resolve reviewer accounts: ${userError.message}`);
+      const profileByEmail = new Map(userPage.users.flatMap((user) => user.email ? [[user.email.trim().toLowerCase(), user.id] as const] : []));
       const review = await startReviewWorkspaceRound({
         projectId: payload.projectId as string,
         actorProfileId: gate.userId,
         actorRole: gate.access.role,
         reviewers: Array.isArray(payload.reviewers)
-          ? payload.reviewers.map((reviewer) => reviewer as { email: string; name?: string | null })
+          ? payload.reviewers.map((reviewer) => {
+              const contact = reviewer as { email: string; name?: string | null };
+              return { ...contact, profileId: profileByEmail.get(contact.email.trim().toLowerCase()) ?? null };
+            })
           : [],
       });
       const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin).replace(/\/+$/, "");
@@ -77,7 +85,6 @@ export async function POST(request: Request): Promise<Response> {
           clickTracking: false,
         }),
       ));
-      const service = createServiceClient();
       await Promise.all(review.invitations.map((invitation, index) =>
         service
           .from("bsm_content_review_invitations")
