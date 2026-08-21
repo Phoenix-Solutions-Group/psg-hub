@@ -51,7 +51,7 @@ const ANNOTATION_MIGRATION = readFileSync(
   "utf8",
 );
 const STAFF_ANNOTATION_MIGRATION = readFileSync(
-  join(process.cwd(), "supabase/migrations/20260821203000_bsm_review_workspace_staff_annotations.sql"),
+  join(process.cwd(), "supabase/migrations/20260821192449_bsm_review_workspace_staff_annotations.sql"),
   "utf8",
 );
 
