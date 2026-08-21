@@ -10,8 +10,13 @@ const shops = [
 ];
 
 describe("collision demo scope", () => {
-  it("combines only the authorized demo account memberships", () => {
+  it("combines only the authorized demo and admin account memberships", () => {
     expect(resolveCollisionDemoScope("test@psghub.me", shops)).toEqual({
+      sourceShopIds: ["riverside", "south-lincoln"],
+      primaryShopId: "south-lincoln",
+      displayName: "Riverside Collision Demo",
+    });
+    expect(resolveCollisionDemoScope("admin@psghub.me", shops)).toEqual({
       sourceShopIds: ["riverside", "south-lincoln"],
       primaryShopId: "south-lincoln",
       displayName: "Riverside Collision Demo",

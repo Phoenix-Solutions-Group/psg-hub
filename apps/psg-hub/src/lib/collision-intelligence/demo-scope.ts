@@ -1,6 +1,6 @@
 import type { UserShop } from "@/lib/shop/context";
 
-const DEMO_ACCOUNT_EMAIL = "test@psghub.me";
+const DEMO_ACCOUNT_EMAILS = ["test@psghub.me", "admin@psghub.me"];
 const RIVERSIDE_NAME = "riverside collision";
 const SOUTH_LINCOLN_NAME = "south lincoln";
 
@@ -31,7 +31,9 @@ export function resolveCollisionDemoScope(
   email: string | null | undefined,
   shops: UserShop[],
 ): CollisionDemoScope | null {
-  if (email?.trim().toLowerCase() !== DEMO_ACCOUNT_EMAIL) return null;
+  if (!email || !DEMO_ACCOUNT_EMAILS.includes(email.trim().toLowerCase())) {
+    return null;
+  }
 
   const riverside = shops.find(
     (shop) => shop.name.trim().toLowerCase() === RIVERSIDE_NAME,
