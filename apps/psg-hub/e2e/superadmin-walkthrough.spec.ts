@@ -39,7 +39,7 @@ test.describe("clean BSM demo admin walkthrough", () => {
     await page.goto("/ops/bsm-content-approvals", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Review Workspace" })).toBeVisible();
     await expect(page.getByLabel("Client", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "New review" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "New review" }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Review dashboard" })).toBeVisible();
     await shoot(page, "focused-bsm-ops-bsm-content-approvals");
 

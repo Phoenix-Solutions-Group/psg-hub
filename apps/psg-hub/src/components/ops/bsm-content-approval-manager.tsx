@@ -1822,7 +1822,7 @@ export function BsmContentApprovalManager({
       </header>
 
       <div className="grid min-h-[680px] lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="border-b border-border bg-[#edf0f2] p-4 lg:border-b-0 lg:border-r">
+        <aside className="border-b border-border bg-[#f7f8f9] p-4 lg:border-b-0 lg:border-r">
           <Label
             htmlFor="bsm-approval-shop"
             className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground"
