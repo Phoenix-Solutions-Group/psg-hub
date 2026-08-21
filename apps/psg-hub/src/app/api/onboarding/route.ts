@@ -7,6 +7,7 @@ type OnboardingBody = {
   address?: string;
   city?: string;
   state?: string;
+  postalCode?: string;
   websiteUrl?: string;
   phone?: string;
 };
@@ -18,6 +19,7 @@ type ShopInsert = {
   address_street: string | null;
   address_locality: string | null;
   address_region: string | null;
+  address_postal_code: string | null;
   url: string | null;
   telephone: string | null;
 };
@@ -27,8 +29,8 @@ const MAX_SLUG_ATTEMPTS = 100;
 function slugify(name: string): string {
   return (
     name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "") || "shop"
   );
 }
@@ -80,6 +82,13 @@ export async function POST(request: Request) {
   if (!shopName) {
     return NextResponse.json({ error: "shopName required" }, { status: 400 });
   }
+  const postalCode = (body.postalCode ?? "").trim();
+  if (postalCode && !/^\d{5}$/.test(postalCode)) {
+    return NextResponse.json(
+      { error: "Enter a 5-digit ZIP code." },
+      { status: 400 },
+    );
+  }
 
   // All privileged writes go through service-role: shop_users INSERT is RLS-gated
   // by with_check user_is_shop_owner(shop_id), which is false for a brand-new shop,
@@ -118,11 +127,15 @@ export async function POST(request: Request) {
     .single();
 
   if (clientErr || !client) {
-    if (clientErr) console.error("[onboarding] client insert failed:", clientErr.message);
-    return NextResponse.json({ error: "Client creation failed" }, { status: 500 });
+    if (clientErr)
+      console.error("[onboarding] client insert failed:", clientErr.message);
+    return NextResponse.json(
+      { error: "Client creation failed" },
+      { status: 500 },
+    );
   }
 
-  // 2. Create the shop using LIVE shops columns (no website_url/phone/city/state/address).
+  // 2. Create the shop using the live shops address/contact columns.
   // On failure, compensate by deleting the orphan client.
   const { data: shop, error: shopErr } = await insertShopWithUniqueSlug(service, {
     client_id: client.id,
@@ -130,14 +143,19 @@ export async function POST(request: Request) {
     address_street: body.address?.trim() || null,
     address_locality: body.city?.trim() || null,
     address_region: body.state?.trim() || null,
+    address_postal_code: postalCode || null,
     url: websiteUrl,
     telephone: body.phone?.trim() || null,
   });
 
   if (shopErr || !shop) {
     await service.from("clients").delete().eq("id", client.id);
-    if (shopErr) console.error("[onboarding] shop insert failed:", shopErr.message);
-    return NextResponse.json({ error: "Shop creation failed" }, { status: 500 });
+    if (shopErr)
+      console.error("[onboarding] shop insert failed:", shopErr.message);
+    return NextResponse.json(
+      { error: "Shop creation failed" },
+      { status: 500 },
+    );
   }
 
   // 3. First-owner membership. On failure, compensate by deleting shop + client.

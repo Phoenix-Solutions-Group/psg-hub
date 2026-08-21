@@ -4,27 +4,49 @@ import { Logo } from "@/components/brand/logo";
 import { OnboardingScreen } from "@/components/dashboard/onboarding-screen";
 import { ShopSwitcher } from "@/components/dashboard/shop-switcher";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
-import { getDashboardAccess, decideDashboardAccess } from "@/lib/auth/shop-access";
+import {
+  getDashboardAccess,
+  decideDashboardAccess,
+} from "@/lib/auth/shop-access";
 import { getOpsAccess, isOpsStaff } from "@/lib/auth/ops-access";
 import { getActiveShopContext } from "@/lib/shop/context";
 
-function dashboardNav(activeShopId: string | null) {
+export function dashboardNav(
+  activeShopId: string | null,
+  isSuperadmin: boolean,
+) {
   const invoiceHref = activeShopId
     ? `/dashboard/shop/${encodeURIComponent(activeShopId)}/invoices`
     : "/dashboard";
   return [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/analytics", label: "Analytics" },
-  { href: "/dashboard/audit", label: "SEO Audit" },
-  { href: "/dashboard/local-reach", label: "Local Reach" },
-  { href: "/dashboard/content", label: "Content" },
-  { href: "/dashboard/approvals", label: "Approvals" },
-  { href: "/dashboard/reviews", label: "Reviews" },
-  { href: "/dashboard/billing", label: "Billing" },
-  { href: invoiceHref, label: "Invoices" },
-  { href: "/dashboard/ads", label: "Ads" },
-  { href: "/dashboard/agents", label: "Agents" },
-  { href: "/dashboard/settings", label: "Settings" },
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard/analytics", label: "Analytics" },
+    {
+      href: "/dashboard/collision-intelligence",
+      label: "Collision Intelligence",
+    },
+    ...(isSuperadmin
+      ? [
+          {
+            href: "/dashboard/collision-intelligence/review",
+            label: "Data Quality & Matching",
+          },
+          {
+            href: "/dashboard/collision-intelligence/body-shop-insurance",
+            label: "Body Shop Insurance",
+          },
+        ]
+      : []),
+    { href: "/dashboard/audit", label: "SEO Audit" },
+    { href: "/dashboard/local-reach", label: "Local Reach" },
+    { href: "/dashboard/content", label: "Content" },
+    { href: "/dashboard/approvals", label: "Approvals" },
+    { href: "/dashboard/reviews", label: "Reviews" },
+    { href: "/dashboard/billing", label: "Billing" },
+    { href: invoiceHref, label: "Invoices" },
+    { href: "/dashboard/ads", label: "Ads" },
+    { href: "/dashboard/agents", label: "Agents" },
+    { href: "/dashboard/settings", label: "Settings" },
   ];
 }
 
@@ -52,7 +74,7 @@ export default async function DashboardLayout({
 
   // Active-shop context for the switcher (additive; the gate above is unchanged).
   const { shops, activeShopId } = await getActiveShopContext(user.id);
-  const nav = dashboardNav(activeShopId);
+  const nav = dashboardNav(activeShopId, access.role === "psg_superadmin");
 
   // Internal-ops staff (psg_internal / psg_superadmin) land here on /dashboard with
   // no visible path to the /ops backbone (PSG-107 / PSG-111). Surface an "Internal
@@ -93,7 +115,7 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-border px-6">
           <div className="flex items-center gap-3">
             <MobileNav nav={nav} shops={shops} activeShopId={activeShopId} />

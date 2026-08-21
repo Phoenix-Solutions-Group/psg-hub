@@ -47,12 +47,17 @@ describe("normalizePayType", () => {
     expect(normalizePayType("claim")).toBe("insurance");
     expect(normalizePayType("3rd party")).toBe("insurance");
     expect(normalizePayType("Third Party")).toBe("insurance");
+    expect(normalizePayType("Customer Insurance")).toBe("insurance");
+    expect(normalizePayType("Claimant (Other Insurance)")).toBe("insurance");
+    expect(normalizePayType("Ins Pay Which Party Unknown")).toBe("insurance");
+    expect(normalizePayType("Claiment")).toBe("insurance");
   });
 
   it("maps customer-pay aliases", () => {
     expect(normalizePayType("Customer")).toBe("customer");
     expect(normalizePayType("Cust")).toBe("customer");
     expect(normalizePayType("Customer Pay")).toBe("customer");
+    expect(normalizePayType("Cash Customer Pay")).toBe("customer");
     expect(normalizePayType("CP")).toBe("customer");
     expect(normalizePayType("self")).toBe("customer");
     expect(normalizePayType("Retail")).toBe("customer");

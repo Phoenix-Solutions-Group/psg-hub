@@ -125,7 +125,9 @@ describe("Riverside invoice-only seed", () => {
   it("fails closed without production confirmation, shop id, or credentials", () => {
     expect(() => parseRiversideInvoiceSeedArgs(["--shop-id", SHOP_ID])).toThrow("--confirm-production");
     expect(() => parseRiversideInvoiceSeedArgs(["--confirm-production"])).toThrow("--shop-id");
-    expect(() => connectRiversideInvoiceSeed({}, vi.fn())).toThrow("SUPABASE_SERVICE_ROLE_KEY");
+    expect(() =>
+      connectRiversideInvoiceSeed({} as NodeJS.ProcessEnv, vi.fn()),
+    ).toThrow("SUPABASE_SERVICE_ROLE_KEY");
   });
 
   it("verifies the target is Riverside before writing", async () => {

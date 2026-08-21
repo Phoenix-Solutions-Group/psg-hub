@@ -19,6 +19,10 @@ import {
 } from "@/lib/ops/user-management";
 import { filterCleanDemoUsers } from "@/lib/ops/demo-user-filter";
 
+type Props = {
+  searchParams: Promise<{ shop_id?: string | string[] }>;
+};
+
 function cleanRole(role: unknown): AdminAppRole | null {
   return (ADMIN_APP_ROLES as readonly string[]).includes(role as string)
     ? (role as AdminAppRole)
@@ -49,7 +53,7 @@ async function listAllAuthUsers(service: ReturnType<typeof createServiceClient>)
   return users;
 }
 
-export default async function UsersAdminPage() {
+export default async function UsersAdminPage({ searchParams }: Props) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -69,6 +73,9 @@ export default async function UsersAdminPage() {
   }
 
   const service = createServiceClient();
+  const params = await searchParams;
+  const requestedShopId =
+    typeof params.shop_id === "string" ? params.shop_id : null;
   const [
     authUsers,
     { data: profiles },
@@ -81,7 +88,10 @@ export default async function UsersAdminPage() {
     service.from("profiles").select("id, display_name"),
     service.from("app_user_roles").select("profile_id, role"),
     service.from("shop_users").select("user_id, shop_id, role"),
-    service.from("shops").select("id, name, slug").order("name", { ascending: true }),
+    service
+      .from("shops")
+      .select("id, name, slug, client_id")
+      .order("name", { ascending: true }),
     service.from("subscriptions").select("shop_id, tier, status"),
   ]);
 
@@ -110,11 +120,15 @@ export default async function UsersAdminPage() {
       id,
       name: ((s.name as string | null) ?? (s.slug as string | null) ?? id).trim(),
       slug: (s.slug as string | null) ?? null,
+      clientId: (s.client_id as string | null) ?? null,
       tier: sub?.tier ?? null,
       tierLabel: sub?.tier ? ADMIN_TIER_LABELS[sub.tier] : "No subscription tier set",
       subscriptionStatus: sub?.status ?? null,
     };
   });
+  const initialShopId = shops.some((shop) => shop.id === requestedShopId)
+    ? requestedShopId
+    : null;
 
   const shopNameById = new Map(shops.map((s) => [s.id, s.name]));
   const membershipsByUserId = new Map<string, ManagedUser["memberships"]>();
@@ -173,7 +187,11 @@ export default async function UsersAdminPage() {
         </p>
       </div>
 
-      <UserAccessManager users={users} shops={shops} />
+      <UserAccessManager
+        users={users}
+        shops={shops}
+        initialShopId={initialShopId}
+      />
     </div>
   );
 }

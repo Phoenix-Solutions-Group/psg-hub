@@ -11,8 +11,8 @@ const seedSql = fs.readFileSync(seedPath, "utf8");
 describe("Riverside operational-report seed", () => {
   it("contains only the five approved deterministic repair orders", () => {
     const repairOrderNumbers = [
-      ...seedSql.matchAll(/'(?<ro>DEMO-RIV-2026-\d{2}-\d{2})'/g),
-    ].map((match) => match.groups?.ro);
+      ...seedSql.matchAll(/'(DEMO-RIV-2026-\d{2}-\d{2})'/g),
+    ].map((match) => match[1]);
 
     expect(repairOrderNumbers).toEqual([
       "DEMO-RIV-2026-07-01",
@@ -33,11 +33,11 @@ describe("Riverside operational-report seed", () => {
 
   it("keeps the approved July and August Processing Recap totals", () => {
     const rows = [...seedSql.matchAll(
-      /'DEMO-RIV-2026-(?<month>\d{2})-\d{2}', '(?<status>open|closed)',\s+(?<amount>\d+)/g
+      /'DEMO-RIV-2026-(\d{2})-\d{2}', '(open|closed)',\s+(\d+)/g
     )].map((match) => ({
-      month: match.groups?.month,
-      status: match.groups?.status,
-      amount: Number(match.groups?.amount),
+      month: match[1],
+      status: match[2],
+      amount: Number(match[3]),
     }));
     const summarize = (month: string) => {
       const monthRows = rows.filter((row) => row.month === month);

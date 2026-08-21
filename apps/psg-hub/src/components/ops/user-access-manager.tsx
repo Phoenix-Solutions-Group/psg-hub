@@ -24,6 +24,7 @@ export type ManagedShop = {
   id: string;
   name: string;
   slug: string | null;
+  clientId: string | null;
   tier: AdminTier | null;
   tierLabel: string;
   subscriptionStatus: string | null;
@@ -47,25 +48,88 @@ export type ManagedUser = {
 export function UserAccessManager({
   users,
   shops,
+  initialShopId = null,
 }: {
   users: ManagedUser[];
   shops: ManagedShop[];
+  initialShopId?: string | null;
 }) {
+  const initialShop = shops.find((shop) => shop.id === initialShopId) ?? null;
+  const suggestedUserIds = useMemo(() => {
+    if (!initialShop?.clientId) return new Set<string>();
+    const relatedShopIds = new Set(
+      shops
+        .filter(
+          (shop) =>
+            shop.clientId === initialShop.clientId && shop.id !== initialShop.id,
+        )
+        .map((shop) => shop.id),
+    );
+    return new Set(
+      users
+        .filter(
+          (user) =>
+            user.role === "customer" &&
+            !user.memberships.some(
+              (membership) => membership.shopId === initialShop.id,
+            ) &&
+            user.memberships.some((membership) =>
+              relatedShopIds.has(membership.shopId),
+            ),
+        )
+        .map((user) => user.profileId),
+    );
+  }, [initialShop, shops, users]);
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u) =>
-      [u.displayName, u.email ?? "", u.profileId]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [query, users]);
+    return users
+      .filter(
+        (user) =>
+          !q ||
+          [user.displayName, user.email ?? "", user.profileId]
+            .join(" ")
+            .toLowerCase()
+            .includes(q),
+      )
+      .sort(
+        (left, right) =>
+          Number(suggestedUserIds.has(right.profileId)) -
+          Number(suggestedUserIds.has(left.profileId)),
+      );
+  }, [query, suggestedUserIds, users]);
 
   return (
     <section className="space-y-6">
-      <InviteUserForm shops={shops} />
+      {initialShop ? (
+        <div
+          role="status"
+          className="rounded-lg border border-warning/50 bg-warning/10 p-4"
+        >
+          <p className="font-heading font-semibold">
+            Preparing customer access for {initialShop.name}
+          </p>
+          <p className="mt-1 text-sm leading-6 text-foreground/75">
+            Invite the intended customer or add this shop to an existing user.
+            The shop is preselected below; saved access changes are audited.
+          </p>
+          {suggestedUserIds.size ? (
+            <p className="mt-1 text-sm leading-6 text-foreground/75">
+              {suggestedUserIds.size} existing customer {suggestedUserIds.size === 1 ? "has" : "accounts have"}{" "}
+              access to another shop under the same client account and {suggestedUserIds.size === 1 ? "is" : "are"}{" "}
+              listed first. Confirm the intended audience before saving.
+            </p>
+          ) : null}
+          <Link
+            href="/dashboard/collision-intelligence/review#forecast-model-review"
+            className="mt-2 inline-block text-sm text-muted-foreground hover:text-ember"
+          >
+            Return to forecast review
+          </Link>
+        </div>
+      ) : null}
+
+      <InviteUserForm shops={shops} initialShopId={initialShop?.id ?? null} />
 
       <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -86,7 +150,13 @@ export function UserAccessManager({
 
         <div className="space-y-3">
           {filtered.map((user) => (
-            <UserAccessCard key={user.profileId} user={user} shops={shops} />
+            <UserAccessCard
+              key={user.profileId}
+              user={user}
+              shops={shops}
+              initialShopId={initialShop?.id ?? null}
+              relatedShopAccess={suggestedUserIds.has(user.profileId)}
+            />
           ))}
           {filtered.length === 0 && (
             <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
@@ -100,11 +170,17 @@ export function UserAccessManager({
   );
 }
 
-function InviteUserForm({ shops }: { shops: ManagedShop[] }) {
+function InviteUserForm({
+  shops,
+  initialShopId,
+}: {
+  shops: ManagedShop[];
+  initialShopId: string | null;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AdminAppRole>("customer");
-  const [shopId, setShopId] = useState("");
+  const [shopId, setShopId] = useState(initialShopId ?? "");
   const [shopRole, setShopRole] = useState<ShopMemberRole>("viewer");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -245,15 +321,28 @@ function InviteUserForm({ shops }: { shops: ManagedShop[] }) {
   );
 }
 
-function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop[] }) {
+function UserAccessCard({
+  user,
+  shops,
+  initialShopId,
+  relatedShopAccess,
+}: {
+  user: ManagedUser;
+  shops: ManagedShop[];
+  initialShopId: string | null;
+  relatedShopAccess: boolean;
+}) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(user.displayName);
   const [email, setEmail] = useState(user.email ?? "");
   const [role, setRole] = useState<AdminAppRole>(user.role ?? "customer");
-  const [shopId, setShopId] = useState(shops[0]?.id ?? "");
+  const [shopId, setShopId] = useState(initialShopId ?? shops[0]?.id ?? "");
   const [shopRole, setShopRole] = useState<ShopMemberRole>("viewer");
-  const [tierShopId, setTierShopId] = useState(shops[0]?.id ?? "");
-  const [tier, setTier] = useState<AdminTier | null>(shops[0]?.tier ?? null);
+  const [tierShopId, setTierShopId] = useState(
+    initialShopId ?? shops[0]?.id ?? ""
+  );
+  const initialTierShop = shops.find((shop) => shop.id === initialShopId) ?? shops[0];
+  const [tier, setTier] = useState<AdminTier | null>(initialTierShop?.tier ?? null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -290,6 +379,9 @@ function UserAccessCard({ user, shops }: { user: ManagedUser; shops: ManagedShop
           <div className="text-sm text-muted-foreground">{user.email ?? user.profileId}</div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {relatedShopAccess ? (
+            <Badge variant="outline">Related shop access</Badge>
+          ) : null}
           <Badge variant="secondary">
             {user.role ? ADMIN_APP_ROLE_LABELS[user.role] : "No role"}
           </Badge>

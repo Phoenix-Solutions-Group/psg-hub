@@ -95,17 +95,6 @@ vi.mock("@/lib/analytics/direct-mail", () => ({
   ),
 }));
 
-vi.mock("@/lib/analytics/google-ads-dashboard", async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import("@/lib/analytics/google-ads-dashboard")
-    >();
-  return {
-    ...actual,
-    getRecentGoogleAdsChanges: vi.fn(async () => []),
-  };
-});
-
 vi.mock("@/components/analytics/charts", () => ({
   LineChartCard: ({
     title,

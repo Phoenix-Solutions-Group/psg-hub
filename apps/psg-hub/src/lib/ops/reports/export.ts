@@ -8,7 +8,6 @@
 import type {
   ColumnType,
   ReportCell,
-  ReportColumn,
   ReportResult,
 } from "./types";
 
@@ -44,7 +43,10 @@ export function formatCell(value: ReportCell, type: ColumnType): string {
 /** Raw, locale-free string for machine formats (CSV/Excel). Numbers stay numeric. */
 function rawCell(value: ReportCell): string {
   if (value === null || value === undefined) return "";
-  return String(value);
+  const text = String(value);
+  return typeof value === "string" && /^[=+\-@\t\r]/.test(text)
+    ? `'${text}`
+    : text;
 }
 
 function csvEscape(field: string): string {
@@ -89,7 +91,7 @@ function isNumericType(type: ColumnType): boolean {
 
 function xmlDataCell(value: ReportCell, type: ColumnType): string {
   if (value === null || value === undefined || value === "") {
-    return "<Cell><Data ss:Type=\"String\"></Data></Cell>";
+    return '<Cell><Data ss:Type="String"></Data></Cell>';
   }
   if (isNumericType(type)) {
     const n = typeof value === "number" ? value : Number(value);

@@ -21,6 +21,7 @@ export function OnboardingWizard() {
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [postalCode, setPostalCode] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [phone, setPhone] = useState("");
   const trackedOpenRef = useRef(false);
@@ -85,6 +86,7 @@ export function OnboardingWizard() {
         address,
         city,
         state,
+        postalCode,
         websiteUrl,
         phone,
       }),
@@ -146,7 +148,7 @@ export function OnboardingWizard() {
                 onChange={(e) => setAddress(e.target.value)}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="city">City</Label>
                 <Input
@@ -166,6 +168,20 @@ export function OnboardingWizard() {
                   onChange={(e) => setState(e.target.value.toUpperCase())}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="postal-code">ZIP code</Label>
+                <Input
+                  id="postal-code"
+                  inputMode="numeric"
+                  pattern="[0-9]{5}"
+                  maxLength={5}
+                  placeholder="68512"
+                  value={postalCode}
+                  onChange={(e) =>
+                    setPostalCode(e.target.value.replace(/\D/g, "").slice(0, 5))
+                  }
+                />
+              </div>
             </div>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setStep(1)}>
@@ -181,7 +197,9 @@ export function OnboardingWizard() {
               onClick={handleDiscover}
               disabled={discovering || !shopName.trim()}
             >
-              {discovering ? "Finding your shop..." : "Find my shop & auto-fill"}
+              {discovering
+                ? "Finding your shop..."
+                : "Find my shop & auto-fill"}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
               We&apos;ll suggest your website and details from your name and
@@ -197,8 +215,8 @@ export function OnboardingWizard() {
                 <p>{discoveryNote}</p>
                 {pendingFields.length > 0 && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    We&apos;ll auto-fill {pendingFields.join(", ")} once your data
-                    sources are connected.
+                    We&apos;ll auto-fill {pendingFields.join(", ")} once your
+                    data sources are connected.
                   </p>
                 )}
               </div>

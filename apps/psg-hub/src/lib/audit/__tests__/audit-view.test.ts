@@ -31,6 +31,7 @@ describe("auditCategory", () => {
     expect(auditCategory("module.visibility.set")).toBe("modules");
     expect(auditCategory("security_profile.assign")).toBe("profiles");
     expect(auditCategory("superadmin.add")).toBe("superadmin");
+    expect(auditCategory("collision.shop_mapping.approve")).toBe("collision");
     expect(auditCategory("mystery")).toBe("other");
   });
   it("covers every known action with a non-other category", () => {

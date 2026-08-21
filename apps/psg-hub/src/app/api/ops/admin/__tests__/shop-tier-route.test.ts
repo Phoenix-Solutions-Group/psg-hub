@@ -4,7 +4,7 @@ const auditEvents: unknown[] = [];
 const operations: unknown[] = [];
 
 vi.mock("@/lib/auth/ops-access", () => ({
-  requireSuperadmin: vi.fn(async () => ({ ok: true, userId: "super-1" })),
+  requireOpsFn: vi.fn(async () => ({ ok: true, userId: "super-1" })),
 }));
 
 vi.mock("@/lib/audit/access-audit", () => ({

@@ -15,6 +15,7 @@ const shops: ManagedShop[] = [
     id: "22222222-2222-4222-8222-222222222222",
     name: "Wallace Collision",
     slug: "wallace",
+    clientId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     tier: "growth",
     tierLabel: "Growth",
     subscriptionStatus: "active",
@@ -23,6 +24,7 @@ const shops: ManagedShop[] = [
     id: "33333333-3333-4333-8333-333333333333",
     name: "Tedesco Auto Body",
     slug: "tedesco",
+    clientId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     tier: "performance",
     tierLabel: "Performance",
     subscriptionStatus: "active",
@@ -81,5 +83,62 @@ describe("UserAccessManager", () => {
     expect(html).toContain(">No subscription tier</option>");
     expect(html).toContain(">Growth</option>");
     expect(html).toContain(">Performance</option>");
+  });
+
+  it("preselects a forecast target for invites and existing-user assignments", () => {
+    const html = renderToStaticMarkup(
+      <UserAccessManager
+        users={users}
+        shops={shops}
+        initialShopId={shops[1].id}
+      />
+    );
+
+    expect(html).toContain("Preparing customer access for Tedesco Auto Body");
+    expect(html).toContain(
+      'href="/dashboard/collision-intelligence/review#forecast-model-review"'
+    );
+    expect(html.match(/value="33333333-3333-4333-8333-333333333333" selected=""/g)).toHaveLength(
+      3
+    );
+  });
+
+  it("lists unassigned users from related client shops first", () => {
+    const relatedShop: ManagedShop = {
+      ...shops[1],
+      id: "44444444-4444-4444-8444-444444444444",
+      name: "Tedesco North",
+    };
+    const relatedUser: ManagedUser = {
+      profileId: "55555555-5555-4555-8555-555555555555",
+      displayName: "Tedesco Customer",
+      email: "customer@example.com",
+      bannedUntil: null,
+      isDeleted: false,
+      isSuspended: false,
+      role: "customer",
+      memberships: [
+        {
+          shopId: relatedShop.id,
+          shopName: relatedShop.name,
+          role: "manager",
+        },
+      ],
+    };
+    const html = renderToStaticMarkup(
+      <UserAccessManager
+        users={[users[0], relatedUser]}
+        shops={[...shops, relatedShop]}
+        initialShopId={shops[1].id}
+      />,
+    );
+
+    expect(html).toContain(
+      "1 existing customer has access to another shop under the same client account",
+    );
+    expect(html).toContain("Related shop access");
+    expect(html.indexOf("Tedesco Customer")).toBeLessThan(
+      html.indexOf("BSM Demo Admin"),
+    );
   });
 });
