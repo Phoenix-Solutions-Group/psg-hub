@@ -559,7 +559,7 @@ export function WorkspacePreviewScreen({
             </div>
           </div>
           {immersive ? (
-            <div className="inline-flex rounded-lg bg-[#edf0f2] p-1 text-xs font-medium">
+            <div className="inline-flex rounded-lg bg-[#f7f8f9] p-1 text-xs font-medium">
               <span className="rounded-md bg-[#17364b] px-3 py-1.5 text-white">
                 Comment
               </span>

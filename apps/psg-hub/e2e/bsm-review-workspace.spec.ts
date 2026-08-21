@@ -81,7 +81,7 @@ async function ensureContentApprovalsShopOption() {
 test("retired BSM review workspace route redirects to Review Workspace", async ({ page }) => {
   await page.goto("/ops/bsm-review-workspace");
   await expect(page).toHaveURL(/\/ops\/bsm-content-approvals(?:\?.*)?$/);
-  await expect(page.getByRole("heading", { name: "Review Workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review Workspace", exact: true })).toBeVisible();
 });
 
 test("BSM content approvals release gate: admin creates, reviewer comments and submits once", async ({ page, context }) => {
@@ -91,7 +91,7 @@ test("BSM content approvals release gate: admin creates, reviewer comments and s
   const documentTitle = `Homepage release proof ${runId}`;
 
   await page.goto("/ops/bsm-content-approvals");
-  await expect(page.getByRole("heading", { name: "Review Workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review Workspace", exact: true })).toBeVisible();
   await checkA11y(page, "bsm-content-approvals-admin-empty");
 
   const manualShopInput = page.locator("input#bsm-approval-shop");
@@ -156,11 +156,10 @@ test("BSM content approvals release gate: admin creates, reviewer comments and s
 
   await page.reload();
   await expect(page.getByRole("heading", { name: "Review Workspace", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Refresh status" }).click();
-  await expect(page.getByText("1 of 1 submitted")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("Submitted feedback")).toBeVisible();
-  const resultRow = page.getByRole("row", { name: new RegExp(documentTitle) });
-  await expect(resultRow.getByText("changes requested")).toBeVisible({ timeout: 15_000 });
-  await expect(resultRow.getByText("1 comments")).toBeVisible();
+  await page.getByRole("button", { name: "Open review workspace" }).click();
+  await expect(page.getByText("Review notes", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Please update the warranty offer wording before approval.")).toBeVisible();
+  await expect(page.getByText("changes requested", { exact: true })).toBeVisible();
+  await expect(page.getByText("The page is close, but the warranty offer needs clearer wording.")).toBeVisible();
   await checkA11y(page, "bsm-content-approvals-admin-result");
 });
