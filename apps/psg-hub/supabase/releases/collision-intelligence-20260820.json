@@ -1,0 +1,71 @@
+{
+  "$comment": "Collision-intelligence production gate. Apply only these reviewed files, in this order, to Supabase project gylkkzmcmbdftxieyabw. Production execution still requires explicit operator approval.",
+  "projectRef": "gylkkzmcmbdftxieyabw",
+  "migrations": [
+    {
+      "file": "20260819195103_collision_storm_source_reconciliation.sql",
+      "name": "collision_storm_source_reconciliation",
+      "sha256": "1e632981f92f558d70710d438780294f0fb9b412ca9525cd6dcad6aa12170481"
+    },
+    {
+      "file": "20260819201319_collision_forecast_readiness.sql",
+      "name": "collision_forecast_readiness",
+      "sha256": "650fea931ff6572e962fee8e484457817cc7e8d2648adb882dfbaa47c94ba24e"
+    },
+    {
+      "file": "20260819210842_harden_collision_example_functions.sql",
+      "name": "harden_collision_example_functions",
+      "sha256": "c7c38c3c3cbab9b65f9678bde1a993f9685fe84b96b7c3626f251487d32f0c15"
+    },
+    {
+      "file": "20260820153240_collision_shop_insurance_market.sql",
+      "name": "collision_shop_insurance_market",
+      "sha256": "d5943feb9d03bfb7764336eeb1c07ee5c6e9cdf85f7f718603507c0575c177c7"
+    },
+    {
+      "file": "20260820155441_collision_insurer_acronym_matching.sql",
+      "name": "collision_insurer_acronym_matching",
+      "sha256": "432f202a8867408230896337cf4213b745af522e72094e4f15d98c6782d2ed1c"
+    },
+    {
+      "file": "20260820170404_stage_collision_forecast_model_review.sql",
+      "name": "stage_collision_forecast_model_review",
+      "sha256": "cbdfcc3cb871aea91a45c088ca3f8a88a31afb4ceee2ebc88106a4c38dc3805c"
+    },
+    {
+      "file": "20260820203311_review_collision_forecast_models.sql",
+      "name": "review_collision_forecast_models",
+      "sha256": "1bb8d5c3a33ff1cbbac4c4071e284989ce98d0a6dce9536847fff637ce532490"
+    },
+    {
+      "file": "20260820215207_fix_collision_weather_coverage.sql",
+      "name": "fix_collision_weather_coverage",
+      "sha256": "ba9b84553103bede745a7be5bf0280e60a936276b8b30a63ab2db63aee8e499f"
+    },
+    {
+      "file": "20260820224500_collision_payment_classification.sql",
+      "name": "collision_payment_classification",
+      "sha256": "c337359bea63d1c2bec3dbc74f89330ea9a8d69b144b87e6d7eb2a62dcc69c04"
+    },
+    {
+      "file": "20260820235000_collision_forecast_customer_audience.sql",
+      "name": "collision_forecast_customer_audience",
+      "sha256": "7167d6f0477f67e8b31c8bf40ef63ffc6db1cc3df6ebb67e2a6abc5f9f73cd24"
+    },
+    {
+      "file": "20260820235900_collision_weather_alert_review_cases.sql",
+      "name": "collision_weather_alert_review_cases",
+      "sha256": "a8292cf946ed204f59b35afc389a8a7be4f03b16af0a5437d956a2910001e976"
+    },
+    {
+      "file": "20260821012506_collision_forecast_candidate_evaluations.sql",
+      "name": "collision_forecast_candidate_evaluations",
+      "sha256": "706dc43698d93263fac8a5493aacec3441aa1a2368b4040ff703bdd08510e8a2"
+    },
+    {
+      "file": "20260821013156_collision_shop_identity_evidence.sql",
+      "name": "collision_shop_identity_evidence",
+      "sha256": "65022f56f759c3867f85a33ddac33676695ce03b17f6206b29989264c4bd6080"
+    }
+  ]
+}

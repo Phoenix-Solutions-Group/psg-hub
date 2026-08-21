@@ -256,6 +256,24 @@ the migration runner:
 12. `20260821012506_collision_forecast_candidate_evaluations.sql`
 13. `20260821013156_collision_shop_identity_evidence.sql`
 
+The release manifest at
+`apps/psg-hub/supabase/releases/collision-intelligence-20260820.json` locks this exact
+order, the target project, each migration name, and each reviewed file's SHA-256.
+Before applying anything, save the read-only migration ledger query from
+`docs/runbooks/supabase-migration-apply.md` to a temporary file and run:
+
+```bash
+node scripts/check-release-manifest.mjs \
+  --project-ref gylkkzmcmbdftxieyabw \
+  --applied-file /tmp/applied.txt
+```
+
+The checker must report `0/13 applied` before the first migration. It accepts a
+timestamp-ordered applied prefix so an interrupted release can resume at the named
+next migration, but it fails on a skipped migration, a changed reviewed file, or a
+different project target. Re-run it after the final migration; it must report
+`13/13 applied` before postflight.
+
 The current production preconditions were rechecked read-only on 2026-08-20: 3,986
 provisional events still lack a matching source-ledger row for
 `noaa_spc_preliminary-20260801-20260817`; the readiness/reconciliation views,
@@ -312,6 +330,11 @@ service-only function, legacy browser grant, source sequence, the missing insure
 foreign-key index, and the unreconciled SPC source batch. KDOT source/import counts,
 completed ZIP resolution, and both blocked-forecast invariants already pass. This is
 the expected before-state, not a release failure.
+
+The payment-classification migration is the only notable row rewrite in the batch. A
+read-only 2026-08-20 preflight found 3,074 Hub repair orders with a null payment type;
+3,060 match the migration's exact governed aliases and would be updated. FileMaker
+repair facts are not rewritten by this migration.
 
 The first three release files were previously applied together in a local transaction
 and rolled back. The expanded hardening file separately passed and rolled back with all
