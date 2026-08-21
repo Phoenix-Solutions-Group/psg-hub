@@ -834,21 +834,20 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     <div className="space-y-6">
       <div className="max-w-4xl">
         <h1 className="text-2xl font-bold tracking-tight">
-          Match imported collision data
+          Prepare collision data for reporting
         </h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Review one imported value at a time before it is used in PSG Hub
-          reports. Match insurer names, connect shops, and review forecast
-          evidence. Nothing changes until you confirm it, and every saved
-          decision is audited.
+          Resolve imported names and shop connections before they appear in PSG
+          Hub reports. Nothing changes until you confirm it, and every saved
+          decision is recorded.
         </p>
         <div className="mt-4 rounded-lg bg-secondary/50 p-4 text-sm leading-6">
-          <p className="font-heading font-semibold">What changes here</p>
+          <p className="font-heading font-semibold">Why this review matters</p>
           <p className="mt-1 text-muted-foreground">
-            Insurer matches change how carrier-tagged repair orders are grouped
-            in reports. Shop matches change which authorized users can see the
-            imported repair history. These are repair records—not insurer claim
-            counts.
+            An insurer match groups differently written versions of the same
+            insurer under one reporting name. A shop connection controls which
+            authorized users can see imported repair history. The source records
+            remain unchanged, and repair records are not insurer claim counts.
           </p>
         </div>
         <nav
@@ -1416,18 +1415,18 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="alias-review-heading" className="text-lg font-semibold">
-              Match insurer names
+              Resolve insurer reporting names
             </h2>
             <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              Review one FileMaker name at a time. Search first, compare the
-              results, then save one reporting name. Existing PSG names appear
-              before official NAIC legal records, and nothing is saved
+              Review the suggested matches for each FileMaker value. If none is
+              right, search by name or abbreviation. Choose one reporting name
+              or keep the imported value separate; nothing is saved
               automatically.
             </p>
           </div>
           <Badge variant="warning">
-            {aliasReviewCount} {aliasReviewCount === 1 ? "name" : "names"} need
-            review
+            {aliasReviewCount} {aliasReviewCount === 1 ? "name" : "names"}
+            remaining
           </Badge>
         </div>
 
@@ -1444,13 +1443,12 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
             className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm leading-6"
           >
             <p className="font-heading font-semibold">
-              The PSG insurer master list is empty
+              No PSG reporting names are available yet
             </p>
             <p className="mt-1 text-foreground/75">
-              Searches can still return names approved in earlier reviews and
-              official NAIC legal entities. Common reporting names such as “USAA
-              Insurance Company” will not appear until PSG adds and verifies
-              them in the{" "}
+              You can still choose a name approved in an earlier review or a
+              licensed NAIC record. To use a common reporting name such as “USAA
+              Insurance Company,” add and verify it in the{" "}
               <Link
                 href="/ops/sys-config/insurance-companies"
                 className="font-medium text-primary underline underline-offset-4"
@@ -1485,7 +1483,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                 <CardHeader className="border-b border-border pb-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <CardTitle className="text-lg">
-                      Imported name: {alias.source_label_name}
+                      Review “{alias.source_label_name}”
                     </CardTitle>
                     <Badge
                       variant={
@@ -1504,9 +1502,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    FileMaker sent this exact value. Your saved choice only
-                    controls how it appears in PSG reports; the imported source
-                    stays unchanged.
+                    FileMaker sent this value. Your decision only changes the
+                    name used in PSG reports; the imported value stays
+                    unchanged.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1549,12 +1547,12 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         htmlFor={`registry-search-${alias.source_label_normalized.replaceAll(" ", "-")}`}
                         className="block font-heading text-sm font-semibold"
                       >
-                        Search PSG names and NAIC records
+                        Search for a different match
                       </label>
                       <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                        Enter the common name, brand, or abbreviation you
-                        expect. Spaces and punctuation are ignored, so “U S A A”
-                        can find “USAA.”
+                        Search by common name, legal name, or abbreviation.
+                        Spaces and punctuation are ignored, so “U S A A” can
+                        find “USAA.”
                       </p>
                       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                         <input
@@ -1573,9 +1571,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         />
                         <button
                           type="submit"
-                          className="min-h-10 rounded-md bg-primary px-4 py-2 font-heading text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          className="min-h-10 rounded-md border border-border bg-background px-4 py-2 font-heading text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         >
-                          Find matches
+                          Update matches
                         </button>
                       </div>
                       {alias.source_label_normalized === searchSource &&
@@ -1585,10 +1583,10 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                           className="mt-3 rounded-md border border-border bg-background p-3 text-xs leading-5 text-muted-foreground"
                         >
                           {directorySearchUnavailable
-                            ? "The official NAIC directory is unavailable. You can still choose a PSG reporting name below or keep the source label separate."
+                            ? "Licensed NAIC records are temporarily unavailable. You can still choose a PSG reporting name below or keep the imported value separate."
                             : matches.count
-                              ? `Search complete for “${registrySearch}”: ${matches.master.length + matches.approved.length + Number(matches.currentMatches)} PSG reporting ${matches.master.length + matches.approved.length + Number(matches.currentMatches) === 1 ? "name" : "names"} and ${strong.length + possible.length} official NAIC ${strong.length + possible.length === 1 ? "record" : "records"}. Choose one below.`
-                              : `No matches found for “${registrySearch}”. Try the full legal name, search a shorter term, or keep the source label separate.`}
+                              ? `Found ${matches.master.length + matches.approved.length + Number(matches.currentMatches)} PSG reporting ${matches.master.length + matches.approved.length + Number(matches.currentMatches) === 1 ? "name" : "names"} and ${strong.length + possible.length} licensed NAIC ${strong.length + possible.length === 1 ? "record" : "records"} for “${registrySearch}.” Choose the exact insurer below.`
+                              : `No close matches found for “${registrySearch}.” Try a shorter name or the full legal name, or keep the imported value separate.`}
                         </p>
                       ) : null}
                     </div>
@@ -1614,26 +1612,24 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                       className="space-y-3"
                     >
                       <legend className="font-heading text-sm font-semibold">
-                        Choose what PSG reports should show
+                        Choose the name PSG reports should use
                       </legend>
                       <p
                         id={`insurer-match-help-${alias.source_label_normalized.replaceAll(" ", "-")}`}
                         className="text-xs leading-5 text-muted-foreground"
                       >
-                        Prefer an existing PSG reporting name when it represents
-                        the same insurer. NAIC results are licensed legal
-                        entities; choose one only when that exact company
-                        appears on the repair order.
+                        Use an existing PSG name when it is the same insurer.
+                        NAIC results are licensed legal entities, but a similar
+                        name is not proof of identity.
                       </p>
                       {matches.current ? (
                         <div className="space-y-2">
                           <div>
                             <p className="font-heading text-sm font-semibold">
-                              Current saved choice
+                              Currently used in reports
                             </p>
                             <p className="text-xs leading-5 text-muted-foreground">
-                              This is selected now. Search results below are
-                              alternatives.
+                              Keep this selection or choose a replacement below.
                             </p>
                           </div>
                           <InsurerMatchChoice
@@ -1648,11 +1644,11 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         <div className="space-y-2">
                           <div>
                             <p className="font-heading text-sm font-semibold">
-                              Existing PSG reporting names
+                              PSG reporting names
                             </p>
                             <p className="text-xs leading-5 text-muted-foreground">
-                              Use these common names to keep insurer reporting
-                              consistent.
+                              Preferred when the name represents the same
+                              insurer.
                             </p>
                           </div>
                           {matches.master.map((insurer, index) => (
@@ -1662,8 +1658,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                               label={insurer.label}
                               source={
                                 index === 0 && !matches.currentMatches
-                                  ? "Best PSG name match · Insurer master list"
-                                  : "PSG insurer master list"
+                                  ? "Closest text match · PSG insurer list"
+                                  : "PSG insurer list"
                               }
                             />
                           ))}
@@ -1676,8 +1672,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                                 index === 0 &&
                                 !matches.currentMatches &&
                                 !matches.master.length
-                                  ? "Best PSG name match · Already used in reports"
-                                  : "Reporting name already in use"
+                                  ? "Closest text match · Already used in PSG reports"
+                                  : "Already used in PSG reports"
                               }
                             />
                           ))}
@@ -1687,11 +1683,11 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         <div className="space-y-2 border-t border-border pt-3">
                           <div>
                             <p className="font-heading text-sm font-semibold">
-                              Official NAIC legal records
+                              Licensed insurer records
                             </p>
                             <p className="text-xs leading-5 text-muted-foreground">
-                              These are licensed company or group names, not
-                              common brand suggestions.
+                              Legal company or group names from the NAIC
+                              directory. Verify the exact entity before choosing.
                             </p>
                           </div>
                           {strong.map((suggestion) => (
@@ -1699,8 +1695,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                               key={`${suggestion.source}:${suggestion.record_type}:${suggestion.registry_id}`}
                               value={registryTarget(suggestion)}
                               label={suggestion.display_name}
-                              source="Official NAIC record"
-                              detail={`Name similarity ${suggestion.match_score}% (not identity confidence) · ${suggestion.record_type === "group" ? `group ${suggestion.group_code}` : `company ${suggestion.company_code}`}`}
+                              source="Licensed NAIC record"
+                              detail={`Text match ${suggestion.match_score}% — not proof of identity · ${suggestion.record_type === "group" ? `group ${suggestion.group_code}` : `company ${suggestion.company_code}`}`}
                             />
                           ))}
                           {possible.map((suggestion) => (
@@ -1708,8 +1704,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                               key={`${suggestion.source}:${suggestion.record_type}:${suggestion.registry_id}`}
                               value={registryTarget(suggestion)}
                               label={suggestion.display_name}
-                              source="Possible NAIC record — verify carefully"
-                              detail={`Name similarity ${suggestion.match_score}% (not identity confidence) · ${suggestion.record_type === "group" ? `group ${suggestion.group_code}` : `company ${suggestion.company_code}`}`}
+                              source="Possible licensed record — verify carefully"
+                              detail={`Text match ${suggestion.match_score}% — not proof of identity · ${suggestion.record_type === "group" ? `group ${suggestion.group_code}` : `company ${suggestion.company_code}`}`}
                             />
                           ))}
                         </div>
@@ -1719,25 +1715,24 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                           role="status"
                           className="rounded-md border border-border bg-secondary/40 p-3 text-sm leading-6 text-muted-foreground"
                         >
-                          No likely match is available yet. Search another name
-                          or keep the source label separate.
+                          No likely match is available. Search another name or
+                          keep the imported value separate.
                         </div>
                       ) : null}
                     </fieldset>
                     <p className="text-xs leading-5 text-muted-foreground">
-                      Can’t find the common name you need? Verify and add it to
-                      the{" "}
+                      Can’t find the correct name? Add and verify it in the{" "}
                       <Link
                         href="/ops/sys-config/insurance-companies"
                         className="font-medium text-primary underline underline-offset-4"
                       >
                         insurer master list
                       </Link>{" "}
-                      before saving. Do not substitute a similar legal entity;
-                      keep the imported name separate instead.
+                      before saving. If identity is uncertain, keep the imported
+                      value separate.
                     </p>
                     <label className="block text-sm font-medium">
-                      Verification note{" "}
+                      Evidence or note{" "}
                       <span className="font-normal text-muted-foreground">
                         (optional)
                       </span>
@@ -1745,19 +1740,19 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                         name="review_notes"
                         maxLength={1000}
                         rows={2}
-                        placeholder="Example: Exact legal name confirmed on the repair order."
+                        placeholder="Example: Exact legal name verified on repair order 10452."
                         className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       />
                     </label>
                     <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-end sm:justify-between">
                       <div>
                         <p className="font-heading text-sm font-semibold">
-                          Save this reporting decision
+                          Confirm the reporting change
                         </p>
                         <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
                           {alias.review_status === "candidate"
-                            ? `The selected name will replace “${alias.source_label_name}” in reports across all source shops.`
-                            : `Saving updates how “${alias.source_label_name}” appears in reports across all source shops.`}
+                            ? `All repair orders labeled “${alias.source_label_name}” will be grouped under the selected name in PSG reports.`
+                            : `This updates how “${alias.source_label_name}” appears in PSG reports across all source shops.`}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -1768,8 +1763,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                           className="rounded-md bg-primary px-3 py-2 font-heading text-sm font-medium text-primary-foreground hover:bg-primary/90"
                         >
                           {alias.review_status === "candidate"
-                            ? "Save reporting match"
-                            : "Save updated match"}
+                            ? "Use selected reporting name"
+                            : "Update reporting name"}
                         </button>
                         <button
                           type="submit"
@@ -1778,7 +1773,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                           formNoValidate
                           className="rounded-md border border-border px-3 py-2 font-heading text-sm font-medium hover:bg-accent"
                         >
-                          Keep “{alias.source_label_name}” as-is
+                          Keep “{alias.source_label_name}” separate
                         </button>
                       </div>
                     </div>
@@ -1796,11 +1791,11 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                   id="insurer-queue-heading"
                   className="font-heading font-semibold"
                 >
-                  Review queue
+                  Names to review
                 </h3>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Showing {aliases.length} of {aliasReviewCount}, highest repair
-                  volume first.
+                  Showing {aliases.length} of {aliasReviewCount}. Highest repair
+                  volume appears first.
                 </p>
               </div>
               <nav aria-label="Insurer names awaiting review">
