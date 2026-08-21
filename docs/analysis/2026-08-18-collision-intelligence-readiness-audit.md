@@ -1,7 +1,25 @@
 # Collision Intelligence Readiness Audit
 
 **Audited:** 2026-08-18; updated 2026-08-21
-**Verdict:** pilot analytics foundation is implemented; the full project is not complete
+**Verdict:** Supabase production release verified; the operating pilot is not complete
+
+## 2026-08-21 production release
+
+- The user explicitly chose the Supabase production migration and declined any
+  FileMaker backup archive, move, or removal. FileMaker storage was not changed.
+- The exact 13-file collision release manifest passed its SHA-256 and target-project
+  check, then all 13 migrations were applied to Supabase project
+  `gylkkzmcmbdftxieyabw` in the reviewed order. The production ledger records all 13
+  names.
+- The committed production postflight returned `ready = true`, `checks_run = 81`,
+  `checks_failed = 0`, and `failures = []`. The three scoped mutable-search-path
+  warnings are cleared. Remaining collision security-advisor notices are the expected
+  service-only RLS/no-policy information notices; the postflight proves their browser
+  privileges are denied.
+- No shop mapping, customer membership, model approval, forecast scoring,
+  publication, notification, FileMaker refresh, or application deployment was implied
+  by the schema release. PS229 remains unmapped and South Lincoln still has zero
+  customer-role members.
 
 ## 2026-08-20 update
 

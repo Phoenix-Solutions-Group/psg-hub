@@ -238,11 +238,10 @@ Do not run broad `db push`, `migration repair`, or `db pull` during this release
 future scoped history repair requires its own approval and coordination with the other
 applications sharing this project.
 
-The first governed FileMaker import is reconciled. The live migration ledger was
-rechecked read-only at 21:52 CT on 2026-08-20. Its newest collision entry is
-`collision_insurer_registry`; 13 local collision-scoped migration names are absent.
-Under a separate production approval, apply these files in timestamp order through
-the migration runner:
+The first governed FileMaker import is reconciled. A read-only preflight at 21:52 CT
+on 2026-08-20 found all 13 release names absent. On 2026-08-21 the user approved the
+Supabase production migration, the manifest hashes and target project were rechecked,
+and these files were applied in timestamp order through the migration runner:
 
 1. `20260819195103_collision_storm_source_reconciliation.sql`
 2. `20260819201319_collision_forecast_readiness.sql`
@@ -276,7 +275,13 @@ next migration, but it fails on a skipped migration, a changed reviewed file, or
 different project target. Re-run it after the final migration; it must report
 `13/13 applied` before postflight.
 
-The current production preconditions were rechecked read-only on 2026-08-20: 3,986
+The production ledger now reports `13/13 applied`. The committed postflight returned
+`ready = true`, `checks_run = 81`, `checks_failed = 0`, and `failures = []`. Do not
+reapply this release. Shop mapping, audience assignment, model approval, scoring,
+publication, notifications, FileMaker refresh activation, and application deployment
+remain separate audited actions.
+
+The historical production before-state was rechecked read-only on 2026-08-20: 3,986
 provisional events still lack a matching source-ledger row for
 `noaa_spc_preliminary-20260801-20260817`; the readiness/reconciliation views,
 body-shop appetite table, forecast-review RPCs, weather-review lifecycle, customer
@@ -411,10 +416,11 @@ A subsequent read-only capacity audit found four retained folders totaling 38 GB
 three midnight `FMS` folders and the disabled schedule's 9.4 GB
 `Backup_2026-08-20_0300` folder. Its Advantage and Survey files each have link count
 one, so the disabled folder contains materially reclaimable blocks rather than only
-hard links to the midnight set. The safest recovery sequence is to copy that one
-folder to `/mnt/HC_Volume_105029819`, reconcile file count, byte count, and SHA-256,
-then remove the source folder only under explicit approval. No file was moved or
-deleted during this audit.
+hard links to the midnight set. A copy/reconcile/removal sequence was proposed, but on
+August 21 the user explicitly declined any FileMaker archive, move, or removal. Do not
+alter those retained folders. Capacity therefore remains unresolved and continues to
+block recurring FileMaker refresh activation; it did not block the separately approved
+Supabase schema release. No FileMaker file was moved or deleted.
 
 The August 21 log was also checked against the narrowed collision gate. All 92 entries
 match the exact known letter/survey patterns: 55 code 3, 22 code 13, and 15 code 101;
