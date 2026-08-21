@@ -299,6 +299,9 @@ Before dashboard publication or model retraining:
     to-five-year prior period using only then-available repair span, final NCEI source
     coverage, ZIP coverage, and severe-threshold exclusion. Monitoring includes only
     closed evaluable pairs and cannot enable notifications.
+20. The active-shop CSV carries the same signal/control counts, maturity state, paired
+    rates, and descriptive-only limitation as the dashboard. Missing lifecycle schema
+    or prospective cases remains explicit rather than appearing as zero evidence.
 
 ## Known limitations
 

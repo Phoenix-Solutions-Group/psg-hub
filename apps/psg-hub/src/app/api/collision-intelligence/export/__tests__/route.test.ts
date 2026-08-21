@@ -82,6 +82,43 @@ const dashboard = {
       thresholdBasis: "Hail at or above 1 inch",
     },
   ],
+  alertReviewAvailable: true,
+  weatherReviewCases: [
+    {
+      eventType: "hail",
+      zipCode: "68512",
+      eventDate: "2026-08-20",
+      status: "closed",
+      outcome: "observed_follow_through",
+      control: {
+        matchStatus: "matched",
+        eventDate: "2025-08-20",
+        yearsBack: 1,
+        weeklyRepairOrders: [0, 1, 0, 0],
+        prior52WeekRepairOrders: 26,
+        observedFourWeekRepairOrders: 1,
+        followThroughThresholdRepairOrders: 3,
+        derivedOutcome: "no_observed_follow_through",
+      },
+      evidence: {
+        sourceLatestArrivalDate: "2026-09-17",
+        weeklyRepairOrders: [1, 1, 1, 0],
+        prior52WeekRepairOrders: 26,
+        observedFourWeekRepairOrders: 3,
+        followThroughThresholdRepairOrders: 3,
+        matureForClose: true,
+      },
+    },
+  ],
+  weatherAlertMonitoring: [
+    {
+      cohort: "all",
+      matchedCaseCount: 1,
+      signalFollowThroughRatePct: 100,
+      controlFollowThroughRatePct: 0,
+      liftPctPoints: 100,
+    },
+  ],
 };
 
 beforeEach(() => {
@@ -119,8 +156,29 @@ describe("GET collision intelligence export", () => {
     expect(csv).toContain("Held-out MAE improvement 20.1%");
     expect(csv).toContain("source arrivals through 2026-08-19 (1 day old)");
     expect(csv).toContain("not storm damage or claims");
+    expect(csv).toContain("hail · ZIP 68512 · matched control");
+    expect(csv).toContain("Pre-registered 1 year earlier");
+    expect(csv).toContain("signal follow-through 100.0%");
+    expect(csv).toContain("descriptive_only");
+    expect(csv).toContain("cannot enable notifications or operational changes");
     expect(csv).toContain(
       "The model does not predict individual crashes or insurer claim volume.",
     );
+  });
+
+  it("reports missing prospective lifecycle evidence instead of zero", async () => {
+    user = { id: "user-1" };
+    getActiveShopContext.mockResolvedValue({ activeShopId: "shop-2" });
+    getCollisionDashboard.mockResolvedValue({
+      ...dashboard,
+      alertReviewAvailable: false,
+      weatherReviewCases: [],
+      weatherAlertMonitoring: [],
+    });
+
+    const csv = await (await GET()).text();
+
+    expect(csv).toContain("release_pending");
+    expect(csv).toContain("weather lifecycle migration is not applied");
   });
 });

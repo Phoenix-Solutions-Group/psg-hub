@@ -194,6 +194,68 @@ function buildExport(
     });
   }
 
+  for (const reviewCase of dashboard.weatherReviewCases) {
+    rows.push({
+      section: "Weather follow-up",
+      metric: `${reviewCase.eventType} · ZIP ${reviewCase.zipCode} · signal`,
+      period: reviewCase.eventDate,
+      value: reviewCase.evidence.observedFourWeekRepairOrders,
+      lower: null,
+      upper: null,
+      status: reviewCase.status === "closed" ? reviewCase.outcome : "pending",
+      detail: `Weeks 1–4: ${reviewCase.evidence.weeklyRepairOrders.join(" / ")} repairs; prior 52 weeks: ${reviewCase.evidence.prior52WeekRepairOrders}; follow-through threshold: ${reviewCase.evidence.followThroughThresholdRepairOrders}; evidence ${reviewCase.evidence.matureForClose ? "complete" : "incomplete"}; repair arrivals through ${reviewCase.evidence.sourceLatestArrivalDate ?? "unknown"}. This records shop repair arrivals and does not prove weather caused demand.`,
+    });
+    rows.push({
+      section: "Weather follow-up",
+      metric: `${reviewCase.eventType} · ZIP ${reviewCase.zipCode} · matched control`,
+      period: reviewCase.control.eventDate ?? "unavailable",
+      value:
+        reviewCase.control.matchStatus === "matched"
+          ? reviewCase.control.observedFourWeekRepairOrders
+          : null,
+      lower: null,
+      upper: null,
+      status:
+        reviewCase.control.matchStatus === "matched"
+          ? (reviewCase.control.derivedOutcome ?? "pending")
+          : "unavailable",
+      detail:
+        reviewCase.control.matchStatus === "matched"
+          ? `Pre-registered ${reviewCase.control.yearsBack} year${reviewCase.control.yearsBack === 1 ? "" : "s"} earlier; weeks 1–4: ${reviewCase.control.weeklyRepairOrders.join(" / ")} repairs; prior 52 weeks: ${reviewCase.control.prior52WeekRepairOrders}; follow-through threshold: ${reviewCase.control.followThroughThresholdRepairOrders}. Official final NCEI years and ZIP coverage were required, with no overlapping severe threshold.`
+          : "No eligible prior one-to-five-year period had complete repair/weather coverage without an overlapping severe threshold. This case cannot enter prospective matched-control monitoring.",
+    });
+  }
+
+  if (dashboard.weatherAlertMonitoring.length) {
+    for (const monitoring of dashboard.weatherAlertMonitoring) {
+      rows.push({
+        section: "Weather validation",
+        metric: `${monitoring.cohort} matched-control difference (percentage points)`,
+        period: "Closed evaluable cases",
+        value: monitoring.liftPctPoints,
+        lower: null,
+        upper: null,
+        status: "descriptive_only",
+        detail: `${monitoring.matchedCaseCount} matched case${monitoring.matchedCaseCount === 1 ? "" : "s"}; signal follow-through ${monitoring.signalFollowThroughRatePct.toFixed(1)}%; control follow-through ${monitoring.controlFollowThroughRatePct.toFixed(1)}%. PSG has not approved a minimum sample, economic lift, or false-positive tolerance; this cannot enable notifications or operational changes.`,
+      });
+    }
+  } else {
+    rows.push({
+      section: "Weather validation",
+      metric: "Prospective matched-control evidence",
+      period: "",
+      value: null,
+      lower: null,
+      upper: null,
+      status: dashboard.alertReviewAvailable
+        ? "awaiting_evaluable_cases"
+        : "release_pending",
+      detail: dashboard.alertReviewAvailable
+        ? "No closed evaluable matched cases are available yet. Notifications remain disabled."
+        : "The reviewed weather lifecycle migration is not applied. Notifications remain disabled.",
+    });
+  }
+
   rows.push(
     {
       section: "Limitations",
