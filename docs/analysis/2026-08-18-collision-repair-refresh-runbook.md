@@ -103,10 +103,16 @@ ownership remain separately controlled actions.
   with only 5.6 GB free on a 93%-used filesystem; the separate mounted volume still
   has about 75 GB free. A successful run does not resolve this capacity risk.
 - The same overnight log contains 92 FileMaker scripting-error entries across 15
-  schedules: codes 3, 13, and 101. FileMaker records each schedule as completed, so
-  the FileMaker owner must classify which errors are expected empty-set/UI cleanup
-  behavior and which indicate missed nightly source processing before recurring PSG
-  refresh is enabled.
+  schedules. The exact current pattern is 55 code-3 errors on server-incompatible
+  `Adjust Window`/`Open File` steps, 22 code-13 errors on common `Close Window`
+  cleanup steps, and 15 code-101 errors on `Go to Record/Request/Page`. Claris defines
+  these as command unavailable, file or object in use, and record missing. Server-side
+  scripts skip unsupported steps and continue, which explains the code-3 noise; it
+  does not prove that the code-101 business paths processed the intended records.
+  Every schedule reports completed, but no custom script-error log or processed-row
+  result proves the nightly business outcome.
+  [Claris error codes](https://help.claris.com/en/pro-help/content/error-codes.html) ·
+  [server-side script behavior](https://help.claris.com/en/pro-help/content/running-scripts-on-server.html)
 - No backup schedule, database, timer, secret, or file was changed. A restore drill
   and a named refresh-failure recipient are still unproven.
 
@@ -230,22 +236,33 @@ Do not run broad `db push`, `migration repair`, or `db pull` during this release
 future scoped history repair requires its own approval and coordination with the other
 applications sharing this project.
 
-The first governed FileMaker import is reconciled. Under a separate production
-approval, apply these reviewed files in order through the migration runner:
+The first governed FileMaker import is reconciled. The live migration ledger was
+rechecked read-only at 21:52 CT on 2026-08-20. Its newest collision entry is
+`collision_insurer_registry`; 13 local collision-scoped migration names are absent.
+Under a separate production approval, apply these files in timestamp order through
+the migration runner:
 
 1. `20260819195103_collision_storm_source_reconciliation.sql`
 2. `20260819201319_collision_forecast_readiness.sql`
 3. `20260819210842_harden_collision_example_functions.sql`
-4. `20260820215207_fix_collision_weather_coverage.sql`
-5. `20260821012506_collision_forecast_candidate_evaluations.sql`
-6. `20260821013156_collision_shop_identity_evidence.sql`
+4. `20260820153240_collision_shop_insurance_market.sql`
+5. `20260820155441_collision_insurer_acronym_matching.sql`
+6. `20260820170404_stage_collision_forecast_model_review.sql`
+7. `20260820203311_review_collision_forecast_models.sql`
+8. `20260820215207_fix_collision_weather_coverage.sql`
+9. `20260820224500_collision_payment_classification.sql`
+10. `20260820235000_collision_forecast_customer_audience.sql`
+11. `20260820235900_collision_weather_alert_review_cases.sql`
+12. `20260821012506_collision_forecast_candidate_evaluations.sql`
+13. `20260821013156_collision_shop_identity_evidence.sql`
 
 The current production preconditions were rechecked read-only on 2026-08-20: 3,986
 provisional events still lack a matching source-ledger row for
-`noaa_spc_preliminary-20260801-20260817`; neither new view nor either governed evidence
-table exists; the weather view still uses event-presence coverage; and both legacy
-example RPCs retain mutable search paths and browser-role execution. None of the six
-migration names appears in the live migration ledger.
+`noaa_spc_preliminary-20260801-20260817`; the readiness/reconciliation views,
+body-shop appetite table, forecast-review RPCs, weather-review lifecycle, customer
+audience guard, and two governed evidence tables are absent; the weather view still
+uses event-presence coverage; and both legacy example RPCs retain mutable search paths
+and browser-role execution. None of the 13 migration names appears in the live ledger.
 
 Postflight must prove:
 
@@ -262,8 +279,16 @@ Postflight must prove:
 6. candidate-evaluation and shop-identity tables remain service-role-only, their
    mutation RPCs deny browser roles, and shop mapping rejects missing or mismatched
    governed address evidence; and
-7. the Supabase security advisor no longer reports the two collision example-function
-   search-path warnings.
+7. shop-insurance appetite evidence remains service-role-only and acronym matching
+   treats spaced carrier initials consistently without auto-approving an alias;
+8. forecast staging and review RPCs require a confirmed mapping, four evaluated
+   horizons, a PSG superadmin reviewer, written notes, and a real customer audience;
+9. payment classification preserves insurance, non-insurance, and unknown as separate
+   governed categories in `v_collision_repair_orders`;
+10. weather cases can be acknowledged and closed only through service-role RPCs,
+    retain their pre-registered control, and do not enable notifications; and
+11. the Supabase security advisor no longer reports the two collision example-function
+    search-path warnings.
 
 The first three files were applied together in a local transaction and rolled back.
 The weather correction passed a separate synthetic local transaction. All views pass
@@ -292,6 +317,10 @@ The local database ledger itself remains intentionally unrepaired.
   passes every acceptance check, the shared-root capacity risk and nightly scripting
   errors are dispositioned, a restore drill passes, and a named operational owner
   receives failures.
+- Before enabling that timer, the FileMaker owner must remove or server-guard the
+  unsupported UI wrapper steps and add explicit no-record handling plus processed-row
+  logging to the 15 affected schedules. A green “completed” state without a recorded
+  business outcome is not sufficient refresh evidence.
 - The service runs as the non-login `psg-refresh` account, reads only the mode-0600
   operations secret, writes only `/opt/psg/runtime`, lowers CPU and I/O priority, and
   applies systemd filesystem and privilege hardening.

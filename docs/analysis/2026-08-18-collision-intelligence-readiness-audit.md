@@ -22,9 +22,12 @@
   tested locally but are not applied or deployed to production.
 - A current read-only FileMaker recheck found both the midnight and 3:00 AM August 20
   backups completed with all five hosted files. They still share a root that is now
-  93% used with 5.6 GB free, and 15 overnight schedules logged 92 scripting errors
-  despite completing. No server state changed; restore proof, error classification,
-  capacity disposition, and alert ownership still gate the disabled refresh timer.
+  93% used with 5.6 GB free. The 92 overnight script messages are now classified:
+  55 server-incompatible UI commands, 22 file/object-in-use cleanup steps, and 15
+  missing-record navigation results. The first class is explainable noise; the latter
+  two still need explicit handling and processed-row evidence. No server state changed;
+  restore proof, script disposition, capacity disposition, and alert ownership still
+  gate the disabled refresh timer.
 - The superadmin Data Review page supports explicit source-shop mapping approval
   with target selection, written identity evidence, confirmation, and an atomic audit
   entry. This branch also adds repair freshness, storm-ledger reconciliation, KDOT
@@ -55,6 +58,10 @@
   shared project's historical migration-ledger drift. Five already-applied collision
   migrations have the same names under different timestamps; older sibling-app drift
   also exists. Do not run global `migration repair` or `db pull` for this release.
+- A fresh name-based live ledger reconciliation shows 13 local collision-scoped
+  migration names remain unapplied. The refresh runbook now lists
+  the complete timestamp-ordered release set and postflight contract; production is
+  unchanged.
 - The two legacy collision example RPCs have fixed-search-path, service-role-only
   hardening staged and rollback-tested. This is a third pending collision migration;
   it is not applied to production.
