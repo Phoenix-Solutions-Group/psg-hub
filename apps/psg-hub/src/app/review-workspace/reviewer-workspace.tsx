@@ -714,10 +714,10 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
                   </div>
                   {activeDocument.note ? <p className="pt-2 text-sm leading-6 text-muted-foreground">{activeDocument.note}</p> : null}
                   {activeDocument.versionNote ? <p className="pt-2 text-sm leading-6"><strong>What changed:</strong> {activeDocument.versionNote}</p> : null}
-                  {activeDocument.markdownDiff.length ? (
+                  {activeDocument.markdownDiff?.length ? (
                     <details className="mt-3 rounded-md border border-border bg-muted/30 p-3 text-sm">
                       <summary className="cursor-pointer font-medium">View changes from the prior reviewed version</summary>
-                      <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap text-xs">{activeDocument.markdownDiff.map((line, index) => <span key={`${index}:${line.kind}`} className={`block ${line.kind === "added" ? "text-success" : line.kind === "removed" ? "text-destructive" : "text-muted-foreground"}`}>{line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}{line.line}</span>)}</pre>
+                      <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap text-xs">{(activeDocument.markdownDiff ?? []).map((line, index) => <span key={`${index}:${line.kind}`} className={`block ${line.kind === "added" ? "text-success" : line.kind === "removed" ? "text-destructive" : "text-muted-foreground"}`}>{line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}{line.line}</span>)}</pre>
                     </details>
                   ) : null}
                 </CardHeader>

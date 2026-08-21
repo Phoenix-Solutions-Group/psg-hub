@@ -2387,7 +2387,7 @@ export function BsmContentApprovalManager({
                                 ? "bg-[#dff2e6] text-[#27623e]"
                                 : workspace.status === "active"
                                   ? "bg-ember/10 text-ember"
-                                  : "bg-muted text-muted-foreground",
+                                  : "bg-muted text-foreground",
                             )}
                           >
                             {workspace.status === "active"
@@ -2482,7 +2482,7 @@ export function BsmContentApprovalManager({
                           ? "bg-[#dff2e6] text-[#27623e]"
                           : selectedWorkspace.status === "active"
                             ? "bg-ember/10 text-ember"
-                            : "bg-muted text-muted-foreground",
+                            : "bg-muted text-foreground",
                       )}
                     >
                       {selectedWorkspace.status === "active"

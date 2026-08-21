@@ -126,9 +126,10 @@ test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
   await page.getByLabel("Markdown source").fill(revisedMarkdown);
   await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible({ timeout: 10_000 });
   await secondAdmin.getByLabel("Markdown source").fill(`${revisedMarkdown}\n\nStale second session.`);
-  await expect(secondAdmin.getByRole("alert").filter({ hasText: "Conflict" })).toBeVisible({ timeout: 10_000 });
-  await expect(secondAdmin.getByText("Stale second session.")).toBeVisible();
-  await expect(secondAdmin.getByText("Collision repair with clear updates")).toBeVisible();
+  const conflictAlert = secondAdmin.getByRole("alert").filter({ hasText: "Conflict" });
+  await expect(conflictAlert).toBeVisible({ timeout: 10_000 });
+  await expect(conflictAlert.locator("pre").first()).toContainText("Stale second session.");
+  await expect(conflictAlert.locator("pre").nth(1)).toContainText("Collision repair with clear updates");
   await secondAdmin.close();
 
   await page.getByLabel("Upload image").setInputFiles({
