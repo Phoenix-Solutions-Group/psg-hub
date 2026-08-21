@@ -583,30 +583,33 @@ export function buildCollisionDashboard(
       (a, b) =>
         numberOf(a.forecast_horizon_weeks) - numberOf(b.forecast_horizon_weeks),
     )
-    .map((forecast) => ({
-      originWeek: forecast.forecast_origin_week,
-      horizonWeeks: numberOf(forecast.forecast_horizon_weeks),
-      week: forecast.forecast_week,
-      modelKey: forecast.model_key,
-      predicted:
-        forecast.predicted_repair_orders === null
-          ? null
-          : numberOf(forecast.predicted_repair_orders),
-      lower:
-        forecast.lower_repair_orders === null
-          ? null
-          : numberOf(forecast.lower_repair_orders),
-      upper:
-        forecast.upper_repair_orders === null
-          ? null
-          : numberOf(forecast.upper_repair_orders),
-      intervalPct: numberOf(forecast.prediction_interval_pct),
-      sourceLatestArrivalDate: forecast.source_latest_arrival_date,
-      sourceAgeDays: numberOf(forecast.source_age_days),
-      status: forecast.status,
-      reason: forecast.status_reason,
-      generatedAt: forecast.generated_at,
-    }));
+    .map((forecast) => {
+      const published = forecast.status === "published";
+      return {
+        originWeek: forecast.forecast_origin_week,
+        horizonWeeks: numberOf(forecast.forecast_horizon_weeks),
+        week: forecast.forecast_week,
+        modelKey: forecast.model_key,
+        predicted:
+          published && forecast.predicted_repair_orders !== null
+            ? numberOf(forecast.predicted_repair_orders)
+            : null,
+        lower:
+          published && forecast.lower_repair_orders !== null
+            ? numberOf(forecast.lower_repair_orders)
+            : null,
+        upper:
+          published && forecast.upper_repair_orders !== null
+            ? numberOf(forecast.upper_repair_orders)
+            : null,
+        intervalPct: numberOf(forecast.prediction_interval_pct),
+        sourceLatestArrivalDate: forecast.source_latest_arrival_date,
+        sourceAgeDays: numberOf(forecast.source_age_days),
+        status: forecast.status,
+        reason: forecast.status_reason,
+        generatedAt: forecast.generated_at,
+      };
+    });
   const publishedForecasts = operationalForecasts.filter(
     (forecast) =>
       forecast.status === "published" && forecast.predicted !== null,
