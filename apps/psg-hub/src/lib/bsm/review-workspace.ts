@@ -2588,7 +2588,7 @@ async function downloadReviewWorkspaceFile(
       processed_storage_bucket,
       processed_storage_path,
       processed_content_type,
-      item:bsm_content_review_items!inner(id)
+      item:bsm_content_review_items!bsm_content_review_versions_review_item_id_fkey!inner(id)
     `)
     .eq("id", input.versionId)
     .eq("review_item_id", input.reviewItemId)
