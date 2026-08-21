@@ -29,6 +29,20 @@ export function shopMemberCount(
   );
 }
 
+export function approvedPoliciesWithoutCustomerAudience<
+  T extends { shop_id: string; promotion_status: string },
+>(
+  policies: T[],
+  shops: ShopDirectoryEntry[],
+  customerProfileIds: ReadonlySet<string>,
+) {
+  return policies.filter((policy) => {
+    if (policy.promotion_status !== "approved") return false;
+    const shop = shops.find((candidate) => candidate.id === policy.shop_id);
+    return !shop || shopMemberCount(shop, customerProfileIds) === 0;
+  });
+}
+
 // ponytail: two verified pilot locations; move to governed identity rows when review coverage expands.
 export const shopIdentityEvidence: Record<string, ShopIdentityEvidence> = {
   PS228: {

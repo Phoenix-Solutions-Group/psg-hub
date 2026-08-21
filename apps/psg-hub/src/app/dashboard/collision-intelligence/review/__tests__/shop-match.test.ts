@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  approvedPoliciesWithoutCustomerAudience,
   matchesVerifiedShopLocation,
   normalizeShopMatchText,
   rankShopMatches,
@@ -107,13 +108,30 @@ describe("shop identity matching", () => {
     expect(
       shopMemberCount(
         {
-          members: [
-            { user_id: "customer-1" },
-            { user_id: "staff-1" },
-          ],
+          members: [{ user_id: "customer-1" }, { user_id: "staff-1" }],
         },
         customerProfileIds,
       ),
     ).toBe(1);
+  });
+
+  it("surfaces only approved policies without a customer-role member", () => {
+    const customerProfileIds = new Set(["customer-1"]);
+    const audienceShops = [
+      { ...shops[0], members: [{ user_id: "staff-1" }] },
+      { ...shops[1], members: [{ user_id: "customer-1" }] },
+    ];
+
+    expect(
+      approvedPoliciesWithoutCustomerAudience(
+        [
+          { shop_id: "collision-center", promotion_status: "approved" },
+          { shop_id: "body-shop", promotion_status: "approved" },
+          { shop_id: "wallace", promotion_status: "review" },
+        ],
+        audienceShops,
+        customerProfileIds,
+      ).map((policy) => policy.shop_id),
+    ).toEqual(["collision-center"]);
   });
 });

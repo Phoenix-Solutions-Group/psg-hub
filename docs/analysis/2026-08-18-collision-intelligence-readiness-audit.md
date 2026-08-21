@@ -260,7 +260,10 @@ staging, model approval, scoring, and publication remain separate audited action
   counted any shop membership. The staged customer-audience migration adds shared
   database triggers that prevent review, approval, or publication unless a linked
   member has the global `customer` role; PSG staff memberships no longer clear the
-  gate. Production data remains unchanged pending separate migration approval.
+  gate. The internal review page now exposes any legacy approved policy with no
+  customer audience and links directly to that shop's User Access screen without
+  changing approval state or creating a membership. Production data remains unchanged
+  pending separate migration approval.
   Cron health now fails when any mapped shop/horizon remains gated after scoring.
 - Unified mapped source and weekly-demand counts both reconcile to 3,420 repair orders;
   all are FileMaker rows and no legacy pilot rows are unioned.

@@ -20,6 +20,7 @@ import {
   type ForecastRunRow,
 } from "./source-health";
 import {
+  approvedPoliciesWithoutCustomerAudience,
   matchesVerifiedShopLocation,
   rankShopMatches,
   shopMemberCount,
@@ -129,7 +130,7 @@ type ForecastModelPolicy = {
   shop_id: string;
   forecast_horizon_weeks: number;
   model_key: string;
-  promotion_status: "review";
+  promotion_status: "review" | "approved";
   seasonal_baseline_mae: number;
   model_mae: number;
   mae_improvement_pct: number;
@@ -292,10 +293,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         "id,name,slug,address_street,address_locality,address_region,address_postal_code,client:clients(name),members:shop_users(user_id)",
       )
       .order("name", { ascending: true }),
-    service
-      .from("app_user_roles")
-      .select("profile_id")
-      .eq("role", "customer"),
+    service.from("app_user_roles").select("profile_id").eq("role", "customer"),
     service
       .from("collision_shop_mappings")
       .select("shop_id")
@@ -330,7 +328,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       .select(
         "shop_id,source_shop_key,model_key,promotion_status,seasonal_baseline_mae,model_mae,mae_improvement_pct,holdout_start,holdout_end,interval_half_width,interval_validation_coverage_pct,evaluation_scope,evaluated_at",
       )
-      .eq("promotion_status", "review")
+      .in("promotion_status", ["review", "approved"])
       .order("evaluated_at", { ascending: false }),
     service
       .from("collision_forecast_horizon_registry")
@@ -587,34 +585,51 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   );
   const modelHorizonReviews = (modelHorizonResult.data ??
     []) as ForecastModelPolicy[];
-  const modelReviews = (
-    (modelWeekOneResult.data ?? []) as ForecastModelWeekOne[]
-  ).map((weekOne) => {
-    const policies = [
-      { ...weekOne, forecast_horizon_weeks: 1 },
-      ...modelHorizonReviews.filter(
-        (policy) => policy.shop_id === weekOne.shop_id,
-      ),
-    ].sort((a, b) => a.forecast_horizon_weeks - b.forecast_horizon_weeks);
-    const shop = hubShops.find((candidate) => candidate.id === weekOne.shop_id);
-    const memberCount = shop
-      ? shopMemberCount(shop, customerProfileIds)
-      : 0;
+  const modelWeekOnePolicies = (modelWeekOneResult.data ??
+    []) as ForecastModelWeekOne[];
+  const approvedAudienceGaps = approvedPoliciesWithoutCustomerAudience(
+    modelWeekOnePolicies,
+    hubShops,
+    customerProfileIds,
+  ).map((policy) => {
+    const shop = hubShops.find((candidate) => candidate.id === policy.shop_id);
 
     return {
-      shopId: weekOne.shop_id,
-      shopName: shop?.name ?? shop?.slug ?? weekOne.shop_id,
-      sourceShopKey: weekOne.source_shop_key,
-      memberCount,
-      audienceReady: memberCount > 0,
-      policies,
-      complete:
-        policies.length === 4 &&
-        policies.every(
-          (policy, index) => policy.forecast_horizon_weeks === index + 1,
-        ),
+      shopId: policy.shop_id,
+      shopName: shop?.name ?? shop?.slug ?? policy.shop_id,
+      sourceShopKey: policy.source_shop_key,
+      modelKey: policy.model_key,
+      memberCount: shop ? shopMemberCount(shop, customerProfileIds) : 0,
     };
   });
+  const modelReviews = modelWeekOnePolicies
+    .filter((policy) => policy.promotion_status === "review")
+    .map((weekOne) => {
+      const policies = [
+        { ...weekOne, forecast_horizon_weeks: 1 },
+        ...modelHorizonReviews.filter(
+          (policy) => policy.shop_id === weekOne.shop_id,
+        ),
+      ].sort((a, b) => a.forecast_horizon_weeks - b.forecast_horizon_weeks);
+      const shop = hubShops.find(
+        (candidate) => candidate.id === weekOne.shop_id,
+      );
+      const memberCount = shop ? shopMemberCount(shop, customerProfileIds) : 0;
+
+      return {
+        shopId: weekOne.shop_id,
+        shopName: shop?.name ?? shop?.slug ?? weekOne.shop_id,
+        sourceShopKey: weekOne.source_shop_key,
+        memberCount,
+        audienceReady: memberCount > 0,
+        policies,
+        complete:
+          policies.length === 4 &&
+          policies.every(
+            (policy, index) => policy.forecast_horizon_weeks === index + 1,
+          ),
+      };
+    });
   const requestedShopKey = searchValue(params.shop_source).toUpperCase();
   const selectedShop =
     shops.find((shop) => shop.source_shop_key === requestedShopKey) ??
@@ -1006,6 +1021,51 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
           </Badge>
         </div>
 
+        {approvedAudienceGaps.length ? (
+          <aside
+            aria-labelledby="approved-forecast-audience-heading"
+            className="space-y-3 rounded-lg border border-warning/50 bg-warning/10 p-4"
+          >
+            <div>
+              <h3
+                id="approved-forecast-audience-heading"
+                className="font-heading font-semibold"
+              >
+                {approvedAudienceGaps.length === 1
+                  ? "Approved forecast policy has no customer audience"
+                  : `${approvedAudienceGaps.length} approved forecast policies have no customer audience`}
+              </h3>
+              <p className="mt-1 max-w-3xl text-sm leading-6">
+                {approvedAudienceGaps.length === 1
+                  ? "This policy was approved before customer-audience enforcement. Keep forecast publication paused until the shop has at least one global customer-role user. PSG staff access does not count."
+                  : "These policies were approved before customer-audience enforcement. Keep forecast publication paused until each shop has at least one global customer-role user. PSG staff access does not count."}
+              </p>
+            </div>
+            <ul className="space-y-2">
+              {approvedAudienceGaps.map((policy) => (
+                <li
+                  key={policy.shopId}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-background/70 px-3 py-2 text-sm"
+                >
+                  <span>
+                    <strong>{policy.shopName}</strong>
+                    <span className="ml-2 text-muted-foreground">
+                      {policy.modelKey.replaceAll("_", " ")} · FileMaker source{" "}
+                      {policy.sourceShopKey}
+                    </span>
+                  </span>
+                  <Link
+                    href={`/ops/admin/users?shop_id=${encodeURIComponent(policy.shopId)}`}
+                    className="font-medium underline underline-offset-2"
+                  >
+                    Manage shop members
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        ) : null}
+
         {modelReviews.length ? (
           <div className="space-y-4">
             {modelReviews.map((review) => (
@@ -1087,7 +1147,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                       This shop has {review.memberCount} customer members.
                       Assign at least one intended customer user before
                       approving its forecast policy. You may still reject the
-                      staged evidence. {" "}
+                      staged evidence.{" "}
                       <Link
                         href={`/ops/admin/users?shop_id=${encodeURIComponent(review.shopId)}`}
                         className="font-medium underline underline-offset-2"
@@ -2014,7 +2074,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                               href={`/ops/admin/users?shop_id=${encodeURIComponent(match.shop.id)}`}
                               className="font-medium underline underline-offset-2"
                             >
-                              Manage {match.shop.name ?? match.shop.slug ?? "shop"} members
+                              Manage{" "}
+                              {match.shop.name ?? match.shop.slug ?? "shop"}{" "}
+                              members
                             </Link>
                           ))}
                       </div>
