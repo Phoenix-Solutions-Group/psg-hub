@@ -4,6 +4,7 @@ import { buildCollisionDashboard } from "@/lib/collision-intelligence/aggregate"
 
 const getCollisionDashboard = vi.fn();
 const getActiveShopContext = vi.fn();
+let user: { id: string; email?: string } = { id: "shop-user" };
 
 vi.mock("@/lib/collision-intelligence/dashboard", () => ({
   getCollisionDashboard,
@@ -12,7 +13,7 @@ vi.mock("@/lib/shop/context", () => ({ getActiveShopContext }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     auth: {
-      getUser: vi.fn(async () => ({ data: { user: { id: "shop-user" } } })),
+      getUser: vi.fn(async () => ({ data: { user } })),
     },
   })),
 }));
@@ -133,6 +134,7 @@ const dashboard = buildCollisionDashboard(
 );
 
 beforeEach(() => {
+  user = { id: "shop-user" };
   getCollisionDashboard.mockReset().mockResolvedValue(dashboard);
   getActiveShopContext.mockReset().mockResolvedValue({
     shops: [
@@ -144,6 +146,30 @@ beforeEach(() => {
 });
 
 describe("participating-shop collision dashboard", () => {
+  it("combines Riverside and South Lincoln only for the demo account", async () => {
+    user = { id: "shop-user", email: "test@psghub.me" };
+    getActiveShopContext.mockResolvedValue({
+      shops: [
+        { id: "riverside", name: "Riverside Collision", role: "owner" },
+        { id: "south-lincoln", name: "South Lincoln", role: "owner" },
+      ],
+      activeShopId: "riverside",
+    });
+
+    const html = renderToStaticMarkup(
+      await CollisionIntelligencePage({ searchParams: Promise.resolve({}) }),
+    );
+
+    expect(getCollisionDashboard).toHaveBeenCalledWith("riverside", {
+      sourceShopIds: ["riverside", "south-lincoln"],
+      primaryShopId: "south-lincoln",
+      displayName: "Riverside Collision Demo",
+    });
+    expect(html).toContain("Demo data");
+    expect(html).toContain("Riverside + South Lincoln");
+    expect(html).toContain("underlying shop records remain separate");
+  });
+
   it("renders the active shop's observed metrics and suppresses paused forecast numbers", async () => {
     const html = renderToStaticMarkup(
       await CollisionIntelligencePage({ searchParams: Promise.resolve({}) }),

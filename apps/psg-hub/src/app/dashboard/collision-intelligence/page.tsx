@@ -4,6 +4,7 @@ import { BarChartCard, LineChartCard } from "@/components/analytics/charts";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCollisionDashboard } from "@/lib/collision-intelligence/dashboard";
+import { resolveCollisionDemoScope } from "@/lib/collision-intelligence/demo-scope";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { createClient } from "@/lib/supabase/server";
 
@@ -81,7 +82,10 @@ export default async function CollisionIntelligencePage({
   const activeShop = shops.find((shop) => shop.id === activeShopId);
   const canReviewWeather =
     activeShop?.role === "owner" || activeShop?.role === "manager";
-  const dashboard = await getCollisionDashboard(activeShopId);
+  const demoScope = resolveCollisionDemoScope(user.email, shops);
+  const dashboard = demoScope
+    ? await getCollisionDashboard(activeShopId, demoScope)
+    : await getCollisionDashboard(activeShopId);
   const { summary, baseline, operationalForecast, operationalForecasts } =
     dashboard;
   const openWeatherReviewCases = dashboard.weatherReviewCases.filter(
@@ -134,6 +138,22 @@ export default async function CollisionIntelligencePage({
         >
           {weatherReviewNotice}
         </p>
+      ) : null}
+
+      {demoScope ? (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
+            <div>
+              <p className="font-heading font-semibold">Demo data</p>
+              <p className="text-sm text-muted-foreground">
+                Riverside demo records and South Lincoln collision history are
+                combined for this account. The underlying shop records remain
+                separate and traceable.
+              </p>
+            </div>
+            <Badge variant="secondary">Riverside + South Lincoln</Badge>
+          </CardContent>
+        </Card>
       ) : null}
 
       {!dashboard.companyName ? (

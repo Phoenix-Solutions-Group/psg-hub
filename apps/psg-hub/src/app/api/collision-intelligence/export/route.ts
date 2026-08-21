@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { getCollisionDashboard } from "@/lib/collision-intelligence/dashboard";
+import { resolveCollisionDemoScope } from "@/lib/collision-intelligence/demo-scope";
 import { EXPORT_CONTENT_TYPES, toCSV } from "@/lib/ops/reports/export";
 import type { ReportResult, ReportRow } from "@/lib/ops/reports/types";
 import { getActiveShopContext } from "@/lib/shop/context";
@@ -292,12 +293,15 @@ export async function GET() {
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { activeShopId } = await getActiveShopContext(user.id);
+  const { shops, activeShopId } = await getActiveShopContext(user.id);
   if (!activeShopId)
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
-    const dashboard = await getCollisionDashboard(activeShopId);
+    const demoScope = resolveCollisionDemoScope(user.email, shops);
+    const dashboard = demoScope
+      ? await getCollisionDashboard(activeShopId, demoScope)
+      : await getCollisionDashboard(activeShopId);
     if (!dashboard.companyName) {
       return NextResponse.json(
         { error: "No linked repair history" },

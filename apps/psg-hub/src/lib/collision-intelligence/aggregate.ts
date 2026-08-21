@@ -229,6 +229,231 @@ function numberOf(value: Numeric): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function groupsOf<T>(rows: T[], keyOf: (row: T) => string) {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = keyOf(row);
+    const group = groups.get(key);
+    if (group) group.push(row);
+    else groups.set(key, [row]);
+  }
+  return [...groups.values()];
+}
+
+function sumOf<T>(rows: T[], valueOf: (row: T) => Numeric) {
+  return rows.reduce((sum, row) => sum + numberOf(valueOf(row)), 0);
+}
+
+function latestOf(values: Array<string | null>) {
+  return (
+    values
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1) ?? null
+  );
+}
+
+export type CollisionScopeRows = {
+  weekly: CollisionWeeklyRow[];
+  weather: CollisionWeatherRow[];
+  forecast: CollisionForecastRow[];
+  crashes: CollisionCrashRow[];
+  alerts: CollisionAlertRow[];
+  insurers: CollisionInsurerRow[];
+  customerZips: CollisionZipRow[];
+  vehicles: CollisionVehicleRow[];
+  quality: CollisionQualityRow[];
+  seasonality: CollisionSeasonalityRow[];
+};
+
+export function mergeCollisionScopeRows(
+  rows: CollisionScopeRows,
+  companyName: string,
+): CollisionScopeRows {
+  const weekly = groupsOf(rows.weekly, (row) => row.week_start).map((group) => {
+    const observations = sumOf(group, (row) => row.cycle_time_observations);
+    return {
+      company_name: companyName,
+      week_start: group[0].week_start,
+      repair_orders: sumOf(group, (row) => row.repair_orders),
+      insured_repair_orders: sumOf(group, (row) => row.insured_repair_orders),
+      unknown_payment_repair_orders: sumOf(
+        group,
+        (row) => row.unknown_payment_repair_orders ?? 0,
+      ),
+      repair_value_cents: sumOf(group, (row) => row.repair_value_cents),
+      average_cycle_days: observations
+        ? group.reduce(
+            (sum, row) =>
+              sum +
+              numberOf(row.average_cycle_days) *
+                numberOf(row.cycle_time_observations),
+            0,
+          ) / observations
+        : null,
+      cycle_time_observations: observations,
+    };
+  });
+
+  const forecast = groupsOf(rows.forecast, (row) => row.week_start).map(
+    (group) => ({
+      week_start: group[0].week_start,
+      repair_orders: sumOf(group, (row) => row.repair_orders),
+      repair_orders_lag_52_weeks: group.some(
+        (row) => row.repair_orders_lag_52_weeks === null,
+      )
+        ? null
+        : sumOf(group, (row) => row.repair_orders_lag_52_weeks),
+      trailing_4_week_average: group.some(
+        (row) => row.trailing_4_week_average === null,
+      )
+        ? null
+        : sumOf(group, (row) => row.trailing_4_week_average),
+    }),
+  );
+
+  const weather = groupsOf(rows.weather, (row) => row.month).map((group) => ({
+    month: group[0].month,
+    weather_coverage_pct: Math.min(
+      ...group.map((row) => numberOf(row.weather_coverage_pct)),
+    ),
+    weighted_hail_events: sumOf(group, (row) => row.weighted_hail_events),
+    weighted_wind_events: sumOf(group, (row) => row.weighted_wind_events),
+    weighted_tornado_events: sumOf(group, (row) => row.weighted_tornado_events),
+    weighted_storm_demand_score: sumOf(
+      group,
+      (row) => row.weighted_storm_demand_score,
+    ),
+    weather_refreshed_at: latestOf(
+      group.map((row) => row.weather_refreshed_at),
+    ),
+  }));
+
+  const crashes = groupsOf(rows.crashes, (row) => row.month).map((group) => ({
+    month: group[0].month,
+    customer_zip_count: sumOf(group, (row) => row.customer_zip_count),
+    crash_active_zip_count: sumOf(group, (row) => row.crash_active_zip_count),
+    total_crashes: sumOf(group, (row) => row.total_crashes),
+    fatal_crashes: sumOf(group, (row) => row.fatal_crashes),
+    injury_crashes: sumOf(group, (row) => row.injury_crashes),
+    property_damage_crashes: sumOf(group, (row) => row.property_damage_crashes),
+    rain_or_snow_crashes: sumOf(group, (row) => row.rain_or_snow_crashes),
+    weighted_crash_exposure: sumOf(group, (row) => row.weighted_crash_exposure),
+    crash_refreshed_at: latestOf(group.map((row) => row.crash_refreshed_at)),
+  }));
+
+  const alerts = groupsOf(
+    rows.alerts,
+    (row) => `${row.source_event_id}:${row.zip_code}`,
+  ).map((group) => ({
+    ...group[0],
+    historical_repair_orders: sumOf(
+      group,
+      (row) => row.historical_repair_orders,
+    ),
+  }));
+
+  const insurers = groupsOf(
+    rows.insurers,
+    (row) => row.insurance_company_normalized,
+  )
+    .map((group) => ({
+      insurance_company_name:
+        group.find((row) => row.alias_review_status === "approved")
+          ?.insurance_company_name ??
+        group.find((row) => row.insurance_company_name)
+          ?.insurance_company_name ??
+        null,
+      insurance_company_normalized: group[0].insurance_company_normalized,
+      alias_review_status: group.some(
+        (row) => row.alias_review_status === "approved",
+      )
+        ? ("approved" as const)
+        : group.some((row) => row.alias_review_status === "candidate")
+          ? ("candidate" as const)
+          : ("rejected" as const),
+      repair_orders: sumOf(group, (row) => row.repair_orders),
+      repair_value_cents: sumOf(group, (row) => row.repair_value_cents),
+    }))
+    .sort(
+      (left, right) =>
+        numberOf(right.repair_orders) - numberOf(left.repair_orders),
+    );
+
+  const customerZips = groupsOf(
+    rows.customerZips,
+    (row) => `${row.customer_zip}:${row.customer_state ?? ""}`,
+  )
+    .map((group) => ({
+      customer_zip: group[0].customer_zip,
+      customer_state: group[0].customer_state,
+      repair_orders: sumOf(group, (row) => row.repair_orders),
+      insured_repair_orders: sumOf(group, (row) => row.insured_repair_orders),
+      repair_value_cents: sumOf(group, (row) => row.repair_value_cents),
+    }))
+    .sort(
+      (left, right) =>
+        numberOf(right.repair_orders) - numberOf(left.repair_orders),
+    );
+
+  const vehicles = groupsOf(
+    rows.vehicles,
+    (row) => `${row.vehicle_make ?? ""}:${row.vehicle_model ?? ""}`,
+  )
+    .map((group) => ({
+      vehicle_make: group[0].vehicle_make,
+      vehicle_model: group[0].vehicle_model,
+      repair_orders: sumOf(group, (row) => row.repair_orders),
+      repair_value_cents: sumOf(group, (row) => row.repair_value_cents),
+    }))
+    .sort(
+      (left, right) =>
+        numberOf(right.repair_orders) - numberOf(left.repair_orders),
+    );
+
+  const quality = groupsOf(rows.quality, (row) => row.quality_issue)
+    .map((group) => {
+      const repairOrders = sumOf(group, (row) => row.repair_orders);
+      const affectedRepairs = sumOf(group, (row) => row.affected_repairs);
+      return {
+        quality_issue: group[0].quality_issue,
+        affected_repairs: affectedRepairs,
+        repair_orders: repairOrders,
+        affected_percent: repairOrders
+          ? (100 * affectedRepairs) / repairOrders
+          : 0,
+      };
+    })
+    .sort(
+      (left, right) =>
+        numberOf(right.affected_repairs) - numberOf(left.affected_repairs),
+    );
+
+  const seasonality = groupsOf(
+    rows.seasonality,
+    (row) => `${row.arrival_year}:${row.arrival_month}`,
+  ).map((group) => ({
+    arrival_year: group[0].arrival_year,
+    arrival_month: group[0].arrival_month,
+    repair_orders: sumOf(group, (row) => row.repair_orders),
+    insured_repair_orders: sumOf(group, (row) => row.insured_repair_orders),
+    repair_value_cents: sumOf(group, (row) => row.repair_value_cents),
+  }));
+
+  return {
+    weekly,
+    weather,
+    forecast,
+    crashes,
+    alerts,
+    insurers,
+    customerZips,
+    vehicles,
+    quality,
+    seasonality,
+  };
+}
+
 function summarizeWeatherAlerts(alertRows: CollisionAlertRow[]) {
   const grouped = new Map<
     string,

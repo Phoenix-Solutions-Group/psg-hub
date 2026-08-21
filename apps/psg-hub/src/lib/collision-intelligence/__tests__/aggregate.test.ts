@@ -2,10 +2,118 @@ import { describe, expect, it } from "vitest";
 import {
   buildCollisionDashboard,
   evaluateCollisionBaseline,
+  mergeCollisionScopeRows,
   type CollisionForecastRow,
 } from "../aggregate";
 
 describe("collision intelligence aggregation", () => {
+  it("merges portfolio rows without duplicating shared periods or categories", () => {
+    const merged = mergeCollisionScopeRows(
+      {
+        weekly: [
+          {
+            company_name: "Riverside Collision",
+            week_start: "2026-08-17",
+            repair_orders: 1,
+            insured_repair_orders: 0,
+            unknown_payment_repair_orders: 1,
+            repair_value_cents: 100_00,
+            average_cycle_days: 10,
+            cycle_time_observations: 1,
+          },
+          {
+            company_name: "South Lincoln",
+            week_start: "2026-08-17",
+            repair_orders: 3,
+            insured_repair_orders: 3,
+            unknown_payment_repair_orders: 0,
+            repair_value_cents: 900_00,
+            average_cycle_days: 20,
+            cycle_time_observations: 3,
+          },
+        ],
+        forecast: [
+          {
+            week_start: "2026-08-17",
+            repair_orders: 1,
+            repair_orders_lag_52_weeks: null,
+            trailing_4_week_average: 1,
+          },
+          {
+            week_start: "2026-08-17",
+            repair_orders: 3,
+            repair_orders_lag_52_weeks: 2,
+            trailing_4_week_average: 3,
+          },
+        ],
+        insurers: [
+          {
+            insurance_company_name: "State Farm",
+            insurance_company_normalized: "state farm",
+            alias_review_status: "approved",
+            repair_orders: 1,
+            repair_value_cents: 100_00,
+          },
+          {
+            insurance_company_name: "STATE FARM",
+            insurance_company_normalized: "state farm",
+            alias_review_status: "candidate",
+            repair_orders: 3,
+            repair_value_cents: 900_00,
+          },
+        ],
+        quality: [
+          {
+            quality_issue: "missing_ro_number",
+            affected_repairs: 1,
+            repair_orders: 1,
+            affected_percent: 100,
+          },
+          {
+            quality_issue: "missing_ro_number",
+            affected_repairs: 1,
+            repair_orders: 3,
+            affected_percent: 33.3,
+          },
+        ],
+        weather: [],
+        crashes: [],
+        alerts: [],
+        customerZips: [],
+        vehicles: [],
+        seasonality: [],
+      },
+      "Riverside Collision Demo",
+    );
+
+    expect(merged.weekly).toEqual([
+      expect.objectContaining({
+        company_name: "Riverside Collision Demo",
+        repair_orders: 4,
+        insured_repair_orders: 3,
+        repair_value_cents: 1_000_00,
+        average_cycle_days: 17.5,
+        cycle_time_observations: 4,
+      }),
+    ]);
+    expect(merged.forecast[0]).toMatchObject({
+      repair_orders: 4,
+      repair_orders_lag_52_weeks: null,
+      trailing_4_week_average: 4,
+    });
+    expect(merged.insurers[0]).toMatchObject({
+      insurance_company_name: "State Farm",
+      alias_review_status: "approved",
+      repair_orders: 4,
+      repair_value_cents: 1_000_00,
+    });
+    expect(merged.quality[0]).toMatchObject({
+      affected_repairs: 2,
+      repair_orders: 4,
+      affected_percent: 50,
+    });
+  });
+
   it("keeps financial, cycle-time, and forecast denominators honest", () => {
     const baselineRows: CollisionForecastRow[] = Array.from(
       { length: 104 },
