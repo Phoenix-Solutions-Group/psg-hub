@@ -110,6 +110,23 @@ def post_json(url: str, key: str, path: str, payload: dict[str, Any]) -> Any:
         return json.loads(response.read())
 
 
+def evaluation_input_sha256(
+    rows: list[dict[str, Any]],
+    holdout_weeks: int,
+    calibration_weeks: int,
+    latest_week_cutoff: str,
+) -> str:
+    payload = {
+        "calibration_weeks": calibration_weeks,
+        "holdout_weeks": holdout_weeks,
+        "latest_week_cutoff": latest_week_cutoff,
+        "rows": rows,
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
 def number(value: Any) -> float:
     result = float(value or 0)
     return result if math.isfinite(result) else 0.0
@@ -742,8 +759,13 @@ def build_promotion_candidate(
                 "mae_improvement_pct": improvement,
                 "calibration_weeks": horizon_result["calibration_weeks_per_shop"],
                 "holdout_weeks": horizon_result["holdout_weeks_per_shop"],
+                "holdout_repairs": shop["holdout_repairs"],
                 "holdout_start": shop["holdout_start"],
                 "holdout_end": shop["holdout_end"],
+                "coverage_segment_start": shop["coverage_segment_start"],
+                "excluded_internal_gap_weeks": shop[
+                    "excluded_internal_gap_weeks"
+                ],
                 "base_interval_half_width": base_interval_half_width,
                 "interval_multiplier": interval_multiplier,
                 "interval_half_width": math.ceil(
@@ -770,6 +792,7 @@ def build_promotion_candidate(
         "scope": "filemaker_promotion_candidate",
         "source_shop_key": source_shop_key,
         "source_shop_name": source_shop_name,
+        "latest_week_cutoff": result["latest_week_cutoff"],
         "mapped": mapped,
         "shop_member_count": shop_member_count,
         "shop_audience_ready": shop_audience_ready,
@@ -819,6 +842,31 @@ def stage_promotion_review(
     return {
         "scope": "filemaker_promotion_review_staged",
         **staged,
+        "limitation": candidate["limitation"],
+    }
+
+
+def record_candidate_evidence(
+    url: str, key: str, candidate: dict[str, Any]
+) -> dict[str, Any]:
+    if not candidate["evaluation_passed"]:
+        raise ValueError("Candidate evidence requires four passing horizons")
+    recorded = post_json(
+        url,
+        key,
+        "rpc/record_collision_forecast_candidate_evaluation",
+        {
+            "p_source_system": "filemaker_repair_customer",
+            "p_source_shop_key": candidate["source_shop_key"],
+            "p_latest_week_cutoff": candidate["latest_week_cutoff"],
+            "p_input_sha256": candidate["input_sha256"],
+            "p_evaluator_sha256": candidate["evaluator_sha256"],
+            "p_horizons": candidate["horizons"],
+        },
+    )
+    return {
+        "scope": "filemaker_candidate_evidence_recorded",
+        **recorded,
         "limitation": candidate["limitation"],
     }
 
@@ -1099,6 +1147,11 @@ def self_test() -> None:
     assert candidate["evaluation_passed"] is True
     assert candidate["review_staging_ready"] is False
     assert len(candidate["horizons"]) == 4
+    assert candidate["horizons"][0]["holdout_repairs"] == 100
+    assert candidate["horizons"][0]["excluded_internal_gap_weeks"] == 0
+    digest = evaluation_input_sha256(weekly, 10, 10, "2026-08-03")
+    assert len(digest) == 64
+    assert digest == evaluation_input_sha256(weekly, 10, 10, "2026-08-03")
     mapped_evaluation = json.loads(json.dumps(promotion_evaluation))
     for horizon_result in mapped_evaluation["horizons"].values():
         for shop in horizon_result["shops"]:
@@ -1140,8 +1193,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "--latest-week-cutoff must be a completed Monday before the current week"
             )
     promotion_candidate = (args.promotion_candidate or "").strip().upper()
-    if args.stage_review and not promotion_candidate:
-        raise ValueError("--stage-review requires --promotion-candidate")
+    if (
+        args.stage_review or args.record_candidate_evidence
+    ) and not promotion_candidate:
+        raise ValueError(
+            "--stage-review and --record-candidate-evidence require "
+            "--promotion-candidate"
+        )
+    if args.stage_review and args.record_candidate_evidence:
+        raise ValueError(
+            "--stage-review and --record-candidate-evidence are separate mutations"
+        )
     if promotion_candidate:
         if not re.fullmatch(r"PS[0-9]+", promotion_candidate):
             raise ValueError("--promotion-candidate must match PS followed by digits")
@@ -1235,17 +1297,26 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 candidate = build_promotion_candidate(
                     result, promotion_candidate, shop_member_count
                 )
-            return (
-                stage_promotion_review(
+                candidate["input_sha256"] = evaluation_input_sha256(
+                    rows,
+                    args.holdout_weeks,
+                    args.calibration_weeks,
+                    args.latest_week_cutoff,
+                )
+                candidate["evaluator_sha256"] = hashlib.sha256(
+                    Path(__file__).read_bytes()
+                ).hexdigest()
+            if promotion_candidate and args.stage_review:
+                return stage_promotion_review(
                     url,
                     key,
                     candidate,
                     args.actor_profile_id,
                     args.review_notes,
                 )
-                if promotion_candidate and args.stage_review
-                else candidate
-            )
+            if promotion_candidate and args.record_candidate_evidence:
+                return record_candidate_evidence(url, key, candidate)
+            return candidate
         return evaluate_filemaker_shops(
             rows, args.holdout_weeks, args.calibration_weeks, args.latest_week_cutoff
         )
@@ -1284,6 +1355,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-shop-key")
     parser.add_argument("--promotion-candidate")
     parser.add_argument("--stage-review", action="store_true")
+    parser.add_argument("--record-candidate-evidence", action="store_true")
     parser.add_argument("--actor-profile-id")
     parser.add_argument("--review-notes")
     parser.add_argument("--project-id", default="gylkkzmcmbdftxieyabw")
@@ -1320,6 +1392,11 @@ if __name__ == "__main__":
             print_promotion_candidate_markdown(result)
         elif result.get("scope") == "filemaker_promotion_review_staged":
             print_staged_review_markdown(result)
+        elif result.get("scope") == "filemaker_candidate_evidence_recorded":
+            print(
+                f"Recorded {result['source_shop_key']} evidence through "
+                f"{result['latest_week_cutoff']}; no mapping, approval, or forecast changed."
+            )
         elif result.get("scope") == "filemaker_multishop":
             print_multishop_markdown(result)
         elif result.get("scope") == "filemaker_shop":

@@ -20,6 +20,7 @@ export type ShopIdentityEvidence = {
 };
 
 export type ForecastCandidateEvidence = {
+  source: "governed" | "preview";
   evaluatedAt: string;
   latestWeekCutoff: string;
   modelLabel: string;
@@ -28,7 +29,13 @@ export type ForecastCandidateEvidence = {
   wapePct: readonly [number, number];
   intervalCoveragePct: readonly [number, number];
   historyNote: string;
-  recommendedPilot: boolean;
+};
+
+export type ForecastCandidateEvaluationRow = {
+  source_shop_key: string;
+  latest_week_cutoff: string;
+  horizons: unknown;
+  evaluated_at: string;
 };
 
 export function shopMemberCount(
@@ -89,34 +96,126 @@ export const shopIdentityEvidence: Record<string, ShopIdentityEvidence> = {
   },
 };
 
-// ponytail: frozen pre-mapping evidence; replace with staged registry rows after mapping and audience approval.
+// ponytail: preview fallback until the governed candidate-evidence migration is released.
 export const forecastCandidateEvidence: Record<
   string,
   ForecastCandidateEvidence
 > = {
   PS228: {
-    evaluatedAt: "Aug 20, 2026",
-    latestWeekCutoff: "Aug 3, 2026",
+    source: "preview",
+    evaluatedAt: "2026-08-20",
+    latestWeekCutoff: "2026-08-03",
     modelLabel: "Seasonal + recent blend",
     holdoutRepairs: 531,
     maeImprovementPct: [16.5, 21.0],
     wapePct: [27.5, 29.1],
     intervalCoveragePct: [80.4, 85.1],
     historyNote: "One 46-week internal coverage gap was excluded.",
-    recommendedPilot: false,
   },
   PS229: {
-    evaluatedAt: "Aug 20, 2026",
-    latestWeekCutoff: "Aug 3, 2026",
+    source: "preview",
+    evaluatedAt: "2026-08-20",
+    latestWeekCutoff: "2026-08-03",
     modelLabel: "Seasonal + recent blend",
     holdoutRepairs: 844,
     maeImprovementPct: [20.1, 24.1],
     wapePct: [17.7, 18.7],
     intervalCoveragePct: [80.4, 85.1],
     historyNote: "The current evaluation segment has no long internal gap.",
-    recommendedPilot: true,
   },
 };
+
+type CandidateHorizon = {
+  forecast_horizon_weeks: number;
+  model_key: string;
+  model_wape_pct: number;
+  mae_improvement_pct: number;
+  holdout_repairs: number;
+  excluded_internal_gap_weeks: number;
+  interval_validation_coverage_pct: number;
+};
+
+function candidateHorizons(value: unknown): CandidateHorizon[] | null {
+  if (!Array.isArray(value) || value.length !== 4) return null;
+  const horizons = value.filter(
+    (item): item is CandidateHorizon =>
+      Boolean(item) &&
+      typeof item === "object" &&
+      [
+        "forecast_horizon_weeks",
+        "model_wape_pct",
+        "mae_improvement_pct",
+        "holdout_repairs",
+        "excluded_internal_gap_weeks",
+        "interval_validation_coverage_pct",
+      ].every(
+        (key) =>
+          typeof (item as Record<string, unknown>)[key] === "number" &&
+          Number.isFinite((item as Record<string, number>)[key]),
+      ) &&
+      typeof (item as Record<string, unknown>).model_key === "string",
+  );
+  return horizons.length === 4 &&
+    horizons
+      .map((horizon) => horizon.forecast_horizon_weeks)
+      .sort((a, b) => a - b)
+      .every((horizon, index) => horizon === index + 1)
+    ? horizons
+    : null;
+}
+
+function range(values: number[]): readonly [number, number] {
+  return [Math.min(...values), Math.max(...values)];
+}
+
+export function summarizeForecastCandidateEvidence(
+  row: ForecastCandidateEvaluationRow,
+): ForecastCandidateEvidence | null {
+  const horizons = candidateHorizons(row.horizons);
+  if (!horizons) return null;
+  const models = new Set(horizons.map((horizon) => horizon.model_key));
+  const modelLabel =
+    models.size > 1
+      ? "Best supported model by horizon"
+      : models.has("seasonal_recent_blend_v1")
+        ? "Seasonal + recent blend"
+        : models.has("trailing4_v1")
+          ? "Recent four-week average"
+          : "Evaluated model";
+  const excludedGapWeeks = Math.max(
+    ...horizons.map((horizon) => horizon.excluded_internal_gap_weeks),
+  );
+
+  return {
+    source: "governed",
+    evaluatedAt: row.evaluated_at,
+    latestWeekCutoff: row.latest_week_cutoff,
+    modelLabel,
+    holdoutRepairs: Math.max(
+      ...horizons.map((horizon) => horizon.holdout_repairs),
+    ),
+    maeImprovementPct: range(
+      horizons.map((horizon) => horizon.mae_improvement_pct),
+    ),
+    wapePct: range(horizons.map((horizon) => horizon.model_wape_pct)),
+    intervalCoveragePct: range(
+      horizons.map((horizon) => horizon.interval_validation_coverage_pct),
+    ),
+    historyNote: excludedGapWeeks
+      ? `${excludedGapWeeks} internal coverage-gap weeks were excluded.`
+      : "The current evaluation segment has no long internal gap.",
+  };
+}
+
+export function preferredForecastPilot(
+  evidence: Record<string, ForecastCandidateEvidence>,
+) {
+  return Object.entries(evidence).sort(([, left], [, right]) => {
+    const leftWape = (left.wapePct[0] + left.wapePct[1]) / 2;
+    const rightWape = (right.wapePct[0] + right.wapePct[1]) / 2;
+    return leftWape - rightWape || right.holdoutRepairs - left.holdoutRepairs;
+  })[0]?.[0];
+}
 
 export type RankedShopMatch = {
   shop: ShopDirectoryEntry;

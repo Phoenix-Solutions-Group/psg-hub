@@ -24,9 +24,12 @@ import {
   approvedPoliciesWithoutCustomerAudience,
   forecastCandidateEvidence,
   matchesVerifiedShopLocation,
+  preferredForecastPilot,
   rankShopMatches,
   shopMemberCount,
   shopIdentityEvidence,
+  summarizeForecastCandidateEvidence,
+  type ForecastCandidateEvaluationRow,
   type ShopDirectoryEntry,
 } from "./shop-match";
 
@@ -167,6 +170,19 @@ const dateTime = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
   timeZoneName: "short",
 });
+
+const reviewDate = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+
+function formatReviewDate(value: string) {
+  return reviewDate.format(
+    new Date(value.includes("T") ? value : `${value}T00:00:00Z`),
+  );
+}
 
 const notices: Record<string, string> = {
   approved:
@@ -647,8 +663,41 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         selectedShop.latest_arrival_date,
       )
     : null;
+  const candidateEvaluationResult = await service
+    .from("collision_forecast_candidate_evaluations")
+    .select("source_shop_key,latest_week_cutoff,horizons,evaluated_at")
+    .eq("source_system", "filemaker_repair_customer")
+    .order("evaluated_at", { ascending: false })
+    .limit(100);
+  const candidateEvidenceReleasePending = isMissingReviewView(
+    candidateEvaluationResult.error,
+    "collision_forecast_candidate_evaluations",
+  );
+  if (candidateEvaluationResult.error && !candidateEvidenceReleasePending) {
+    throw new Error(candidateEvaluationResult.error.message);
+  }
+  const governedCandidateEvidence = Object.create(null) as Record<
+    string,
+    (typeof forecastCandidateEvidence)[string]
+  >;
+  for (const row of (candidateEvaluationResult.data ??
+    []) as unknown as ForecastCandidateEvaluationRow[]) {
+    if (governedCandidateEvidence[row.source_shop_key]) continue;
+    const evidence = summarizeForecastCandidateEvidence(row);
+    if (!evidence) {
+      throw new Error(
+        `Candidate evidence for ${row.source_shop_key} is malformed`,
+      );
+    }
+    governedCandidateEvidence[row.source_shop_key] = evidence;
+  }
+  const candidateEvidence = {
+    ...forecastCandidateEvidence,
+    ...governedCandidateEvidence,
+  };
+  const preferredPilotKey = preferredForecastPilot(candidateEvidence);
   const selectedForecastEvidence = selectedShop
-    ? forecastCandidateEvidence[selectedShop.source_shop_key]
+    ? candidateEvidence[selectedShop.source_shop_key]
     : null;
   const selectedInsuredShare =
     selectedShop && selectedShop.repair_orders
@@ -2013,16 +2062,28 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     <p className="font-heading font-semibold">
                       Historical model evidence
                     </p>
-                    <Badge variant="success">4 of 4 horizons passed</Badge>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="success">4 of 4 horizons passed</Badge>
+                      <Badge variant="outline">
+                        {selectedForecastEvidence.source === "governed"
+                          ? "Supabase evidence"
+                          : "Preview snapshot"}
+                      </Badge>
+                    </div>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-foreground/75">
-                    Read-only backtest evaluated{" "}
-                    {selectedForecastEvidence.evaluatedAt} using completed weeks
-                    through {selectedForecastEvidence.latestWeekCutoff}. It
-                    selected{" "}
+                    {selectedForecastEvidence.source === "governed"
+                      ? "Governed read-only backtest recorded "
+                      : "Read-only preview backtest captured "}
+                    {formatReviewDate(selectedForecastEvidence.evaluatedAt)}{" "}
+                    using completed weeks through{" "}
+                    {formatReviewDate(
+                      selectedForecastEvidence.latestWeekCutoff,
+                    )}
+                    . It selected{" "}
                     {selectedForecastEvidence.modelLabel.toLocaleLowerCase()}{" "}
-                    for weeks 1–4. This evidence is frozen for review; it is not
-                    staged, approved, scored, or published.
+                    for weeks 1–4. This evidence is not staged, approved,
+                    scored, or published.
                   </p>
                   <div className="mt-4 grid grid-cols-2 gap-4 border-t border-success/30 pt-4 lg:grid-cols-4">
                     <ReviewMetric
@@ -2044,15 +2105,18 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                   </div>
                   <p className="mt-3 text-sm leading-6 text-foreground/75">
                     {selectedForecastEvidence.historyNote}{" "}
-                    {selectedForecastEvidence.recommendedPilot
-                      ? "South Lincoln is the recommended first pilot because it has the larger holdout and lower error at every horizon."
-                      : "North Lincoln passed, but South Lincoln has the cleaner and lower-error first-pilot case."}
+                    {selectedShop.source_shop_key === preferredPilotKey
+                      ? "Of the current candidates, this is the lower-error first-pilot case."
+                      : "Another current candidate has the lower-error first-pilot case."}
                   </p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     Next gate: confirm the customer audience and exact shop
                     mapping, then rerun the evaluator before staging manual
                     model review. These metrics predict aggregate repair
                     arrivals—not individual crashes or insurer claim volume.
+                    {selectedForecastEvidence.source === "preview"
+                      ? " The reviewed database migration must be applied and this evaluation recorded before the snapshot becomes governed evidence."
+                      : " The stored input and evaluator hashes make this result reproducible."}
                   </p>
                 </div>
               ) : null}
