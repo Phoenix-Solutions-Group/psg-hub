@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { ContentWireframeRenderer } from "@/components/bsm/content-wireframe-renderer";
+import type { ContentWireframeManifest, MarkdownDiffLine } from "@/lib/bsm/content-wireframe";
 
 type Decision = "approved" | "changes_requested";
 type TextSelectionAnchor = {
@@ -42,6 +44,9 @@ type WorkspaceDocument = {
     cta: string;
     sourceUrl: string | null;
   } | null;
+  wireframe: ContentWireframeManifest | null;
+  versionNote: string | null;
+  markdownDiff: MarkdownDiffLine[];
 };
 
 type WorkspaceComment = {
@@ -252,8 +257,13 @@ function rangeForHtmlAnchor(document: Document, anchor: TextSelectionAnchor): Ra
   return range;
 }
 
-function highlightedText(text: string, selections: TextSelectionAnchor[]): ReactNode {
-  return buildHighlightSegments(text, selections).map((segment, index) =>
+function highlightedText(text: string, selections: TextSelectionAnchor[], blockOffset = 0): ReactNode {
+  const localSelections = selections.map((selection) => ({
+    ...selection,
+    startOffset: selection.startOffset - blockOffset,
+    endOffset: selection.endOffset - blockOffset,
+  }));
+  return buildHighlightSegments(text, localSelections).map((segment, index) =>
     segment.highlighted ? (
       <mark key={`${index}:${segment.text}`} className="rounded-sm bg-warning/35 px-0.5 text-inherit">
         {segment.text}
@@ -299,7 +309,7 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
   const activeDecision = decisions[activeKey];
   const activeDecisionNote = decisionNotes[activeKey] ?? "";
   const nextAnnotationNumber = threadRoots.length + 1;
-  const canHighlightActiveDocument = Boolean(activeDocument?.proofContent) || isHtmlProof(activeDocument?.contentType ?? null);
+  const canHighlightActiveDocument = Boolean(activeDocument?.proofContent || activeDocument?.wireframe) || isHtmlProof(activeDocument?.contentType ?? null);
 
   async function verifyInvite() {
     setPending(true);
@@ -367,7 +377,7 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
   }
 
   function captureHighlight() {
-    if (annotationMode !== "highlight" || !activeDocument?.proofContent) return;
+    if (annotationMode !== "highlight" || (!activeDocument?.proofContent && !activeDocument?.wireframe)) return;
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
     const range = selection.getRangeAt(0);
@@ -702,6 +712,13 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
                     <Badge>{workspace.round.status}</Badge>
                   </div>
                   {activeDocument.note ? <p className="pt-2 text-sm leading-6 text-muted-foreground">{activeDocument.note}</p> : null}
+                  {activeDocument.versionNote ? <p className="pt-2 text-sm leading-6"><strong>What changed:</strong> {activeDocument.versionNote}</p> : null}
+                  {activeDocument.markdownDiff.length ? (
+                    <details className="mt-3 rounded-md border border-border bg-muted/30 p-3 text-sm">
+                      <summary className="cursor-pointer font-medium">View changes from the prior reviewed version</summary>
+                      <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap text-xs">{activeDocument.markdownDiff.map((line, index) => <span key={`${index}:${line.kind}`} className={`block ${line.kind === "added" ? "text-success" : line.kind === "removed" ? "text-destructive" : "text-muted-foreground"}`}>{line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}{line.line}</span>)}</pre>
+                    </details>
+                  ) : null}
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-hidden rounded-md border border-border bg-background">
@@ -718,7 +735,13 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
                       ) : null}
                     </div>
                     <div className="relative" onMouseUp={captureHighlight}>
-                      {activeDocument.proofContent ? (
+                      {activeDocument.wireframe ? (
+                        <ContentWireframeRenderer
+                          manifest={activeDocument.wireframe}
+                          assetUrl={(assetId) => `/api/bsm/review-workspace/asset?${assignedReviewer ? `projectId=${encodeURIComponent(projectId ?? "")}` : `sessionHash=${encodeURIComponent(sessionHash ?? "")}`}&reviewItemId=${encodeURIComponent(activeDocument.itemId)}&versionId=${encodeURIComponent(activeDocument.versionId)}&assetId=${encodeURIComponent(assetId)}`}
+                          renderText={(blockId, text, blockOffset) => highlightedText(text, selectionsForBlock(blockId), blockOffset)}
+                        />
+                      ) : activeDocument.proofContent ? (
                         <article className="min-h-80 bg-white p-5 text-foreground sm:p-8">
                           <div data-review-block="eyebrow" className="text-xs font-semibold uppercase text-ember">{highlightedText(activeDocument.proofContent.eyebrow, selectionsForBlock("eyebrow"))}</div>
                           <h3 data-review-block="headline" className="mt-2 font-heading text-2xl font-semibold">{highlightedText(activeDocument.proofContent.headline, selectionsForBlock("headline"))}</h3>

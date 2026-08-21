@@ -41,6 +41,7 @@ const INVITATION_ID = "55555555-5555-4555-8555-555555555555";
 const SESSION_ID = "66666666-6666-4666-8666-666666666666";
 const REVIEW_ITEM_ID = "77777777-7777-4777-8777-777777777777";
 const VERSION_ID = "88888888-8888-4888-8888-888888888888";
+const ASSET_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const THREAD_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const SECOND_REVIEW_ITEM_ID = "77777777-7777-4777-8777-777777777778";
 const SECOND_VERSION_ID = "88888888-8888-4888-8888-888888888889";
@@ -168,6 +169,7 @@ type FakeClientOptions = {
   emptyVersionMetadata?: boolean;
   uploadedFileProof?: boolean;
   uploadedHtmlProof?: boolean;
+  wireframeProof?: boolean;
   draftStaffPreview?: boolean;
   submitted?: boolean;
   hasPin?: boolean;
@@ -325,6 +327,35 @@ class Query {
       };
     }
     if (this.table === "bsm_content_review_versions") {
+      if (this.options.wireframeProof) {
+        return {
+          data: [{
+            id: VERSION_ID,
+            project_id: PROJECT_ID,
+            version_number: 2,
+            original_filename: "content.md",
+            content_type: "text/markdown",
+            preview_url: null,
+            generated_page_path: null,
+            storage_bucket: "bsm-content-approvals",
+            storage_path: `${SHOP_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/content.md`,
+            processed_storage_bucket: null,
+            processed_storage_path: null,
+            processed_content_type: null,
+            source_metadata_jsonb: {
+              versionNote: "Clarified the primary offer.",
+              markdownDiff: [{ kind: "added", line: "Repairs without surprises" }],
+            },
+            snapshot_jsonb: {},
+            artifact_manifest_jsonb: {
+              contractVersion: 1,
+              assetIds: [ASSET_ID],
+              blocks: [{ id: "hero:1", kind: "hero", ordinal: 1, text: "Repairs without surprises" }],
+            },
+          }],
+          error: null,
+        };
+      }
       if (this.options.uploadedFileProof) {
         const extension = this.options.uploadedHtmlProof ? "html" : "pdf";
         const contentType = this.options.uploadedHtmlProof ? "text/html" : "application/pdf";
@@ -1201,6 +1232,9 @@ describe("BSM review workspace foundation service", () => {
           cta: "Schedule my repair review",
           sourceUrl: null,
         },
+        wireframe: null,
+        versionNote: null,
+        markdownDiff: [],
       },
     ]);
     expect(workspace.comments).toEqual([
@@ -1314,6 +1348,32 @@ describe("BSM review workspace foundation service", () => {
         { client: client as never },
       ),
     ).rejects.toThrow("Review document file not found");
+  });
+
+  it("projects the same immutable wireframe, version note, and diff to staff and reviewers", async () => {
+    const { client } = createFakeClient({ wireframeProof: true });
+
+    const [reviewer, staff] = await Promise.all([
+      getGuestReviewWorkspace("session-hash", { client: client as never }),
+      getStaffReviewWorkspaceResult(PROJECT_ID, ACTOR_ID, { client: client as never }),
+    ]);
+
+    expect(reviewer.documents[0]).toMatchObject({
+      wireframe: {
+        contractVersion: 1,
+        assetIds: [ASSET_ID],
+        blocks: [{ id: "hero:1", kind: "hero", ordinal: 1, text: "Repairs without surprises" }],
+      },
+      versionNote: "Clarified the primary offer.",
+      markdownDiff: [{ kind: "added", line: "Repairs without surprises" }],
+      proofUrl: null,
+    });
+    expect(staff.documents[0]).toMatchObject({
+      wireframe: reviewer.documents[0].wireframe,
+      versionNote: reviewer.documents[0].versionNote,
+      markdownDiff: reviewer.documents[0].markdownDiff,
+      proofUrl: null,
+    });
   });
 
   it("shows PSG notes without exposing another reviewer's notes", async () => {
@@ -1708,6 +1768,20 @@ describe("BSM review workspace foundation service", () => {
     });
     expect(guest.inserts.find((entry) => entry.table === "bsm_content_review_events")?.payload).toMatchObject({ event_type: "review_workspace_thread_resolved", version_id: VERSION_ID });
     expect(staff.inserts.find((entry) => entry.table === "bsm_content_review_events")?.payload).toMatchObject({ event_type: "review_workspace_thread_reopened", actor_profile_id: ACTOR_ID });
+  });
+
+  it("records the three explicit PSG feedback dispositions on the version-bound thread", async () => {
+    for (const disposition of ["resolved", "declined", "needs_clarification"] as const) {
+      const result = createFakeClient();
+      await setStaffThreadStatus(
+        { projectId: PROJECT_ID, threadId: THREAD_ID, status: disposition, actorProfileId: ACTOR_ID },
+        { client: result.client as never },
+      );
+      expect(result.updates.find((entry) => entry.table === "bsm_content_review_comment_threads")).toMatchObject({
+        payload: { status: disposition },
+        filters: { id: THREAD_ID, project_id: PROJECT_ID, round_id: ROUND_ID },
+      });
+    }
   });
 
   it("blocks new reviewer comments after submit", async () => {

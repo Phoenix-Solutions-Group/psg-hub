@@ -66,7 +66,7 @@ describe("review workspace admin actions", () => {
 
   it("routes PSG replies and thread resolution through the authorized project", async () => {
     mocks.addStaffThreadReply.mockResolvedValue({ id: "reply-1" });
-    mocks.setStaffThreadStatus.mockResolvedValue({ threadId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "resolved" });
+    mocks.setStaffThreadStatus.mockResolvedValue({ threadId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "needs_clarification" });
 
     const reply = await PATCH(new Request("https://hub.example/api/project", {
       method: "PATCH",
@@ -76,13 +76,13 @@ describe("review workspace admin actions", () => {
     const resolved = await PATCH(new Request("https://hub.example/api/project", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "set_thread_status", threadId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "resolved" }),
+      body: JSON.stringify({ action: "set_thread_status", threadId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "needs_clarification" }),
     }), context);
 
     expect(reply.status).toBe(201);
     expect(resolved.status).toBe(200);
     expect(mocks.addStaffThreadReply).toHaveBeenCalledWith(expect.objectContaining({ projectId: "22222222-2222-4222-8222-222222222222", body: "Updated proof is ready." }));
-    expect(mocks.setStaffThreadStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "resolved" }));
+    expect(mocks.setStaffThreadStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "needs_clarification" }));
   });
 
   it("routes PSG pin comments through the authorized project", async () => {

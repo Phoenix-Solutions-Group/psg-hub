@@ -84,6 +84,172 @@ test("retired BSM review workspace route redirects to Review Workspace", async (
   await expect(page.getByRole("heading", { name: "Review Workspace", exact: true })).toBeVisible();
 });
 
+test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
+  const shopId = await ensureContentApprovalsShopOption();
+  const runId = Date.now();
+  const workspaceTitle = `Content wireframe ${runId}`;
+  const documentTitle = `Homepage content ${runId}`;
+  const reviewerEmail = `wireframe-${runId}@e2e.test`;
+  const initialMarkdown = "# Repairs without surprises\n\nClear updates from estimate through delivery.\n\n[CTA: Request an estimate](/estimate)";
+  const revisedMarkdown = "# Collision repair with clear updates\n\nKnow what happens from estimate through delivery.\n\n[CTA: Request an estimate](/estimate)";
+  const secondMarkdown = "# Collision repair with clear updates\n\nKnow what happens from estimate through delivery, with one point of contact.\n\n[CTA: Request an estimate](/estimate)";
+
+  await page.goto("/ops/bsm-content-approvals");
+  const manualShopInput = page.locator("input#bsm-approval-shop");
+  if (await manualShopInput.isVisible()) await manualShopInput.fill(shopId);
+  await page.getByLabel("Review name").fill(workspaceTitle);
+  await page.getByLabel(/Client instructions/).fill("Review copy and structure before design production.");
+  await page.getByRole("button", { name: "Continue to upload" }).click();
+  await expect(page.getByText("The Review Workspace is ready for documents and reviewers.")).toBeVisible({ timeout: 15_000 });
+
+  await page.locator("#bsm-approval-file").setInputFiles({
+    name: "homepage.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(initialMarkdown),
+  });
+  await page.getByLabel("Proof title").fill(documentTitle);
+  await page.getByRole("button", { name: "Add to review" }).click();
+  await expect(page.getByText(documentTitle).first()).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("link", { name: "Edit Markdown" }).click();
+  await expect(page.getByRole("heading", { name: "Create Content Draft" })).toBeVisible();
+  await page.getByRole("button", { name: "Clone current Markdown version" }).click();
+  await expect(page.getByLabel("Markdown source")).toHaveValue(initialMarkdown);
+
+  const editorUrl = page.url();
+  const [, projectId, documentId] = /bsm-content-approvals\/([^/]+)\/documents\/([^/]+)\/edit/.exec(editorUrl) ?? [];
+  expect(projectId).toBeTruthy();
+  expect(documentId).toBeTruthy();
+  const secondAdmin = await context.newPage();
+  await secondAdmin.goto(editorUrl);
+  await expect(secondAdmin.getByLabel("Markdown source")).toHaveValue(initialMarkdown);
+
+  await page.getByLabel("Markdown source").fill(revisedMarkdown);
+  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible({ timeout: 10_000 });
+  await secondAdmin.getByLabel("Markdown source").fill(`${revisedMarkdown}\n\nStale second session.`);
+  await expect(secondAdmin.getByRole("alert").filter({ hasText: "Conflict" })).toBeVisible({ timeout: 10_000 });
+  await expect(secondAdmin.getByText("Stale second session.")).toBeVisible();
+  await expect(secondAdmin.getByText("Collision repair with clear updates")).toBeVisible();
+  await secondAdmin.close();
+
+  await page.getByLabel("Upload image").setInputFiles({
+    name: "shop.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"),
+  });
+  await expect(page.getByText("shop.png")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible({ timeout: 10_000 });
+
+  await page.getByRole("button", { name: "Publish check" }).click();
+  await page.getByLabel(/Version note/).fill("Clarified the hero and added the selected shop image.");
+  await expect(page.getByText("does not approve final design or production launch")).toBeVisible();
+  await page.getByRole("button", { name: "Publish immutable version" }).click();
+  await expect(page.getByText(/No Review Invitations were sent/)).toBeVisible({ timeout: 15_000 });
+
+  const admin = adminClient();
+  const beforeSend = await admin.from("bsm_content_review_invitations").select("id").eq("project_id", projectId!);
+  expect(beforeSend.error, beforeSend.error?.message).toBeNull();
+  expect(beforeSend.data).toHaveLength(0);
+  const storedAsset = await admin.from("bsm_content_review_assets").select("id, storage_bucket, storage_path").eq("review_item_id", documentId!).single();
+  expect(storedAsset.error, storedAsset.error?.message).toBeNull();
+  expect(storedAsset.data!.storage_bucket).toBe("bsm-content-approvals");
+  expect(storedAsset.data!.storage_path).toContain(`/${projectId}/${documentId}/assets/`);
+
+  await page.getByRole("link", { name: "Back to Content Approvals" }).click();
+  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByLabel("Email", { exact: true }).fill(reviewerEmail);
+  await page.getByLabel(/Name/).fill("Wireframe Reviewer");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button", { name: "Send review" }).click();
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.getByRole("button", { name: "Copy link and code" }).click();
+  const firstInvitation = await page.evaluate(() => navigator.clipboard.readText());
+  const [firstInvitePath, firstCodeLine] = firstInvitation.split("\n");
+  const firstCode = firstCodeLine?.match(/^One-time code: (\d{6})$/)?.[1];
+  expect(firstCode).toMatch(/^\d{6}$/);
+
+  const reviewerContext = await browser.newContext();
+  try {
+    const reviewer = await reviewerContext.newPage();
+    await reviewer.goto(firstInvitePath!);
+    await reviewer.getByLabel("One-time code").fill(firstCode!);
+    await reviewer.getByRole("button", { name: "Open review" }).click();
+    await expect(reviewer.getByText("Collision repair with clear updates")).toBeVisible();
+    await expect(reviewer.getByText("Clarified the hero and added the selected shop image.")).toBeVisible();
+    await expect(reviewer.getByText("Content and structure review only")).toBeVisible();
+
+    await reviewer.getByLabel("Request changes").check();
+    await reviewer.getByRole("button", { name: "Place pin" }).click();
+    await reviewer.getByRole("button", { name: "Place comment pin on document" }).click({ position: { x: 200, y: 150 } });
+    await reviewer.getByLabel("Private comment").fill("Pin: strengthen the CTA placement.");
+    await reviewer.getByRole("button", { name: "Save private comment" }).click();
+
+    await reviewer.getByRole("button", { name: "Highlight text" }).click();
+    await reviewer.locator('[data-review-block="hero:1"]').evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    });
+    await expect(reviewer.getByText(/Highlighted:/)).toBeVisible();
+    await reviewer.getByLabel("Private comment").fill("Highlight: use more customer-centered wording.");
+    await reviewer.getByRole("button", { name: "Save private comment" }).click();
+    await reviewer.getByLabel("Decision note for this document").fill("Please update both copy points.");
+    await reviewer.getByRole("button", { name: "Submit completed review" }).click();
+    await expect(reviewer.getByText("Read-only after submit")).toBeVisible({ timeout: 15_000 });
+
+    await page.reload();
+    await page.getByRole("button", { name: "Open review workspace" }).click();
+    for (const comment of ["Pin: strengthen the CTA placement.", "Highlight: use more customer-centered wording."]) {
+      const note = page.locator("article").filter({ hasText: comment });
+      await note.getByRole("button", { name: "Resolved" }).click();
+      await expect(note).toContainText("resolved");
+    }
+    await page.getByRole("button", { name: "Manage files" }).click();
+    await page.getByRole("link", { name: "Edit Markdown" }).click();
+    await page.getByLabel("Markdown source").fill(secondMarkdown);
+    await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Publish check" }).click();
+    await page.getByLabel(/Version note/).fill("Adds the single point-of-contact promise.");
+    await expect(page.getByText("Blocking").locator(".." )).toContainText("0");
+    await page.getByRole("button", { name: "Publish immutable version" }).click();
+    await expect(page.getByText(/No Review Invitations were sent/)).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole("link", { name: "Back to Content Approvals" }).click();
+    await page.getByRole("button", { name: "Open review workspace" }).click();
+    await page.getByRole("button", { name: "Manage files" }).click();
+    await page.getByRole("button", { name: "Share", exact: true }).click();
+    await page.getByRole("button", { name: "Send next round" }).click();
+    await page.getByRole("button", { name: "Copy link and code" }).click();
+    const secondInvitation = await page.evaluate(() => navigator.clipboard.readText());
+    const [secondInvitePath, secondCodeLine] = secondInvitation.split("\n");
+    const secondCode = secondCodeLine?.match(/^One-time code: (\d{6})$/)?.[1];
+    const laterReviewer = await reviewerContext.newPage();
+    await laterReviewer.goto(secondInvitePath!);
+    await laterReviewer.getByLabel("One-time code").fill(secondCode!);
+    await laterReviewer.getByRole("button", { name: "Open review" }).click();
+    await expect(laterReviewer.getByText("Adds the single point-of-contact promise.")).toBeVisible();
+    await expect(laterReviewer.getByText("Markdown changes from the base version")).toBeVisible();
+    await expect(laterReviewer.getByText("with one point of contact.")).toBeVisible();
+
+    const rounds = await admin.from("bsm_content_review_rounds").select("id, round_number").eq("project_id", projectId!).order("round_number");
+    expect(rounds.error, rounds.error?.message).toBeNull();
+    expect(rounds.data).toHaveLength(2);
+    const roundDocuments = await admin.from("bsm_content_review_round_documents").select("round_id, version_id").eq("review_item_id", documentId!);
+    expect(roundDocuments.error, roundDocuments.error?.message).toBeNull();
+    expect(new Set((roundDocuments.data ?? []).map((row) => row.version_id)).size).toBe(2);
+    const annotations = await admin.from("bsm_content_review_comments").select("version_id, comment_kind, selection_jsonb").eq("review_item_id", documentId!);
+    expect(annotations.error, annotations.error?.message).toBeNull();
+    const annotationRows = annotations.data ?? [];
+    expect(annotationRows.some((row) => row.comment_kind === "pin")).toBe(true);
+    expect(annotationRows.some((row) => row.comment_kind === "highlight" && row.selection_jsonb)).toBe(true);
+    expect(new Set(annotationRows.map((row) => row.version_id)).size).toBe(1);
+  } finally {
+    await reviewerContext.close();
+  }
+});
+
 test("BSM content approvals release gate: admin creates, reviewer comments and submits once", async ({ page, context }) => {
   const shopId = await ensureContentApprovalsShopOption();
   const runId = Date.now();

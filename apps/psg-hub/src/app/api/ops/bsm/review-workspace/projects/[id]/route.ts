@@ -112,7 +112,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const thread = await setStaffThreadStatus({
         projectId: id,
         threadId: payload.threadId as string,
-        status: payload.status as "open" | "resolved",
+        status: payload.status as "open" | "resolved" | "declined" | "needs_clarification",
         actorProfileId: gate.userId,
         actorRole: gate.access.role,
       });

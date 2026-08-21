@@ -532,6 +532,9 @@ describe("BsmContentApprovalManager", () => {
         generatedPagePath: null,
         proofUrl: "https://storage.example/homepage.html",
         proofContent: null,
+        wireframe: null,
+        versionNote: null,
+        markdownDiff: [],
       },
       {
         itemId: "item-page",
@@ -546,6 +549,9 @@ describe("BsmContentApprovalManager", () => {
         generatedPagePath: "/generated/internal-only-proof",
         proofUrl: "/generated/internal-only-proof",
         proofContent: null,
+        wireframe: null,
+        versionNote: null,
+        markdownDiff: [],
       },
     ];
 
@@ -555,6 +561,7 @@ describe("BsmContentApprovalManager", () => {
         selectedDocumentKey="item-page:version-page"
         onSelectDocument={() => undefined}
         onAddPinComment={async () => true}
+        onSetThreadStatus={async () => true}
         immersive
         comments={[
           {
@@ -602,6 +609,9 @@ describe("BsmContentApprovalManager", () => {
     expect(html).toContain('aria-label="Place comment pin on document"');
     expect(html).toContain("Move this headline higher.");
     expect(html).toContain("Pin 1");
+    expect(html).toContain("Resolved");
+    expect(html).toContain("Declined");
+    expect(html).toContain("Needs clarification");
     expect(html).toContain('src="https://preview.example/generated-proof"');
     expect(html).not.toContain("/generated/internal-only-proof");
     expect(workspacePreviewDocumentKindLabel(documents[0])).toBe(
@@ -644,6 +654,9 @@ describe("BsmContentApprovalManager", () => {
           generatedPagePath: null,
           proofUrl: "https://storage.example/proof.pdf",
           proofContent: null,
+          wireframe: null,
+          versionNote: null,
+          markdownDiff: [],
         }}
       />,
     );
@@ -662,6 +675,9 @@ describe("BsmContentApprovalManager", () => {
           generatedPagePath: null,
           proofUrl: "https://storage.example/proof.jpg",
           proofContent: null,
+          wireframe: null,
+          versionNote: null,
+          markdownDiff: [],
         }}
       />,
     );
@@ -670,5 +686,87 @@ describe("BsmContentApprovalManager", () => {
     expect(pdfHtml).toContain('src="https://storage.example/proof.pdf"');
     expect(imageHtml).toContain("<img");
     expect(imageHtml).toContain('src="https://storage.example/proof.jpg"');
+  });
+
+  it("renders the immutable Content Wireframe contract in the operator preview", () => {
+    const html = renderToStaticMarkup(
+      <WorkspacePreviewProof
+        document={{
+          itemId: "item-wireframe",
+          versionId: "version-wireframe",
+          versionNumber: 2,
+          title: "Homepage copy",
+          processingStatus: "ready",
+          status: "in_review",
+          originalFilename: "content.md",
+          contentType: "text/markdown",
+          previewUrl: null,
+          generatedPagePath: null,
+          proofUrl: null,
+          proofContent: null,
+          wireframe: {
+            contractVersion: 1,
+            assetIds: [],
+            blocks: [
+              { id: "hero:1", kind: "hero", ordinal: 1, text: "Repairs without surprises" },
+              { id: "cta:1", kind: "cta", ordinal: 1, text: "Request an estimate", href: "/estimate" },
+            ],
+          },
+          versionNote: "Clarified the primary offer.",
+          markdownDiff: [{ kind: "added", line: "Repairs without surprises" }],
+        }}
+      />,
+    );
+
+    expect(html).toContain("Content and structure review only");
+    expect(html).toContain("Repairs without surprises");
+    expect(html).toContain('href="/estimate"');
+  });
+
+  it("links Markdown documents to the scoped admin editor", () => {
+    const html = renderToStaticMarkup(
+      <BsmContentApprovalManager
+        initialApprovals={[{
+          id: "item-markdown",
+          shopId: "shop-a",
+          customerProfileId: null,
+          title: "Homepage copy",
+          status: "draft",
+          processingStatus: "ready",
+          contentType: "markdown",
+          sourceKind: "uploaded_file",
+          contextNote: null,
+          updatedAt: "2026-08-21T20:00:00.000Z",
+          currentVersion: {
+            id: "version-markdown",
+            originalFilename: "homepage.md",
+            contentType: "text/markdown",
+            byteSize: 512,
+            storagePath: "shop-a/item-markdown/version-markdown/homepage.md",
+            previewType: "file",
+            sourceMetadata: {},
+            createdAt: "2026-08-21T20:00:00.000Z",
+          },
+          latestDecision: null,
+          replyAttachments: [],
+          commentCount: 0,
+          reviewWorkspace: { projectId: "project-a", projectTitle: "Website copy", roundId: null },
+        }]}
+        activeShopId="shop-a"
+        activeWorkspaceProjectId="project-a"
+        shops={[{ id: "shop-a", name: "Example Shop" }]}
+        workspaces={[{
+          id: "project-a",
+          shopId: "shop-a",
+          title: "Website copy",
+          status: "draft",
+          currentRoundId: null,
+          documentCount: 1,
+        }]}
+      />,
+    );
+
+    expect(html).toContain("Edit Markdown");
+    expect(html).toContain('/ops/bsm-content-approvals/project-a/documents/item-markdown/edit');
   });
 });

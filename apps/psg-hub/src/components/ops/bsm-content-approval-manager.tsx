@@ -39,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { StaffReviewWorkspaceResult } from "@/lib/bsm/review-workspace";
+import { ContentWireframeRenderer } from "@/components/bsm/content-wireframe-renderer";
 
 type UploadResponse =
   | {
@@ -261,6 +262,7 @@ function canFramePreviewProof(url: string | null): url is string {
 export function workspacePreviewDocumentKindLabel(
   document: WorkspacePreviewDocument,
 ): string {
+  if (document.wireframe) return "Content Wireframe";
   if (isPreviewGeneratedPageProof(document)) return "Generated page";
   if (isPreviewPdfProof(document)) return "PDF";
   if (isPreviewHtmlProof(document)) return "Website proof";
@@ -292,7 +294,7 @@ function workspacePreviewDocumentUrl(
 export function workspacePreviewDocumentNeedsPreparation(
   document: WorkspacePreviewDocument,
 ): boolean {
-  return !document.proofContent && !workspacePreviewDocumentUrl(document);
+  return !document.wireframe && !document.proofContent && !workspacePreviewDocumentUrl(document);
 }
 
 function workspacePreviewDocumentIcon(
@@ -305,7 +307,7 @@ function workspacePreviewDocumentIcon(
   );
   if (isPreviewImageProof(document))
     return <ImageIcon className={className} aria-hidden="true" />;
-  if (isPreviewGeneratedPageProof(document) || document.proofContent)
+  if (isPreviewGeneratedPageProof(document) || document.proofContent || document.wireframe)
     return <Monitor className={className} aria-hidden="true" />;
   return <FileText className={className} aria-hidden="true" />;
 }
@@ -318,6 +320,7 @@ export function WorkspacePreviewProof({
   pendingPin = null,
   pendingPinNumber = null,
   onPlacePin,
+  assetUrl,
 }: {
   document: WorkspacePreviewDocument;
   comments?: WorkspacePreviewComment[];
@@ -326,6 +329,7 @@ export function WorkspacePreviewProof({
   pendingPin?: { xRatio: number; yRatio: number } | null;
   pendingPinNumber?: number | null;
   onPlacePin?: (point: { xRatio: number; yRatio: number }) => void;
+  assetUrl?: (assetId: string) => string | null;
 }) {
   const proofUrl = workspacePreviewDocumentUrl(document);
   const canFrame = canFramePreviewProof(proofUrl);
@@ -363,7 +367,9 @@ export function WorkspacePreviewProof({
         ) : null}
       </div>
       <div className="relative">
-        {document.proofContent ? (
+        {document.wireframe ? (
+          <ContentWireframeRenderer manifest={document.wireframe} assetUrl={assetUrl} />
+        ) : document.proofContent ? (
           <article
             className={cn(
               "bg-white p-5 text-foreground sm:p-8",
@@ -485,10 +491,12 @@ export function WorkspacePreviewScreen({
   selectedDocumentKey,
   onSelectDocument,
   onAddPinComment,
+  onSetThreadStatus,
   comments = [],
   decisions = [],
   reviewers = [],
   immersive = false,
+  projectId,
 }: {
   documents: WorkspacePreviewDocument[];
   selectedDocumentKey: string | null;
@@ -499,10 +507,15 @@ export function WorkspacePreviewScreen({
     xRatio: number;
     yRatio: number;
   }) => Promise<boolean>;
+  onSetThreadStatus?: (
+    threadId: string,
+    status: "resolved" | "declined" | "needs_clarification",
+  ) => Promise<boolean>;
   comments?: StaffReviewWorkspaceResult["submittedComments"];
   decisions?: StaffReviewWorkspaceResult["decisions"];
   reviewers?: StaffReviewWorkspaceResult["reviewers"];
   immersive?: boolean;
+  projectId?: string;
 }) {
   const selectedDocument =
     documents.find(
@@ -516,6 +529,7 @@ export function WorkspacePreviewScreen({
   const [pendingPin, setPendingPin] = useState<{ xRatio: number; yRatio: number } | null>(null);
   const [commentBody, setCommentBody] = useState("");
   const [savingComment, setSavingComment] = useState(false);
+  const [updatingThreadId, setUpdatingThreadId] = useState<string | null>(null);
   const selectedComments = selectedDocument
     ? comments.filter((comment) => comment.reviewItemId === selectedDocument.itemId)
     : [];
@@ -655,6 +669,13 @@ export function WorkspacePreviewScreen({
             </div>
           ) : null}
         </div>
+        {selectedDocument.versionNote ? <p className="rounded-lg border border-border bg-white p-3 text-sm"><strong>Version note:</strong> {selectedDocument.versionNote}</p> : null}
+        {selectedDocument.markdownDiff.length ? (
+          <details className="rounded-lg border border-border bg-white p-3 text-sm">
+            <summary className="cursor-pointer font-medium">Markdown changes from the base version</summary>
+            <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs">{selectedDocument.markdownDiff.map((line, index) => <span key={`${index}:${line.kind}`} className={`block ${line.kind === "added" ? "text-success" : line.kind === "removed" ? "text-destructive" : "text-muted-foreground"}`}>{line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}{line.line}</span>)}</pre>
+          </details>
+        ) : null}
         <WorkspacePreviewProof
           document={selectedDocument}
           comments={selectedComments}
@@ -663,6 +684,7 @@ export function WorkspacePreviewScreen({
           pendingPin={pendingPin}
           pendingPinNumber={pendingPinNumber}
           onPlacePin={onAddPinComment ? setPendingPin : undefined}
+          assetUrl={projectId ? (assetId) => `/api/ops/bsm/review-workspace/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(selectedDocument.itemId)}/draft?assetId=${encodeURIComponent(assetId)}` : undefined}
         />
       </div>
       {immersive ? (
@@ -756,6 +778,32 @@ export function WorkspacePreviewScreen({
                       {comment.createdAt ? formatDate(comment.createdAt) : ""}
                     </span>
                   </div>
+                  {onSetThreadStatus && (comment.commentKind === "pin" || comment.commentKind === "highlight") ? (
+                    <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+                      {([
+                        ["resolved", "Resolved"],
+                        ["declined", "Declined"],
+                        ["needs_clarification", "Needs clarification"],
+                      ] as const).map(([status, label]) => (
+                        <button
+                          key={status}
+                          type="button"
+                          className={buttonVariants({ variant: comment.threadStatus === status ? "default" : "outline", size: "sm" })}
+                          disabled={updatingThreadId === comment.threadId}
+                          onClick={async () => {
+                            setUpdatingThreadId(comment.threadId);
+                            try {
+                              await onSetThreadStatus(comment.threadId, status);
+                            } finally {
+                              setUpdatingThreadId(null);
+                            }
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </article>
               ))
             )}
@@ -1264,6 +1312,36 @@ export function BsmContentApprovalManager({
       setPhase({
         kind: "error",
         message: error instanceof Error ? error.message : "The comment could not be saved.",
+      });
+      return false;
+    }
+  }
+
+  async function setWorkspaceThreadStatus(
+    threadId: string,
+    status: "resolved" | "declined" | "needs_clarification",
+  ): Promise<boolean> {
+    if (!reviewWorkspaceProjectId) return false;
+    try {
+      const response = await fetch(`/api/ops/bsm/review-workspace/projects/${reviewWorkspaceProjectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set_thread_status", threadId, status }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "The feedback disposition could not be saved.");
+      setWorkspacePreview((current) => current ? {
+        ...current,
+        submittedComments: current.submittedComments.map((comment) =>
+          comment.threadId === threadId ? { ...comment, threadStatus: status } : comment,
+        ),
+      } : current);
+      setPhase({ kind: "success", message: "Feedback disposition saved." });
+      return true;
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The feedback disposition could not be saved.",
       });
       return false;
     }
@@ -2794,10 +2872,12 @@ export function BsmContentApprovalManager({
               {workspacePreview?.documents.length ? (
                 <div className="mt-5">
                   <WorkspacePreviewScreen
+                    projectId={workspacePreview.project.id}
                     documents={workspacePreview.documents}
                     selectedDocumentKey={selectedPreviewDocumentKey}
                     onSelectDocument={setSelectedPreviewDocumentKey}
                     onAddPinComment={addWorkspacePinComment}
+                    onSetThreadStatus={setWorkspaceThreadStatus}
                     comments={workspacePreview.submittedComments}
                     decisions={workspacePreview.decisions}
                     reviewers={workspacePreview.reviewers}
@@ -3060,6 +3140,24 @@ export function BsmContentApprovalManager({
                                 />
                                 Edit
                               </button>
+                              {(item.currentVersion?.contentType === "text/markdown" ||
+                                item.currentVersion?.previewType === "content_wireframe" ||
+                                /\.md$/i.test(item.currentVersion?.originalFilename ?? "")) &&
+                              item.reviewWorkspace?.projectId ? (
+                                <a
+                                  href={`/ops/bsm-content-approvals/${encodeURIComponent(item.reviewWorkspace.projectId)}/documents/${encodeURIComponent(item.id)}/edit`}
+                                  className={cn(
+                                    buttonVariants({
+                                      variant: "outline",
+                                      size: "sm",
+                                    }),
+                                    "gap-1",
+                                  )}
+                                >
+                                  <FilePenLine className="size-3.5" aria-hidden="true" />
+                                  Edit Markdown
+                                </a>
+                              ) : null}
                               {canManageWorkspaces &&
                               archiveItemId === item.id ? (
                                 <>
@@ -3123,6 +3221,7 @@ export function BsmContentApprovalManager({
                   {workspacePreview?.documents.length ? (
                     <div className="mt-6 rounded-2xl border border-border bg-[#f7f8f9] p-4">
                       <WorkspacePreviewScreen
+                        projectId={workspacePreview.project.id}
                         documents={workspacePreview.documents}
                         selectedDocumentKey={selectedPreviewDocumentKey}
                         onSelectDocument={setSelectedPreviewDocumentKey}

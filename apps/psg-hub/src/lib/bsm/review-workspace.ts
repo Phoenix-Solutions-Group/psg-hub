@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BSM_CONTENT_APPROVALS_BUCKET } from "@/lib/bsm/content-approvals-shared";
 import { createServiceClient } from "@/lib/supabase/service";
+import type { ContentWireframeManifest, MarkdownDiffLine } from "@/lib/bsm/content-wireframe";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PGRST_SCHEMA_CACHE_COLUMN_RE = /'([^']+)' column/;
@@ -194,7 +195,7 @@ export type SetGuestThreadStatusInput = {
 export type SetStaffThreadStatusInput = {
   projectId: string;
   threadId: string;
-  status: "open" | "resolved";
+  status: "open" | "resolved" | "declined" | "needs_clarification";
   actorProfileId: string;
   actorRole?: ReviewWorkspaceActorRole;
 };
@@ -250,6 +251,9 @@ export type GuestReviewWorkspace = {
     generatedPagePath: string | null;
     proofUrl: string | null;
     proofContent: ReviewWorkspaceProofContent | null;
+    wireframe: ContentWireframeManifest | null;
+    versionNote: string | null;
+    markdownDiff: MarkdownDiffLine[];
   }>;
   comments: Array<{
     id: string;
@@ -288,6 +292,9 @@ export type StaffReviewWorkspaceResult = {
     generatedPagePath: string | null;
     proofUrl: string | null;
     proofContent: ReviewWorkspaceProofContent | null;
+    wireframe: ContentWireframeManifest | null;
+    versionNote: string | null;
+    markdownDiff: MarkdownDiffLine[];
   }>;
   reviewers: Array<{
     invitationId: string;
@@ -448,6 +455,13 @@ function cleanThreadStatus(value: unknown): "open" | "resolved" {
   return value;
 }
 
+function cleanStaffThreadStatus(value: unknown): "open" | "resolved" | "declined" | "needs_clarification" {
+  if (value !== "open" && value !== "resolved" && value !== "declined" && value !== "needs_clarification") {
+    throw new ReviewWorkspaceInputError(400, "Thread status must be open, resolved, declined, or needs clarification");
+  }
+  return value;
+}
+
 async function loadProfileNames(client: ReviewWorkspaceDbClient, profileIds: string[]): Promise<Map<string, string>> {
   const ids = Array.from(new Set(profileIds));
   if (!ids.length) return new Map();
@@ -538,6 +552,23 @@ function readProofContent(value: unknown): ReviewWorkspaceProofContent | null {
 
 function proofContentFromMetadata(metadata: Record<string, unknown> | null | undefined): ReviewWorkspaceProofContent | null {
   return readProofContent(metadata?.proofContent);
+}
+
+function wireframeFromVersion(value: unknown): ContentWireframeManifest | null {
+  if (!value || typeof value !== "object") return null;
+  const manifest = value as Partial<ContentWireframeManifest>;
+  if (manifest.contractVersion !== 1 || !Array.isArray(manifest.blocks) || !Array.isArray(manifest.assetIds)) return null;
+  return manifest as ContentWireframeManifest;
+}
+
+function markdownDiffFromMetadata(metadata: Record<string, unknown>): MarkdownDiffLine[] {
+  if (!Array.isArray(metadata.markdownDiff)) return [];
+  return metadata.markdownDiff.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const row = entry as Record<string, unknown>;
+    if ((row.kind !== "context" && row.kind !== "added" && row.kind !== "removed") || typeof row.line !== "string") return [];
+    return [{ kind: row.kind, line: row.line } as MarkdownDiffLine];
+  });
 }
 
 function fileProofTarget(version: Record<string, unknown> | null | undefined): { bucket: string; path: string } | null {
@@ -1129,7 +1160,7 @@ export async function getStaffReviewWorkspaceResult(
   const { data: versionRows, error: versionError } = versionIds.length
     ? await client
         .from("bsm_content_review_versions")
-        .select("id, project_id, version_number, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb")
+        .select("id, project_id, version_number, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb, artifact_manifest_jsonb")
         .in("id", versionIds)
     : { data: [], error: null };
   if (versionError) throw new Error(`Could not load Review Workspace document versions: ${versionError.message}`);
@@ -1179,10 +1210,11 @@ export async function getStaffReviewWorkspaceResult(
           ? version.generated_page_path
           : null;
       const contentType = reviewerDocumentContentType(version ?? null);
-      const privateProofUrl = contentType === "text/html" && fileProofTarget(version) && versionId
+      const wireframe = wireframeFromVersion(version?.artifact_manifest_jsonb);
+      const privateProofUrl = !wireframe && contentType === "text/html" && fileProofTarget(version) && versionId
         ? `/api/ops/bsm/review-workspace/file?projectId=${encodeURIComponent(access.projectId)}&reviewItemId=${encodeURIComponent(row.id as string)}&versionId=${encodeURIComponent(versionId)}`
         : null;
-      const signedProofUrl = privateProofUrl ? null : await createSignedProofUrl(client, version);
+      const signedProofUrl = privateProofUrl || wireframe ? null : await createSignedProofUrl(client, version);
       return {
         itemId: row.id as string,
         versionId,
@@ -1196,6 +1228,9 @@ export async function getStaffReviewWorkspaceResult(
         generatedPagePath,
         proofUrl: previewUrl ?? generatedPagePath ?? privateProofUrl ?? signedProofUrl,
         proofContent: proofContentFromMetadata(sourceMetadata) ?? proofContentFromMetadata(snapshot),
+        wireframe,
+        versionNote: typeof sourceMetadata.versionNote === "string" ? sourceMetadata.versionNote : null,
+        markdownDiff: markdownDiffFromMetadata(sourceMetadata),
       };
     })),
     reviewers: ((invitationRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
@@ -2296,7 +2331,7 @@ export async function addStaffThreadReply(
 async function persistThreadStatus(
   client: ReviewWorkspaceDbClient,
   thread: ReviewWorkspaceThreadRow,
-  status: "open" | "resolved",
+  status: "open" | "resolved" | "declined" | "needs_clarification",
   actorProfileId: string | null,
   actorRole: "client" | "psg",
   now: Date,
@@ -2308,13 +2343,17 @@ async function persistThreadStatus(
     .eq("project_id", thread.project_id);
   update = thread.round_id ? update.eq("round_id", thread.round_id) : update.is("round_id", null);
   const { error } = await update;
-  if (error) throw new Error(`Could not ${status === "resolved" ? "resolve" : "reopen"} review comment thread: ${error.message}`);
+  if (error) throw new Error(`Could not update review comment thread: ${error.message}`);
 
   await insertEvent(client, {
     shop_id: thread.shop_id,
     review_item_id: thread.review_item_id,
     version_id: thread.version_id,
-    event_type: status === "resolved" ? "review_workspace_thread_resolved" : "review_workspace_thread_reopened",
+    event_type: status === "resolved"
+      ? "review_workspace_thread_resolved"
+      : status === "open"
+        ? "review_workspace_thread_reopened"
+        : "content_feedback_dispositioned",
     actor_profile_id: actorProfileId,
     payload_jsonb: { projectId: thread.project_id, roundId: thread.round_id, invitationId: thread.owner_invitation_id, threadId: thread.id, actorRole },
   });
@@ -2342,7 +2381,7 @@ export async function setStaffThreadStatus(
   const projectId = assertUuid("projectId", input.projectId);
   const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
   const thread = await requireStaffThread(client, projectId, actorProfileId, input.actorRole ?? null, input.threadId);
-  return persistThreadStatus(client, thread, cleanThreadStatus(input.status), actorProfileId, "psg", deps.now ?? new Date());
+  return persistThreadStatus(client, thread, cleanStaffThreadStatus(input.status), actorProfileId, "psg", deps.now ?? new Date());
 }
 
 export async function getGuestReviewWorkspace(
@@ -2403,7 +2442,7 @@ export async function getGuestReviewWorkspace(
   const { data: versions } = versionIds.length
     ? await client
         .from("bsm_content_review_versions")
-        .select("id, project_id, version_number, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb")
+        .select("id, project_id, version_number, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb, artifact_manifest_jsonb")
         .in("id", versionIds)
     : { data: [] };
   const versionsById = new Map(((versions ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
@@ -2460,7 +2499,8 @@ export async function getGuestReviewWorkspace(
         : typeof version?.generated_page_path === "string" && version.generated_page_path.trim()
           ? version.generated_page_path
           : null;
-      const privateProofUrl = fileProofTarget(version)
+      const wireframe = wireframeFromVersion(version?.artifact_manifest_jsonb);
+      const privateProofUrl = !wireframe && fileProofTarget(version)
         ? `/api/bsm/review-workspace/file?${"actorProfileId" in access ? `projectId=${encodeURIComponent(access.projectId)}` : `sessionHash=${encodeURIComponent(sessionHash)}`}&reviewItemId=${encodeURIComponent(row.review_item_id as string)}&versionId=${encodeURIComponent(row.version_id as string)}`
         : null;
       const sectionId = (item?.section_id as string | null) ?? null;
@@ -2478,6 +2518,9 @@ export async function getGuestReviewWorkspace(
         generatedPagePath,
         proofUrl: previewUrl ?? generatedPagePath ?? privateProofUrl,
         proofContent: proofContentFromMetadata(metadata) ?? proofContentFromMetadata(snapshot),
+        wireframe,
+        versionNote: typeof metadata.versionNote === "string" ? metadata.versionNote : null,
+        markdownDiff: markdownDiffFromMetadata(metadata),
       };
     })),
     comments: commentRows.flatMap((row) => {
@@ -2554,6 +2597,60 @@ export async function getAssignedReviewerWorkspaceFileDownload(
   const client = resolveClient(deps.client);
   const access = await requireAssignedReviewerAccess(client, input.projectId, input.actorProfileId);
   return getGuestReviewWorkspaceFileDownload({ ...input, sessionHash: "" }, { client, access });
+}
+
+export async function getGuestReviewWorkspaceAssetDownload(
+  input: { sessionHash: string; reviewItemId: string; versionId: string; assetId: string },
+  deps: { client?: ReviewWorkspaceDbClient; access?: ReviewerAccess } = {},
+): Promise<GuestReviewWorkspaceFileDownload> {
+  const client = resolveClient(deps.client);
+  const access = deps.access ?? await requireGuestReviewSession(client, input.sessionHash);
+  const reviewItemId = assertUuid("reviewItemId", input.reviewItemId);
+  const versionId = assertUuid("versionId", input.versionId);
+  const assetId = assertUuid("assetId", input.assetId);
+  await requireRoundDocumentAccess(client, access, reviewItemId, versionId);
+
+  const { data: version, error: versionError } = await client
+    .from("bsm_content_review_versions")
+    .select("artifact_manifest_jsonb")
+    .eq("id", versionId)
+    .eq("project_id", access.projectId)
+    .eq("shop_id", access.shopId)
+    .eq("review_item_id", reviewItemId)
+    .maybeSingle();
+  if (versionError) throw new Error(`Could not load Content Wireframe version: ${versionError.message}`);
+  const wireframe = wireframeFromVersion(version?.artifact_manifest_jsonb);
+  if (!wireframe?.assetIds.includes(assetId)) throw new ReviewWorkspaceInputError(404, "Content Asset not found");
+
+  const { data: asset, error: assetError } = await client
+    .from("bsm_content_review_assets")
+    .select("storage_bucket, storage_path, original_filename, content_type, byte_size")
+    .eq("id", assetId)
+    .eq("project_id", access.projectId)
+    .eq("shop_id", access.shopId)
+    .eq("review_item_id", reviewItemId)
+    .maybeSingle();
+  if (assetError) throw new Error(`Could not load Content Asset: ${assetError.message}`);
+  if (!asset) throw new ReviewWorkspaceInputError(404, "Content Asset not found");
+  const storage = (client as ReviewWorkspaceStorageClient).storage;
+  if (!storage) throw new Error("Review workspace storage is unavailable");
+  const download = await storage.from(asset.storage_bucket as string).download(asset.storage_path as string);
+  if (download.error || !download.data) throw new Error(`Could not download Content Asset: ${download.error?.message ?? "file unavailable"}`);
+  return {
+    data: download.data,
+    originalFilename: asset.original_filename as string,
+    contentType: asset.content_type as string,
+    byteSize: Number(asset.byte_size),
+  };
+}
+
+export async function getAssignedReviewerWorkspaceAssetDownload(
+  input: { projectId: string; actorProfileId: string; reviewItemId: string; versionId: string; assetId: string },
+  deps: { client?: ReviewWorkspaceDbClient } = {},
+): Promise<GuestReviewWorkspaceFileDownload> {
+  const client = resolveClient(deps.client);
+  const access = await requireAssignedReviewerAccess(client, input.projectId, input.actorProfileId);
+  return getGuestReviewWorkspaceAssetDownload({ ...input, sessionHash: "" }, { client, access });
 }
 
 export async function getStaffReviewWorkspaceFileDownload(
