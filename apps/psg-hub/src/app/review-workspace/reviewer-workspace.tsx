@@ -120,6 +120,13 @@ export function normalizedPointerAnchor(
   };
 }
 
+export function reviewWorkspaceCapabilities(assignedReviewer: boolean) {
+  return {
+    canManageThreads: !assignedReviewer,
+    canReopenSubmission: !assignedReviewer,
+  };
+}
+
 function documentKey(document: Pick<WorkspaceDocument, "itemId" | "versionId">) {
   return `${document.itemId}:${document.versionId}`;
 }
@@ -255,7 +262,7 @@ function highlightedText(text: string, selections: TextSelectionAnchor[]): React
   );
 }
 
-export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
+export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken?: string; projectId?: string }) {
   const [code, setCode] = useState("");
   const [sessionHash, setSessionHash] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -266,10 +273,12 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   const [selectedDocumentKey, setSelectedDocumentKey] = useState<string | null>(null);
   const [annotationMode, setAnnotationMode] = useState<"pin" | "highlight" | null>(null);
   const [pendingAnchor, setPendingAnchor] = useState<PendingAnchor | null>(null);
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState(Boolean(projectId));
   const [error, setError] = useState<string | null>(null);
   const htmlProofFrameRef = useRef<HTMLIFrameElement>(null);
   const [htmlProofLoad, setHtmlProofLoad] = useState(0);
+  const assignedReviewer = Boolean(projectId);
+  const capabilities = reviewWorkspaceCapabilities(assignedReviewer);
 
   const activeDocument =
     workspace?.documents.find((document) => documentKey(document) === selectedDocumentKey) ??
@@ -312,12 +321,12 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
     }
   }
 
-  async function loadWorkspace(hash = sessionHash) {
-    if (!hash) return;
+  async function loadWorkspace(hash: string | null = sessionHash) {
+    if (!hash && !projectId) return;
     const response = await fetch("/api/bsm/review-workspace/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionHash: hash }),
+      body: JSON.stringify(projectId ? { projectId } : { sessionHash: hash }),
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) throw new Error(body?.error ?? "Could not load this review workspace.");
@@ -335,6 +344,15 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
     setDecisions((current) => Object.keys(current).length && !nextWorkspace.reviewer.readOnly ? current : loadedDecisions);
     setDecisionNotes((current) => Object.keys(current).length && !nextWorkspace.reviewer.readOnly ? current : loadedNotes);
   }
+
+  useEffect(() => {
+    if (!projectId) return;
+    void loadWorkspace(null)
+      .catch((cause) => setError(cause instanceof Error ? cause.message : "Could not load this review workspace."))
+      .finally(() => setPending(false));
+    // The project id is the authenticated workspace identity; reload only when it changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   function selectDocument(document: WorkspaceDocument) {
     setSelectedDocumentKey(documentKey(document));
@@ -440,7 +458,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   }, [activeDocument?.contentType, activeKey, commentsForActiveDocument, htmlProofLoad, pendingAnchor]);
 
   async function saveComment() {
-    if (!sessionHash || !activeDocument || !pendingAnchor || !comment.trim()) {
+    if ((!sessionHash && !projectId) || !activeDocument || !pendingAnchor || !comment.trim()) {
       setError("Place a pin or select text, then enter a private comment.");
       return;
     }
@@ -451,7 +469,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionHash,
+          ...(projectId ? { projectId } : { sessionHash }),
           reviewItemId: activeDocument.itemId,
           versionId: activeDocument.versionId,
           body: comment.trim(),
@@ -467,7 +485,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
       if (!response.ok) throw new Error(body?.error ?? "Could not save this private comment.");
       setComment("");
       setPendingAnchor(null);
-      await loadWorkspace(sessionHash);
+      await loadWorkspace();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not save this private comment.");
     } finally {
@@ -477,19 +495,19 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
 
   async function postThreadReply(threadId: string) {
     const body = threadReplies[threadId]?.trim();
-    if (!sessionHash || !body) return;
+    if ((!sessionHash && !projectId) || !body) return;
     setPending(true);
     setError(null);
     try {
       const response = await fetch("/api/bsm/review-workspace/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reply", sessionHash, threadId, body }),
+        body: JSON.stringify({ action: "reply", ...(projectId ? { projectId } : { sessionHash }), threadId, body }),
       });
       const result = await response.json().catch(() => null);
       if (!response.ok) throw new Error(result?.error ?? "Could not post this reply.");
       setThreadReplies((current) => ({ ...current, [threadId]: "" }));
-      await loadWorkspace(sessionHash);
+      await loadWorkspace();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not post this reply.");
     } finally {
@@ -498,7 +516,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   }
 
   async function setThreadStatus(threadId: string, status: "open" | "resolved") {
-    if (!sessionHash) return;
+    if (!sessionHash || !capabilities.canManageThreads) return;
     setPending(true);
     setError(null);
     try {
@@ -509,7 +527,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
       });
       const result = await response.json().catch(() => null);
       if (!response.ok) throw new Error(result?.error ?? "Could not update this comment thread.");
-      await loadWorkspace(sessionHash);
+      await loadWorkspace();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not update this comment thread.");
     } finally {
@@ -518,7 +536,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   }
 
   async function submitReview() {
-    if (!sessionHash || !workspace) return;
+    if ((!sessionHash && !projectId) || !workspace) return;
     const missingDecision = workspace.documents.find((document) => !decisions[documentKey(document)]);
     if (missingDecision) {
       selectDocument(missingDecision);
@@ -542,7 +560,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionHash,
+          ...(projectId ? { projectId } : { sessionHash }),
           decisions: workspace.documents.map((document) => ({
             reviewItemId: document.itemId,
             versionId: document.versionId,
@@ -553,7 +571,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error ?? "Could not submit this review.");
-      await loadWorkspace(sessionHash);
+      await loadWorkspace();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not submit this review.");
     } finally {
@@ -573,7 +591,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error ?? "Could not reopen this review.");
-      await loadWorkspace(sessionHash);
+      await loadWorkspace();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not reopen this review.");
     } finally {
@@ -588,7 +606,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
       : saved;
   };
 
-  if (!inviteToken) {
+  if (!inviteToken && !projectId) {
     return (
       <main className="flex min-h-svh w-full flex-1 items-start justify-center px-4 py-10 sm:px-6 sm:py-16">
         <Card className="w-full max-w-lg">
@@ -613,7 +631,14 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
         </p>
       </header>
 
-      {!workspace ? (
+      {!workspace ? assignedReviewer ? (
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle>Opening review</CardTitle>
+            <CardDescription>{error ?? (pending ? "Loading your assigned Review Workspace…" : "This Review Workspace is not available to your account.")}</CardDescription>
+          </CardHeader>
+        </Card>
+      ) : (
         <Card className="max-w-md">
           <CardHeader>
             <CardTitle>Secure access</CardTitle>
@@ -749,14 +774,14 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
             <Card>
               <CardHeader>
                 <CardTitle>{isReadOnly ? "Submitted review" : "Your review"}</CardTitle>
-                <CardDescription>{isReadOnly ? "Your response is locked unless you reopen it while the round is active." : `Reviewing ${activeDocument?.title ?? "document"}.`}</CardDescription>
+                <CardDescription>{isReadOnly ? assignedReviewer ? "Your submitted response is read-only." : "Your response is locked unless you reopen it while the round is active." : `Reviewing ${activeDocument?.title ?? "document"}.`}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {isReadOnly ? (
                   <div className="rounded-md border border-success/30 bg-success/10 p-3 text-sm">
                     <div className="flex items-center gap-2 font-medium"><Lock className="size-4" aria-hidden="true" />Read-only after submit</div>
                     <p className="mt-1 text-muted-foreground">Submitted by {workspace.reviewer.email}</p>
-                    {workspace.round.status === "active" || workspace.round.status === "inviting" ? (
+                    {capabilities.canReopenSubmission && (workspace.round.status === "active" || workspace.round.status === "inviting") ? (
                       <Button type="button" variant="outline" className="mt-3" onClick={reopenReview} disabled={pending}><RotateCcw className="size-4" aria-hidden="true" />Reopen response</Button>
                     ) : null}
                   </div>
@@ -824,10 +849,12 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                             <Input id={`thread-reply-${item.threadId}`} value={threadReplies[item.threadId] ?? ""} onChange={(event) => setThreadReplies((current) => ({ ...current, [item.threadId]: event.target.value }))} placeholder="Continue this discussion" />
                             <Button type="button" variant="outline" onClick={() => postThreadReply(item.threadId)} disabled={pending || !(threadReplies[item.threadId]?.trim())}><Send className="size-4" aria-hidden="true" /><span className="sr-only">Post reply</span></Button>
                           </div>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => setThreadStatus(item.threadId, resolved ? "open" : "resolved")} disabled={pending}>
-                            {resolved ? <RotateCcw className="size-4" aria-hidden="true" /> : <CheckCircle className="size-4" aria-hidden="true" />}
-                            {resolved ? "Reopen comment" : "Resolve comment"}
-                          </Button>
+                          {capabilities.canManageThreads ? (
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setThreadStatus(item.threadId, resolved ? "open" : "resolved")} disabled={pending}>
+                              {resolved ? <RotateCcw className="size-4" aria-hidden="true" /> : <CheckCircle className="size-4" aria-hidden="true" />}
+                              {resolved ? "Reopen comment" : "Resolve comment"}
+                            </Button>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>

@@ -1,9 +1,11 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import {
   ReviewWorkspaceInputError,
   bsmReviewWorkspaceInternalEnabled,
+  getAssignedReviewerWorkspaceFileDownload,
   getGuestReviewWorkspaceFileDownload,
 } from "@/lib/bsm/review-workspace";
 
@@ -31,11 +33,20 @@ export async function GET(request: Request): Promise<Response> {
 
   const url = new URL(request.url);
   const sessionHash = url.searchParams.get("sessionHash") ?? "";
+  const projectId = url.searchParams.get("projectId") ?? "";
   const reviewItemId = url.searchParams.get("reviewItemId") ?? "";
   const versionId = url.searchParams.get("versionId") ?? "";
 
   try {
-    const file = await getGuestReviewWorkspaceFileDownload({ sessionHash, reviewItemId, versionId });
+    let file;
+    if (projectId) {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      file = await getAssignedReviewerWorkspaceFileDownload({ projectId, actorProfileId: user.id, reviewItemId, versionId });
+    } else {
+      file = await getGuestReviewWorkspaceFileDownload({ sessionHash, reviewItemId, versionId });
+    }
     return new Response(file.data, {
       status: 200,
       headers: {

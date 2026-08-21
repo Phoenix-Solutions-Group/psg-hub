@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import {
   ReviewWorkspaceInputError,
   bsmReviewWorkspaceInternalEnabled,
@@ -14,6 +15,13 @@ export async function POST(request: Request): Promise<Response> {
 
   const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!payload) return NextResponse.json({ error: "The request body was not readable." }, { status: 400 });
+
+  if (typeof payload.projectId === "string") {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Assigned reviewers cannot reopen submitted reviews." }, { status: 403 });
+  }
 
   try {
     const result = await reopenGuestReviewRound({

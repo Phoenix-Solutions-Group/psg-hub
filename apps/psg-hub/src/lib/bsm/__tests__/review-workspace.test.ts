@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  addAssignedReviewerAnnotation,
+  addAssignedReviewerThreadReply,
   addGuestReviewAnnotation,
   addGuestThreadReply,
   addStaffReviewAnnotation,
@@ -11,11 +13,13 @@ import {
   createReviewWorkspaceDeletionTombstone,
   createReviewWorkspaceProject,
   enqueueReviewWorkspaceProcessingJob,
+  getAssignedReviewerWorkspace,
   getGuestReviewWorkspace,
   getGuestReviewWorkspaceFileDownload,
   getStaffReviewWorkspaceFileDownload,
   getStaffReviewWorkspaceResult,
   listStaffReviewWorkspaces,
+  requireAssignedReviewerAccess,
   requireGuestReviewSession,
   requireReviewWorkspaceStaffAccess,
   removeReviewWorkspaceProject,
@@ -24,6 +28,7 @@ import {
   setGuestThreadStatus,
   setStaffThreadStatus,
   startReviewWorkspaceRound,
+  submitAssignedReviewerRound,
   submitGuestReviewRound,
   updateReviewWorkspaceProject,
 } from "@/lib/bsm/review-workspace";
@@ -54,6 +59,10 @@ const ANNOTATION_MIGRATION = readFileSync(
 );
 const STAFF_ANNOTATION_MIGRATION = readFileSync(
   join(process.cwd(), "supabase/migrations/20260821192449_bsm_review_workspace_staff_annotations.sql"),
+  "utf8",
+);
+const ASSIGNED_REVIEWER_MIGRATION = readFileSync(
+  join(process.cwd(), "supabase/migrations/20260821200000_bsm_assigned_reviewer_access.sql"),
   "utf8",
 );
 
@@ -153,6 +162,7 @@ function createFakeClient(options: FakeClientOptions = {}) {
 }
 
 type FakeClientOptions = {
+  assignedReviewer?: boolean;
   collaborator?: boolean;
   expiredSession?: boolean;
   emptyVersionMetadata?: boolean;
@@ -176,6 +186,9 @@ type FakeClientOptions = {
   duplicateStaffThreadInsertOnce?: boolean;
   deletedReviewItem?: boolean;
   deletedReviewItemIds?: string[];
+  psgPrivateComment?: boolean;
+  revokedReviewer?: boolean;
+  shopMembership?: boolean;
 };
 
 class Query {
@@ -245,8 +258,7 @@ class Query {
       if (this.filters.limit === 1) {
         return { data: this.options.hasPin === false ? [] : [{ id: "comment-1" }], error: null };
       }
-      return {
-        data: this.options.commentRows ?? [
+      const comments = this.options.commentRows ?? [
           {
             id: "comment-1",
             invitation_id: INVITATION_ID,
@@ -264,8 +276,31 @@ class Query {
             y_ratio: 0.6,
             selection_jsonb: {},
             created_at: "2026-07-28T18:30:00.000Z",
+            visibility: "shop_and_psg",
           },
-        ],
+          ...(this.options.psgPrivateComment ? [{
+            id: "comment-private",
+            review_item_id: REVIEW_ITEM_ID,
+            version_id: VERSION_ID,
+            round_id: ROUND_ID,
+            thread_id: THREAD_ID,
+            author_profile_id: ACTOR_ID,
+            body: "PSG private escalation note",
+            comment_kind: "psg_reply",
+            pin_number: null,
+            draft_status: "submitted",
+            viewport: null,
+            x_ratio: null,
+            y_ratio: null,
+            selection_jsonb: {},
+            created_at: "2026-07-28T18:35:00.000Z",
+            visibility: "psg_private",
+          }] : []),
+        ];
+      return {
+        data: this.filters.visibility
+          ? comments.filter((row) => (row.visibility ?? "shop_and_psg") === this.filters.visibility)
+          : comments,
         error: null,
       };
     }
@@ -284,6 +319,7 @@ class Query {
           processing_status: "ready",
           status: this.options.draftStaffPreview ? "draft" : "in_review",
           section_id: SECTION_ID,
+          admin_context_note: "PSG private delivery note",
         }],
         error: null,
       };
@@ -508,7 +544,13 @@ class Query {
     }
     if (this.table === "bsm_content_review_projects") {
       return Promise.resolve({
-        data: { id: PROJECT_ID, shop_id: SHOP_ID, status: "draft", deleted_at: null },
+        data: {
+          id: PROJECT_ID,
+          shop_id: SHOP_ID,
+          current_round_id: ROUND_ID,
+          status: "active",
+          deleted_at: null,
+        },
         error: null,
       });
     }
@@ -546,6 +588,9 @@ class Query {
       });
     }
     if (this.table === "bsm_content_review_invitations") {
+      if (this.filters.reviewer_profile_id === ACTOR_ID && this.options.assignedReviewer === false) {
+        return Promise.resolve({ data: null, error: null });
+      }
       return Promise.resolve({
         data: {
           id: INVITATION_ID,
@@ -553,14 +598,41 @@ class Query {
           round_id: ROUND_ID,
           shop_id: SHOP_ID,
           reviewer_email: "owner@example.com",
+          reviewer_name: "Shop Owner",
+          reviewer_profile_id: ACTOR_ID,
           status: this.options.submitted ? "submitted" : "sent",
           submitted_at: this.options.submitted ? "2026-07-28T19:00:00.000Z" : null,
           token_hash: "fixture-token-hash",
           code_hash: "fixture-code-hash",
           code_attempt_count: 0,
           expires_at: "2999-01-01T00:00:00.000Z",
-          revoked_at: null,
+          revoked_at: this.options.revokedReviewer ? "2026-07-28T20:00:00.000Z" : null,
         },
+        error: null,
+      });
+    }
+    if (this.table === "bsm_content_review_reviewers") {
+      return Promise.resolve({
+        data: this.options.assignedReviewer === false || this.options.revokedReviewer
+          ? null
+          : {
+              invitation_id: INVITATION_ID,
+              round_id: ROUND_ID,
+              shop_id: SHOP_ID,
+              profile_id: ACTOR_ID,
+              reviewer_email: "owner@example.com",
+              reviewer_name: "Shop Owner",
+              reviewer_role: "reviewer",
+              submission_status: this.options.submitted ? "submitted" : "not_started",
+              submitted_at: this.options.submitted ? "2026-07-28T19:00:00.000Z" : null,
+              removed_at: null,
+            },
+        error: null,
+      });
+    }
+    if (this.table === "shop_users") {
+      return Promise.resolve({
+        data: this.options.shopMembership === false ? null : { shop_id: SHOP_ID },
         error: null,
       });
     }
@@ -947,7 +1019,7 @@ describe("BSM review workspace foundation service", () => {
         projectId: PROJECT_ID,
         actorProfileId: ACTOR_ID,
         actorRole: "psg_superadmin",
-        reviewers: [{ email: "owner@example.com", name: "Shop Owner" }],
+        reviewers: [{ email: "owner@example.com", name: "Shop Owner", profileId: ACTOR_ID }],
       },
       { client: client as never, now: new Date("2026-07-29T18:00:00.000Z") },
     );
@@ -963,6 +1035,11 @@ describe("BSM review workspace foundation service", () => {
     });
     expect(inserts.find((entry) => entry.table === "bsm_content_review_invitations")?.payload).toMatchObject({
       status: "sent",
+      reviewer_email: "owner@example.com",
+      reviewer_profile_id: ACTOR_ID,
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_reviewers")?.payload).toMatchObject({
+      profile_id: ACTOR_ID,
       reviewer_email: "owner@example.com",
     });
     expect(updates.find((entry) => entry.table === "bsm_content_review_projects")?.payload).toMatchObject({
@@ -1063,6 +1140,40 @@ describe("BSM review workspace foundation service", () => {
     );
   });
 
+  it("requires an exact active reviewer assignment and shop membership for authenticated access", async () => {
+    const assigned = createFakeClient();
+    await expect(
+      requireAssignedReviewerAccess(assigned.client as never, PROJECT_ID, ACTOR_ID),
+    ).resolves.toMatchObject({
+      invitationId: INVITATION_ID,
+      projectId: PROJECT_ID,
+      roundId: ROUND_ID,
+      shopId: SHOP_ID,
+      actorProfileId: ACTOR_ID,
+    });
+
+    const membershipOnly = createFakeClient({ assignedReviewer: false });
+    await expect(
+      requireAssignedReviewerAccess(membershipOnly.client as never, PROJECT_ID, ACTOR_ID),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const revoked = createFakeClient({ revokedReviewer: true });
+    await expect(
+      requireAssignedReviewerAccess(revoked.client as never, PROJECT_ID, ACTOR_ID),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const crossShop = createFakeClient({ shopMembership: false });
+    await expect(
+      requireAssignedReviewerAccess(crossShop.client as never, PROJECT_ID, ACTOR_ID),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("removes nullable reviewer wildcards from the authenticated RLS boundary", () => {
+    expect(ASSIGNED_REVIEWER_MIGRATION).toContain("r.profile_id = (select auth.uid())");
+    expect(ASSIGNED_REVIEWER_MIGRATION).toContain("r.removed_at is null");
+    expect(ASSIGNED_REVIEWER_MIGRATION).not.toMatch(/r\.profile_id\s+is\s+null/i);
+  });
+
   it("loads only the active reviewer invitation comments in the guest workspace", async () => {
     const { client } = createFakeClient();
 
@@ -1099,6 +1210,68 @@ describe("BSM review workspace foundation service", () => {
       }),
     ]);
     expect(workspace.reviewer.readOnly).toBe(false);
+    expect(workspace.documents[0].note).toBeNull();
+  });
+
+  it("reuses the safe guest workspace projection for an assigned reviewer", async () => {
+    const { client } = createFakeClient({ uploadedFileProof: true, psgPrivateComment: true });
+
+    const workspace = await getAssignedReviewerWorkspace(PROJECT_ID, ACTOR_ID, { client: client as never });
+
+    expect(workspace.documents[0]).toMatchObject({
+      note: null,
+      proofUrl: `/api/bsm/review-workspace/file?projectId=${PROJECT_ID}&reviewItemId=${REVIEW_ITEM_ID}&versionId=${VERSION_ID}`,
+    });
+    expect(workspace.comments[0]).toMatchObject({ authorRole: "client", authorDisplayName: "Shop Owner" });
+    expect(workspace.comments.map((comment) => comment.body)).not.toContain("PSG private escalation note");
+  });
+
+  it("records assigned reviewer comments and decisions as the logged-in customer", async () => {
+    const annotation = createFakeClient();
+    await addAssignedReviewerAnnotation(
+      {
+        projectId: PROJECT_ID,
+        actorProfileId: ACTOR_ID,
+        reviewItemId: REVIEW_ITEM_ID,
+        versionId: VERSION_ID,
+        body: "Move this headline.",
+        pinNumber: 1,
+        viewport: "desktop",
+        xRatio: 0.4,
+        yRatio: 0.6,
+      },
+      { client: annotation.client as never },
+    );
+    expect(annotation.inserts.find((entry) => entry.table === "bsm_content_review_comments")?.payload).toMatchObject({
+      author_profile_id: ACTOR_ID,
+      reviewer_session_id: null,
+      visibility: "shop_and_psg",
+    });
+
+    const reply = createFakeClient();
+    await addAssignedReviewerThreadReply(
+      { projectId: PROJECT_ID, actorProfileId: ACTOR_ID, threadId: THREAD_ID, body: "One more detail." },
+      { client: reply.client as never },
+    );
+    expect(reply.inserts.find((entry) => entry.table === "bsm_content_review_comments")?.payload).toMatchObject({
+      author_profile_id: ACTOR_ID,
+      comment_kind: "clarification_reply",
+    });
+
+    const submission = createFakeClient({ hasPin: true });
+    await submitAssignedReviewerRound(
+      {
+        projectId: PROJECT_ID,
+        actorProfileId: ACTOR_ID,
+        decisions: [{ reviewItemId: REVIEW_ITEM_ID, versionId: VERSION_ID, decision: "approved", message: null }],
+      },
+      { client: submission.client as never, now: new Date("2026-07-28T20:00:00.000Z") },
+    );
+    expect(submission.inserts.find((entry) => entry.table === "bsm_content_review_decisions")?.payload).toMatchObject({
+      actor_profile_id: ACTOR_ID,
+      actor_role: "customer",
+      invitation_id: INVITATION_ID,
+    });
   });
 
   it("removes deleted documents and their feedback from staff and client views", async () => {

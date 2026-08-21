@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHighlightSegments, normalizedPointerAnchor } from "@/app/review-workspace/reviewer-workspace";
+import { buildHighlightSegments, normalizedPointerAnchor, reviewWorkspaceCapabilities } from "@/app/review-workspace/reviewer-workspace";
 
 describe("reviewer workspace annotations", () => {
   it("renders overlapping highlight ranges without losing text", () => {
@@ -20,6 +20,17 @@ describe("reviewer workspace annotations", () => {
     expect(normalizedPointerAnchor(500, 0, { left: 100, top: 50, width: 200, height: 100 })).toEqual({
       xRatio: 1,
       yRatio: 0,
+    });
+  });
+
+  it("keeps assigned reviewers in comment-and-decision mode without management controls", () => {
+    expect(reviewWorkspaceCapabilities(true)).toEqual({
+      canManageThreads: false,
+      canReopenSubmission: false,
+    });
+    expect(reviewWorkspaceCapabilities(false)).toEqual({
+      canManageThreads: true,
+      canReopenSubmission: true,
     });
   });
 });

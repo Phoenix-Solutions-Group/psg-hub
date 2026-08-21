@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "../route";
 
 const getGuestReviewWorkspaceFileDownload = vi.hoisted(() => vi.fn());
+const getAssignedReviewerWorkspaceFileDownload = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: "33333333-3333-4333-8333-333333333333" } } }) } }),
+}));
 
 vi.mock("@/lib/bsm/review-workspace", async () => {
   const actual = await vi.importActual<typeof import("@/lib/bsm/review-workspace")>(
@@ -10,6 +15,7 @@ vi.mock("@/lib/bsm/review-workspace", async () => {
   return {
     ...actual,
     bsmReviewWorkspaceInternalEnabled: () => true,
+    getAssignedReviewerWorkspaceFileDownload,
     getGuestReviewWorkspaceFileDownload,
   };
 });
@@ -17,6 +23,7 @@ vi.mock("@/lib/bsm/review-workspace", async () => {
 describe("guest review workspace file route", () => {
   beforeEach(() => {
     getGuestReviewWorkspaceFileDownload.mockReset();
+    getAssignedReviewerWorkspaceFileDownload.mockReset();
   });
 
   it("renders HTML review files inline for private reviewer sessions", async () => {
@@ -43,5 +50,26 @@ describe("guest review workspace file route", () => {
     expect(response.headers.get("Content-Security-Policy")).not.toContain("allow-scripts");
     expect(response.headers.get("Content-Security-Policy")).toContain("img-src https:");
     await expect(response.text()).resolves.toContain("<h1>Visual proof</h1>");
+  });
+
+  it("authorizes assigned-reviewer files with the logged-in profile", async () => {
+    getAssignedReviewerWorkspaceFileDownload.mockResolvedValueOnce({
+      data: new Blob(["proof"], { type: "application/pdf" }),
+      originalFilename: "proof.pdf",
+      contentType: "application/pdf",
+      byteSize: 5,
+    });
+
+    const response = await GET(new Request(
+      "https://hub.test/api/bsm/review-workspace/file?projectId=22222222-2222-4222-8222-222222222222&reviewItemId=11111111-1111-4111-8111-111111111111&versionId=22222222-2222-4222-8222-222222222222",
+    ));
+
+    expect(response.status).toBe(200);
+    expect(getAssignedReviewerWorkspaceFileDownload).toHaveBeenCalledWith({
+      projectId: "22222222-2222-4222-8222-222222222222",
+      actorProfileId: "33333333-3333-4333-8333-333333333333",
+      reviewItemId: "11111111-1111-4111-8111-111111111111",
+      versionId: "22222222-2222-4222-8222-222222222222",
+    });
   });
 });

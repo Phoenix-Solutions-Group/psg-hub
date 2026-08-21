@@ -441,6 +441,7 @@ async function seedBsmContentApprovalReview(
 ): Promise<void> {
   const oldVersionId = opts.itemId.replace(/1111$|2222$/, "0001");
   const currentVersionId = opts.itemId.replace(/1111$|2222$/, "0002");
+  const reviewerId = opts.itemId.replace(/1111$|2222$/, "0003");
 
   const { error: itemErr } = await admin.from("bsm_content_review_items").upsert(
     {
@@ -514,13 +515,14 @@ async function seedBsmContentApprovalReview(
 
   const { error: reviewerErr } = await admin.from("bsm_content_review_reviewers").upsert(
     {
+      id: reviewerId,
       review_item_id: opts.itemId,
       shop_id: shopId,
       profile_id: ownerId,
       reviewer_role: "reviewer",
       notification_preference: "email",
     },
-    { onConflict: "review_item_id,profile_id" }
+    { onConflict: "id" }
   );
   if (reviewerErr) throw new Error(`[e2e] BSM content reviewer seed failed: ${reviewerErr.message}`);
 }
