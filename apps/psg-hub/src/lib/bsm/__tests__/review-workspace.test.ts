@@ -162,6 +162,7 @@ type FakeClientOptions = {
   currentRoundNumber?: number;
   itemVersionId?: string;
   commentRows?: Array<Record<string, unknown>>;
+  roundlessStaffThread?: boolean;
 };
 
 class Query {
@@ -510,7 +511,7 @@ class Query {
         data: {
           id: THREAD_ID,
           project_id: PROJECT_ID,
-          round_id: ROUND_ID,
+          round_id: this.options.roundlessStaffThread ? null : ROUND_ID,
           shop_id: SHOP_ID,
           review_item_id: REVIEW_ITEM_ID,
           version_id: VERSION_ID,
@@ -566,6 +567,11 @@ class MutationQuery {
   }
 
   in(column: string, value: unknown[]) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  is(column: string, value: unknown) {
     this.filters[column] = value;
     return this;
   }
@@ -1329,6 +1335,27 @@ describe("BSM review workspace foundation service", () => {
       version_id: VERSION_ID,
       comment_kind: "psg_reply",
       author_profile_id: ACTOR_ID,
+    });
+  });
+
+  it("lets PSG reply to and resolve a pin created before a review round", async () => {
+    const reply = createFakeClient({ roundlessStaffThread: true });
+    const status = createFakeClient({ roundlessStaffThread: true });
+
+    await addStaffThreadReply(
+      { projectId: PROJECT_ID, threadId: THREAD_ID, body: "Draft note follow-up.", actorProfileId: ACTOR_ID },
+      { client: reply.client as never },
+    );
+    await setStaffThreadStatus(
+      { projectId: PROJECT_ID, threadId: THREAD_ID, status: "resolved", actorProfileId: ACTOR_ID },
+      { client: status.client as never },
+    );
+
+    expect(reply.inserts.find((entry) => entry.table === "bsm_content_review_comments")?.payload.round_id).toBeNull();
+    expect(status.updates.find((entry) => entry.table === "bsm_content_review_comment_threads")?.filters).toMatchObject({
+      id: THREAD_ID,
+      project_id: PROJECT_ID,
+      round_id: null,
     });
   });
 

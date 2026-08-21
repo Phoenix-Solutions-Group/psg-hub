@@ -1706,6 +1706,8 @@ async function requireStaffThread(
   if (error) throw new Error(`Could not load review comment thread: ${error.message}`);
   if (!data) throw new ReviewWorkspaceInputError(404, "Review comment thread not found");
 
+  if (!data.round_id) return data as ReviewWorkspaceThreadRow;
+
   const { data: round, error: roundError } = await client
     .from("bsm_content_review_rounds")
     .select("id, status")
@@ -2153,12 +2155,13 @@ async function persistThreadStatus(
   actorRole: "client" | "psg",
   now: Date,
 ) {
-  const { error } = await client
+  let update = client
     .from("bsm_content_review_comment_threads")
     .update({ status, updated_at: now.toISOString() })
     .eq("id", thread.id)
-    .eq("project_id", thread.project_id)
-    .eq("round_id", thread.round_id);
+    .eq("project_id", thread.project_id);
+  update = thread.round_id ? update.eq("round_id", thread.round_id) : update.is("round_id", null);
+  const { error } = await update;
   if (error) throw new Error(`Could not ${status === "resolved" ? "resolve" : "reopen"} review comment thread: ${error.message}`);
 
   await insertEvent(client, {
