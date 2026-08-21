@@ -170,6 +170,10 @@ staging, model approval, scoring, and publication remain separate audited action
 
 - Official KDOT import: 411,208 statewide crash facts from 2019-01-01 through
   2026-08-13; 410,910 ZIP matched and 298 explicitly unmatched.
+- A read-only 2026-08-20 source probe now reports 411,206 KDOT rows for
+  2019–2026 and the same latest crash date, 2026-08-13. The two-row difference
+  from the governed import indicates a source revision, not newer crash
+  coverage. No KDOT production refresh was run.
 - `ksdot_crash_zip_monthly`: 45,048 rows across 725 ZIPs.
 - Pilot customer-ZIP view: 92 months and 134,907 historical portfolio crashes.
 - The existing legacy `crash_zip_annual` table contains Chicago data for 2022-2025
@@ -340,6 +344,9 @@ staging, model approval, scoring, and publication remain separate audited action
    `migration repair`, or `db pull`. Confirm every NCEI/SPC batch is reconciled, every
    mapped shop/horizon has an explainable state, weather coverage equals loaded
    boundary coverage, and browser roles cannot read the service-only views or RPCs.
+   Separately approve and run the idempotent KDOT refresh when its read-only probe
+   differs from the governed source ledger; reconcile the new exact source count,
+   ZIP resolution, and monthly rollups before calling crash data current.
 3. Use `/dashboard/collision-intelligence/review` as a superadmin to review the
    highest-volume insurer aliases and source-shop mappings. First record an
    authoritative physical address in the governed evidence form; mapping approval

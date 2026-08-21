@@ -179,6 +179,48 @@ def source_page(year: int, offset: int, page_size: int) -> list[dict[str, Any]]:
     return [feature["attributes"] for feature in payload.get("features", [])]
 
 
+def probe_summary(
+    start_year: int,
+    end_year: int,
+    counts: dict[int, int],
+    latest: dict[str, Any],
+) -> dict[str, Any]:
+    years = range(start_year, end_year + 1)
+    if set(counts) != set(years):
+        raise ValueError("KDOT probe counts do not cover every requested year")
+    latest_year = integer(latest.get("ACC_YEAR"), start_year, end_year)
+    if latest_year is None:
+        raise ValueError("KDOT probe latest row is outside the requested years")
+    return {
+        "status": "ready",
+        "dataset_key": DATASET_KEY,
+        "source_rows": sum(counts.values()),
+        "min_source_year": start_year,
+        "max_source_year": end_year,
+        "latest_source_date": source_date(latest.get("DATE_OF_ACCIDENT")),
+        "rows_by_year": {str(year): counts[year] for year in years},
+    }
+
+
+def probe_source(start_year: int, end_year: int) -> dict[str, Any]:
+    counts = {year: source_count(year) for year in range(start_year, end_year + 1)}
+    payload = fetch_json(
+        QUERY_URL,
+        {
+            "f": "json",
+            "where": f"ACC_YEAR >= '{start_year}' AND ACC_YEAR <= '{end_year}'",
+            "outFields": "DATE_OF_ACCIDENT,ACC_YEAR",
+            "returnGeometry": "false",
+            "orderByFields": "DATE_OF_ACCIDENT DESC",
+            "resultRecordCount": 1,
+        },
+    )
+    features = payload.get("features", [])
+    if len(features) != 1:
+        raise RuntimeError("KDOT probe did not return one latest source row")
+    return probe_summary(start_year, end_year, counts, features[0]["attributes"])
+
+
 class Supabase:
     def __init__(self, url: str, key: str):
         self.base = f"{url.rstrip('/')}/rest/v1"
@@ -308,6 +350,20 @@ def self_test() -> dict[str, str]:
     assert row["zip_resolution_status"] == "pending"
     assert row["hour"] == 16
     assert integer("99", 0, 23) is None
+    assert probe_summary(
+        2024,
+        2025,
+        {2024: 10, 2025: 12},
+        {"ACC_YEAR": "2025", "DATE_OF_ACCIDENT": 1747630800000},
+    ) == {
+        "status": "ready",
+        "dataset_key": DATASET_KEY,
+        "source_rows": 22,
+        "min_source_year": 2024,
+        "max_source_year": 2025,
+        "latest_source_date": "2025-05-19",
+        "rows_by_year": {"2024": 10, "2025": 12},
+    }
     return {"self_test": "passed"}
 
 
@@ -341,12 +397,14 @@ def resolve_and_rollup(client: Supabase, batch_size: int) -> dict[str, Any]:
 def run(args: argparse.Namespace) -> dict[str, Any]:
     if args.self_test:
         return self_test()
-    if not args.env_file:
-        raise ValueError("--env-file is required unless --self-test is used")
     if args.end_year < args.start_year:
         raise ValueError("--end-year must be on or after --start-year")
     if not 2000 <= args.start_year <= args.end_year <= 2100:
         raise ValueError("Import years must be between 2000 and 2100")
+    if args.probe:
+        return probe_source(args.start_year, args.end_year)
+    if not args.env_file:
+        raise ValueError("--env-file is required unless --probe or --self-test is used")
     if not 1 <= args.page_size <= 25_000:
         raise ValueError("--page-size must be between 1 and 25000")
     if args.batch_size < 1 or args.workers < 1:
@@ -449,6 +507,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--zip-batch-size", type=int, default=5000)
     parser.add_argument("--resume-rollup", action="store_true")
+    parser.add_argument("--probe", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     return parser.parse_args()
 

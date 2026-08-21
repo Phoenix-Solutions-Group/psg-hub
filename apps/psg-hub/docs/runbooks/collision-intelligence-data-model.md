@@ -162,6 +162,22 @@ Every displayed forecast must include:
 
 ## Read-only readiness check
 
+Probe the official KDOT ArcGIS source before opening a Supabase connection:
+
+```bash
+python3 scripts/import-ksdot-crashes.py --probe --start-year 2019
+```
+
+The probe requires no environment file and performs no database write. It reports
+the exact row count for every requested year plus the latest source crash date.
+Compare those values with `ksdot_crash_sources`; a difference means the public
+source was revised and does not by itself prove that newer crash dates exist.
+
+Run the KDOT importer only under separate production data-refresh approval. After
+the import, require exact source/import count reconciliation, complete ZIP-resolution
+status (matched or explicitly unmatched), refreshed monthly rollups, and an updated
+source ledger before treating the crash feed as current.
+
 ```sql
 select
   (select count(*) from public.collision_repair_facts) as repair_facts,
