@@ -129,7 +129,10 @@ PS229 is the recommended first live pilot because its current segment is continu
 its holdout contains more repair arrivals, and its error is materially lower at every
 horizon. The exact-address evidence makes it eligible for human mapping review, not
 automatic mapping. Before staging model evidence, PSG must confirm the target shop,
-establish the intended shop-member audience, and approve the mapping. Mapping, review
+establish the intended shop-member audience, and approve the mapping. A read-only
+2026-08-20 recheck found zero customer-role users on South Lincoln, North Lincoln,
+and their related demo shop, so there is no existing same-client customer audience to
+reuse without an explicit invite or assignment. Mapping, review
 staging, model approval, scoring, and publication remain separate audited actions.
 
 ## Requirement status

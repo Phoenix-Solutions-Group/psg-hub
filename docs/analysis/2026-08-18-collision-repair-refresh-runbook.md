@@ -348,6 +348,39 @@ intentionally unrepaired.
 
 ## Schedule and monitoring
 
+Run the read-only pre-enable checker on the FileMaker host before requesting timer
+activation. It exits nonzero and names every unmet automatic or human gate; it does
+not read secret values or change backups, services, schedules, or databases.
+
+```bash
+sudo python3 /opt/psg/psg-hub/apps/psg-hub/scripts/check-filemaker-refresh-readiness.py \
+  --evidence-file /opt/psg/ops/collision-refresh-evidence.json
+```
+
+The evidence file is an operator-owned JSON object. Record decisions, not credentials:
+
+```json
+{
+  "backup_schedule_decision": "approved change or retained-schedule rationale",
+  "script_error_decision": "reviewed error remediation and outcome evidence",
+  "restore_drill_result": "pass",
+  "restore_drill_at": "2026-08-20T15:00:00-05:00",
+  "failure_owner": "named team or person"
+}
+```
+
+The capacity check passes only when the filesystem is at most 85% used and has at
+least 20 GiB free. The restore drill must be passing and no more than 90 days old.
+Thresholds are command-line calibration knobs; changing them requires an operations
+rationale. A `READY` result is evidence for a separate activation decision, not
+authorization to enable the timer.
+
+A no-install SSH execution at 23:12 CT on August 20 returned `NOT READY`. The disabled
+timer, least-privilege permissions, both current five-file backups, and absence of an
+in-progress backup passed. It reported 5.5 GiB free, the same 55 code-3, 22 code-13,
+and 15 code-101 errors, and missing schedule disposition, restore evidence, and failure
+owner. No server state changed.
+
 - The server's midnight backup and 12:30–1:40 AM FileMaker script window were verified
   on 2026-08-19. The staged systemd timer runs at 4:30 AM America/Chicago with up to
   ten minutes of jitter.

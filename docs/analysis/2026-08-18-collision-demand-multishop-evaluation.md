@@ -59,10 +59,11 @@ lower MAE. Its held-out-shop interval coverage was 80.4%, 83.0%, 83.0%, and
 85.1%, respectively, so all four horizons clear the current review threshold.
 
 The evidence is not staged or approved. `PS229` remains unmapped, and the exact
-South Lincoln Hub shop at 1500 Center Park Road has no customer member. Related
-Tracy's shops do have an existing customer member; User Access now ranks that
-same-client customer first for explicit, audited assignment without granting access
-automatically. PSG staff memberships do not clear the forecast audience gate.
+South Lincoln Hub shop at 1500 Center Park Road has no customer member. A read-only
+2026-08-20 recheck found zero customer-role members across South Lincoln, North
+Lincoln, and the related demo shop. PSG must therefore invite the intended customer
+or explicitly assign an existing customer; PSG staff memberships do not clear the
+forecast audience gate.
 
 Trailing-4 beats seasonal at all four aggregate horizons. For PS177 specifically,
 trailing-4 remains the shop champion for horizons 1–3; the seasonal/recent blend is
