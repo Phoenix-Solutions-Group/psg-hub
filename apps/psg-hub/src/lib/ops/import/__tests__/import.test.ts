@@ -18,6 +18,7 @@ import {
 import { suggestMapping, applyMapping, missingRequiredMappings } from "@/lib/ops/import/template";
 import { validateRecords } from "@/lib/ops/import/validate";
 import { previewImport, toCommitRecord } from "@/lib/ops/import";
+import { evaluateImportSuppression } from "@/lib/ops/import/suppression";
 
 describe("address normalization", () => {
   it("resolves full state names and codes", () => {
@@ -364,5 +365,160 @@ describe("previewImport + toCommitRecord", () => {
     const rec = toCommitRecord("ro", res.validation.rows[0]);
     expect(rec.ro?.repair_amount_cents).toBe(187525);
     expect(rec.ro?.pay_type).toBe("customer");
+  });
+});
+
+describe("FileMaker-parity import suppression", () => {
+  it("makes duplicate and do-not-mail rows explicit in a prepared review import", () => {
+    const summary = validateRecords(
+      "ro",
+      {
+        ro_number: "RO Number",
+        customer_last_name: "Last Name",
+        job_classification: "Job Classification",
+      },
+      [
+        { ro_number: "BOARD-1001", customer_last_name: "Example", job_classification: "Customer Repair" },
+        { ro_number: "BOARD-1001", customer_last_name: "Duplicate", job_classification: "Customer Repair" },
+        { ro_number: "BOARD-1004", customer_last_name: "Optout", job_classification: "Do Not Mail" },
+      ],
+    );
+
+    expect(summary.valid).toBe(1);
+    expect(summary.suppressed).toBe(2);
+    expect(summary.rows[1].suppression?.reasons[0]).toMatchObject({ reason: "duplicate_in_file" });
+    expect(summary.rows[2].suppression?.reasons[0]).toMatchObject({
+      reason: "job_classification",
+      message: "Do-not-mail preference suppresses this row",
+    });
+  });
+
+  it("maps insurer and job-classification columns used by exclusion rules", () => {
+    const headers = [
+      "RC_RONumber",
+      "RC_Cust_Last",
+      "RC_Insurance_Company",
+      "RC_Job_Class",
+      "RC_Vehicle_Make",
+      "RC_Vehicle_Model",
+    ];
+    const mapping = suggestMapping("ro", headers);
+    expect(mapping.insurance_company).toBe("RC_Insurance_Company");
+    expect(mapping.job_classification).toBe("RC_Job_Class");
+    expect(mapping.vehicle_make).toBe("RC_Vehicle_Make");
+    expect(mapping.vehicle_model).toBe("RC_Vehicle_Model");
+  });
+
+  it("suppresses FileMaker-style non-actionable rows with explicit reasons", () => {
+    const summary = validateRecords(
+      "ro",
+      {
+        ro_number: "RO #",
+        customer_last_name: "Last",
+        total_loss_flag: "Total Loss",
+        repair_amount: "Total",
+        pay_type: "Pay Type",
+        job_classification: "Job Class",
+        insurance_company: "Carrier",
+        vehicle_make: "Make",
+      },
+      [
+        {
+          ro_number: "1001",
+          customer_last_name: "Doe",
+          total_loss_flag: "Y",
+          repair_amount: "0",
+          pay_type: "Warranty",
+          job_classification: "Due Bill",
+          insurance_company: "Carrier Mutual",
+          vehicle_make: "Tesla",
+        },
+      ],
+      {
+        excludedInsurers: ["Carrier Mutual"],
+        excludedVehicleMakes: ["Tesla"],
+      },
+    );
+
+    expect(summary.valid).toBe(0);
+    expect(summary.invalid).toBe(0);
+    expect(summary.suppressed).toBe(1);
+    expect(summary.rows[0].suppression!.reasons.map((r) => r.reason)).toEqual(
+      expect.arrayContaining([
+        "total_loss",
+        "zero_or_negative_repair_total",
+        "non_actionable_pay_type",
+        "job_classification",
+        "insurer_exclusion",
+        "vehicle_make_exclusion",
+      ]),
+    );
+  });
+
+  it("keeps a valid FileMaker example row eligible for commit", () => {
+    const summary = validateRecords(
+      "ro",
+      {
+        ro_number: "RO #",
+        customer_last_name: "Last",
+        repair_amount: "Total",
+        pay_type: "Pay Type",
+        insurance_company: "Carrier",
+      },
+      [
+        {
+          ro_number: "FM-1002",
+          customer_last_name: "Lopez",
+          repair_amount: "1425.00",
+          pay_type: "Insurance",
+          insurance_company: "Carrier Mutual",
+        },
+      ],
+      { excludedInsurers: ["Other Carrier"] },
+    );
+
+    expect(summary.valid).toBe(1);
+    expect(summary.suppressed).toBe(0);
+    expect(summary.rows[0].suppression!.reasons).toEqual([]);
+    expect(toCommitRecord("ro", summary.rows[0]).ro?.ro_number).toBe("FM-1002");
+  });
+
+  it("supports shop-specific field rules without code changes", () => {
+    const summary = validateRecords(
+      "ro",
+      { ro_number: "RO #", customer_last_name: "Last", vehicle_model: "Model" },
+      [{ ro_number: "2004", customer_last_name: "Roe", vehicle_model: "Cybertruck Foundation" }],
+      {
+        fieldRules: [
+          {
+            id: "rule-model",
+            field: "vehicle_model",
+            operator: "contains",
+            values: ["cybertruck"],
+            reason: "vehicle_model_exclusion",
+            message: "Shop excludes this vehicle model",
+          },
+        ],
+      },
+    );
+
+    expect(summary.suppressed).toBe(1);
+    expect(summary.rows[0].suppression!.reasons[0]).toMatchObject({
+      reason: "vehicle_model_exclusion",
+      ruleId: "rule-model",
+    });
+  });
+
+  it("flags malformed repair order numbers as suppressed instead of importing them", () => {
+    const summary = validateRecords(
+      "ro",
+      { ro_number: "RO #", customer_last_name: "Last" },
+      [{ ro_number: "NOT A REAL RO", customer_last_name: "Doe" }],
+    );
+
+    expect(evaluateImportSuppression("ro", summary.rows[0]).map((r) => r.reason)).toContain(
+      "malformed_ro_number",
+    );
+    expect(summary.suppressed).toBe(1);
   });
 });

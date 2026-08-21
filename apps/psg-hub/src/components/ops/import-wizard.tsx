@@ -20,13 +20,17 @@ type ValidatedRow = {
   values: Record<string, string | number | boolean | null>;
   errors: string[];
   warnings: string[];
+  suppression?: {
+    suppressed: boolean;
+    reasons: Array<{ reason: string; message: string }>;
+  };
 };
 
 type Preview = {
   table: { format: string; headers: string[]; rowCount: number };
   mapping: Record<string, string>;
   suggested: Record<string, string>;
-  validation: { kind: ImportKind; total: number; valid: number; invalid: number; rows: ValidatedRow[]; unmappedRequired: string[] };
+  validation: { kind: ImportKind; total: number; valid: number; invalid: number; suppressed: number; rows: ValidatedRow[]; unmappedRequired: string[] };
 };
 
 type CommitResult = {
@@ -74,8 +78,9 @@ export function ImportWizard({
     void loadTemplates(kind);
   }, [kind, loadTemplates]);
 
-  async function runValidate(useMapping?: Record<string, string>) {
-    if (!file) {
+  async function runValidate(useMapping?: Record<string, string>, selectedFile?: File) {
+    const importFile = selectedFile ?? file;
+    if (!importFile) {
       setError("Choose a file first.");
       return;
     }
@@ -84,8 +89,9 @@ export function ImportWizard({
     setCommit(null);
     try {
       const fd = new FormData();
-      fd.set("file", file);
+      fd.set("file", importFile);
       fd.set("kind", kind);
+      fd.set("company_id", companyId);
       if (useMapping) fd.set("mapping", JSON.stringify(useMapping));
       else if (templateId) fd.set("template_id", templateId);
       const res = await fetch("/api/ops/import/validate", { method: "POST", body: fd });
@@ -96,6 +102,28 @@ export function ImportWizard({
       setMapping(p.mapping);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Validate failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadPreparedReviewImport() {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch("/review-data/PSG_CONTROLLED_MAILING_REVIEW.csv");
+      if (!response.ok) throw new Error("The prepared review import could not be loaded.");
+      const reviewFile = new File(
+        [await response.blob()],
+        "PSG_CONTROLLED_MAILING_REVIEW.csv",
+        { type: "text/csv" },
+      );
+      setKind("ro");
+      setFile(reviewFile);
+      setTemplateId("");
+      await runValidate(undefined, reviewFile);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The prepared review import could not be loaded.");
     } finally {
       setBusy(false);
     }
@@ -155,6 +183,29 @@ export function ImportWizard({
 
   return (
     <div className="space-y-6">
+      <section className="space-y-3 rounded-lg border border-primary/40 bg-primary/5 p-4">
+        <h2 className="font-heading text-base font-semibold">Prepared board review import</h2>
+        <p className="text-sm">
+          <strong>PSG_CONTROLLED_MAILING_REVIEW.csv</strong> contains safe, fictional demo
+          records that show an invalid row, a duplicate, and a do-not-mail suppression.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Loading it only creates an on-screen preview. It cannot send mail, place a vendor
+          order, or spend money. Do not select Commit during this review.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <Button type="button" disabled={busy} onClick={loadPreparedReviewImport}>
+            {busy ? "Loading…" : "Load prepared review import"}
+          </Button>
+          <a
+            className="inline-flex items-center text-sm font-medium text-primary underline"
+            href="/review-data/PSG_CONTROLLED_MAILING_REVIEW.csv"
+            download
+          >
+            Download the prepared file
+          </a>
+        </div>
+      </section>
       {/* Step 1 — kind + file */}
       <section className="space-y-3 rounded-lg border border-border p-4">
         <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -281,7 +332,7 @@ export function ImportWizard({
               {preview.validation.valid === 1 ? "" : "s"}
             </Button>
             <span className="text-sm text-muted-foreground">
-              {preview.validation.valid} valid · {preview.validation.invalid} with errors · {preview.table.rowCount} total
+              {preview.validation.valid} valid · {preview.validation.invalid} rejected · {preview.validation.suppressed} suppressed · {preview.table.rowCount} total
             </span>
           </div>
         </section>
@@ -337,6 +388,10 @@ function PreviewTable({ preview }: { preview: Preview }) {
                 {r.errors.length ? (
                   <span className="text-ember" title={r.errors.join("; ")}>
                     ✗ {r.errors[0]}
+                  </span>
+                ) : r.suppression?.suppressed ? (
+                  <span className="text-amber-700" title={r.suppression.reasons.map((reason) => reason.message).join("; ")}>
+                    ⊘ {r.suppression.reasons[0]?.message ?? "Suppressed"}
                   </span>
                 ) : r.warnings.length ? (
                   <span className="text-amber-600" title={r.warnings.join("; ")}>

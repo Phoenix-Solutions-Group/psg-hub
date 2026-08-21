@@ -125,6 +125,11 @@ export async function ingestFmTable(args: IngestTableArgs): Promise<IngestStats>
       stats.failed++;
       continue;
     }
+    if (validatedRow.suppression?.suppressed) {
+      // Landed raw (replayable) but excluded from canonical reports/mailings.
+      stats.skipped++;
+      continue;
+    }
 
     const record = toCommitRecord(kind, validatedRow);
     const businessKey = businessKeyOf(entity, record);

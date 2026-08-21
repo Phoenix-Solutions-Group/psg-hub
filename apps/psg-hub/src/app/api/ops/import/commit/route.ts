@@ -16,9 +16,58 @@ import {
   UnsupportedSpreadsheetError,
   type FieldMapping,
   type ImportKind,
+  type ImportSuppressionConfig,
+  type ImportSuppressionHit,
+  type ImportSuppressionRule,
 } from "@/lib/ops/import";
 
 const MAX_BYTES = 15 * 1024 * 1024;
+
+async function loadSuppressionConfig(args: {
+  companyId: string;
+  kind: ImportKind;
+}): Promise<ImportSuppressionConfig> {
+  const service = createServiceClient();
+  const { data, error } = await service
+    .from("import_suppression_rules")
+    .select("id, reason, field, operator, values, message")
+    .eq("company_id", args.companyId)
+    .eq("enabled", true)
+    .or(`kind.is.null,kind.eq.${args.kind}`);
+  if (error) return {};
+  return {
+    fieldRules: (data ?? []).map((row) => ({
+      id: row.id,
+      reason: row.reason,
+      field: row.field,
+      operator: row.operator,
+      values: row.values,
+      message: row.message ?? undefined,
+    })) as ImportSuppressionRule[],
+  };
+}
+
+function businessKey(kind: ImportKind, values: Record<string, string | number | boolean | null>): string | null {
+  const value = kind === "ro" ? values.ro_number : values.estimate_number;
+  return value == null ? null : String(value);
+}
+
+async function logSuppressedRow(args: {
+  companyId: string;
+  kind: ImportKind;
+  rowIndex: number;
+  businessKey: string | null;
+  reasons: ImportSuppressionHit[];
+}) {
+  const service = createServiceClient();
+  await service.from("import_row_exclusions").insert({
+    company_id: args.companyId,
+    kind: args.kind,
+    row_index: args.rowIndex,
+    business_key: args.businessKey,
+    reasons_jsonb: args.reasons,
+  });
+}
 
 export async function POST(request: NextRequest) {
   const gate = await requireOpsFn("manage_companies");
@@ -82,7 +131,8 @@ export async function POST(request: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer());
   let validation;
   try {
-    ({ validation } = await previewImport({ kind, filename: file.name, buffer, mapping }));
+    const suppression = await loadSuppressionConfig({ companyId, kind });
+    ({ validation } = await previewImport({ kind, filename: file.name, buffer, mapping, suppression }));
   } catch (err) {
     if (err instanceof UnsupportedSpreadsheetError) {
       return NextResponse.json({ error: err.message }, { status: 422 });
@@ -101,11 +151,29 @@ export async function POST(request: NextRequest) {
   const numberCol = kind === "ro" ? "ro_number" : "estimate_number";
   const targetTable = kind === "ro" ? "repair_orders" : "estimates";
 
-  const result = { inserted: 0, skipped: 0, failedRows: [] as Array<{ index: number; error: string }> };
+  const result = {
+    inserted: 0,
+    skipped: 0,
+    suppressed: 0,
+    failedRows: [] as Array<{ index: number; error: string }>,
+    suppressedRows: [] as Array<{ index: number; reasons: ImportSuppressionHit[] }>,
+  };
 
   for (const row of validation.rows) {
     if (row.errors.length > 0) {
       result.failedRows.push({ index: row.index, error: row.errors[0] });
+      continue;
+    }
+    if (row.suppression?.suppressed) {
+      result.suppressed++;
+      result.suppressedRows.push({ index: row.index, reasons: row.suppression.reasons });
+      await logSuppressedRow({
+        companyId,
+        kind,
+        rowIndex: row.index,
+        businessKey: businessKey(kind, row.values),
+        reasons: row.suppression.reasons,
+      });
       continue;
     }
     const rec = toCommitRecord(kind, row);

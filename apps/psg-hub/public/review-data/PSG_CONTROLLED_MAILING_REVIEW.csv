@@ -1,0 +1,5 @@
+RO Number,Last Name,First Name,Address,City,State,ZIP,Repair Amount,Pay Type,Job Classification
+BOARD-1001,Example,Avery,100 Demo Way,Phoenix,AZ,85001,2450.00,Insurance,Customer Repair
+BOARD-INVALID,,Blake,200 Demo Way,Phoenix,AZ,85002,1800.00,Insurance,Customer Repair
+BOARD-1001,Duplicate,Casey,300 Demo Way,Phoenix,AZ,85003,2100.00,Insurance,Customer Repair
+BOARD-1004,Optout,Drew,400 Demo Way,Phoenix,AZ,85004,1950.00,Customer,Do Not Mail

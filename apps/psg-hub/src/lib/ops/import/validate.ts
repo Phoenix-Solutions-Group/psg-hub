@@ -3,9 +3,11 @@
 import { fieldsFor } from "./fields";
 import { normalizePhone, resolveAddress } from "./address";
 import { missingRequiredMappings } from "./template";
+import { evaluateImportSuppression } from "./suppression";
 import type {
   FieldMapping,
   ImportKind,
+  ImportSuppressionConfig,
   ValidatedRow,
   ValidationSummary,
 } from "./types";
@@ -133,22 +135,45 @@ function validateRow(
     errors.push(`ZIP is malformed: "${zipVal}"`);
   }
 
-  return { index, values, errors, warnings };
+  return { index, values, errors, warnings, suppression: { suppressed: false, reasons: [] } };
 }
 
 export function validateRecords(
   kind: ImportKind,
   mapping: FieldMapping,
   records: Array<Record<string, string>>,
+  suppressionConfig: ImportSuppressionConfig = {},
 ): ValidationSummary {
   const unmappedRequired = missingRequiredMappings(kind, mapping);
-  const rows = records.map((r, i) => validateRow(kind, i + 1, r));
-  const valid = rows.filter((r) => r.errors.length === 0).length;
+  const seenBusinessKeys = new Set<string>();
+  const rows = records.map((r, i) => {
+    const row = validateRow(kind, i + 1, r);
+    const reasons = evaluateImportSuppression(kind, row, suppressionConfig);
+    const businessKey = String(
+      row.values[kind === "ro" ? "ro_number" : "estimate_number"] ?? "",
+    )
+      .trim()
+      .toLowerCase();
+    if (businessKey && seenBusinessKeys.has(businessKey)) {
+      reasons.push({
+        reason: "duplicate_in_file",
+        message: "Duplicate record in this import is suppressed",
+        field: kind === "ro" ? "ro_number" : "estimate_number",
+        value: businessKey,
+      });
+    }
+    if (businessKey) seenBusinessKeys.add(businessKey);
+    row.suppression = { suppressed: reasons.length > 0, reasons };
+    return row;
+  });
+  const valid = rows.filter((r) => r.errors.length === 0 && !r.suppression?.suppressed).length;
+  const suppressed = rows.filter((r) => r.suppression?.suppressed).length;
   return {
     kind,
     total: rows.length,
     valid,
-    invalid: rows.length - valid,
+    invalid: rows.filter((r) => r.errors.length > 0).length,
+    suppressed,
     rows,
     unmappedRequired,
   };

@@ -15,9 +15,36 @@ import {
   UnsupportedSpreadsheetError,
   type FieldMapping,
   type ImportKind,
+  type ImportSuppressionConfig,
+  type ImportSuppressionRule,
 } from "@/lib/ops/import";
 
 const MAX_BYTES = 15 * 1024 * 1024; // 15 MB upload ceiling.
+
+async function loadSuppressionConfig(args: {
+  companyId: string | null;
+  kind: ImportKind;
+}): Promise<ImportSuppressionConfig> {
+  if (!args.companyId) return {};
+  const service = createServiceClient();
+  const { data, error } = await service
+    .from("import_suppression_rules")
+    .select("id, reason, field, operator, values, message")
+    .eq("company_id", args.companyId)
+    .eq("enabled", true)
+    .or(`kind.is.null,kind.eq.${args.kind}`);
+  if (error) return {};
+  return {
+    fieldRules: (data ?? []).map((row) => ({
+      id: row.id,
+      reason: row.reason,
+      field: row.field,
+      operator: row.operator,
+      values: row.values,
+      message: row.message ?? undefined,
+    })) as ImportSuppressionRule[],
+  };
+}
 
 export async function POST(request: NextRequest) {
   const gate = await requireOpsFn("manage_companies");
@@ -36,6 +63,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "kind must be 'ro' or 'estimate'" }, { status: 400 });
   }
   const kind = kindRaw as ImportKind;
+  const companyIdRaw = form.get("company_id");
+  const companyId = typeof companyIdRaw === "string" && companyIdRaw.trim() ? companyIdRaw.trim() : null;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "file is required" }, { status: 400 });
@@ -69,7 +98,8 @@ export async function POST(request: NextRequest) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
   try {
-    const result = await previewImport({ kind, filename: file.name, buffer, mapping });
+    const suppression = await loadSuppressionConfig({ companyId, kind });
+    const result = await previewImport({ kind, filename: file.name, buffer, mapping, suppression });
     // Surface a suggested mapping too, so the wizard can offer "auto-fill".
     const suggested = suggestMapping(kind, result.table.headers);
     return NextResponse.json({ ...result, suggested });

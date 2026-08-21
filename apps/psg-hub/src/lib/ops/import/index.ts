@@ -19,6 +19,7 @@ import { applyMapping, suggestMapping } from "./template";
 import { validateRecords } from "./validate";
 import type {
   FieldMapping,
+  ImportSuppressionConfig,
   ImportKind,
   RawTable,
   ValidatedRow,
@@ -37,6 +38,7 @@ export {
   NonTabularSpreadsheetError,
 } from "./parse";
 export { validateRecords } from "./validate";
+export { evaluateImportSuppression } from "./suppression";
 export {
   resolveAddress,
   normalizeState,
@@ -79,11 +81,12 @@ export async function previewImport(args: {
   filename: string;
   buffer: Buffer;
   mapping?: FieldMapping;
+  suppression?: ImportSuppressionConfig;
 }): Promise<PreviewResult> {
   const table = await parseImportTable(args.kind, args.filename, args.buffer);
   const mapping = args.mapping ?? suggestMapping(args.kind, table.headers);
   const records = applyMapping(table, mapping);
-  const validation = validateRecords(args.kind, mapping, records);
+  const validation = validateRecords(args.kind, mapping, records, args.suppression);
   return {
     table: { format: table.format, headers: table.headers, rowCount: table.rows.length },
     mapping,

@@ -58,6 +58,50 @@ export type FieldDef = {
   hint?: string;
 };
 
+export type ImportSuppressionReason =
+  | "missing_required_value"
+  | "zero_or_negative_repair_total"
+  | "total_loss"
+  | "job_classification"
+  | "malformed_ro_number"
+  | "insurance_pay_type_conflict"
+  | "insurer_exclusion"
+  | "vehicle_make_exclusion"
+  | "vehicle_model_exclusion"
+  | "duplicate_in_file"
+  | "shop_field_exclusion"
+  | "non_actionable_pay_type";
+
+export type ImportSuppressionHit = {
+  reason: ImportSuppressionReason;
+  message: string;
+  field?: string;
+  value?: string | number | boolean | null;
+  ruleId?: string;
+};
+
+export type ImportSuppressionRule = {
+  id?: string;
+  reason?: ImportSuppressionReason;
+  field: string;
+  operator?: "equals" | "contains" | "starts_with" | "ends_with" | "regex";
+  values: string[];
+  message?: string;
+};
+
+export type ImportSuppressionConfig = {
+  enabled?: boolean;
+  suppressTotalLoss?: boolean;
+  suppressZeroOrNegativeRepairAmount?: boolean;
+  suppressMalformedRoNumber?: boolean;
+  nonActionablePayTypes?: string[];
+  excludedInsurers?: string[];
+  excludedVehicleMakes?: string[];
+  excludedVehicleModels?: string[];
+  excludedJobClassifications?: string[];
+  fieldRules?: ImportSuppressionRule[];
+};
+
 /** A single normalized + validated import row, ready for preview/commit. */
 export type ValidatedRow = {
   /** 1-based source row index (excludes the header row). */
@@ -68,6 +112,11 @@ export type ValidatedRow = {
   errors: string[];
   /** Non-blocking notes (e.g. an address that was auto-corrected). */
   warnings: string[];
+  /** Import exclusions that prevent this row from affecting reports/mailings. */
+  suppression?: {
+    suppressed: boolean;
+    reasons: ImportSuppressionHit[];
+  };
 };
 
 export type ValidationSummary = {
@@ -75,6 +124,7 @@ export type ValidationSummary = {
   total: number;
   valid: number;
   invalid: number;
+  suppressed: number;
   rows: ValidatedRow[];
   /** Canonical fields with no source column mapped. */
   unmappedRequired: string[];
