@@ -124,6 +124,7 @@ export function reviewWorkspaceCapabilities(assignedReviewer: boolean) {
   return {
     canManageThreads: !assignedReviewer,
     canReopenSubmission: !assignedReviewer,
+    canSubmitDecisions: !assignedReviewer,
   };
 }
 
@@ -662,7 +663,7 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
             <Card>
               <CardHeader>
                 <CardTitle>Documents</CardTitle>
-                <CardDescription>Review one document at a time. Every document needs its own decision.</CardDescription>
+                <CardDescription>{assignedReviewer ? "Review one document at a time and leave comments for PSG." : "Review one document at a time. Every document needs its own decision."}</CardDescription>
               </CardHeader>
               <CardContent>
                 <nav aria-label="Review documents" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -683,7 +684,7 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
                       >
                         <span className={cn("text-xs", selected ? "text-primary-foreground/80" : "text-muted-foreground")}>Document {index + 1}</span>
                         <span className="mt-1 block font-medium">{document.title}</span>
-                        <span className={cn("mt-2 block text-xs capitalize", selected ? "text-primary-foreground/80" : "text-muted-foreground")}>{documentDecision?.replaceAll("_", " ") ?? "Decision needed"}</span>
+                        <span className={cn("mt-2 block text-xs capitalize", selected ? "text-primary-foreground/80" : "text-muted-foreground")}>{assignedReviewer ? "Comment-only review" : documentDecision?.replaceAll("_", " ") ?? "Decision needed"}</span>
                       </button>
                     );
                   })}
@@ -787,11 +788,13 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
                   </div>
                 ) : (
                   <>
-                    <fieldset className="space-y-2">
-                      <legend className="font-heading text-sm font-medium">Decision for this document</legend>
-                      <label className="flex items-center gap-2 text-sm"><input type="radio" name={`decision-${activeKey}`} checked={activeDecision === "approved"} onChange={() => setDecisions((current) => ({ ...current, [activeKey]: "approved" }))} />Approve</label>
-                      <label className="flex items-center gap-2 text-sm"><input type="radio" name={`decision-${activeKey}`} checked={activeDecision === "changes_requested"} onChange={() => setDecisions((current) => ({ ...current, [activeKey]: "changes_requested" }))} />Request changes</label>
-                    </fieldset>
+                    {capabilities.canSubmitDecisions ? (
+                      <fieldset className="space-y-2">
+                        <legend className="font-heading text-sm font-medium">Decision for this document</legend>
+                        <label className="flex items-center gap-2 text-sm"><input type="radio" name={`decision-${activeKey}`} checked={activeDecision === "approved"} onChange={() => setDecisions((current) => ({ ...current, [activeKey]: "approved" }))} />Approve</label>
+                        <label className="flex items-center gap-2 text-sm"><input type="radio" name={`decision-${activeKey}`} checked={activeDecision === "changes_requested"} onChange={() => setDecisions((current) => ({ ...current, [activeKey]: "changes_requested" }))} />Request changes</label>
+                      </fieldset>
+                    ) : null}
 
                     <div className="space-y-2 border-t border-border pt-4">
                       <Label>Anchor a private comment</Label>
@@ -810,11 +813,15 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
                     </div>
                     <Button type="button" variant="outline" onClick={saveComment} disabled={pending || !activeDocument || !pendingAnchor || !comment.trim()}><MapPin className="size-4" aria-hidden="true" />Save private comment</Button>
 
-                    <div className="space-y-2 border-t border-border pt-4">
-                      <Label htmlFor="decision-note">Decision note for this document</Label>
-                      <textarea id="decision-note" value={activeDecisionNote} onChange={(event) => setDecisionNotes((current) => ({ ...current, [activeKey]: event.target.value }))} placeholder="Optional summary for PSG." className="min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
-                    </div>
-                    <Button type="button" onClick={submitReview} disabled={pending || workspace.documents.length === 0}><Send className="size-4" aria-hidden="true" />Submit completed review</Button>
+                    {capabilities.canSubmitDecisions ? (
+                      <>
+                        <div className="space-y-2 border-t border-border pt-4">
+                          <Label htmlFor="decision-note">Decision note for this document</Label>
+                          <textarea id="decision-note" value={activeDecisionNote} onChange={(event) => setDecisionNotes((current) => ({ ...current, [activeKey]: event.target.value }))} placeholder="Optional summary for PSG." className="min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
+                        </div>
+                        <Button type="button" onClick={submitReview} disabled={pending || workspace.documents.length === 0}><Send className="size-4" aria-hidden="true" />Submit completed review</Button>
+                      </>
+                    ) : null}
                   </>
                 )}
                 {error ? <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive">{error}</p> : null}
