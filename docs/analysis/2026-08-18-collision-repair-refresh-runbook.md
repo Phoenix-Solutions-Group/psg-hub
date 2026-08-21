@@ -396,6 +396,15 @@ remained scheduled for midnight. Event.log records `Schedule "Backup" disabled b
 the existing FileMaker administrator alert path is active. Capacity remains blocked
 at 93% used with 5.5 GiB free, and the refresh timer remains disabled.
 
+A subsequent read-only capacity audit found four retained folders totaling 38 GB:
+three midnight `FMS` folders and the disabled schedule's 9.4 GB
+`Backup_2026-08-20_0300` folder. Its Advantage and Survey files each have link count
+one, so the disabled folder contains materially reclaimable blocks rather than only
+hard links to the midnight set. The safest recovery sequence is to copy that one
+folder to `/mnt/HC_Volume_105029819`, reconcile file count, byte count, and SHA-256,
+then remove the source folder only under explicit approval. No file was moved or
+deleted during this audit.
+
 - The server's midnight backup and 12:30–1:40 AM FileMaker script window were verified
   on 2026-08-19. The staged systemd timer runs at 4:30 AM America/Chicago with up to
   ten minutes of jitter.
@@ -407,8 +416,8 @@ at 93% used with 5.5 GiB free, and the refresh timer remains disabled.
   run but does not itself reclaim space.
 - A separate persistent ext4 volume at `/mnt/HC_Volume_105029819` has about 75 GB free.
   The duplicate schedule is now disabled. Do not delete healthy midnight backups to
-  make room; recover capacity through an approved FileMaker retention plan and prove a
-  backup and restore.
+  make room; archive and verify only the disabled schedule's retained folder before
+  removing its source, then prove a midnight backup and restore.
 - Install `apps/psg-hub/ops/systemd/psg-collision-refresh.{service,timer}` under
   `/etc/systemd/system/`. Keep the timer disabled until the first manual service run
   passes every acceptance check, the shared-root capacity risk and nightly scripting

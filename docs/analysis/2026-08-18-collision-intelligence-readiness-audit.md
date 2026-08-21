@@ -35,6 +35,10 @@
   backup folders were deleted. The user confirmed the existing FileMaker admin alert
   path is active. Capacity, restore proof, and script outcomes still gate the disabled
   collision refresh timer.
+- The disabled schedule's retained August 20 folder is 9.4 GB. Its two large hosted
+  database files have link count one, so archiving that folder to the 75-GB-free
+  mounted volume, reconciling it, and only then removing the source is the scoped
+  capacity remedy awaiting approval. The three midnight folders remain untouched.
 - The superadmin Data Review page supports explicit source-shop mapping approval
   with target selection, written identity evidence, confirmation, and an atomic audit
   entry. This branch also adds repair freshness, storm-ledger reconciliation, KDOT
