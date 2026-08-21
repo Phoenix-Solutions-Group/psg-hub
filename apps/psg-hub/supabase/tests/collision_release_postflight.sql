@@ -161,6 +161,34 @@ with required_migrations(name) as (
   from required_functions required
   left join pg_catalog.pg_proc function
     on function.oid = pg_catalog.to_regprocedure(required.signature)
+), function_contract_checks as (
+  select
+    'function_contract'::text as check_type,
+    required.check_name,
+    coalesce(
+      pg_catalog.strpos(
+        pg_catalog.pg_get_functiondef(function.oid),
+        'join public.app_user_roles role'
+      ) > 0
+      and pg_catalog.strpos(
+        pg_catalog.pg_get_functiondef(function.oid),
+        'role.role = ''customer'''
+      ) > 0,
+      false
+    ) as passed
+  from (
+    values
+      (
+        'public.stage_collision_forecast_model_review(text,text,jsonb,uuid,text)',
+        'stage_model_review_requires_customer_role'
+      ),
+      (
+        'public.review_collision_forecast_models(uuid,text,uuid,text)',
+        'model_approval_requires_customer_role'
+      )
+  ) required(signature, check_name)
+  left join pg_catalog.pg_proc function
+    on function.oid = pg_catalog.to_regprocedure(required.signature)
 ), index_checks as (
   select
     'index'::text as check_type,
@@ -305,6 +333,7 @@ with required_migrations(name) as (
   union all select * from relation_checks
   union all select * from sequence_checks
   union all select * from function_checks
+  union all select * from function_contract_checks
   union all select * from index_checks
   union all select * from privilege_checks
   union all select * from trigger_checks

@@ -97,6 +97,12 @@
   existing audited User Access workflow with the exact Hub shop preselected for both
   invitations and existing-user assignments. The workflow does not guess the intended
   customer or create a membership automatically.
+- Forecast staging and approval now join `app_user_roles` directly and require the
+  assigned shop member's authoritative global role to be `customer`. This closes the
+  partial-release window in which a PSG staff membership could satisfy the RPC before
+  the later audience triggers landed. A rollback-only runtime check proved staff-only
+  staging and approval fail without mutation, while a real customer membership enables
+  all four review horizons and approval. Production remains unchanged.
 
 ### Fresh exact-address forecast candidates
 

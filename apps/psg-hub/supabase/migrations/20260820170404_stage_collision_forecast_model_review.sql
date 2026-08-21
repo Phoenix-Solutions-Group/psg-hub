@@ -78,9 +78,12 @@ begin
   if not exists (
     select 1
     from public.shop_users membership
+    join public.app_user_roles role
+      on role.profile_id = membership.user_id
+     and role.role = 'customer'
     where membership.shop_id = v_mapping.shop_id
   ) then
-    raise exception 'At least one customer shop member is required before model review'
+    raise exception 'At least one assigned customer user is required before model review'
       using errcode = 'check_violation';
   end if;
 

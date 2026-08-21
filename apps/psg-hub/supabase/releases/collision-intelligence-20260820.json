@@ -30,12 +30,12 @@
     {
       "file": "20260820170404_stage_collision_forecast_model_review.sql",
       "name": "stage_collision_forecast_model_review",
-      "sha256": "cbdfcc3cb871aea91a45c088ca3f8a88a31afb4ceee2ebc88106a4c38dc3805c"
+      "sha256": "0e40c5bbe747342c7ecffbca9210bf64ab109edc833bf61714ad66b875aadc23"
     },
     {
       "file": "20260820203311_review_collision_forecast_models.sql",
       "name": "review_collision_forecast_models",
-      "sha256": "1bb8d5c3a33ff1cbbac4c4071e284989ce98d0a6dce9536847fff637ce532490"
+      "sha256": "c017cc1eba2c6129cb70921e5ee9a2dbfd24c2090fd0030ae61ce1ed51b71a52"
     },
     {
       "file": "20260820215207_fix_collision_weather_coverage.sql",

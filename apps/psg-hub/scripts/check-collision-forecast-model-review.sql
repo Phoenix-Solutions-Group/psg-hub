@@ -46,18 +46,36 @@ begin
     pg_catalog.pg_get_functiondef(
       'public.stage_collision_forecast_model_review(text,text,jsonb,uuid,text)'::regprocedure
     ),
-    'from public.shop_users membership'
+    'join public.app_user_roles role'
   ) = 0 then
-    raise exception 'Model review staging does not enforce a customer shop audience';
+    raise exception 'Model review staging does not join the authoritative role table';
+  end if;
+
+  if pg_catalog.strpos(
+    pg_catalog.pg_get_functiondef(
+      'public.stage_collision_forecast_model_review(text,text,jsonb,uuid,text)'::regprocedure
+    ),
+    'role.role = ''customer'''
+  ) = 0 then
+    raise exception 'Model review staging accepts a non-customer shop membership';
   end if;
 
   if pg_catalog.strpos(
     pg_catalog.pg_get_functiondef(
       'public.review_collision_forecast_models(uuid,text,uuid,text)'::regprocedure
     ),
-    'from public.shop_users membership'
+    'join public.app_user_roles role'
   ) = 0 then
-    raise exception 'Model approval does not enforce a customer shop audience';
+    raise exception 'Model approval does not join the authoritative role table';
+  end if;
+
+  if pg_catalog.strpos(
+    pg_catalog.pg_get_functiondef(
+      'public.review_collision_forecast_models(uuid,text,uuid,text)'::regprocedure
+    ),
+    'role.role = ''customer'''
+  ) = 0 then
+    raise exception 'Model approval accepts a non-customer shop membership';
   end if;
 
   begin
