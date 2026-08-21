@@ -451,6 +451,15 @@ checker against the live server passes those decisions and the known-script chec
 Only backup capacity (`5.5 GiB` free) and a current restore drill remain failed. The
 timer remains disabled.
 
+A fresh no-install, read-only execution at 11:12 AM CT on August 21 confirmed the
+midnight `FMS_2026-08-21_0000` backup is complete with all five database files and no
+recent blocking backup run. The disabled timer, least-privilege permissions,
+duplicate-schedule decision, failure owner, incomplete-backup check, and narrowed
+nightly-script gate all pass. Capacity still fails with `5.5 GiB` free (`df` reports
+93% used), and the isolated restore drill remains missing. These are still the only
+two failed gates. No FileMaker file, record, schedule, service, or evidence value was
+changed.
+
 Do not use `fmsadmin verify` for the restore gate: its own help states that it closes
 and reopens hosted databases. The drill must run on an isolated FileMaker host. Copy
 one complete midnight backup set there, reconcile file count, bytes, and SHA-256,
