@@ -155,6 +155,18 @@ export type AddStaffThreadReplyInput = {
   actorRole?: ReviewWorkspaceActorRole;
 };
 
+export type AddStaffAnnotationInput = {
+  projectId: string;
+  reviewItemId: string;
+  versionId: string;
+  body: string;
+  viewport: "desktop" | "pdf_page";
+  xRatio: number;
+  yRatio: number;
+  actorProfileId: string;
+  actorRole?: ReviewWorkspaceActorRole;
+};
+
 export type SetGuestThreadStatusInput = {
   sessionHash: string;
   threadId: string;
@@ -1626,7 +1638,7 @@ export async function requireGuestReviewSession(
 
 async function requireRoundDocumentAccess(
   client: ReviewWorkspaceDbClient,
-  access: GuestSessionAccess,
+  access: Pick<GuestSessionAccess, "roundId" | "projectId" | "shopId">,
   reviewItemId: string,
   versionId: string,
 ) {
@@ -1648,11 +1660,11 @@ async function requireRoundDocumentAccess(
 type ReviewWorkspaceThreadRow = {
   id: string;
   project_id: string;
-  round_id: string;
+  round_id: string | null;
   shop_id: string;
   review_item_id: string;
   version_id: string;
-  owner_invitation_id: string;
+  owner_invitation_id: string | null;
   pin_number: number;
   status: string;
 };
@@ -1693,6 +1705,8 @@ async function requireStaffThread(
     .maybeSingle();
   if (error) throw new Error(`Could not load review comment thread: ${error.message}`);
   if (!data) throw new ReviewWorkspaceInputError(404, "Review comment thread not found");
+
+  if (!data.round_id) return data as ReviewWorkspaceThreadRow;
 
   const { data: round, error: roundError } = await client
     .from("bsm_content_review_rounds")
@@ -1889,6 +1903,160 @@ export async function addGuestReviewAnnotation(
   return data;
 }
 
+export async function addStaffReviewAnnotation(
+  input: AddStaffAnnotationInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+) {
+  const client = resolveClient(deps.client);
+  const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
+  const access = await requireReviewWorkspaceStaffAccess(
+    client,
+    input.projectId,
+    actorProfileId,
+    input.actorRole ?? null,
+  );
+  const reviewItemId = assertUuid("reviewItemId", input.reviewItemId);
+  const versionId = assertUuid("versionId", input.versionId);
+  const body = cleanText("body", input.body, 2000);
+  const xRatio = assertRatio("xRatio", input.xRatio);
+  const yRatio = assertRatio("yRatio", input.yRatio);
+  const now = deps.now ?? new Date();
+
+  const { data: project, error: projectError } = await client
+    .from("bsm_content_review_projects")
+    .select("current_round_id")
+    .eq("id", access.projectId)
+    .eq("shop_id", access.shopId)
+    .single();
+  if (projectError || !project) {
+    throw new Error(`Could not load review workspace project: ${projectError?.message ?? "not found"}`);
+  }
+  const roundId = (project.current_round_id as string | null) ?? null;
+  if (roundId) {
+    const { data: round, error: roundError } = await client
+      .from("bsm_content_review_rounds")
+      .select("status")
+      .eq("id", roundId)
+      .eq("project_id", access.projectId)
+      .eq("shop_id", access.shopId)
+      .single();
+    if (roundError || !round) throw new Error(`Could not load review comment round: ${roundError?.message ?? "not found"}`);
+    if (round.status !== "active" && round.status !== "inviting") {
+      throw new ReviewWorkspaceInputError(409, "This review round is no longer open");
+    }
+    await requireRoundDocumentAccess(
+      client,
+      { roundId, projectId: access.projectId, shopId: access.shopId },
+      reviewItemId,
+      versionId,
+    );
+  } else {
+    const { data: item, error: itemError } = await client
+      .from("bsm_content_review_items")
+      .select("id")
+      .eq("id", reviewItemId)
+      .eq("project_id", access.projectId)
+      .eq("shop_id", access.shopId)
+      .eq("current_version_id", versionId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (itemError) throw new Error(`Could not verify review document: ${itemError.message}`);
+    if (!item) {
+      throw new ReviewWorkspaceInputError(404, "This review document is not part of the workspace");
+    }
+  }
+
+  const { data: priorThreads, error: priorThreadsError } = await client
+    .from("bsm_content_review_comment_threads")
+    .select("pin_number")
+    .eq("project_id", access.projectId)
+    .eq("shop_id", access.shopId)
+    .eq("review_item_id", reviewItemId)
+    .eq("version_id", versionId);
+  if (priorThreadsError) throw new Error(`Could not load review comment pins: ${priorThreadsError.message}`);
+  let pinNumber = Math.max(
+    0,
+    ...((priorThreads ?? []) as Array<Record<string, unknown>>).map((row) => Number(row.pin_number ?? 0)),
+  ) + 1;
+  const threadId = randomUUID();
+  const commentId = randomUUID();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { error: threadError } = await client
+      .from("bsm_content_review_comment_threads")
+      .insert({
+        id: threadId,
+        project_id: access.projectId,
+        round_id: roundId,
+        shop_id: access.shopId,
+        review_item_id: reviewItemId,
+        version_id: versionId,
+        owner_invitation_id: null,
+        root_comment_id: null,
+        pin_number: pinNumber,
+        status: "open",
+      });
+    if (!threadError) break;
+    if (threadError.code !== "23505" || attempt === 2) {
+      throw new Error(`Could not create PSG review comment thread: ${threadError.message}`);
+    }
+    pinNumber += 1;
+  }
+
+  const { data, error: commentError } = await client
+    .from("bsm_content_review_comments")
+    .insert({
+      id: commentId,
+      shop_id: access.shopId,
+      project_id: access.projectId,
+      round_id: roundId,
+      invitation_id: null,
+      reviewer_session_id: null,
+      review_item_id: reviewItemId,
+      version_id: versionId,
+      thread_id: threadId,
+      author_profile_id: actorProfileId,
+      body,
+      visibility: "shop_and_psg",
+      comment_kind: "pin",
+      draft_status: "submitted",
+      pin_number: pinNumber,
+      page_number: null,
+      viewport: input.viewport,
+      x_ratio: xRatio,
+      y_ratio: yRatio,
+      selection_jsonb: {},
+      submitted_at: now.toISOString(),
+      locked_at: now.toISOString(),
+    })
+    .select("id, thread_id, body, draft_status")
+    .single();
+  if (commentError) throw new Error(`Could not add PSG review comment: ${commentError.message}`);
+
+  const { error: threadUpdateError } = await client
+    .from("bsm_content_review_comment_threads")
+    .update({ root_comment_id: commentId, updated_at: now.toISOString() })
+    .eq("id", threadId);
+  if (threadUpdateError) throw new Error(`Could not link PSG review comment thread: ${threadUpdateError.message}`);
+
+  await insertEvent(client, {
+    shop_id: access.shopId,
+    review_item_id: reviewItemId,
+    version_id: versionId,
+    event_type: "review_workspace_staff_annotation_added",
+    actor_profile_id: actorProfileId,
+    payload_jsonb: {
+      projectId: access.projectId,
+      roundId,
+      threadId,
+      commentId,
+      pinNumber,
+      actorRole: "psg",
+    },
+  });
+  return data;
+}
+
 export async function addGuestThreadReply(
   input: AddGuestThreadReplyInput,
   deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
@@ -2004,12 +2172,13 @@ async function persistThreadStatus(
   actorRole: "client" | "psg",
   now: Date,
 ) {
-  const { error } = await client
+  let update = client
     .from("bsm_content_review_comment_threads")
     .update({ status, updated_at: now.toISOString() })
     .eq("id", thread.id)
-    .eq("project_id", thread.project_id)
-    .eq("round_id", thread.round_id);
+    .eq("project_id", thread.project_id);
+  update = thread.round_id ? update.eq("round_id", thread.round_id) : update.is("round_id", null);
+  const { error } = await update;
   if (error) throw new Error(`Could not ${status === "resolved" ? "resolve" : "reopen"} review comment thread: ${error.message}`);
 
   await insertEvent(client, {
@@ -2065,17 +2234,15 @@ export async function getGuestReviewWorkspace(
       .eq("shop_id", access.shopId),
     client
       .from("bsm_content_review_comments")
-      .select("id, review_item_id, version_id, thread_id, author_profile_id, body, comment_kind, pin_number, draft_status, viewport, x_ratio, y_ratio, selection_jsonb, created_at")
-      .eq("round_id", access.roundId)
-      .eq("invitation_id", access.invitationId)
+      .select("id, invitation_id, round_id, review_item_id, version_id, thread_id, author_profile_id, body, comment_kind, pin_number, draft_status, viewport, x_ratio, y_ratio, selection_jsonb, created_at")
+      .eq("project_id", access.projectId)
+      .eq("shop_id", access.shopId)
       .order("created_at", { ascending: true }),
     client
       .from("bsm_content_review_comment_threads")
       .select("id, status, pin_number")
-      .eq("round_id", access.roundId)
       .eq("project_id", access.projectId)
-      .eq("shop_id", access.shopId)
-      .eq("owner_invitation_id", access.invitationId),
+      .eq("shop_id", access.shopId),
     client
       .from("bsm_content_review_decisions")
       .select("review_item_id, version_id, decision, message, submitted_at")
@@ -2101,7 +2268,14 @@ export async function getGuestReviewWorkspace(
         .in("id", versionIds)
     : { data: [] };
   const versionsById = new Map(((versions ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
-  const commentRows = (comments ?? []) as Array<Record<string, unknown>>;
+  const commentRows = ((comments ?? []) as Array<Record<string, unknown>>).filter(
+    (row) =>
+      itemIds.includes(row.review_item_id as string) &&
+      versionIds.includes(row.version_id as string) &&
+      ((row.invitation_id === access.invitationId && row.round_id === access.roundId) ||
+        (row.invitation_id == null && typeof row.author_profile_id === "string" &&
+          (row.round_id == null || row.round_id === access.roundId))),
+  );
   const profileNames = await loadProfileNames(client, commentRows.flatMap((row) => typeof row.author_profile_id === "string" ? [row.author_profile_id] : []));
   const threadsById = new Map(((threads ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
   const sectionIds = Array.from(

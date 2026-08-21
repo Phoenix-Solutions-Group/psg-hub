@@ -114,6 +114,13 @@ test("BSM content approvals release gate: admin creates, reviewer comments and s
   await page.getByRole("button", { name: "Add to review" }).click();
   await expect(page.getByText(documentTitle).first()).toBeVisible({ timeout: 15_000 });
 
+  await page.getByRole("button", { name: "Open review workspace" }).click();
+  await page.getByRole("button", { name: "Comment mode" }).click();
+  await page.getByRole("button", { name: "Place comment pin on document" }).click({ position: { x: 220, y: 160 } });
+  await page.getByLabel("Comment text").fill("PSG shared note for the client reviewer.");
+  await page.getByRole("button", { name: "Save comment" }).click();
+  await expect(page.getByText("PSG shared note for the client reviewer.")).toBeVisible();
+
   await page.getByRole("button", { name: "Share", exact: true }).click();
   await page.getByLabel("Email", { exact: true }).fill("reviewer@e2e.test");
   await page.getByLabel(/Name/).fill("E2E Reviewer");
@@ -136,6 +143,7 @@ test("BSM content approvals release gate: admin creates, reviewer comments and s
   await reviewer.getByRole("button", { name: "Open review" }).click();
   await expect(reviewer.getByRole("heading", { name: workspaceTitle })).toBeVisible();
   await expect(reviewer.getByText(documentTitle).first()).toBeVisible();
+  await expect(reviewer.getByText("PSG shared note for the client reviewer.")).toBeVisible();
   await checkA11y(reviewer, "bsm-review-workspace-reviewer-open");
 
   await reviewer.getByRole("button", { name: "Submit completed review" }).click();

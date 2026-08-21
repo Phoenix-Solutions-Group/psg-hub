@@ -526,6 +526,7 @@ describe("BsmContentApprovalManager", () => {
         documents={documents}
         selectedDocumentKey="item-page:version-page"
         onSelectDocument={() => undefined}
+        onAddPinComment={async () => true}
         immersive
         comments={[
           {
@@ -569,6 +570,8 @@ describe("BsmContentApprovalManager", () => {
     expect(html).toContain("Uploaded HTML proof");
     expect(html).toContain("Generated page proof");
     expect(html).toContain("Review notes");
+    expect(html).toContain('aria-label="Comment mode"');
+    expect(html).toContain('aria-label="Place comment pin on document"');
     expect(html).toContain("Move this headline higher.");
     expect(html).toContain("Pin 1");
     expect(html).toContain('src="https://preview.example/generated-proof"');

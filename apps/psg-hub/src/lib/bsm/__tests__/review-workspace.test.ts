@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   addGuestReviewAnnotation,
   addGuestThreadReply,
+  addStaffReviewAnnotation,
   addStaffThreadReply,
   closeReviewWorkspaceRoundEarly,
   createInternalReviewWorkspaceSlice,
@@ -49,6 +50,10 @@ const ANNOTATION_MIGRATION = readFileSync(
   join(process.cwd(), "supabase/migrations/20260810000000_bsm_review_workspace_highlight_annotations.sql"),
   "utf8",
 );
+const STAFF_ANNOTATION_MIGRATION = readFileSync(
+  join(process.cwd(), "supabase/migrations/20260821192449_bsm_review_workspace_staff_annotations.sql"),
+  "utf8",
+);
 
 function collectProcessingJobColumnsAfterMigrations(...migrations: string[]) {
   const columns = new Set<string>();
@@ -73,6 +78,7 @@ function createFakeClient(options: FakeClientOptions = {}) {
   const schemaCacheMisses = new Map(
     Object.entries(options.missingSchemaCacheColumns ?? {}).map(([table, columns]) => [table, [...columns]]),
   );
+  let duplicateStaffThreadInserts = options.duplicateStaffThreadInsertOnce ? 1 : 0;
   const client = {
     storage: {
       from(bucket: string) {
@@ -97,11 +103,18 @@ function createFakeClient(options: FakeClientOptions = {}) {
             options.legacyEventsRequireReviewItem &&
             table === "bsm_content_review_events" &&
             payload.review_item_id == null;
+          const duplicateStaffThreadError =
+            table === "bsm_content_review_comment_threads" &&
+            payload.owner_invitation_id == null &&
+            duplicateStaffThreadInserts > 0;
+          if (duplicateStaffThreadError) duplicateStaffThreadInserts -= 1;
           const error = missingColumn
             ? {
                 code: "PGRST204",
                 message: `Could not find the '${missingColumn}' column of '${table}' in the schema cache`,
               }
+            : duplicateStaffThreadError
+              ? { code: "23505", message: "duplicate staff pin number" }
             : legacyEventNullItemError
               ? {
                   code: "23502",
@@ -156,6 +169,9 @@ type FakeClientOptions = {
   currentRoundStatus?: string;
   currentRoundNumber?: number;
   itemVersionId?: string;
+  commentRows?: Array<Record<string, unknown>>;
+  roundlessStaffThread?: boolean;
+  duplicateStaffThreadInsertOnce?: boolean;
 };
 
 class Query {
@@ -214,9 +230,10 @@ class Query {
         return { data: this.options.hasPin === false ? [] : [{ id: "comment-1" }], error: null };
       }
       return {
-        data: [
+        data: this.options.commentRows ?? [
           {
             id: "comment-1",
+            invitation_id: INVITATION_ID,
             review_item_id: REVIEW_ITEM_ID,
             version_id: VERSION_ID,
             round_id: ROUND_ID,
@@ -503,7 +520,7 @@ class Query {
         data: {
           id: THREAD_ID,
           project_id: PROJECT_ID,
-          round_id: ROUND_ID,
+          round_id: this.options.roundlessStaffThread ? null : ROUND_ID,
           shop_id: SHOP_ID,
           review_item_id: REVIEW_ITEM_ID,
           version_id: VERSION_ID,
@@ -559,6 +576,11 @@ class MutationQuery {
   }
 
   in(column: string, value: unknown[]) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  is(column: string, value: unknown) {
     this.filters[column] = value;
     return this;
   }
@@ -1028,6 +1050,68 @@ describe("BSM review workspace foundation service", () => {
     expect(workspace.reviewer.readOnly).toBe(false);
   });
 
+  it("shows PSG notes without exposing another reviewer's notes", async () => {
+    const { client } = createFakeClient({
+      commentRows: [
+        {
+          id: "comment-owner",
+          invitation_id: INVITATION_ID,
+          round_id: ROUND_ID,
+          review_item_id: REVIEW_ITEM_ID,
+          version_id: VERSION_ID,
+          thread_id: THREAD_ID,
+          author_profile_id: null,
+          body: "Owner note",
+          comment_kind: "pin",
+          draft_status: "draft",
+        },
+        {
+          id: "comment-other",
+          invitation_id: "55555555-5555-4555-8555-555555555556",
+          round_id: ROUND_ID,
+          review_item_id: REVIEW_ITEM_ID,
+          version_id: VERSION_ID,
+          thread_id: THREAD_ID,
+          author_profile_id: null,
+          body: "Other reviewer private note",
+          comment_kind: "pin",
+          draft_status: "draft",
+        },
+        {
+          id: "comment-psg",
+          invitation_id: null,
+          round_id: ROUND_ID,
+          review_item_id: REVIEW_ITEM_ID,
+          version_id: VERSION_ID,
+          thread_id: THREAD_ID,
+          author_profile_id: ACTOR_ID,
+          body: "PSG shared note",
+          comment_kind: "pin",
+          draft_status: "submitted",
+        },
+        {
+          id: "comment-psg-private-reply",
+          invitation_id: "55555555-5555-4555-8555-555555555556",
+          round_id: ROUND_ID,
+          review_item_id: REVIEW_ITEM_ID,
+          version_id: VERSION_ID,
+          thread_id: THREAD_ID,
+          author_profile_id: ACTOR_ID,
+          body: "PSG reply to another reviewer",
+          comment_kind: "psg_reply",
+          draft_status: "submitted",
+        },
+      ],
+    });
+
+    const workspace = await getGuestReviewWorkspace("session-hash", { client: client as never });
+
+    expect(workspace.comments.map((comment) => comment.body)).toEqual([
+      "Owner note",
+      "PSG shared note",
+    ]);
+  });
+
   it("falls back to version proof columns when metadata is empty", async () => {
     const { client } = createFakeClient({ emptyVersionMetadata: true });
 
@@ -1175,6 +1259,77 @@ describe("BSM review workspace foundation service", () => {
     });
   });
 
+  it("stores a PSG pin comment on the active review round", async () => {
+    const { client, inserts } = createFakeClient();
+
+    await addStaffReviewAnnotation(
+      {
+        projectId: PROJECT_ID,
+        reviewItemId: REVIEW_ITEM_ID,
+        versionId: VERSION_ID,
+        body: "Move this headline higher.",
+        viewport: "desktop",
+        xRatio: 0.25,
+        yRatio: 0.5,
+        actorProfileId: ACTOR_ID,
+        actorRole: "psg_superadmin",
+      },
+      { client: client as never, now: new Date("2026-08-21T20:30:00.000Z") },
+    );
+
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_comment_threads")?.payload).toMatchObject({
+      round_id: ROUND_ID,
+      owner_invitation_id: null,
+      pin_number: 2,
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_comments")?.payload).toMatchObject({
+      invitation_id: null,
+      author_profile_id: ACTOR_ID,
+      draft_status: "submitted",
+      x_ratio: 0.25,
+      y_ratio: 0.5,
+    });
+  });
+
+  it("rejects PSG pin comments after the review round closes", async () => {
+    const { client } = createFakeClient({ currentRoundStatus: "completed" });
+
+    await expect(addStaffReviewAnnotation(
+      {
+        projectId: PROJECT_ID,
+        reviewItemId: REVIEW_ITEM_ID,
+        versionId: VERSION_ID,
+        body: "Late note.",
+        viewport: "desktop",
+        xRatio: 0.25,
+        yRatio: 0.5,
+        actorProfileId: ACTOR_ID,
+      },
+      { client: client as never },
+    )).rejects.toThrow("This review round is no longer open");
+  });
+
+  it("retries a simultaneous PSG pin number collision", async () => {
+    const { client, inserts } = createFakeClient({ duplicateStaffThreadInsertOnce: true });
+
+    await addStaffReviewAnnotation(
+      {
+        projectId: PROJECT_ID,
+        reviewItemId: REVIEW_ITEM_ID,
+        versionId: VERSION_ID,
+        body: "Concurrent note.",
+        viewport: "desktop",
+        xRatio: 0.25,
+        yRatio: 0.5,
+        actorProfileId: ACTOR_ID,
+      },
+      { client: client as never },
+    );
+
+    expect(inserts.filter((entry) => entry.table === "bsm_content_review_comment_threads").map((entry) => entry.payload.pin_number)).toEqual([2, 3]);
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_comments")?.payload.pin_number).toBe(3);
+  });
+
   it("stores a reviewer text highlight without fabricated pin coordinates", async () => {
     const { client, inserts } = createFakeClient();
 
@@ -1240,6 +1395,27 @@ describe("BSM review workspace foundation service", () => {
       version_id: VERSION_ID,
       comment_kind: "psg_reply",
       author_profile_id: ACTOR_ID,
+    });
+  });
+
+  it("lets PSG reply to and resolve a pin created before a review round", async () => {
+    const reply = createFakeClient({ roundlessStaffThread: true });
+    const status = createFakeClient({ roundlessStaffThread: true });
+
+    await addStaffThreadReply(
+      { projectId: PROJECT_ID, threadId: THREAD_ID, body: "Draft note follow-up.", actorProfileId: ACTOR_ID },
+      { client: reply.client as never },
+    );
+    await setStaffThreadStatus(
+      { projectId: PROJECT_ID, threadId: THREAD_ID, status: "resolved", actorProfileId: ACTOR_ID },
+      { client: status.client as never },
+    );
+
+    expect(reply.inserts.find((entry) => entry.table === "bsm_content_review_comments")?.payload.round_id).toBeNull();
+    expect(status.updates.find((entry) => entry.table === "bsm_content_review_comment_threads")?.filters).toMatchObject({
+      id: THREAD_ID,
+      project_id: PROJECT_ID,
+      round_id: null,
     });
   });
 
@@ -1628,6 +1804,12 @@ describe("BSM review workspace foundation service", () => {
     expect(MIGRATION).toContain("revoke all on table public.bsm_content_review_processing_jobs from authenticated");
     expect(MIGRATION).not.toContain("grant select on table public.bsm_content_review_processing_jobs to authenticated");
     expect(MIGRATION).toContain("Guest reviewers are intentionally not granted anon database access");
+  });
+
+  it("allows PSG-owned comment threads before a reviewer invitation exists", () => {
+    expect(STAFF_ANNOTATION_MIGRATION).toContain("alter column round_id drop not null");
+    expect(STAFF_ANNOTATION_MIGRATION).toContain("alter column owner_invitation_id drop not null");
+    expect(STAFF_ANNOTATION_MIGRATION).toContain("bsm_content_review_comment_threads_staff_pin_uniq");
   });
 
   it("keeps processing-job migrations compatible with the enqueue service write contract", () => {

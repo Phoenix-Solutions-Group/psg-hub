@@ -98,6 +98,10 @@ type WorkspacePreviewResponse =
   | { result: StaffReviewWorkspaceResult }
   | { error?: string };
 
+type WorkspaceCommentResponse =
+  | { comment: { id: string } }
+  | { error?: string };
+
 type WorkspaceUpdateResponse =
   | { workspace: { id: string; shopId: string; title: string; status: string } }
   | { error?: string };
@@ -310,10 +314,18 @@ export function WorkspacePreviewProof({
   document,
   comments = [],
   immersive = false,
+  commentMode = false,
+  pendingPin = null,
+  pendingPinNumber = null,
+  onPlacePin,
 }: {
   document: WorkspacePreviewDocument;
   comments?: WorkspacePreviewComment[];
   immersive?: boolean;
+  commentMode?: boolean;
+  pendingPin?: { xRatio: number; yRatio: number } | null;
+  pendingPinNumber?: number | null;
+  onPlacePin?: (point: { xRatio: number; yRatio: number }) => void;
 }) {
   const proofUrl = workspacePreviewDocumentUrl(document);
   const canFrame = canFramePreviewProof(proofUrl);
@@ -430,7 +442,7 @@ export function WorkspacePreviewProof({
         {pins.map((comment) => (
           <span
             key={comment.id}
-            className="pointer-events-none absolute flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-ember text-xs font-bold text-white shadow-lg"
+            className="pointer-events-none absolute z-20 flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-ember text-xs font-bold text-white shadow-lg"
             style={{
               left: `${comment.xRatio! * 100}%`,
               top: `${comment.yRatio! * 100}%`,
@@ -440,6 +452,29 @@ export function WorkspacePreviewProof({
             {comment.pinNumber ?? "•"}
           </span>
         ))}
+        {pendingPin ? (
+          <span
+            className="pointer-events-none absolute z-20 flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-[#17364b] text-xs font-bold text-white shadow-lg"
+            style={{ left: `${pendingPin.xRatio * 100}%`, top: `${pendingPin.yRatio * 100}%` }}
+            aria-label={`Pending comment pin ${pendingPinNumber ?? ""}`}
+          >
+            {pendingPinNumber ?? "•"}
+          </span>
+        ) : null}
+        {commentMode && onPlacePin ? (
+          <button
+            type="button"
+            aria-label="Place comment pin on document"
+            className="absolute inset-0 z-10 cursor-crosshair bg-[#17364b]/5 outline-none focus-visible:ring-4 focus-visible:ring-ring/50"
+            onClick={(event) => {
+              const bounds = event.currentTarget.getBoundingClientRect();
+              onPlacePin({
+                xRatio: (event.clientX - bounds.left) / bounds.width,
+                yRatio: (event.clientY - bounds.top) / bounds.height,
+              });
+            }}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -449,6 +484,7 @@ export function WorkspacePreviewScreen({
   documents,
   selectedDocumentKey,
   onSelectDocument,
+  onAddPinComment,
   comments = [],
   decisions = [],
   reviewers = [],
@@ -457,6 +493,12 @@ export function WorkspacePreviewScreen({
   documents: WorkspacePreviewDocument[];
   selectedDocumentKey: string | null;
   onSelectDocument: (key: string) => void;
+  onAddPinComment?: (input: {
+    document: WorkspacePreviewDocument;
+    body: string;
+    xRatio: number;
+    yRatio: number;
+  }) => Promise<boolean>;
   comments?: StaffReviewWorkspaceResult["submittedComments"];
   decisions?: StaffReviewWorkspaceResult["decisions"];
   reviewers?: StaffReviewWorkspaceResult["reviewers"];
@@ -470,13 +512,37 @@ export function WorkspacePreviewScreen({
     documents[0] ??
     null;
 
+  const [mode, setMode] = useState<"comment" | "browse">("comment");
+  const [pendingPin, setPendingPin] = useState<{ xRatio: number; yRatio: number } | null>(null);
+  const [commentBody, setCommentBody] = useState("");
+  const [savingComment, setSavingComment] = useState(false);
+  const selectedComments = selectedDocument
+    ? comments.filter((comment) => comment.reviewItemId === selectedDocument.itemId)
+    : [];
+  const selectedDecisions = selectedDocument
+    ? decisions.filter((decision) => decision.reviewItemId === selectedDocument.itemId)
+    : [];
+  const pendingPinNumber = Math.max(0, ...selectedComments.map((comment) => comment.pinNumber ?? 0)) + 1;
+
   if (!selectedDocument) return null;
-  const selectedComments = comments.filter(
-    (comment) => comment.reviewItemId === selectedDocument.itemId,
-  );
-  const selectedDecisions = decisions.filter(
-    (decision) => decision.reviewItemId === selectedDocument.itemId,
-  );
+
+  async function savePinComment() {
+    if (!onAddPinComment || !pendingPin || !commentBody.trim()) return;
+    setSavingComment(true);
+    try {
+      const saved = await onAddPinComment({
+        document: selectedDocument,
+        body: commentBody.trim(),
+        ...pendingPin,
+      });
+      if (saved) {
+        setPendingPin(null);
+        setCommentBody("");
+      }
+    } finally {
+      setSavingComment(false);
+    }
+  }
 
   return (
     <div
@@ -506,7 +572,11 @@ export function WorkspacePreviewScreen({
             <button
               key={key}
               type="button"
-              onClick={() => onSelectDocument(key)}
+              onClick={() => {
+                setPendingPin(null);
+                setCommentBody("");
+                onSelectDocument(key);
+              }}
               className={cn(
                 "w-full rounded-md border p-3 text-left transition-colors",
                 selected
@@ -560,10 +630,28 @@ export function WorkspacePreviewScreen({
           </div>
           {immersive ? (
             <div className="inline-flex rounded-lg bg-[#f7f8f9] p-1 text-xs font-medium">
-              <span className="rounded-md bg-[#17364b] px-3 py-1.5 text-white">
+              <button
+                type="button"
+                aria-label="Comment mode"
+                aria-pressed={mode === "comment"}
+                onClick={() => setMode("comment")}
+                className={cn("rounded-md px-3 py-1.5", mode === "comment" ? "bg-[#17364b] text-white" : "text-muted-foreground")}
+              >
                 Comment
-              </span>
-              <span className="px-3 py-1.5 text-muted-foreground">Browse</span>
+              </button>
+              <button
+                type="button"
+                aria-label="Browse mode"
+                aria-pressed={mode === "browse"}
+                onClick={() => {
+                  setMode("browse");
+                  setPendingPin(null);
+                  setCommentBody("");
+                }}
+                className={cn("rounded-md px-3 py-1.5", mode === "browse" ? "bg-white text-[#142838] shadow-sm" : "text-muted-foreground")}
+              >
+                Browse
+              </button>
             </div>
           ) : null}
         </div>
@@ -571,6 +659,10 @@ export function WorkspacePreviewScreen({
           document={selectedDocument}
           comments={selectedComments}
           immersive={immersive}
+          commentMode={immersive && mode === "comment"}
+          pendingPin={pendingPin}
+          pendingPinNumber={pendingPinNumber}
+          onPlacePin={onAddPinComment ? setPendingPin : undefined}
         />
       </div>
       {immersive ? (
@@ -584,6 +676,40 @@ export function WorkspacePreviewScreen({
             </span>
           </div>
           <div className="mt-4 space-y-3">
+            {pendingPin ? (
+              <div className="rounded-xl border border-[#17364b]/20 bg-[#f7f8f9] p-3">
+                <Label htmlFor="staff-review-comment">Pin {pendingPinNumber} comment</Label>
+                <textarea
+                  id="staff-review-comment"
+                  aria-label="Comment text"
+                  value={commentBody}
+                  onChange={(event) => setCommentBody(event.target.value)}
+                  placeholder="Describe the change for the client or PSG team."
+                  className="mt-2 min-h-24 w-full rounded-lg border border-input bg-white px-3 py-2 text-sm"
+                />
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={savePinComment}
+                    disabled={savingComment || !commentBody.trim()}
+                    className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[#17364b] hover:bg-[#17364b]/90")}
+                  >
+                    {savingComment ? "Saving" : "Save comment"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingPin(null);
+                      setCommentBody("");
+                    }}
+                    disabled={savingComment}
+                    className={buttonVariants({ variant: "ghost", size: "sm" })}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {selectedComments.length === 0 ? (
               <div className="rounded-xl bg-[#f7f8f9] p-4 text-sm text-muted-foreground">
                 No notes on this file yet.
@@ -1106,6 +1232,43 @@ export function BsmContentApprovalManager({
     }
   }
 
+  async function addWorkspacePinComment(input: {
+    document: WorkspacePreviewDocument;
+    body: string;
+    xRatio: number;
+    yRatio: number;
+  }): Promise<boolean> {
+    if (!reviewWorkspaceProjectId || !input.document.versionId) return false;
+    try {
+      const response = await fetch(`/api/ops/bsm/review-workspace/projects/${reviewWorkspaceProjectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add_annotation",
+          reviewItemId: input.document.itemId,
+          versionId: input.document.versionId,
+          body: input.body,
+          viewport: input.document.contentType === "application/pdf" ? "pdf_page" : "desktop",
+          xRatio: input.xRatio,
+          yRatio: input.yRatio,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as WorkspaceCommentResponse;
+      if (!response.ok || !("comment" in body)) {
+        throw new Error("error" in body && body.error ? body.error : "The comment could not be saved.");
+      }
+      await loadWorkspacePreview(reviewWorkspaceProjectId, input.document.itemId);
+      setPhase({ kind: "success", message: "Comment added to the review." });
+      return true;
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The comment could not be saved.",
+      });
+      return false;
+    }
+  }
+
   function openWorkspace(
     workspace: BsmContentApprovalWorkspaceOption,
     share = false,
@@ -1157,6 +1320,7 @@ export function BsmContentApprovalManager({
         );
       }
       setStartedReview(body.review);
+      setWorkspacePreview(null);
       setWorkspaceOptions((current) =>
         current.map((workspace) =>
           workspace.id === reviewWorkspaceProjectId
@@ -2582,6 +2746,7 @@ export function BsmContentApprovalManager({
                     documents={workspacePreview.documents}
                     selectedDocumentKey={selectedPreviewDocumentKey}
                     onSelectDocument={setSelectedPreviewDocumentKey}
+                    onAddPinComment={addWorkspacePinComment}
                     comments={workspacePreview.submittedComments}
                     decisions={workspacePreview.decisions}
                     reviewers={workspacePreview.reviewers}
