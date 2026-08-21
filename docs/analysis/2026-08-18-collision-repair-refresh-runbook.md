@@ -290,6 +290,19 @@ Postflight must prove:
 11. the Supabase security advisor no longer reports the two collision example-function
     search-path warnings.
 
+Run the committed read-only verifier before and after the release:
+
+```bash
+psql "$SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 \
+  -f apps/psg-hub/supabase/tests/collision_release_postflight.sql
+```
+
+The single result must report `ready = true` and an empty `failures` array. The
+2026-08-20 pre-release execution against `gylkkzmcmbdftxieyabw` ran 42 checks and
+failed 37, including every missing migration name, relation, trigger, and service-only
+function plus the unreconciled SPC source batch. The two blocked-forecast invariants
+already pass. This is the expected before-state, not a release failure.
+
 The first three files were applied together in a local transaction and rolled back.
 The weather correction passed a separate synthetic local transaction. All views pass
 their grant checks, and the readiness view returned the four expected pilot horizons.
