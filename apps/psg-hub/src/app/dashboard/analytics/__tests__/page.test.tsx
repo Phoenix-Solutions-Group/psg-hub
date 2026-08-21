@@ -82,7 +82,13 @@ vi.mock("@/lib/analytics/direct-mail", () => ({
     privacy: { rawRecipientFieldsIncluded: false },
   })),
   isDirectMailMetricsEmpty: vi.fn(
-    (metrics: { sources?: { sendHistoryRows?: number; productionRows?: number; resultRows?: number } }) =>
+    (metrics: {
+      sources?: {
+        sendHistoryRows?: number;
+        productionRows?: number;
+        resultRows?: number;
+      };
+    }) =>
       (metrics.sources?.sendHistoryRows ?? 0) === 0 &&
       (metrics.sources?.productionRows ?? 0) === 0 &&
       (metrics.sources?.resultRows ?? 0) === 0,
@@ -141,7 +147,8 @@ vi.mock("@/components/analytics/direct-mail-panel", () => ({
     metrics: { activity?: { lettersMailedLifetime?: number } };
   }) => (
     <section>
-      Direct mail {metrics.activity?.lettersMailedLifetime ?? 0} lifetime letters
+      Direct mail {metrics.activity?.lettersMailedLifetime ?? 0} lifetime
+      letters
     </section>
   ),
 }));
@@ -180,5 +187,16 @@ describe("AnalyticsPage private preview", () => {
     expect(html).toContain("Open Google Ads connection");
     expect(html).toContain("Direct mail 5 lifetime letters");
     expect(html).not.toContain("Google Ads account connection");
+  });
+
+  it("updates applicable metric labels and links for the selected date range", async () => {
+    const html = renderToStaticMarkup(
+      await AnalyticsPage({ searchParams: Promise.resolve({ days: "90" }) }),
+    );
+
+    expect(html).toContain("Reporting period");
+    expect(html).toContain("trailing 90 days");
+    expect(html).toContain("Website sessions over the last 90 days");
+    expect(html).toContain('href="/dashboard/analytics?days=90"');
   });
 });

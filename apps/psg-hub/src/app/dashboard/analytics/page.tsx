@@ -57,7 +57,8 @@ import { LinkGbpButton } from "./link-gbp-button";
 // source lands. Cached snapshots only, no real-time — "Last synced" tells the
 // story (ads-dashboard canon).
 
-const WINDOW_DAYS = 30;
+const DEFAULT_WINDOW_DAYS = 30;
+const ALLOWED_WINDOW_DAYS = [30, 90] as const;
 const SOURCE = "semrush" as const;
 const PAID_SOURCE = "google_ads" as const;
 const PERIOD = "daily" as const;
@@ -153,8 +154,23 @@ function GooglePreviewNotice({ source }: { source: string }) {
 }
 
 type Props = {
-  searchParams: Promise<{ scope?: string }>;
+  searchParams: Promise<{ scope?: string; days?: string }>;
 };
+
+function resolveWindowDays(value: string | undefined): number {
+  const parsed = Number(value);
+  return ALLOWED_WINDOW_DAYS.some((days) => days === parsed)
+    ? parsed
+    : DEFAULT_WINDOW_DAYS;
+}
+
+function analyticsHref(days: number, scopeAll: boolean): string {
+  const query = new URLSearchParams();
+  if (scopeAll) query.set("scope", "all");
+  if (days !== DEFAULT_WINDOW_DAYS) query.set("days", String(days));
+  const suffix = query.toString();
+  return suffix ? `/dashboard/analytics?${suffix}` : "/dashboard/analytics";
+}
 
 function priorWindow(from: string, days: number): { from: string; to: string } {
   const priorTo = new Date(`${from}T00:00:00Z`);
@@ -171,6 +187,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const supabase = await createClient();
   const service = createServiceClient();
   const params = await searchParams;
+  const windowDays = resolveWindowDays(params.days);
 
   const {
     data: { user },
@@ -183,7 +200,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const { shops, activeShopId: resolvedActiveShopId } =
     await getActiveShopContext(
       user.id,
-      isRiversideDemoUser(user.email) ? RIVERSIDE_ANALYTICS_DEMO_SHOP.name : null,
+      isRiversideDemoUser(user.email)
+        ? RIVERSIDE_ANALYTICS_DEMO_SHOP.name
+        : null,
     );
   let activeShopId = resolvedActiveShopId;
   let analyticsReader = supabase;
@@ -253,10 +272,10 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     shops.find((s) => s.id === activeShopId)?.role ??
     (showGoogleDemoCards ? "owner" : "viewer");
 
-  // Date window: trailing 30 days. Clock read lives in trailingWindow (server
+  // Date window: selected trailing period. Clock read lives in trailingWindow (server
   // helper) — client islands receive plain props so hydration stays deterministic.
-  const { from, to } = trailingWindow(WINDOW_DAYS);
-  const priorPaidWindow = priorWindow(from, WINDOW_DAYS);
+  const { from, to } = trailingWindow(windowDays);
+  const priorPaidWindow = priorWindow(from, windowDays);
   const readWarnings: { section: string; message: string }[] = [];
 
   const snapshots = await readAnalyticsSection(
@@ -645,7 +664,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             className="flex rounded-md border border-border p-0.5"
           >
             <a
-              href="/dashboard/analytics"
+              href={analyticsHref(windowDays, false)}
               aria-current={!scopeAll ? "page" : undefined}
               className={`rounded px-3 py-1.5 font-heading text-sm font-medium transition-colors ${
                 !scopeAll
@@ -656,7 +675,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               This shop
             </a>
             <a
-              href="/dashboard/analytics?scope=all"
+              href={analyticsHref(windowDays, true)}
               aria-current={scopeAll ? "page" : undefined}
               className={`rounded px-3 py-1.5 font-heading text-sm font-medium transition-colors ${
                 scopeAll
@@ -669,6 +688,27 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </nav>
         ) : null}
       </div>
+
+      <nav
+        aria-label="Analytics date range"
+        className="flex items-center gap-2"
+      >
+        <span className="text-sm text-muted-foreground">Reporting period</span>
+        {ALLOWED_WINDOW_DAYS.map((days) => (
+          <a
+            key={days}
+            href={analyticsHref(days, scopeAll)}
+            aria-current={windowDays === days ? "page" : undefined}
+            className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+              windowDays === days
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {days} days
+          </a>
+        ))}
+      </nav>
 
       {readWarnings.length > 0 ? (
         <Card>
@@ -719,7 +759,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                       <Sparkline
                         data={toSeries(rows, kpi.key)}
                         dataKey="value"
-                        ariaLabel={`${kpi.label}, last ${WINDOW_DAYS} days`}
+                        ariaLabel={`${kpi.label}, last ${windowDays} days`}
                       />
                     </div>
                   </CardContent>
@@ -731,11 +771,11 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           <div className="grid gap-4 lg:grid-cols-2">
             <LineChartCard
               title="Organic traffic"
-              caption={`Estimated monthly visits from organic search, trailing ${WINDOW_DAYS} days.`}
+              caption={`Estimated monthly visits from organic search, trailing ${windowDays} days.`}
               data={trafficSeries}
               dataKey="value"
               xKey="date"
-              ariaLabel={`Organic traffic over the last ${WINDOW_DAYS} days`}
+              ariaLabel={`Organic traffic over the last ${windowDays} days`}
             />
             <BarChartCard
               title="Traffic value"
@@ -743,7 +783,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               data={costSeries}
               dataKey="value"
               xKey="date"
-              ariaLabel={`Organic traffic value in USD over the last ${WINDOW_DAYS} days`}
+              ariaLabel={`Organic traffic value in USD over the last ${windowDays} days`}
               color="var(--chart-2)"
             />
           </div>
@@ -805,7 +845,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                       <Sparkline
                         data={tile.series}
                         dataKey="value"
-                        ariaLabel={`${tile.label}, last ${WINDOW_DAYS} days`}
+                        ariaLabel={`${tile.label}, last ${windowDays} days`}
                       />
                     </div>
                   </CardContent>
@@ -816,11 +856,11 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             <div className="grid gap-4 lg:grid-cols-2">
               <LineChartCard
                 title="Ad spend"
-                caption={`Daily Google Ads spend from synced account snapshots, trailing ${WINDOW_DAYS} days.`}
+                caption={`Daily Google Ads spend from synced account snapshots, trailing ${windowDays} days.`}
                 data={googleAdsDashboard.spendSeries}
                 dataKey="value"
                 xKey="date"
-                ariaLabel={`Google Ads spend over the last ${WINDOW_DAYS} days`}
+                ariaLabel={`Google Ads spend over the last ${windowDays} days`}
               />
               <BarChartCard
                 title="Leads"
@@ -832,7 +872,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 data={googleAdsDashboard.leadsSeries}
                 dataKey="value"
                 xKey="date"
-                ariaLabel={`Google Ads leads over the last ${WINDOW_DAYS} days`}
+                ariaLabel={`Google Ads leads over the last ${windowDays} days`}
                 color="var(--chart-2)"
               />
             </div>
@@ -927,7 +967,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                         <Sparkline
                           data={toSeries(gaRows, kpi.key)}
                           dataKey="value"
-                          ariaLabel={`${kpi.label}, last ${WINDOW_DAYS} days`}
+                          ariaLabel={`${kpi.label}, last ${windowDays} days`}
                         />
                       </div>
                     </CardContent>
@@ -939,11 +979,11 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             <div className="grid gap-4 lg:grid-cols-2">
               <LineChartCard
                 title="Sessions"
-                caption={`Daily website sessions, trailing ${WINDOW_DAYS} days.`}
+                caption={`Daily website sessions, trailing ${windowDays} days.`}
                 data={sessionsSeries}
                 dataKey="value"
                 xKey="date"
-                ariaLabel={`Website sessions over the last ${WINDOW_DAYS} days`}
+                ariaLabel={`Website sessions over the last ${windowDays} days`}
               />
               <BarChartCard
                 title="Key events"
@@ -951,7 +991,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 data={keyEventsSeries}
                 dataKey="value"
                 xKey="date"
-                ariaLabel={`Key events over the last ${WINDOW_DAYS} days`}
+                ariaLabel={`Key events over the last ${windowDays} days`}
                 color="var(--chart-2)"
               />
             </div>
@@ -1010,7 +1050,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                         <Sparkline
                           data={toSeries(gscRows, kpi.key)}
                           dataKey="value"
-                          ariaLabel={`${kpi.label}, last ${WINDOW_DAYS} days`}
+                          ariaLabel={`${kpi.label}, last ${windowDays} days`}
                         />
                       </div>
                     </CardContent>
@@ -1022,11 +1062,11 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             <div className="grid gap-4 lg:grid-cols-2">
               <LineChartCard
                 title="Search clicks"
-                caption={`Daily clicks from Google organic search, trailing ${WINDOW_DAYS} days.`}
+                caption={`Daily clicks from Google organic search, trailing ${windowDays} days.`}
                 data={clicksSeries}
                 dataKey="value"
                 xKey="date"
-                ariaLabel={`Search clicks over the last ${WINDOW_DAYS} days`}
+                ariaLabel={`Search clicks over the last ${windowDays} days`}
               />
               <BarChartCard
                 title="Impressions"
@@ -1034,7 +1074,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 data={impressionsSeries}
                 dataKey="value"
                 xKey="date"
-                ariaLabel={`Search impressions over the last ${WINDOW_DAYS} days`}
+                ariaLabel={`Search impressions over the last ${windowDays} days`}
                 color="var(--chart-2)"
               />
             </div>
@@ -1138,7 +1178,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                         <Sparkline
                           data={toSeries(gbpRows, kpi.key)}
                           dataKey="value"
-                          ariaLabel={`${kpi.label}, last ${WINDOW_DAYS} days`}
+                          ariaLabel={`${kpi.label}, last ${windowDays} days`}
                         />
                       </div>
                     </CardContent>
@@ -1150,11 +1190,11 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             <div className="grid gap-4 lg:grid-cols-2">
               <LineChartCard
                 title="Profile calls"
-                caption={`Daily calls from your Business Profile, trailing ${WINDOW_DAYS} days.`}
+                caption={`Daily calls from your Business Profile, trailing ${windowDays} days.`}
                 data={callsSeries}
                 dataKey="value"
                 xKey="date"
-                ariaLabel={`Profile calls over the last ${WINDOW_DAYS} days`}
+                ariaLabel={`Profile calls over the last ${windowDays} days`}
               />
               <BarChartCard
                 title="Website clicks"
@@ -1162,7 +1202,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 data={websiteClicksSeries}
                 dataKey="value"
                 xKey="date"
-                ariaLabel={`Profile website clicks over the last ${WINDOW_DAYS} days`}
+                ariaLabel={`Profile website clicks over the last ${windowDays} days`}
                 color="var(--chart-2)"
               />
             </div>
