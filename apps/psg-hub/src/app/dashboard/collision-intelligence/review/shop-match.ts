@@ -19,6 +19,18 @@ export type ShopIdentityEvidence = {
   sources: Array<[string, string]>;
 };
 
+export type ForecastCandidateEvidence = {
+  evaluatedAt: string;
+  latestWeekCutoff: string;
+  modelLabel: string;
+  holdoutRepairs: number;
+  maeImprovementPct: readonly [number, number];
+  wapePct: readonly [number, number];
+  intervalCoveragePct: readonly [number, number];
+  historyNote: string;
+  recommendedPilot: boolean;
+};
+
 export function shopMemberCount(
   shop: Pick<ShopDirectoryEntry, "members">,
   customerProfileIds: ReadonlySet<string>,
@@ -74,6 +86,35 @@ export const shopIdentityEvidence: Record<string, ShopIdentityEvidence> = {
         "https://www.bbb.org/us/ne/lincoln/profile/auto-body-repair-and-painting/tracys-collision-center-0714-207000414/addressId/70387",
       ],
     ],
+  },
+};
+
+// ponytail: frozen pre-mapping evidence; replace with staged registry rows after mapping and audience approval.
+export const forecastCandidateEvidence: Record<
+  string,
+  ForecastCandidateEvidence
+> = {
+  PS228: {
+    evaluatedAt: "Aug 20, 2026",
+    latestWeekCutoff: "Aug 3, 2026",
+    modelLabel: "Seasonal + recent blend",
+    holdoutRepairs: 531,
+    maeImprovementPct: [16.5, 21.0],
+    wapePct: [27.5, 29.1],
+    intervalCoveragePct: [80.4, 85.1],
+    historyNote: "One 46-week internal coverage gap was excluded.",
+    recommendedPilot: false,
+  },
+  PS229: {
+    evaluatedAt: "Aug 20, 2026",
+    latestWeekCutoff: "Aug 3, 2026",
+    modelLabel: "Seasonal + recent blend",
+    holdoutRepairs: 844,
+    maeImprovementPct: [20.1, 24.1],
+    wapePct: [17.7, 18.7],
+    intervalCoveragePct: [80.4, 85.1],
+    historyNote: "The current evaluation segment has no long internal gap.",
+    recommendedPilot: true,
   },
 };
 

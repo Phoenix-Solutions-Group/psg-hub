@@ -22,6 +22,7 @@ import {
 } from "./source-health";
 import {
   approvedPoliciesWithoutCustomerAudience,
+  forecastCandidateEvidence,
   matchesVerifiedShopLocation,
   rankShopMatches,
   shopMemberCount,
@@ -645,6 +646,9 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         selectedShop.first_arrival_date,
         selectedShop.latest_arrival_date,
       )
+    : null;
+  const selectedForecastEvidence = selectedShop
+    ? forecastCandidateEvidence[selectedShop.source_shop_key]
     : null;
   const selectedInsuredShare =
     selectedShop && selectedShop.repair_orders
@@ -1996,6 +2000,59 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     with at least 80% held-out-shop interval coverage. A
                     confirmed mapping is required only before staging manual
                     model review; nothing here approves or publishes a forecast.
+                  </p>
+                </div>
+              ) : null}
+
+              {selectedForecastEvidence ? (
+                <div
+                  role="note"
+                  className="rounded-lg border border-success/40 bg-success/10 p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-heading font-semibold">
+                      Historical model evidence
+                    </p>
+                    <Badge variant="success">4 of 4 horizons passed</Badge>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-foreground/75">
+                    Read-only backtest evaluated{" "}
+                    {selectedForecastEvidence.evaluatedAt} using completed weeks
+                    through {selectedForecastEvidence.latestWeekCutoff}. It
+                    selected{" "}
+                    {selectedForecastEvidence.modelLabel.toLocaleLowerCase()}{" "}
+                    for weeks 1–4. This evidence is frozen for review; it is not
+                    staged, approved, scored, or published.
+                  </p>
+                  <div className="mt-4 grid grid-cols-2 gap-4 border-t border-success/30 pt-4 lg:grid-cols-4">
+                    <ReviewMetric
+                      label="MAE improvement"
+                      value={`${selectedForecastEvidence.maeImprovementPct[0].toFixed(1)}%–${selectedForecastEvidence.maeImprovementPct[1].toFixed(1)}%`}
+                    />
+                    <ReviewMetric
+                      label="Holdout WAPE"
+                      value={`${selectedForecastEvidence.wapePct[0].toFixed(1)}%–${selectedForecastEvidence.wapePct[1].toFixed(1)}%`}
+                    />
+                    <ReviewMetric
+                      label="Interval coverage"
+                      value={`${selectedForecastEvidence.intervalCoveragePct[0].toFixed(1)}%–${selectedForecastEvidence.intervalCoveragePct[1].toFixed(1)}%`}
+                    />
+                    <ReviewMetric
+                      label="Holdout repairs"
+                      value={selectedForecastEvidence.holdoutRepairs.toLocaleString()}
+                    />
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-foreground/75">
+                    {selectedForecastEvidence.historyNote}{" "}
+                    {selectedForecastEvidence.recommendedPilot
+                      ? "South Lincoln is the recommended first pilot because it has the larger holdout and lower error at every horizon."
+                      : "North Lincoln passed, but South Lincoln has the cleaner and lower-error first-pilot case."}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Next gate: confirm the customer audience and exact shop
+                    mapping, then rerun the evaluator before staging manual
+                    model review. These metrics predict aggregate repair
+                    arrivals—not individual crashes or insurer claim volume.
                   </p>
                 </div>
               ) : null}

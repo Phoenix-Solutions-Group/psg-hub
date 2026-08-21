@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   approvedPoliciesWithoutCustomerAudience,
+  forecastCandidateEvidence,
   matchesVerifiedShopLocation,
   normalizeShopMatchText,
   rankShopMatches,
@@ -95,6 +96,15 @@ describe("shop identity matching", () => {
         .filter((match) => matchesVerifiedShopLocation("PS229", match.shop))
         .map((match) => match.shop.id),
     ).toEqual(["body-shop"]);
+  });
+
+  it("keeps the frozen South Lincoln evidence separate from release readiness", () => {
+    expect(forecastCandidateEvidence.PS229).toMatchObject({
+      holdoutRepairs: 844,
+      maeImprovementPct: [20.1, 24.1],
+      intervalCoveragePct: [80.4, 85.1],
+      recommendedPilot: true,
+    });
   });
 
   it("rejects name-only mappings without governed address evidence", () => {
