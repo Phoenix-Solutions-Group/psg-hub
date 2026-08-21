@@ -421,6 +421,14 @@ checker against the live server passes those decisions and the known-script chec
 Only backup capacity (`5.5 GiB` free) and a current restore drill remain failed. The
 timer remains disabled.
 
+Do not use `fmsadmin verify` for the restore gate: its own help states that it closes
+and reopens hosted databases. The drill must run on an isolated FileMaker host. Copy
+one complete midnight backup set there, reconcile file count, bytes, and SHA-256,
+open all five databases without a consistency failure, run the bounded 15-field OData
+probe against the restored Advantage file, reconcile its count, then close the isolated
+copy. Record the backup folder, isolated host, result, and timestamp in the evidence
+file only after those checks pass.
+
 - The server's midnight backup and 12:30–1:40 AM FileMaker script window were verified
   on 2026-08-19. The staged systemd timer runs at 4:30 AM America/Chicago with up to
   ten minutes of jitter.
