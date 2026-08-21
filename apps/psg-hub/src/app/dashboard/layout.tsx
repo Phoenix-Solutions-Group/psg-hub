@@ -12,6 +12,7 @@ import { getActiveShopContext } from "@/lib/shop/context";
 import {
   RIVERSIDE_ANALYTICS_DEMO_SHOP,
   getRiversideAnalyticsPreviewShop,
+  shouldUseRiversideQaRoutingFallback,
   shouldUseRiversideAnalyticsPreviewFallback,
   type SupabaseShopLookup,
 } from "@/lib/bsm/riverside-analytics-demo";
@@ -35,8 +36,28 @@ export default async function DashboardLayout({
   // No-shop non-staff get self-serve onboarding (Phase 7 / 07-01) instead of a dead-end
   // notice — the wizard POSTs the service-role /api/onboarding bootstrap route.
   const access = await getDashboardAccess(user.id);
+  const requestHost = (await headers()).get("host");
+  let noMembershipPreviewShop: Awaited<
+    ReturnType<typeof getRiversideAnalyticsPreviewShop>
+  > = null;
   if (decideDashboardAccess(access) === "no-shop") {
-    return <OnboardingScreen email={user.email} />;
+    if (
+      !shouldUseRiversideQaRoutingFallback({
+        userEmail: user.email,
+        requestHost,
+      })
+    ) {
+      return <OnboardingScreen email={user.email} />;
+    }
+    const service = createServiceClient() as unknown as SupabaseShopLookup;
+    noMembershipPreviewShop = await getRiversideAnalyticsPreviewShop(service, {
+      userEmail: user.email,
+      activeShopName: null,
+      requestHost,
+    });
+    if (!noMembershipPreviewShop) {
+      return <OnboardingScreen email={user.email} />;
+    }
   }
 
   // Active-shop context for the switcher (additive; the gate above is unchanged).
@@ -46,7 +67,6 @@ export default async function DashboardLayout({
   let displayShops = shops;
   const activeShopName =
     shops.find((shop) => shop.id === activeShopId)?.name ?? null;
-  const requestHost = (await headers()).get("host");
   const riversideDemoShop = shops.find(
     (shop) => shop.name === RIVERSIDE_ANALYTICS_DEMO_SHOP.name
   );
@@ -58,14 +78,13 @@ export default async function DashboardLayout({
     })
   ) {
     const service = createServiceClient() as unknown as SupabaseShopLookup;
-    const previewShop = await getRiversideAnalyticsPreviewShop(
-      service,
-      {
+    const previewShop =
+      noMembershipPreviewShop ??
+      (await getRiversideAnalyticsPreviewShop(service, {
         userEmail: user.email,
         activeShopName,
         requestHost,
-      }
-    );
+      }));
     if (previewShop) {
       activeShopId = previewShop.id;
       displayShops = [

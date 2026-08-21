@@ -83,6 +83,19 @@ function isPsgVercelPreviewHost(host?: string | null): boolean {
   return normalized.startsWith("psg-") && normalized.endsWith(".vercel.app");
 }
 
+export function shouldUseRiversideQaRoutingFallback({
+  userEmail,
+  requestHost,
+  env,
+}: Omit<ShouldUseRiversideAnalyticsPreviewFallbackArgs, "activeShopName">): boolean {
+  const runtimeEnv = env ?? process.env;
+  const isPrivatePreview =
+    runtimeEnv.VERCEL_ENV === "preview" ||
+    isPsgVercelPreviewHost(runtimeEnv.VERCEL_URL) ||
+    isPsgVercelPreviewHost(requestHost);
+  return isPrivatePreview && isRiversideDemoUser(userEmail, runtimeEnv);
+}
+
 function isRiversideDemoHost(host?: string | null): boolean {
   const normalized = normalizeHost(host);
   return RIVERSIDE_ANALYTICS_DEMO_HOSTS.includes(

@@ -5,6 +5,9 @@ const redirect = vi.fn((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
 vi.mock("next/navigation", () => ({ redirect }));
+vi.mock("next/headers", () => ({
+  headers: vi.fn(async () => new Headers({ host: "psg-riverside.vercel.app" })),
+}));
 
 type User = { id: string; email?: string } | null;
 let mockUser: User = null;
@@ -89,6 +92,12 @@ describe("AdsPage shop resolution", () => {
     await expect(run()).rejects.toThrow("REDIRECT:/dashboard");
   });
 
+  it("routes the approved preview login to Riverside when membership is missing", async () => {
+    mockUser = { id: "u1", email: "test@psghub.me" };
+
+    await expect(run()).rejects.toThrow("REDIRECT:/dashboard/ads?shop_id=s1");
+  });
+
   it("AC-2: explicit param for a non-member shop -> redirects to /dashboard", async () => {
     mockExplicitMembership = null; // re-validation finds no membership
     await expect(run("shopX")).rejects.toThrow("REDIRECT:/dashboard");
@@ -100,6 +109,17 @@ describe("AdsPage shop resolution", () => {
     const result = await run("shopB");
     expect(result).toBeTruthy();
     expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("allows only the Riverside preview shop for the approved no-membership login", async () => {
+    mockUser = { id: "u1", email: "test@psghub.me" };
+    mockTierMeets = false;
+
+    const result = await run("s1");
+    expect(result).toBeTruthy();
+    expect(redirect).not.toHaveBeenCalled();
+
+    await expect(run("another-shop")).rejects.toThrow("REDIRECT:/dashboard");
   });
 
   it("unauthenticated -> redirects to /login", async () => {

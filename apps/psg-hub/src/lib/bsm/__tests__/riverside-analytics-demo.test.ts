@@ -4,6 +4,7 @@ import {
   RIVERSIDE_ANALYTICS_DEMO_SHOP,
   getRiversideAnalyticsPreviewShop,
   isRiversideDemoUser,
+  shouldUseRiversideQaRoutingFallback,
   shouldUseRiversideAnalyticsPreviewFallback,
 } from "@/lib/bsm/riverside-analytics-demo";
 
@@ -13,6 +14,22 @@ const previewEnv = {
 };
 
 describe("Riverside Analytics preview demo fallback", () => {
+  it("keeps no-membership routing restricted to private previews", () => {
+    expect(
+      shouldUseRiversideQaRoutingFallback({
+        userEmail: "test@psghub.me",
+        requestHost: "psg-riverside.vercel.app",
+        env: previewEnv,
+      }),
+    ).toBe(true);
+    expect(
+      shouldUseRiversideQaRoutingFallback({
+        userEmail: "test@psghub.me",
+        requestHost: "hub.psgweb.me",
+        env: {},
+      }),
+    ).toBe(false);
+  });
   it("recognizes only the configured demo accounts for tenant preference", () => {
     expect(isRiversideDemoUser(" TEST@PSGHUB.ME ", previewEnv)).toBe(true);
     expect(isRiversideDemoUser("customer@example.com", previewEnv)).toBe(false);

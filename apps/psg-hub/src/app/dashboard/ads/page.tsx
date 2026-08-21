@@ -1,8 +1,13 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import {
   RIVERSIDE_ANALYTICS_DEMO_SHOP,
+  getRiversideAnalyticsPreviewShop,
   isRiversideDemoUser,
+  shouldUseRiversideQaRoutingFallback,
+  type SupabaseShopLookup,
 } from "@/lib/bsm/riverside-analytics-demo";
 import { getActiveShopContext } from "@/lib/shop/context";
 import { shopHasTier } from "@/lib/tier/gate";
@@ -26,16 +31,37 @@ export default async function AdsPage({ searchParams }: Props) {
     redirect("/login");
   }
 
-  const shopId = params.shop_id;
+  let shopId = params.shop_id;
+  let previewShopId: string | null = null;
   if (!shopId) {
     const { activeShopId } = await getActiveShopContext(
       user.id,
       isRiversideDemoUser(user.email) ? RIVERSIDE_ANALYTICS_DEMO_SHOP.name : null,
     );
-    if (!activeShopId) {
+    shopId = activeShopId ?? undefined;
+    if (!shopId) {
+      const requestHost = (await headers()).get("host");
+      if (
+        !shouldUseRiversideQaRoutingFallback({
+          userEmail: user.email,
+          requestHost,
+        })
+      ) {
+        redirect("/dashboard");
+      }
+      const service = createServiceClient() as unknown as SupabaseShopLookup;
+      const previewShop = await getRiversideAnalyticsPreviewShop(service, {
+        userEmail: user.email,
+        activeShopName: null,
+        requestHost,
+      });
+      shopId = previewShop?.id;
+      previewShopId = previewShop?.id ?? null;
+    }
+    if (!shopId) {
       redirect("/dashboard");
     }
-    redirect(`/dashboard/ads?shop_id=${activeShopId}`);
+    redirect(`/dashboard/ads?shop_id=${shopId}`);
   }
 
   const { data: membership } = await supabase
@@ -45,8 +71,33 @@ export default async function AdsPage({ searchParams }: Props) {
     .eq("shop_id", shopId)
     .maybeSingle();
 
-  if (!membership) {
-    redirect("/dashboard");
+  let resolvedMembership = membership;
+  let adsReader = supabase;
+  if (!resolvedMembership) {
+    const requestHost = (await headers()).get("host");
+    if (
+      !shouldUseRiversideQaRoutingFallback({
+        userEmail: user.email,
+        requestHost,
+      })
+    ) {
+      redirect("/dashboard");
+    }
+    const service = createServiceClient();
+    const previewShop = await getRiversideAnalyticsPreviewShop(
+      service as unknown as SupabaseShopLookup,
+      {
+        userEmail: user.email,
+        activeShopName: null,
+        requestHost,
+      },
+    );
+    previewShopId = previewShop?.id ?? previewShopId;
+    if (previewShopId !== shopId) {
+      redirect("/dashboard");
+    }
+    resolvedMembership = { role: "owner" };
+    adsReader = service;
   }
 
   // Tier check: shared gate (Performance subscription OR override allowlist).
@@ -61,7 +112,7 @@ export default async function AdsPage({ searchParams }: Props) {
   // "Link Google Ads" CTA from <AccountsTable>. Campaign metrics ingest + the
   // campaign management view land in 10-02; campaign MUTATION stays out of scope
   // (v1.2 Ads Mutation Studio, D52/D66 — Python on Vercel Sandbox).
-  const { data: accounts } = await supabase
+  const { data: accounts } = await adsReader
     .from("google_ads_accounts")
     .select("id, customer_id, status, linked_at, last_error")
     .eq("shop_id", shopId)
@@ -79,7 +130,7 @@ export default async function AdsPage({ searchParams }: Props) {
       <AccountsTable
         accounts={accounts ?? []}
         shopId={shopId}
-        userRole={membership.role as ShopRole}
+        userRole={resolvedMembership.role as ShopRole}
       />
     </div>
   );
