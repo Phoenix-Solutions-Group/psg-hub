@@ -69,6 +69,37 @@ def fetch_rows(url: str, key: str, table: str, params: dict[str, str]) -> list[d
         return json.loads(response.read())
 
 
+def count_customer_members(
+    members: list[dict[str, Any]], customer_roles: list[dict[str, Any]]
+) -> int:
+    member_ids = {str(row["user_id"]) for row in members}
+    customer_ids = {str(row["profile_id"]) for row in customer_roles}
+    return len(member_ids & customer_ids)
+
+
+def customer_shop_member_count(url: str, key: str, shop_id: str) -> int:
+    members = fetch_rows(
+        url,
+        key,
+        "shop_users",
+        {"select": "user_id", "shop_id": f"eq.{shop_id}"},
+    )
+    member_ids = sorted({str(row["user_id"]) for row in members})
+    if not member_ids:
+        return 0
+    customer_roles = fetch_rows(
+        url,
+        key,
+        "app_user_roles",
+        {
+            "select": "profile_id",
+            "role": "eq.customer",
+            "profile_id": f"in.({','.join(member_ids)})",
+        },
+    )
+    return count_customer_members(members, customer_roles)
+
+
 def fetch_rows_paged(
     url: str,
     key: str,
@@ -696,7 +727,9 @@ def evaluate_direct_shop_horizons(
 
 
 def build_promotion_candidate(
-    result: dict[str, Any], source_shop_key: str, shop_member_count: int | None
+    result: dict[str, Any],
+    source_shop_key: str,
+    customer_member_count: int | None,
 ) -> dict[str, Any]:
     horizons = []
     mapped = False
@@ -787,14 +820,14 @@ def build_promotion_candidate(
     evaluation_passed = len(horizons) == 4 and all(
         horizon["promotion_ready"] for horizon in horizons
     )
-    shop_audience_ready = mapped and (shop_member_count or 0) > 0
+    shop_audience_ready = mapped and (customer_member_count or 0) > 0
     return {
         "scope": "filemaker_promotion_candidate",
         "source_shop_key": source_shop_key,
         "source_shop_name": source_shop_name,
         "latest_week_cutoff": result["latest_week_cutoff"],
         "mapped": mapped,
-        "shop_member_count": shop_member_count,
+        "customer_shop_member_count": customer_member_count,
         "shop_audience_ready": shop_audience_ready,
         "evaluation_passed": evaluation_passed,
         "review_staging_ready": evaluation_passed and shop_audience_ready,
@@ -1025,8 +1058,8 @@ def print_promotion_candidate_markdown(result: dict[str, Any]) -> None:
             "passed" if result["evaluation_passed"] else "blocked",
             "confirmed" if result["mapped"] else "pending",
             (
-                f"{result['shop_member_count']} assigned"
-                if result["shop_member_count"] is not None
+                f"{result['customer_shop_member_count']} customer assigned"
+                if result["customer_shop_member_count"] is not None
                 else "pending mapping"
             ),
             "ready" if result["review_staging_ready"] else "not ready",
@@ -1164,6 +1197,10 @@ def self_test() -> None:
     assert build_promotion_candidate(mapped_evaluation, "TEST", 1)[
         "review_staging_ready"
     ] is True
+    assert count_customer_members(
+        [{"user_id": "customer"}, {"user_id": "staff"}],
+        [{"profile_id": "customer"}],
+    ) == 1
     try:
         stage_promotion_review(
             "https://example.supabase.co",
@@ -1279,23 +1316,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     ),
                     None,
                 )
-                shop_member_count = None
+                customer_member_count = None
                 if mapped_shop_id:
-                    shop_rows = fetch_rows(
-                        url,
-                        key,
-                        "shops",
-                        {
-                            "select": "id,members:shop_users(count)",
-                            "id": f"eq.{mapped_shop_id}",
-                            "limit": "1",
-                        },
+                    customer_member_count = customer_shop_member_count(
+                        url, key, mapped_shop_id
                     )
-                    if len(shop_rows) != 1:
-                        raise ValueError("Mapped Hub shop is unavailable")
-                    shop_member_count = int(shop_rows[0]["members"][0]["count"])
                 candidate = build_promotion_candidate(
-                    result, promotion_candidate, shop_member_count
+                    result, promotion_candidate, customer_member_count
                 )
                 candidate["input_sha256"] = evaluation_input_sha256(
                     rows,
