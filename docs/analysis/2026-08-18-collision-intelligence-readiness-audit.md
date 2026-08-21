@@ -82,6 +82,12 @@
   state: 81 checks run, 74 failed because the 13 reviewed migrations and their
   protected objects are not live. The reviewed manifest still matches all 13
   SHA-256 hashes. No migration was applied.
+- The exact 13-file release then passed as one ordered unit in an isolated local
+  database clone with production-shaped, non-PII NAIC, KDOT, and SPC fixtures. The
+  committed postflight returned 81 checks, zero failures, and `ready = true`; the
+  temporary database was removed. A fresh live ledger query still reports 0 of 13
+  reviewed migrations applied, so this is release evidence rather than a production
+  change.
 - Three legacy collision/accident RPCs and the browser grants on legacy accident,
   NHTSA, storm, and ZIP source relations now have service-role-only hardening staged
   and rollback-tested. This is the third pending collision migration; it is not applied

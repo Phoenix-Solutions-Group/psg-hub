@@ -348,6 +348,16 @@ guarantee passed in an isolated transaction and rolled back. The weather correct
 passed a separate synthetic local transaction. The local database ledger itself remains
 intentionally unrepaired.
 
+On August 21 the exact 13-file manifest was also applied in order to an isolated clone
+of the local database. The clone included the production predecessor objects plus
+non-PII release fixtures for the NAIC USAA parent group, the reconciled KDOT source
+ledger, and 3,986 SPC events; the storm migration created the matching source ledger.
+After simulating the 13 ledger names, the committed postflight returned
+`ready = true`, `checks_run = 81`, `checks_failed = 0`, and `failures = []`. The
+temporary database was dropped and independently verified absent. The normal local
+database retained its before-state, and a fresh production query still reports zero of
+the 13 reviewed migration names applied.
+
 ## Schedule and monitoring
 
 Run the read-only pre-enable checker on the FileMaker host before requesting timer
