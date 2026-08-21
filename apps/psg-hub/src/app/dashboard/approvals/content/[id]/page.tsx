@@ -68,7 +68,7 @@ export default async function BsmContentApprovalReviewPage({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link href="/dashboard/approvals" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-            Back to approvals
+            Back to Review Requests
           </Link>
           <h1 className="mt-2 text-2xl font-bold tracking-tight">{item.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">

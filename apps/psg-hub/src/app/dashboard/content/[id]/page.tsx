@@ -13,7 +13,6 @@ import { findRiversideDemoContentItem } from "@/lib/bsm/riverside-demo-content";
 import { Badge } from "@/components/ui/badge";
 import { ContentPreview } from "@/components/dashboard/content-preview";
 import { ApprovalActions } from "@/components/dashboard/approval-actions";
-import { customerPublicationStatus } from "@/components/dashboard/content-table";
 
 const statusColors: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
@@ -22,6 +21,10 @@ const statusColors: Record<string, string> = {
   published: "bg-blue-100 text-blue-800",
   rejected: "bg-red-100 text-red-800",
 };
+
+function customerPublicationStatus(status: string) {
+  return status === "published" ? "Published" : "Draft";
+}
 
 function isRiversideDemoHost(host: string | null): boolean {
   return (host ?? "").trim().toLowerCase().split(":")[0] === "hub.psgweb.me";

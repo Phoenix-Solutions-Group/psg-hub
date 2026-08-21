@@ -55,17 +55,19 @@ test.describe("focused BSM customer walkthrough", () => {
     page,
   }) => {
     await page.goto("/dashboard/approvals");
-    await expect(page.getByRole("heading", { name: "Approvals" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Review Requests" })).toBeVisible();
     await expect(
-      page.getByText("Review agent-proposed actions before they go live.")
+      page.getByText("See what needs your decision.", { exact: false })
     ).toBeVisible();
-    await expect(page.getByText("Nothing waiting for review.")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /^Needs your decision/ })
+    ).toBeVisible();
     await shoot(page, "focused-bsm-approvals");
   });
 
   test("customer can complete the BSM content approval loop", async ({ page }) => {
     await page.goto("/dashboard/approvals");
-    await expect(page.getByRole("heading", { name: "Content Review" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Review Requests" })).toBeVisible();
     await page.getByRole("link", { name: /E2E BSM homepage approval/ }).click();
 
     await expect(page.getByRole("heading", { name: "E2E BSM homepage approval" })).toBeVisible();
@@ -92,9 +94,9 @@ test.describe("focused BSM customer walkthrough", () => {
     await page.getByRole("button", { name: "Request restore" }).click();
     await expect(page.getByText("Restore the prior homepage proof for comparison.")).toBeVisible();
 
-    await page.goto("/dashboard/approvals");
-    await expect(page.getByRole("heading", { name: "Approved Content Archive" })).toBeVisible();
-    await expect(page.getByText("E2E BSM homepage approval")).toBeVisible();
+    await page.goto("/dashboard/content");
+    await expect(page.getByRole("heading", { name: "Approved versions" })).toBeVisible();
+    await expect(page.getByText("E2E BSM homepage approval").first()).toBeVisible();
   });
 
   test("customer cannot open another shop's BSM content approval", async ({ page }) => {

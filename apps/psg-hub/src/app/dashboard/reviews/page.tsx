@@ -128,10 +128,10 @@ export default async function ReviewsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Reviews</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Reputation</h1>
         <p className="text-muted-foreground">
-          Customer reviews from Google and Yelp across your shops. Draft
-          AI responses in the shop&rsquo;s voice, then approve before posting.
+          Monitor public customer feedback and work with prepared response
+          drafts for this location.
         </p>
       </div>
       <ReviewsTable
