@@ -9,6 +9,7 @@ import {
   decideDashboardAccess,
 } from "@/lib/auth/shop-access";
 import { getOpsAccess, isOpsStaff } from "@/lib/auth/ops-access";
+import { resolveCollisionDemoShopContext } from "@/lib/collision-intelligence/demo-scope";
 import { getActiveShopContext } from "@/lib/shop/context";
 
 export function dashboardNav(
@@ -74,7 +75,15 @@ export default async function DashboardLayout({
 
   // Active-shop context for the switcher (additive; the gate above is unchanged).
   const { shops, activeShopId } = await getActiveShopContext(user.id);
-  const nav = dashboardNav(activeShopId, access.role === "psg_superadmin");
+  const shopContext = resolveCollisionDemoShopContext(
+    user.email,
+    shops,
+    activeShopId,
+  );
+  const nav = dashboardNav(
+    shopContext.activeShopId,
+    access.role === "psg_superadmin",
+  );
 
   // Internal-ops staff (psg_internal / psg_superadmin) land here on /dashboard with
   // no visible path to the /ops backbone (PSG-107 / PSG-111). Surface an "Internal
@@ -91,9 +100,12 @@ export default async function DashboardLayout({
         <div className="flex h-16 items-center border-b border-sidebar-border px-5">
           <Logo variant="reverse" className="h-7 w-auto" />
         </div>
-        {shops.length > 0 && (
+        {shopContext.shops.length > 0 && (
           <div className="border-b border-sidebar-border px-3 py-3">
-            <ShopSwitcher shops={shops} activeShopId={activeShopId} />
+            <ShopSwitcher
+              shops={shopContext.shops}
+              activeShopId={shopContext.activeShopId}
+            />
           </div>
         )}
         <nav className="flex-1 space-y-1 p-3">
@@ -118,7 +130,11 @@ export default async function DashboardLayout({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-border px-6">
           <div className="flex items-center gap-3">
-            <MobileNav nav={nav} shops={shops} activeShopId={activeShopId} />
+            <MobileNav
+              nav={nav}
+              shops={shopContext.shops}
+              activeShopId={shopContext.activeShopId}
+            />
             <Logo variant="primary" className="h-5 w-auto lg:hidden" />
             <span className="hidden font-heading text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground lg:inline">
               Client Hub

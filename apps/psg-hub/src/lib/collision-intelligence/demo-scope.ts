@@ -10,6 +10,23 @@ export type CollisionDemoScope = {
   displayName: string;
 };
 
+export function resolveCollisionDemoShopContext(
+  email: string | null | undefined,
+  shops: UserShop[],
+  activeShopId: string | null,
+): { shops: UserShop[]; activeShopId: string | null } {
+  const scope = resolveCollisionDemoScope(email, shops);
+  if (!scope) return { shops, activeShopId };
+
+  const riverside = shops.find((shop) => shop.id === scope.sourceShopIds[0]);
+  if (!riverside) return { shops, activeShopId };
+
+  return {
+    shops: [{ ...riverside, name: scope.displayName }],
+    activeShopId: riverside.id,
+  };
+}
+
 export function resolveCollisionDemoScope(
   email: string | null | undefined,
   shops: UserShop[],

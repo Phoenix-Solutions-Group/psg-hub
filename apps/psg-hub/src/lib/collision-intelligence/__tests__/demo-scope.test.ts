@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveCollisionDemoScope } from "../demo-scope";
+import {
+  resolveCollisionDemoScope,
+  resolveCollisionDemoShopContext,
+} from "../demo-scope";
 
 const shops = [
   { id: "riverside", name: "Riverside Collision", role: "owner" },
@@ -17,5 +20,32 @@ describe("collision demo scope", () => {
     expect(
       resolveCollisionDemoScope("test@psghub.me", shops.slice(0, 1)),
     ).toBeNull();
+  });
+
+  it("presents the combined demo as one Riverside shop", () => {
+    expect(
+      resolveCollisionDemoShopContext(
+        "test@psghub.me",
+        shops,
+        "south-lincoln",
+      ),
+    ).toEqual({
+      shops: [
+        {
+          id: "riverside",
+          name: "Riverside Collision Demo",
+          role: "owner",
+        },
+      ],
+      activeShopId: "riverside",
+    });
+
+    expect(
+      resolveCollisionDemoShopContext(
+        "customer@example.com",
+        shops,
+        "south-lincoln",
+      ),
+    ).toEqual({ shops, activeShopId: "south-lincoln" });
   });
 });
