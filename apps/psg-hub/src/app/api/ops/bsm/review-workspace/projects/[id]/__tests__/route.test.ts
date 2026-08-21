@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   updateReviewWorkspaceProject: vi.fn(),
   revokeReviewWorkspaceInvitation: vi.fn(),
   closeReviewWorkspaceRoundEarly: vi.fn(),
+  addStaffThreadReply: vi.fn(),
+  setStaffThreadStatus: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/ops-access", () => ({
@@ -12,10 +14,12 @@ vi.mock("@/lib/auth/ops-access", () => ({
 }));
 vi.mock("@/lib/bsm/review-workspace", () => ({
   ReviewWorkspaceInputError: class extends Error { status = 400; },
+  addStaffThreadReply: mocks.addStaffThreadReply,
   closeReviewWorkspaceRoundEarly: mocks.closeReviewWorkspaceRoundEarly,
   getStaffReviewWorkspaceResult: vi.fn(),
   removeReviewWorkspaceProject: vi.fn(),
   revokeReviewWorkspaceInvitation: mocks.revokeReviewWorkspaceInvitation,
+  setStaffThreadStatus: mocks.setStaffThreadStatus,
   updateReviewWorkspaceProject: mocks.updateReviewWorkspaceProject,
 }));
 
@@ -56,5 +60,26 @@ describe("review workspace admin actions", () => {
       reason: "Reviewer changed.",
     }));
     expect(mocks.closeReviewWorkspaceRoundEarly).not.toHaveBeenCalled();
+  });
+
+  it("routes PSG replies and thread resolution through the authorized project", async () => {
+    mocks.addStaffThreadReply.mockResolvedValue({ id: "reply-1" });
+    mocks.setStaffThreadStatus.mockResolvedValue({ threadId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "resolved" });
+
+    const reply = await PATCH(new Request("https://hub.example/api/project", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reply_thread", threadId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", body: "Updated proof is ready." }),
+    }), context);
+    const resolved = await PATCH(new Request("https://hub.example/api/project", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_thread_status", threadId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "resolved" }),
+    }), context);
+
+    expect(reply.status).toBe(201);
+    expect(resolved.status).toBe(200);
+    expect(mocks.addStaffThreadReply).toHaveBeenCalledWith(expect.objectContaining({ projectId: "22222222-2222-4222-8222-222222222222", body: "Updated proof is ready." }));
+    expect(mocks.setStaffThreadStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "resolved" }));
   });
 });

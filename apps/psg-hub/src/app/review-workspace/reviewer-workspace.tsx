@@ -24,6 +24,7 @@ type PendingAnchor =
 type WorkspaceDocument = {
   itemId: string;
   versionId: string;
+  versionNumber: number | null;
   title: string;
   note: string | null;
   processingStatus: string;
@@ -47,10 +48,15 @@ type WorkspaceComment = {
   id: string;
   reviewItemId: string;
   versionId: string;
+  threadId: string;
   body: string;
-  commentKind: "pin" | "highlight";
+  commentKind: "pin" | "highlight" | "clarification_reply" | "psg_reply" | "system_note";
   pinNumber: number | null;
+  threadStatus: string;
   draftStatus: string;
+  authorRole: "client" | "psg";
+  authorDisplayName: string;
+  createdAt: string | null;
   viewport: string | null;
   xRatio: number | null;
   yRatio: number | null;
@@ -256,6 +262,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
   const [comment, setComment] = useState("");
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
+  const [threadReplies, setThreadReplies] = useState<Record<string, string>>({});
   const [selectedDocumentKey, setSelectedDocumentKey] = useState<string | null>(null);
   const [annotationMode, setAnnotationMode] = useState<"pin" | "highlight" | null>(null);
   const [pendingAnchor, setPendingAnchor] = useState<PendingAnchor | null>(null);
@@ -276,9 +283,13 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
       : [],
     [activeDocument, workspace],
   );
+  const threadRoots = useMemo(
+    () => commentsForActiveDocument.filter((item) => item.commentKind === "pin" || item.commentKind === "highlight"),
+    [commentsForActiveDocument],
+  );
   const activeDecision = decisions[activeKey];
   const activeDecisionNote = decisionNotes[activeKey] ?? "";
-  const nextAnnotationNumber = commentsForActiveDocument.length + 1;
+  const nextAnnotationNumber = threadRoots.length + 1;
   const canHighlightActiveDocument = Boolean(activeDocument?.proofContent) || isHtmlProof(activeDocument?.contentType ?? null);
 
   async function verifyInvite() {
@@ -464,6 +475,48 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
     }
   }
 
+  async function postThreadReply(threadId: string) {
+    const body = threadReplies[threadId]?.trim();
+    if (!sessionHash || !body) return;
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/bsm/review-workspace/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reply", sessionHash, threadId, body }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error ?? "Could not post this reply.");
+      setThreadReplies((current) => ({ ...current, [threadId]: "" }));
+      await loadWorkspace(sessionHash);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not post this reply.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function setThreadStatus(threadId: string, status: "open" | "resolved") {
+    if (!sessionHash) return;
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/bsm/review-workspace/comments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionHash, threadId, status }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error ?? "Could not update this comment thread.");
+      await loadWorkspace(sessionHash);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not update this comment thread.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function submitReview() {
     if (!sessionHash || !workspace) return;
     const missingDecision = workspace.documents.find((document) => !decisions[documentKey(document)]);
@@ -474,7 +527,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
     }
     const missingComment = workspace.documents.find((document) =>
       decisions[documentKey(document)] === "changes_requested" &&
-      !workspace.comments.some((item) => item.reviewItemId === document.itemId && item.versionId === document.versionId),
+      !workspace.comments.some((item) => item.reviewItemId === document.itemId && item.versionId === document.versionId && (item.commentKind === "pin" || item.commentKind === "highlight")),
     );
     if (missingComment) {
       selectDocument(missingComment);
@@ -619,7 +672,7 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <CardTitle>{activeDocument.title}</CardTitle>
-                      <CardDescription>{activeDocument.sectionTitle ?? "Review document"} · {activeDocument.processingStatus}</CardDescription>
+                      <CardDescription>{activeDocument.sectionTitle ?? "Review document"} · Version {activeDocument.versionNumber ?? "current"} · {activeDocument.processingStatus}</CardDescription>
                     </div>
                     <Badge>{workspace.round.status}</Badge>
                   </div>
@@ -746,14 +799,40 @@ export function ReviewerWorkspace({ inviteToken }: { inviteToken: string }) {
             <Card>
               <CardHeader><CardTitle>Comments on this document</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                {commentsForActiveDocument.length ? commentsForActiveDocument.map((item) => (
-                  <div key={item.id} className="rounded-md border border-border p-3 text-sm">
-                    <div className="font-medium">{item.commentKind === "highlight" ? `Highlight ${item.pinNumber ?? ""}` : `Pin ${item.pinNumber ?? "-"}`}</div>
-                    {item.selection ? <p className="mt-1 line-clamp-3 border-l-2 border-warning pl-2 text-xs italic text-muted-foreground">“{item.selection.text}”</p> : null}
-                    <p className="mt-2">{item.body}</p>
-                    <div className="mt-1 text-xs capitalize text-muted-foreground">{item.draftStatus}</div>
-                  </div>
-                )) : <p className="text-sm text-muted-foreground">No private comments on this document yet.</p>}
+                {threadRoots.length ? threadRoots.map((item) => {
+                  const replies = commentsForActiveDocument.filter((comment) => comment.threadId === item.threadId && comment.id !== item.id);
+                  const resolved = item.threadStatus === "resolved";
+                  return (
+                    <div key={item.id} className="rounded-md border border-border p-3 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-medium">{item.commentKind === "highlight" ? `Highlight ${item.pinNumber ?? ""}` : `Pin ${item.pinNumber ?? "-"}`}</div>
+                        <Badge variant="secondary">{resolved ? "Resolved" : "Open"}</Badge>
+                      </div>
+                      {item.selection ? <p className="mt-1 line-clamp-3 border-l-2 border-warning pl-2 text-xs italic text-muted-foreground">“{item.selection.text}”</p> : null}
+                      <p className="mt-2">{item.body}</p>
+                      <div className="mt-1 text-xs text-muted-foreground">{item.authorDisplayName}{item.createdAt ? ` · ${new Date(item.createdAt).toLocaleString()}` : ""}</div>
+                      {replies.map((reply) => (
+                        <div key={reply.id} className="mt-3 border-l-2 border-border pl-3">
+                          <p>{reply.body}</p>
+                          <div className="mt-1 text-xs text-muted-foreground">{reply.authorDisplayName}{reply.createdAt ? ` · ${new Date(reply.createdAt).toLocaleString()}` : ""}</div>
+                        </div>
+                      ))}
+                      {!isReadOnly ? (
+                        <div className="mt-3 space-y-2 border-t border-border pt-3">
+                          <Label htmlFor={`thread-reply-${item.threadId}`}>Reply</Label>
+                          <div className="flex gap-2">
+                            <Input id={`thread-reply-${item.threadId}`} value={threadReplies[item.threadId] ?? ""} onChange={(event) => setThreadReplies((current) => ({ ...current, [item.threadId]: event.target.value }))} placeholder="Continue this discussion" />
+                            <Button type="button" variant="outline" onClick={() => postThreadReply(item.threadId)} disabled={pending || !(threadReplies[item.threadId]?.trim())}><Send className="size-4" aria-hidden="true" /><span className="sr-only">Post reply</span></Button>
+                          </div>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setThreadStatus(item.threadId, resolved ? "open" : "resolved")} disabled={pending}>
+                            {resolved ? <RotateCcw className="size-4" aria-hidden="true" /> : <CheckCircle className="size-4" aria-hidden="true" />}
+                            {resolved ? "Reopen comment" : "Resolve comment"}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                }) : <p className="text-sm text-muted-foreground">No private comments on this document yet.</p>}
               </CardContent>
             </Card>
           </aside>

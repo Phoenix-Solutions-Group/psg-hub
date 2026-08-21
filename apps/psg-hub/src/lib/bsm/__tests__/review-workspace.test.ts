@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   addGuestReviewAnnotation,
+  addGuestThreadReply,
+  addStaffThreadReply,
   closeReviewWorkspaceRoundEarly,
   createInternalReviewWorkspaceSlice,
   createReviewWorkspaceDeletionTombstone,
@@ -16,6 +18,8 @@ import {
   removeReviewWorkspaceProject,
   reopenGuestReviewRound,
   revokeReviewWorkspaceInvitation,
+  setGuestThreadStatus,
+  setStaffThreadStatus,
   startReviewWorkspaceRound,
   submitGuestReviewRound,
   updateReviewWorkspaceProject,
@@ -29,6 +33,7 @@ const INVITATION_ID = "55555555-5555-4555-8555-555555555555";
 const SESSION_ID = "66666666-6666-4666-8666-666666666666";
 const REVIEW_ITEM_ID = "77777777-7777-4777-8777-777777777777";
 const VERSION_ID = "88888888-8888-4888-8888-888888888888";
+const THREAD_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const SECOND_REVIEW_ITEM_ID = "77777777-7777-4777-8777-777777777778";
 const SECOND_VERSION_ID = "88888888-8888-4888-8888-888888888889";
 const SECTION_ID = "99999999-9999-4999-8999-999999999999";
@@ -182,6 +187,11 @@ class Query {
     return this;
   }
 
+  contains(column: string, value: unknown) {
+    this.filters[column] = value;
+    return this;
+  }
+
   then(resolve: (value: { data: unknown[]; error: null }) => unknown) {
     return Promise.resolve(this.rows()).then(resolve);
   }
@@ -209,6 +219,9 @@ class Query {
             id: "comment-1",
             review_item_id: REVIEW_ITEM_ID,
             version_id: VERSION_ID,
+            round_id: ROUND_ID,
+            thread_id: THREAD_ID,
+            author_profile_id: null,
             body: "Owner one private note",
             comment_kind: "pin",
             pin_number: 1,
@@ -217,6 +230,7 @@ class Query {
             x_ratio: 0.4,
             y_ratio: 0.6,
             selection_jsonb: {},
+            created_at: "2026-07-28T18:30:00.000Z",
           },
         ],
         error: null,
@@ -244,6 +258,7 @@ class Query {
             {
               id: VERSION_ID,
               project_id: PROJECT_ID,
+              version_number: 1,
               original_filename: `homepage-proof.${extension}`,
               content_type: contentType,
               preview_url: null,
@@ -278,6 +293,7 @@ class Query {
         data: [
           {
             id: VERSION_ID,
+            version_number: 1,
             original_filename: null,
             content_type: "text/html",
             preview_url: "/dashboard/content",
@@ -295,6 +311,26 @@ class Query {
     }
     if (this.table === "bsm_content_review_sections") {
       return { data: [{ id: SECTION_ID, title: "Website" }], error: null };
+    }
+    if (this.table === "bsm_content_review_comment_threads") {
+      return { data: [{ id: THREAD_ID, status: "open", pin_number: 1 }], error: null };
+    }
+    if (this.table === "profiles") {
+      return { data: [{ id: ACTOR_ID, display_name: "PSG Reviewer" }], error: null };
+    }
+    if (this.table === "bsm_content_review_events") {
+      return {
+        data: [{
+          id: "event-1",
+          review_item_id: REVIEW_ITEM_ID,
+          version_id: VERSION_ID,
+          event_type: "review_workspace_thread_resolved",
+          actor_profile_id: ACTOR_ID,
+          payload_jsonb: { projectId: PROJECT_ID, invitationId: INVITATION_ID, threadId: THREAD_ID },
+          created_at: "2026-07-28T19:15:00.000Z",
+        }],
+        error: null,
+      };
     }
     if (this.table === "bsm_content_review_decisions") {
       if (this.filters.round_id === ROUND_ID && this.filters.invitation_id === INVITATION_ID && this.options.roundDecisionRows) {
@@ -320,8 +356,11 @@ class Query {
         data: this.options.submitted
           ? [
               {
+                id: "decision-1",
+                invitation_id: INVITATION_ID,
                 review_item_id: REVIEW_ITEM_ID,
                 version_id: VERSION_ID,
+                round_id: ROUND_ID,
                 decision: "changes_requested",
                 message: "Update the offer.",
                 submitted_at: "2026-07-28T19:00:00.000Z",
@@ -433,6 +472,7 @@ class Query {
             expires_at: expires,
             revoked_at: null,
             reviewer_email: "owner@example.com",
+            reviewer_name: "Shop Owner",
             project: { id: PROJECT_ID, deleted_at: null },
           },
         },
@@ -454,6 +494,22 @@ class Query {
           code_attempt_count: 0,
           expires_at: "2999-01-01T00:00:00.000Z",
           revoked_at: null,
+        },
+        error: null,
+      });
+    }
+    if (this.table === "bsm_content_review_comment_threads") {
+      return Promise.resolve({
+        data: {
+          id: THREAD_ID,
+          project_id: PROJECT_ID,
+          round_id: ROUND_ID,
+          shop_id: SHOP_ID,
+          review_item_id: REVIEW_ITEM_ID,
+          version_id: VERSION_ID,
+          owner_invitation_id: INVITATION_ID,
+          pin_number: 1,
+          status: "open",
         },
         error: null,
       });
@@ -943,6 +999,7 @@ describe("BSM review workspace foundation service", () => {
       {
         itemId: REVIEW_ITEM_ID,
         versionId: VERSION_ID,
+        versionNumber: 1,
         title: "Home page",
         note: null,
         processingStatus: "ready",
@@ -1027,6 +1084,14 @@ describe("BSM review workspace foundation service", () => {
       expect.objectContaining({
         decision: "changes_requested",
         message: "Update the offer.",
+        versionNumber: 1,
+      }),
+    ]);
+    expect(result.activity).toEqual([
+      expect.objectContaining({
+        eventType: "review_workspace_thread_resolved",
+        actorDisplayName: "PSG Reviewer",
+        versionNumber: 1,
       }),
     ]);
   });
@@ -1145,6 +1210,62 @@ describe("BSM review workspace foundation service", () => {
         text: "safe page copy",
       },
     });
+  });
+
+  it("keeps guest and PSG replies on the invitation-scoped version thread", async () => {
+    const guest = createFakeClient();
+    const staff = createFakeClient();
+
+    await addGuestThreadReply(
+      { sessionHash: "session-hash", threadId: THREAD_ID, body: "That revision works for me." },
+      { client: guest.client as never, now: new Date("2026-07-28T19:10:00.000Z") },
+    );
+    await addStaffThreadReply(
+      { projectId: PROJECT_ID, threadId: THREAD_ID, body: "We updated the headline.", actorProfileId: ACTOR_ID },
+      { client: staff.client as never, now: new Date("2026-07-28T19:11:00.000Z") },
+    );
+
+    expect(guest.inserts.find((entry) => entry.table === "bsm_content_review_comments")?.payload).toMatchObject({
+      project_id: PROJECT_ID,
+      invitation_id: INVITATION_ID,
+      thread_id: THREAD_ID,
+      version_id: VERSION_ID,
+      comment_kind: "clarification_reply",
+      author_profile_id: null,
+    });
+    expect(staff.inserts.find((entry) => entry.table === "bsm_content_review_comments")?.payload).toMatchObject({
+      project_id: PROJECT_ID,
+      invitation_id: INVITATION_ID,
+      thread_id: THREAD_ID,
+      version_id: VERSION_ID,
+      comment_kind: "psg_reply",
+      author_profile_id: ACTOR_ID,
+    });
+  });
+
+  it("records resolve and reopen actions without moving a thread to another review scope", async () => {
+    const guest = createFakeClient();
+    const staff = createFakeClient();
+
+    await setGuestThreadStatus(
+      { sessionHash: "session-hash", threadId: THREAD_ID, status: "resolved" },
+      { client: guest.client as never, now: new Date("2026-07-28T19:12:00.000Z") },
+    );
+    await setStaffThreadStatus(
+      { projectId: PROJECT_ID, threadId: THREAD_ID, status: "open", actorProfileId: ACTOR_ID },
+      { client: staff.client as never, now: new Date("2026-07-28T19:13:00.000Z") },
+    );
+
+    expect(guest.updates.find((entry) => entry.table === "bsm_content_review_comment_threads")).toMatchObject({
+      payload: { status: "resolved", updated_at: "2026-07-28T19:12:00.000Z" },
+      filters: { id: THREAD_ID, project_id: PROJECT_ID, round_id: ROUND_ID },
+    });
+    expect(staff.updates.find((entry) => entry.table === "bsm_content_review_comment_threads")).toMatchObject({
+      payload: { status: "open", updated_at: "2026-07-28T19:13:00.000Z" },
+      filters: { id: THREAD_ID, project_id: PROJECT_ID, round_id: ROUND_ID },
+    });
+    expect(guest.inserts.find((entry) => entry.table === "bsm_content_review_events")?.payload).toMatchObject({ event_type: "review_workspace_thread_resolved", version_id: VERSION_ID });
+    expect(staff.inserts.find((entry) => entry.table === "bsm_content_review_events")?.payload).toMatchObject({ event_type: "review_workspace_thread_reopened", actor_profile_id: ACTOR_ID });
   });
 
   it("blocks new reviewer comments after submit", async () => {

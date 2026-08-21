@@ -11,6 +11,7 @@ import {
   getBsmContentApprovalFileValidationError,
   getBsmContentApprovalStorageContentType,
   workspacePreviewDocumentKindLabel,
+  workspacePreviewDocumentNeedsPreparation,
   type WorkspacePreviewDocument,
 } from "@/components/ops/bsm-content-approval-manager";
 
@@ -29,7 +30,9 @@ describe("BsmContentApprovalManager", () => {
 
     expect(html).toContain("Tracy&#x27;s Collision");
     expect(html).toContain("Wallace Auto Body");
-    expect(html).toContain('<option value="shop-b" selected="">Wallace Auto Body</option>');
+    expect(html).toContain(
+      '<option value="shop-b" selected="">Wallace Auto Body</option>',
+    );
     expect(html).not.toContain(">shop-a</option>");
     expect(html).not.toContain(">shop-b</option>");
   });
@@ -40,7 +43,9 @@ describe("BsmContentApprovalManager", () => {
         "https://hub.test/ops/bsm-content-approvals?foo=bar#documents",
         { shopId: " shop-a ", workspaceId: " workspace-a " },
       ),
-    ).toBe("/ops/bsm-content-approvals?foo=bar&shopId=shop-a&workspaceId=workspace-a#documents");
+    ).toBe(
+      "/ops/bsm-content-approvals?foo=bar&shopId=shop-a&workspaceId=workspace-a#documents",
+    );
 
     expect(
       getBsmContentApprovalsSelectionUrl(
@@ -52,24 +57,44 @@ describe("BsmContentApprovalManager", () => {
 
   it("does not prompt staff with an internal shop ID when shops are unavailable", () => {
     const html = renderToStaticMarkup(
-      <BsmContentApprovalManager initialApprovals={[]} activeShopId={null} shops={[]} />,
+      <BsmContentApprovalManager
+        initialApprovals={[]}
+        activeShopId={null}
+        shops={[]}
+      />,
     );
 
-    expect(html).toContain('placeholder="No shops available"');
+    expect(html).toContain('placeholder="Client shop"');
     expect(html).not.toContain("00000000-0000-0000-0000-000000000000");
   });
 
-  it("allows admins to select PDF, HTML, DOC, and DOCX documents from the file picker", () => {
-    const html = renderToStaticMarkup(
-      <BsmContentApprovalManager initialApprovals={[]} activeShopId={null} shops={[]} />,
-    );
-
-    expect(html).toContain(`accept="${BSM_CONTENT_APPROVAL_FILE_ACCEPT}"`);
+  it("allows admins to select every supported review document from the file picker", () => {
     expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".pdf");
+    expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".png");
+    expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".md");
+    expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".txt");
     expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".html");
     expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".htm");
     expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".doc");
     expect(BSM_CONTENT_APPROVAL_FILE_ACCEPT).toContain(".docx");
+  });
+
+  it("accepts image, Markdown, and text review files promised by the upload UI", () => {
+    expect(
+      getBsmContentApprovalFileValidationError(
+        new File(["png"], "proof.png", { type: "image/png" }),
+      ),
+    ).toBeNull();
+    expect(
+      getBsmContentApprovalFileValidationError(
+        new File(["# Proof"], "proof.md", { type: "text/markdown" }),
+      ),
+    ).toBeNull();
+    expect(
+      getBsmContentApprovalFileValidationError(
+        new File(["Proof"], "proof.txt", { type: "text/plain" }),
+      ),
+    ).toBeNull();
   });
 
   it("returns the promised unsupported-file message for blocked uploads", () => {
@@ -106,7 +131,7 @@ describe("BsmContentApprovalManager", () => {
     ).toBe("application/pdf");
   });
 
-  it("renders a required Review Workspace picker scoped to the selected shop", () => {
+  it("renders a review dashboard scoped to the selected shop", () => {
     const html = renderToStaticMarkup(
       <BsmContentApprovalManager
         initialApprovals={[]}
@@ -136,9 +161,10 @@ describe("BsmContentApprovalManager", () => {
       />,
     );
 
-    expect(html).toContain("Review Workspace");
+    expect(html).toContain("Review dashboard");
     expect(html).toContain("July proof review");
-    expect(html).toContain("Choose a Review Workspace");
+    expect(html).toContain("Open");
+    expect(html).toContain("Share");
     expect(html).not.toContain("Wallace review");
   });
 
@@ -165,7 +191,9 @@ describe("BsmContentApprovalManager", () => {
       />,
     );
 
-    expect(html).toContain('<option value="workspace-a" selected="">July proof review');
+    expect(html).toContain(
+      '<h2 class="font-heading text-2xl font-semibold text-[#142838]">July proof review</h2>',
+    );
   });
 
   it("renders super-admin edit and remove controls for the selected Review Workspace", () => {
@@ -189,9 +217,9 @@ describe("BsmContentApprovalManager", () => {
       />,
     );
 
-    expect(html).toContain("Super-admin workspace controls");
-    expect(html).toContain("Edit workspace");
-    expect(html).toContain("Remove workspace");
+    expect(html).toContain("Review settings");
+    expect(html).toContain("Rename");
+    expect(html).toContain("Remove review");
   });
 
   it("hides workspace edit and remove controls from non-superadmin staff", () => {
@@ -214,9 +242,8 @@ describe("BsmContentApprovalManager", () => {
       />,
     );
 
-    expect(html).not.toContain("Super-admin workspace controls");
-    expect(html).not.toContain("Edit workspace");
-    expect(html).not.toContain("Remove workspace");
+    expect(html).not.toContain("Review settings");
+    expect(html).not.toContain("Remove review");
   });
 
   it("keeps a requested workspace selectable when the shop only comes from the workspace", () => {
@@ -239,8 +266,9 @@ describe("BsmContentApprovalManager", () => {
       />,
     );
 
-    expect(html).toContain('<option value="workspace-a" selected="">Production upload retest');
-    expect(html).not.toContain("No Review Workspaces for this shop");
+    expect(html).toContain(
+      '<h2 class="font-heading text-2xl font-semibold text-[#142838]">Production upload retest</h2>',
+    );
   });
 
   it("renders an edit action for uploaded review items", () => {
@@ -298,7 +326,7 @@ describe("BsmContentApprovalManager", () => {
     expect(html).toContain("Edit");
   });
 
-  it("renders the board-requested order: workspace, documents, reviewers, then preview/start", () => {
+  it("renders the MarkUp-style primary review flow", () => {
     const html = renderToStaticMarkup(
       <BsmContentApprovalManager
         initialApprovals={[]}
@@ -308,28 +336,14 @@ describe("BsmContentApprovalManager", () => {
       />,
     );
 
-    expect(html).toContain("Workspace title");
-    expect(html).toContain("Reviewer instructions");
-    expect(html).toContain("Review Workspace for these documents");
-    expect(html).toContain("Workspace documents");
-    expect(html).toContain("Shop Owner · owner@example.com");
-    expect(html).toContain("Preview read-only");
-    expect(html).toContain("Start review");
-
-    const workspaceIndex = html.indexOf(">Workspace<");
-    const documentsIndex = html.indexOf(">Documents<");
-    const documentWorkspacePickerIndex = html.indexOf("Review Workspace for these documents");
-    const workspaceDocumentsIndex = html.indexOf(">Workspace documents<");
-    const reviewersIndex = html.indexOf(">Reviewers<");
-    const previewIndex = html.indexOf(">Preview, send, and monitor<");
-
-    expect(workspaceIndex).toBeGreaterThanOrEqual(0);
-    expect(documentsIndex).toBeGreaterThan(workspaceIndex);
-    expect(documentWorkspacePickerIndex).toBeGreaterThan(documentsIndex);
-    expect(workspaceDocumentsIndex).toBeGreaterThan(documentsIndex);
-    expect(workspaceDocumentsIndex).toBeLessThan(reviewersIndex);
-    expect(reviewersIndex).toBeGreaterThan(documentsIndex);
-    expect(previewIndex).toBeGreaterThan(reviewersIndex);
+    expect(html).toContain("PSG Review Workspace");
+    expect(html).toContain("Upload. Share. Resolve.");
+    expect(html).toContain("New review");
+    expect(html).toContain("Review name");
+    expect(html).toContain("Continue to upload");
+    expect(html).toContain("Upload files to start a review");
+    expect(html).not.toContain("Customer profile ID");
+    expect(html).not.toContain("Review Workspace for these documents");
   });
 
   it("shows only the selected Review Workspace documents in the workspace document section", () => {
@@ -432,7 +446,7 @@ describe("BsmContentApprovalManager", () => {
     expect(html).toContain("Selected workspace proof");
     expect(html).not.toContain("Other workspace proof");
     expect(html).not.toContain("Unassigned library proof");
-    expect(html).toContain("1 review item");
+    expect(html).toContain("1 file");
   });
 
   it("blocks review start until documents are ready and a reviewer is selected", () => {
@@ -456,7 +470,9 @@ describe("BsmContentApprovalManager", () => {
         documents: [{ processingStatus: "pending" }],
         reviewers: [{ email: "owner@example.com" }],
       }),
-    ).toBe("Start review is available after every document finishes processing successfully.");
+    ).toBe(
+      "Start review is available after every document finishes processing successfully.",
+    );
     expect(
       getBsmReviewWorkspaceStartBlocker({
         workspaceId: "workspace-a",
@@ -478,6 +494,7 @@ describe("BsmContentApprovalManager", () => {
       {
         itemId: "item-html",
         versionId: "version-html",
+        versionNumber: 1,
         title: "Uploaded HTML proof",
         processingStatus: "ready",
         status: "draft",
@@ -491,6 +508,7 @@ describe("BsmContentApprovalManager", () => {
       {
         itemId: "item-page",
         versionId: "version-page",
+        versionNumber: 1,
         title: "Generated page proof",
         processingStatus: "ready",
         status: "draft",
@@ -508,20 +526,73 @@ describe("BsmContentApprovalManager", () => {
         documents={documents}
         selectedDocumentKey="item-page:version-page"
         onSelectDocument={() => undefined}
+        immersive
+        comments={[
+          {
+            id: "comment-1",
+            invitationId: "invitation-1",
+            reviewItemId: "item-page",
+            versionId: "version-page",
+            versionNumber: 1,
+            roundId: "round-1",
+            threadId: "thread-1",
+            body: "Move this headline higher.",
+            commentKind: "pin",
+            pinNumber: 1,
+            threadStatus: "open",
+            draftStatus: "submitted",
+            authorRole: "client",
+            authorDisplayName: "Client reviewer",
+            createdAt: "2026-08-21T12:00:00.000Z",
+            viewport: null,
+            xRatio: 0.25,
+            yRatio: 0.5,
+            selection: null,
+          },
+        ]}
+        decisions={[]}
+        reviewers={[
+          {
+            invitationId: "invitation-1",
+            email: "reviewer@example.com",
+            name: "Client reviewer",
+            status: "reviewing",
+            submittedAt: null,
+            revokedAt: null,
+          },
+        ]}
       />,
     );
 
-    expect(html).toContain("Screen 1");
-    expect(html).toContain("Screen 2");
+    expect(html).toContain("File 1");
+    expect(html).toContain("File 2");
     expect(html).toContain("Uploaded HTML proof");
     expect(html).toContain("Generated page proof");
+    expect(html).toContain("Review notes");
+    expect(html).toContain("Move this headline higher.");
+    expect(html).toContain("Pin 1");
     expect(html).toContain('src="https://preview.example/generated-proof"');
     expect(html).not.toContain("/generated/internal-only-proof");
-    expect(workspacePreviewDocumentKindLabel(documents[0])).toBe("Website proof");
-    expect(workspacePreviewDocumentKindLabel(documents[1])).toBe("Generated page");
+    expect(workspacePreviewDocumentKindLabel(documents[0])).toBe(
+      "Website proof",
+    );
+    expect(workspacePreviewDocumentKindLabel(documents[1])).toBe(
+      "Generated page",
+    );
+    expect(workspacePreviewDocumentNeedsPreparation(documents[0])).toBe(false);
+    expect(
+      workspacePreviewDocumentNeedsPreparation({
+        ...documents[0],
+        proofUrl: null,
+      }),
+    ).toBe(true);
 
-    const uploadedHtml = renderToStaticMarkup(<WorkspacePreviewProof document={documents[0]} />);
-    expect(uploadedHtml).toContain('src="https://storage.example/homepage.html"');
+    const uploadedHtml = renderToStaticMarkup(
+      <WorkspacePreviewProof document={documents[0]} />,
+    );
+    expect(uploadedHtml).toContain(
+      'src="https://storage.example/homepage.html"',
+    );
     expect(uploadedHtml).toContain('sandbox=""');
     expect(uploadedHtml).not.toContain("Open proof");
   });
@@ -532,6 +603,7 @@ describe("BsmContentApprovalManager", () => {
         document={{
           itemId: "item-pdf",
           versionId: "version-pdf",
+          versionNumber: 1,
           title: "PDF proof",
           processingStatus: "ready",
           status: "draft",
@@ -549,6 +621,7 @@ describe("BsmContentApprovalManager", () => {
         document={{
           itemId: "item-image",
           versionId: "version-image",
+          versionNumber: 1,
           title: "Image proof",
           processingStatus: "ready",
           status: "draft",

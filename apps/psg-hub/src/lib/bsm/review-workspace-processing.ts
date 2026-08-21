@@ -12,7 +12,7 @@ const MAX_ZIP_EXPANSION_RATIO = 20;
 
 export const REVIEW_WORKSPACE_PROCESSING_CONTRACT_VERSION = 1;
 
-export type ReviewWorkspaceFileKind = "pdf" | "doc" | "docx" | "html" | "html_zip";
+export type ReviewWorkspaceFileKind = "pdf" | "doc" | "docx" | "html" | "image" | "text" | "html_zip";
 export type ReviewWorkspaceArtifactKind =
   | "original"
   | "quarantine"
@@ -32,7 +32,7 @@ export type ScanStatus = "pending" | "clean" | "infected" | "failed";
 export type ConversionStatus = "not_needed" | "pending" | "complete" | "failed" | "blocked_runtime";
 export type SanitizationStatus = "not_needed" | "pending" | "complete" | "failed";
 
-export type ProcessingCapability = "malware_scan" | "pdf_passthrough" | "doc_to_pdf" | "html_sanitize" | "html_zip_inspect";
+export type ProcessingCapability = "malware_scan" | "pdf_passthrough" | "safe_passthrough" | "doc_to_pdf" | "html_sanitize" | "html_zip_inspect";
 
 export type ReviewWorkspaceFilePlan = {
   fileKind: ReviewWorkspaceFileKind;
@@ -45,7 +45,7 @@ export type ReviewWorkspaceFilePlan = {
   scanStatus: ScanStatus;
   conversionStatus: ConversionStatus;
   sanitizationStatus: SanitizationStatus;
-  reviewCopyExpectation: "original_pdf_after_clean_scan" | "converted_pdf" | "sanitized_static_html";
+  reviewCopyExpectation: "original_pdf_after_clean_scan" | "original_file_after_clean_scan" | "converted_pdf" | "sanitized_static_html";
 };
 
 export type HtmlSafetyFinding = {
@@ -137,12 +137,16 @@ export function classifyReviewWorkspaceFile(input: {
           ? "docx"
           : extension === "html" || extension === "htm" || mime === "text/html"
             ? "html"
+            : ["png", "jpg", "jpeg", "webp"].includes(extension) || ["image/png", "image/jpeg", "image/webp"].includes(mime)
+              ? "image"
+              : ["md", "markdown", "txt"].includes(extension) || mime === "text/markdown" || mime === "text/plain"
+                ? "text"
             : extension === "zip" || mime === "application/zip" || mime === "application/x-zip-compressed"
               ? "html_zip"
               : null;
 
   if (!detectedFileKind) {
-    throw new ReviewWorkspaceProcessingError("Unsupported file type. Use PDF, DOC, DOCX, HTML, or an HTML ZIP package.");
+    throw new ReviewWorkspaceProcessingError("Unsupported file type. Use PDF, image, Markdown, text, DOC, DOCX, HTML, or an HTML ZIP package.");
   }
   const fileKind: ReviewWorkspaceFileKind = detectedFileKind;
 
@@ -191,6 +195,31 @@ export function classifyReviewWorkspaceFile(input: {
       conversionStatus: "not_needed",
       sanitizationStatus: "pending",
       reviewCopyExpectation: "sanitized_static_html",
+    };
+  }
+  if (fileKind === "image") {
+    const normalizedMimeType = extension === "png" || mime === "image/png"
+      ? "image/png"
+      : extension === "webp" || mime === "image/webp"
+        ? "image/webp"
+        : "image/jpeg";
+    return {
+      ...common,
+      normalizedMimeType,
+      requiredCapabilities: ["malware_scan", "safe_passthrough"],
+      conversionStatus: "not_needed",
+      sanitizationStatus: "not_needed",
+      reviewCopyExpectation: "original_file_after_clean_scan",
+    };
+  }
+  if (fileKind === "text") {
+    return {
+      ...common,
+      normalizedMimeType: "text/plain",
+      requiredCapabilities: ["malware_scan", "safe_passthrough"],
+      conversionStatus: "not_needed",
+      sanitizationStatus: "not_needed",
+      reviewCopyExpectation: "original_file_after_clean_scan",
     };
   }
   return {
@@ -397,7 +426,7 @@ export type ReviewWorkspaceSandbox = {
 
 export type ReviewWorkspaceSandboxResult = {
   data: Buffer;
-  contentType: "application/pdf" | "text/html";
+  contentType: string;
   scanEngine: string;
   converter: string | null;
   sandboxId: string;
@@ -415,7 +444,15 @@ function assertExpectedFileSignature(plan: ReviewWorkspaceFilePlan, data: Buffer
       ? prefix.equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))
       : plan.fileKind === "docx"
         ? prefix[0] === 0x50 && prefix[1] === 0x4b
-        : true;
+        : plan.fileKind === "image" && plan.normalizedMimeType === "image/png"
+          ? prefix.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+          : plan.fileKind === "image" && plan.normalizedMimeType === "image/jpeg"
+            ? prefix[0] === 0xff && prefix[1] === 0xd8 && prefix[2] === 0xff
+            : plan.fileKind === "image" && plan.normalizedMimeType === "image/webp"
+              ? prefix.subarray(0, 4).toString("ascii") === "RIFF" && data.subarray(8, 12).toString("ascii") === "WEBP"
+              : plan.fileKind === "text"
+                ? !data.includes(0)
+                : true;
   if (!matches) throw new ReviewWorkspaceProcessingError(`The uploaded file content does not match its ${plan.fileKind.toUpperCase()} type`);
 }
 
@@ -459,7 +496,7 @@ export async function processReviewFileInSandbox(
     return await Sandbox.create({ runtime: "node24", timeout: 290_000, networkPolicy: "allow-all" }) as ReviewWorkspaceSandbox;
   });
   const sandbox = await createSandbox();
-  const extension = plan.fileKind === "html" ? "html" : plan.fileKind;
+  const extension = extensionOf(input.fileName);
   const inputPath = `/vercel/sandbox/input/source.${extension}`;
   const outputPath = "/vercel/sandbox/output/source.pdf";
 
@@ -502,10 +539,10 @@ export async function processReviewFileInSandbox(
       "Malware scanner version check",
     ));
 
-    if (plan.fileKind === "pdf" || plan.fileKind === "html") {
+    if (["pdf", "html", "image", "text"].includes(plan.fileKind)) {
       return {
         data: input.data,
-        contentType: plan.fileKind === "html" ? "text/html" : "application/pdf",
+        contentType: plan.normalizedMimeType,
         scanEngine,
         converter: null,
         sandboxId: sandbox.name,
@@ -538,7 +575,7 @@ export async function processReviewFileInSandbox(
 export async function processReviewWorkspaceUploadedVersion(
   input: { projectId: string; shopId: string; reviewItemId: string; versionId: string },
   deps: { client?: SupabaseClient; createSandbox?: () => Promise<ReviewWorkspaceSandbox> } = {},
-): Promise<{ processingStatus: "ready"; processedContentType: "application/pdf" | "text/html"; processedStoragePath: string }> {
+): Promise<{ processingStatus: "ready"; processedContentType: string; processedStoragePath: string }> {
   const projectId = assertUuid("projectId", input.projectId);
   const shopId = assertUuid("shopId", input.shopId);
   const reviewItemId = assertUuid("reviewItemId", input.reviewItemId);
@@ -611,13 +648,24 @@ export async function processReviewWorkspaceUploadedVersion(
       { fileName: originalFilename, contentType, data: Buffer.from(await original.arrayBuffer()) },
       { createSandbox: deps.createSandbox },
     );
+    const processedExtension = result.contentType === "application/pdf"
+      ? "pdf"
+      : result.contentType === "text/html"
+        ? "html"
+        : result.contentType === "image/png"
+          ? "png"
+          : result.contentType === "image/jpeg"
+            ? "jpg"
+            : result.contentType === "image/webp"
+              ? "webp"
+              : "txt";
     const processedStoragePath = reviewWorkspaceStoragePath({
       shopId,
       projectId,
       documentId: reviewItemId,
       versionId,
       artifactKind: "review-copy",
-      fileName: `${originalFilename.replace(/\.[^.]+$/, "") || "review-copy"}.${result.contentType === "text/html" ? "html" : "pdf"}`,
+      fileName: `${originalFilename.replace(/\.[^.]+$/, "") || "review-copy"}.${processedExtension}`,
     });
     const { error: uploadError } = await client.storage
       .from(BSM_CONTENT_APPROVALS_BUCKET)

@@ -104,15 +104,14 @@ export default async function BsmContentApprovalsPage({ searchParams }: BsmConte
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <section className="border-b border-border pb-6">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Content Approvals
+    <div className="mx-auto max-w-[1500px] space-y-5">
+      <section>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ember">Client collaboration</p>
+        <h1 className="mt-1 font-heading text-3xl font-semibold tracking-tight text-[#142838]">
+          Review Workspace
         </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Manage each customer approval as a Review Workspace. Create the workspace for one shop,
-          add the files or generated pages reviewers need, and track comments, decisions, and
-          requested updates from one place.
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+          Upload proofs, invite clients, collect precise feedback, and keep every approval together.
         </p>
       </section>
 
@@ -122,14 +121,7 @@ export default async function BsmContentApprovalsPage({ searchParams }: BsmConte
         </div>
       ) : null}
 
-      <section className="space-y-4 border-t border-border pt-6">
-        <div>
-          <h2 className="font-heading text-xl font-semibold tracking-tight">Approval setup</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Choose or create the Review Workspace, add documents, choose reviewers, then preview or start
-            the customer review.
-          </p>
-        </div>
+      <section>
         <BsmContentApprovalManager
           initialApprovals={approvals}
           workspaces={workspaces}

@@ -112,9 +112,12 @@ export type GuestSessionAccess = {
   roundId: string;
   shopId: string;
   reviewerEmail: string;
+  reviewerName: string | null;
   invitationStatus: string;
   submittedAt: string | null;
 };
+
+type ReviewWorkspaceCommentKind = "pin" | "highlight" | "clarification_reply" | "psg_reply" | "system_note";
 
 export type ReviewWorkspaceTextSelection = {
   kind: "text";
@@ -136,6 +139,34 @@ export type AddGuestAnnotationInput = {
   xRatio?: number | null;
   yRatio?: number | null;
   selection?: Record<string, unknown> | null;
+};
+
+export type AddGuestThreadReplyInput = {
+  sessionHash: string;
+  threadId: string;
+  body: string;
+};
+
+export type AddStaffThreadReplyInput = {
+  projectId: string;
+  threadId: string;
+  body: string;
+  actorProfileId: string;
+  actorRole?: ReviewWorkspaceActorRole;
+};
+
+export type SetGuestThreadStatusInput = {
+  sessionHash: string;
+  threadId: string;
+  status: "open" | "resolved";
+};
+
+export type SetStaffThreadStatusInput = {
+  projectId: string;
+  threadId: string;
+  status: "open" | "resolved";
+  actorProfileId: string;
+  actorRole?: ReviewWorkspaceActorRole;
 };
 
 export type ReviewWorkspaceDocumentInput = {
@@ -178,6 +209,7 @@ export type GuestReviewWorkspace = {
   documents: Array<{
     itemId: string;
     versionId: string;
+    versionNumber: number | null;
     title: string;
     note: string | null;
     processingStatus: string;
@@ -193,10 +225,15 @@ export type GuestReviewWorkspace = {
     id: string;
     reviewItemId: string;
     versionId: string;
+    threadId: string;
     body: string;
-    commentKind: "pin" | "highlight";
+    commentKind: ReviewWorkspaceCommentKind;
     pinNumber: number | null;
+    threadStatus: string;
     draftStatus: string;
+    authorRole: "client" | "psg";
+    authorDisplayName: string;
+    createdAt: string | null;
     viewport: string | null;
     xRatio: number | null;
     yRatio: number | null;
@@ -211,6 +248,7 @@ export type StaffReviewWorkspaceResult = {
   documents: Array<{
     itemId: string;
     versionId: string | null;
+    versionNumber: number | null;
     title: string;
     processingStatus: string;
     status: string;
@@ -233,13 +271,25 @@ export type StaffReviewWorkspaceResult = {
     id: string;
     invitationId: string | null;
     reviewItemId: string;
+    versionId: string | null;
+    versionNumber: number | null;
+    roundId: string | null;
+    threadId: string;
     body: string;
-    commentKind: "pin" | "highlight";
+    commentKind: ReviewWorkspaceCommentKind;
     pinNumber: number | null;
+    threadStatus: string;
     draftStatus: string;
+    authorRole: "client" | "psg";
+    authorDisplayName: string;
+    createdAt: string | null;
+    viewport: string | null;
+    xRatio: number | null;
+    yRatio: number | null;
     selection: ReviewWorkspaceTextSelection | null;
   }>;
-  decisions: Array<{ id: string; invitationId: string | null; reviewItemId: string; decision: string; message: string | null; submittedAt: string | null }>;
+  decisions: Array<{ id: string; invitationId: string | null; reviewItemId: string; versionId: string | null; versionNumber: number | null; roundId: string | null; decision: string; message: string | null; actorDisplayName: string; submittedAt: string | null }>;
+  activity: Array<{ id: string; eventType: string; reviewItemId: string | null; versionId: string | null; versionNumber: number | null; actorDisplayName: string; createdAt: string | null }>;
 };
 
 export type SubmitGuestReviewRoundInput = {
@@ -348,6 +398,30 @@ function readTextSelection(value: unknown): ReviewWorkspaceTextSelection | null 
   } catch {
     return null;
   }
+}
+
+function readCommentKind(value: unknown): ReviewWorkspaceCommentKind {
+  return value === "highlight" || value === "clarification_reply" || value === "psg_reply" || value === "system_note"
+    ? value
+    : "pin";
+}
+
+function cleanThreadStatus(value: unknown): "open" | "resolved" {
+  if (value !== "open" && value !== "resolved") {
+    throw new ReviewWorkspaceInputError(400, "Thread status must be open or resolved");
+  }
+  return value;
+}
+
+async function loadProfileNames(client: ReviewWorkspaceDbClient, profileIds: string[]): Promise<Map<string, string>> {
+  const ids = Array.from(new Set(profileIds));
+  if (!ids.length) return new Map();
+  const { data, error } = await client.from("profiles").select("id, display_name").in("id", ids);
+  if (error) throw new Error(`Could not load review comment authors: ${error.message}`);
+  return new Map(((data ?? []) as Array<Record<string, unknown>>).map((row) => [
+    row.id as string,
+    typeof row.display_name === "string" && row.display_name.trim() ? row.display_name : "PSG team",
+  ]));
 }
 
 function resolveClient(client?: ReviewWorkspaceDbClient): ReviewWorkspaceDbClient {
@@ -930,7 +1004,7 @@ export async function getStaffReviewWorkspaceResult(
   const project = projectRow as Record<string, unknown>;
   const roundId = (project.current_round_id as string | null) ?? null;
 
-  const [{ data: roundRows, error: roundError }, { data: roundDocumentRows, error: roundDocumentError }, { data: itemRows, error: itemError }, { data: invitationRows, error: invitationError }, { data: commentRows, error: commentError }, { data: decisionRows, error: decisionError }] = await Promise.all([
+  const [{ data: roundRows, error: roundError }, { data: roundDocumentRows, error: roundDocumentError }, { data: itemRows, error: itemError }, { data: invitationRows, error: invitationError }, { data: commentRows, error: commentError }, { data: threadRows, error: threadError }, { data: decisionRows, error: decisionError }, { data: eventRows, error: eventError }] = await Promise.all([
     roundId
       ? client
           .from("bsm_content_review_rounds")
@@ -957,47 +1031,62 @@ export async function getStaffReviewWorkspaceResult(
       .eq("project_id", access.projectId)
       .is("deleted_at", null)
       .order("position", { ascending: true }),
-    roundId
-      ? client
-          .from("bsm_content_review_invitations")
-          .select("id, reviewer_email, reviewer_name, status, submitted_at, revoked_at")
-          .eq("round_id", roundId)
-          .order("created_at", { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
-    roundId
-      ? client
-          .from("bsm_content_review_comments")
-          .select("id, invitation_id, review_item_id, body, comment_kind, pin_number, draft_status, selection_jsonb")
-          .eq("round_id", roundId)
-          .in("draft_status", ["submitted", "locked"])
-          .order("created_at", { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
-    roundId
-      ? client
-          .from("bsm_content_review_decisions")
-          .select("id, invitation_id, review_item_id, decision, message, submitted_at")
-          .eq("round_id", roundId)
-          .order("submitted_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null }),
+    client
+      .from("bsm_content_review_invitations")
+      .select("id, reviewer_email, reviewer_name, status, submitted_at, revoked_at")
+      .eq("project_id", access.projectId)
+      .eq("shop_id", access.shopId)
+      .order("created_at", { ascending: true }),
+    client
+      .from("bsm_content_review_comments")
+      .select("id, invitation_id, review_item_id, version_id, round_id, thread_id, author_profile_id, body, comment_kind, pin_number, draft_status, viewport, x_ratio, y_ratio, selection_jsonb, created_at")
+      .eq("project_id", access.projectId)
+      .eq("shop_id", access.shopId)
+      .order("created_at", { ascending: true }),
+    client
+      .from("bsm_content_review_comment_threads")
+      .select("id, status, pin_number")
+      .eq("project_id", access.projectId)
+      .eq("shop_id", access.shopId),
+    client
+      .from("bsm_content_review_decisions")
+      .select("id, invitation_id, review_item_id, version_id, round_id, decision, message, submitted_at")
+      .eq("project_id", access.projectId)
+      .eq("shop_id", access.shopId)
+      .order("submitted_at", { ascending: false }),
+    client
+      .from("bsm_content_review_events")
+      .select("id, review_item_id, version_id, event_type, actor_profile_id, payload_jsonb, created_at")
+      .eq("shop_id", access.shopId)
+      .contains("payload_jsonb", { projectId: access.projectId })
+      .order("created_at", { ascending: false }),
   ]);
   if (roundError) throw new Error(`Could not load review workspace round: ${roundError.message}`);
   if (roundDocumentError) throw new Error(`Could not load review workspace round documents: ${roundDocumentError.message}`);
   if (itemError) throw new Error(`Could not load Review Workspace documents: ${itemError.message}`);
   if (invitationError) throw new Error(`Could not load review workspace invitations: ${invitationError.message}`);
   if (commentError) throw new Error(`Could not load review workspace comments: ${commentError.message}`);
+  if (threadError) throw new Error(`Could not load review workspace comment threads: ${threadError.message}`);
   if (decisionError) throw new Error(`Could not load review workspace decisions: ${decisionError.message}`);
+  if (eventError) throw new Error(`Could not load review workspace activity: ${eventError.message}`);
 
   const itemRecords = (itemRows ?? []) as Array<Record<string, unknown>>;
+  const comments = (commentRows ?? []) as Array<Record<string, unknown>>;
+  const decisionRecords = (decisionRows ?? []) as Array<Record<string, unknown>>;
+  const events = (eventRows ?? []) as Array<Record<string, unknown>>;
   const roundVersionByItem = new Map(((roundDocumentRows ?? []) as Array<Record<string, unknown>>).map(
     (row) => [row.review_item_id as string, row.version_id as string],
   ));
-  const versionIds = itemRecords
-    .map((row) => roundVersionByItem.get(row.id as string) ?? row.current_version_id)
-    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  const versionIds = Array.from(new Set([
+    ...itemRecords.map((row) => roundVersionByItem.get(row.id as string) ?? row.current_version_id),
+    ...comments.map((row) => row.version_id),
+    ...decisionRecords.map((row) => row.version_id),
+    ...events.map((row) => row.version_id),
+  ].filter((value): value is string => typeof value === "string" && value.length > 0)));
   const { data: versionRows, error: versionError } = versionIds.length
     ? await client
         .from("bsm_content_review_versions")
-        .select("id, project_id, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb")
+        .select("id, project_id, version_number, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb")
         .in("id", versionIds)
     : { data: [], error: null };
   if (versionError) throw new Error(`Could not load Review Workspace document versions: ${versionError.message}`);
@@ -1005,6 +1094,15 @@ export async function getStaffReviewWorkspaceResult(
     ((versionRows ?? []) as Array<Record<string, unknown>>).map((version) => [version.id as string, version]),
   );
   const round = ((roundRows ?? []) as Array<Record<string, unknown>>)[0] ?? null;
+  const profileNames = await loadProfileNames(client, [
+    ...comments.flatMap((row) => typeof row.author_profile_id === "string" ? [row.author_profile_id] : []),
+    ...events.flatMap((row) => typeof row.actor_profile_id === "string" ? [row.actor_profile_id] : []),
+  ]);
+  const threadsById = new Map(((threadRows ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
+  const reviewersByInvitation = new Map(((invitationRows ?? []) as Array<Record<string, unknown>>).map((row) => [
+    row.id as string,
+    typeof row.reviewer_name === "string" && row.reviewer_name.trim() ? row.reviewer_name : row.reviewer_email as string,
+  ]));
 
   return {
     project: {
@@ -1045,6 +1143,7 @@ export async function getStaffReviewWorkspaceResult(
       return {
         itemId: row.id as string,
         versionId,
+        versionNumber: typeof version?.version_number === "number" ? version.version_number : null,
         title: row.title as string,
         processingStatus: row.processing_status as string,
         status: row.status as string,
@@ -1064,27 +1163,71 @@ export async function getStaffReviewWorkspaceResult(
       submittedAt: (row.submitted_at as string | null) ?? null,
       revokedAt: (row.revoked_at as string | null) ?? null,
     })),
-    submittedComments: ((commentRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    submittedComments: comments.flatMap((row) => {
+      const threadId = typeof row.thread_id === "string" ? row.thread_id : null;
+      if (!threadId) return [];
+      const thread = threadsById.get(threadId);
+      const authorProfileId = typeof row.author_profile_id === "string" ? row.author_profile_id : null;
+      const invitationId = (row.invitation_id as string | null) ?? null;
+      const authorRole = row.comment_kind === "psg_reply" || authorProfileId ? "psg" as const : "client" as const;
+      return [{
       id: row.id as string,
-      invitationId: (row.invitation_id as string | null) ?? null,
+      invitationId,
       reviewItemId: row.review_item_id as string,
+      versionId: (row.version_id as string | null) ?? null,
+      versionNumber: typeof versionsById.get(row.version_id as string)?.version_number === "number"
+        ? versionsById.get(row.version_id as string)?.version_number as number
+        : null,
+      roundId: (row.round_id as string | null) ?? null,
+      threadId,
       body: row.body as string,
-      commentKind: row.comment_kind === "highlight" ? "highlight" as const : "pin" as const,
-      pinNumber: (row.pin_number as number | null) ?? null,
+      commentKind: readCommentKind(row.comment_kind),
+      pinNumber: (row.pin_number as number | null) ?? (thread?.pin_number as number | null) ?? null,
+      threadStatus: (thread?.status as string | null) ?? "open",
       draftStatus: row.draft_status as string,
+      authorRole,
+      authorDisplayName: authorRole === "psg"
+        ? (authorProfileId ? profileNames.get(authorProfileId) : null) ?? "PSG team"
+        : (invitationId ? reviewersByInvitation.get(invitationId) : null) ?? "Client reviewer",
+      createdAt: (row.created_at as string | null) ?? null,
+      viewport: (row.viewport as string | null) ?? null,
+      xRatio: row.x_ratio == null ? null : Number(row.x_ratio),
+      yRatio: row.y_ratio == null ? null : Number(row.y_ratio),
       selection: readTextSelection(row.selection_jsonb),
-    })),
-    decisions: [...new Map(((decisionRows ?? []) as Array<Record<string, unknown>>).slice().reverse().map((row) => [
-      `${row.invitation_id}:${row.review_item_id}`,
-      row,
-    ])).values()].map((row) => ({
+      }];
+    }),
+    decisions: decisionRecords.map((row) => ({
       id: row.id as string,
       invitationId: (row.invitation_id as string | null) ?? null,
       reviewItemId: row.review_item_id as string,
+      versionId: (row.version_id as string | null) ?? null,
+      versionNumber: typeof versionsById.get(row.version_id as string)?.version_number === "number"
+        ? versionsById.get(row.version_id as string)?.version_number as number
+        : null,
+      roundId: (row.round_id as string | null) ?? null,
       decision: row.decision as string,
       message: (row.message as string | null) ?? null,
+      actorDisplayName: reviewersByInvitation.get(row.invitation_id as string) ?? "Client reviewer",
       submittedAt: (row.submitted_at as string | null) ?? null,
     })),
+    activity: events.map((row) => {
+      const payload = row.payload_jsonb && typeof row.payload_jsonb === "object" ? row.payload_jsonb as Record<string, unknown> : {};
+      const actorProfileId = typeof row.actor_profile_id === "string" ? row.actor_profile_id : null;
+      const invitationId = typeof payload.invitationId === "string" ? payload.invitationId : null;
+      return {
+        id: row.id as string,
+        eventType: row.event_type as string,
+        reviewItemId: (row.review_item_id as string | null) ?? null,
+        versionId: (row.version_id as string | null) ?? null,
+        versionNumber: typeof versionsById.get(row.version_id as string)?.version_number === "number"
+          ? versionsById.get(row.version_id as string)?.version_number as number
+          : null,
+        actorDisplayName: actorProfileId
+          ? profileNames.get(actorProfileId) ?? "PSG team"
+          : (invitationId ? reviewersByInvitation.get(invitationId) : null) ?? "Client reviewer",
+        createdAt: (row.created_at as string | null) ?? null,
+      };
+    }),
   };
 }
 
@@ -1440,6 +1583,7 @@ export async function requireGuestReviewSession(
         expires_at,
         revoked_at,
         reviewer_email,
+        reviewer_name,
         project:bsm_content_review_projects!inner (
           id,
           deleted_at
@@ -1474,6 +1618,7 @@ export async function requireGuestReviewSession(
     roundId: data.round_id as string,
     shopId: data.shop_id as string,
     reviewerEmail: invitation.reviewer_email as string,
+    reviewerName: (invitation.reviewer_name as string | null) ?? null,
     invitationStatus: invitation.status as string,
     submittedAt: (invitation.submitted_at as string | null) ?? null,
   };
@@ -1498,6 +1643,69 @@ async function requireRoundDocumentAccess(
   if (!data) {
     throw new ReviewWorkspaceInputError(404, "This review document is not part of the active round");
   }
+}
+
+type ReviewWorkspaceThreadRow = {
+  id: string;
+  project_id: string;
+  round_id: string;
+  shop_id: string;
+  review_item_id: string;
+  version_id: string;
+  owner_invitation_id: string;
+  pin_number: number;
+  status: string;
+};
+
+async function requireGuestThread(
+  client: ReviewWorkspaceDbClient,
+  access: GuestSessionAccess,
+  threadId: string,
+): Promise<ReviewWorkspaceThreadRow> {
+  const { data, error } = await client
+    .from("bsm_content_review_comment_threads")
+    .select("id, project_id, round_id, shop_id, review_item_id, version_id, owner_invitation_id, pin_number, status")
+    .eq("id", assertUuid("threadId", threadId))
+    .eq("project_id", access.projectId)
+    .eq("round_id", access.roundId)
+    .eq("shop_id", access.shopId)
+    .eq("owner_invitation_id", access.invitationId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not load review comment thread: ${error.message}`);
+  if (!data) throw new ReviewWorkspaceInputError(404, "Review comment thread not found");
+  return data as ReviewWorkspaceThreadRow;
+}
+
+async function requireStaffThread(
+  client: ReviewWorkspaceDbClient,
+  projectId: string,
+  actorProfileId: string,
+  actorRole: ReviewWorkspaceActorRole,
+  threadId: string,
+): Promise<ReviewWorkspaceThreadRow> {
+  const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, actorRole);
+  const { data, error } = await client
+    .from("bsm_content_review_comment_threads")
+    .select("id, project_id, round_id, shop_id, review_item_id, version_id, owner_invitation_id, pin_number, status")
+    .eq("id", assertUuid("threadId", threadId))
+    .eq("project_id", access.projectId)
+    .eq("shop_id", access.shopId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not load review comment thread: ${error.message}`);
+  if (!data) throw new ReviewWorkspaceInputError(404, "Review comment thread not found");
+
+  const { data: round, error: roundError } = await client
+    .from("bsm_content_review_rounds")
+    .select("id, status")
+    .eq("id", data.round_id as string)
+    .eq("project_id", access.projectId)
+    .eq("shop_id", access.shopId)
+    .single();
+  if (roundError || !round) throw new Error(`Could not load review comment round: ${roundError?.message ?? "not found"}`);
+  if (round.status !== "active" && round.status !== "inviting") {
+    throw new ReviewWorkspaceInputError(409, "This review round is no longer open");
+  }
+  return data as ReviewWorkspaceThreadRow;
 }
 
 function isActiveInvitation(row: Record<string, unknown>): boolean {
@@ -1681,6 +1889,164 @@ export async function addGuestReviewAnnotation(
   return data;
 }
 
+export async function addGuestThreadReply(
+  input: AddGuestThreadReplyInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+) {
+  const client = resolveClient(deps.client);
+  const access = await requireGuestReviewSession(client, input.sessionHash);
+  if (access.invitationStatus === "submitted" || access.submittedAt) {
+    throw new ReviewWorkspaceInputError(409, "This review round was already submitted");
+  }
+  const thread = await requireGuestThread(client, access, input.threadId);
+  const body = cleanText("body", input.body, 2000);
+  const now = deps.now ?? new Date();
+  const commentId = randomUUID();
+  const { data, error } = await client
+    .from("bsm_content_review_comments")
+    .insert({
+      id: commentId,
+      shop_id: access.shopId,
+      project_id: access.projectId,
+      round_id: access.roundId,
+      invitation_id: access.invitationId,
+      reviewer_session_id: access.sessionId,
+      review_item_id: thread.review_item_id,
+      version_id: thread.version_id,
+      thread_id: thread.id,
+      author_profile_id: null,
+      body,
+      visibility: "shop_and_psg",
+      comment_kind: "clarification_reply",
+      draft_status: "draft",
+      pin_number: null,
+    })
+    .select("id, thread_id, body, draft_status")
+    .single();
+  if (error) throw new Error(`Could not add reviewer reply: ${error.message}`);
+
+  const { error: threadError } = await client
+    .from("bsm_content_review_comment_threads")
+    .update({ status: "open", updated_at: now.toISOString() })
+    .eq("id", thread.id)
+    .eq("owner_invitation_id", access.invitationId);
+  if (threadError) throw new Error(`Could not update review comment thread: ${threadError.message}`);
+
+  await insertEvent(client, {
+    shop_id: access.shopId,
+    review_item_id: thread.review_item_id,
+    version_id: thread.version_id,
+    event_type: "review_workspace_thread_replied",
+    actor_profile_id: null,
+    payload_jsonb: { projectId: access.projectId, roundId: access.roundId, invitationId: access.invitationId, threadId: thread.id, commentId, actorRole: "client" },
+  });
+  return data;
+}
+
+export async function addStaffThreadReply(
+  input: AddStaffThreadReplyInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+) {
+  const client = resolveClient(deps.client);
+  const projectId = assertUuid("projectId", input.projectId);
+  const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
+  const thread = await requireStaffThread(client, projectId, actorProfileId, input.actorRole ?? null, input.threadId);
+  const body = cleanText("body", input.body, 2000);
+  const now = deps.now ?? new Date();
+  const commentId = randomUUID();
+  const { data, error } = await client
+    .from("bsm_content_review_comments")
+    .insert({
+      id: commentId,
+      shop_id: thread.shop_id,
+      project_id: thread.project_id,
+      round_id: thread.round_id,
+      invitation_id: thread.owner_invitation_id,
+      reviewer_session_id: null,
+      review_item_id: thread.review_item_id,
+      version_id: thread.version_id,
+      thread_id: thread.id,
+      author_profile_id: actorProfileId,
+      body,
+      visibility: "shop_and_psg",
+      comment_kind: "psg_reply",
+      draft_status: "submitted",
+      pin_number: null,
+      submitted_at: now.toISOString(),
+    })
+    .select("id, thread_id, body, draft_status")
+    .single();
+  if (error) throw new Error(`Could not add PSG reply: ${error.message}`);
+
+  const { error: threadError } = await client
+    .from("bsm_content_review_comment_threads")
+    .update({ status: "open", updated_at: now.toISOString() })
+    .eq("id", thread.id)
+    .eq("project_id", thread.project_id);
+  if (threadError) throw new Error(`Could not update review comment thread: ${threadError.message}`);
+
+  await insertEvent(client, {
+    shop_id: thread.shop_id,
+    review_item_id: thread.review_item_id,
+    version_id: thread.version_id,
+    event_type: "review_workspace_thread_replied",
+    actor_profile_id: actorProfileId,
+    payload_jsonb: { projectId: thread.project_id, roundId: thread.round_id, invitationId: thread.owner_invitation_id, threadId: thread.id, commentId, actorRole: "psg" },
+  });
+  return data;
+}
+
+async function persistThreadStatus(
+  client: ReviewWorkspaceDbClient,
+  thread: ReviewWorkspaceThreadRow,
+  status: "open" | "resolved",
+  actorProfileId: string | null,
+  actorRole: "client" | "psg",
+  now: Date,
+) {
+  const { error } = await client
+    .from("bsm_content_review_comment_threads")
+    .update({ status, updated_at: now.toISOString() })
+    .eq("id", thread.id)
+    .eq("project_id", thread.project_id)
+    .eq("round_id", thread.round_id);
+  if (error) throw new Error(`Could not ${status === "resolved" ? "resolve" : "reopen"} review comment thread: ${error.message}`);
+
+  await insertEvent(client, {
+    shop_id: thread.shop_id,
+    review_item_id: thread.review_item_id,
+    version_id: thread.version_id,
+    event_type: status === "resolved" ? "review_workspace_thread_resolved" : "review_workspace_thread_reopened",
+    actor_profile_id: actorProfileId,
+    payload_jsonb: { projectId: thread.project_id, roundId: thread.round_id, invitationId: thread.owner_invitation_id, threadId: thread.id, actorRole },
+  });
+  return { threadId: thread.id, status };
+}
+
+export async function setGuestThreadStatus(
+  input: SetGuestThreadStatusInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+) {
+  const client = resolveClient(deps.client);
+  const access = await requireGuestReviewSession(client, input.sessionHash);
+  if (access.invitationStatus === "submitted" || access.submittedAt) {
+    throw new ReviewWorkspaceInputError(409, "This review round was already submitted");
+  }
+  const thread = await requireGuestThread(client, access, input.threadId);
+  return persistThreadStatus(client, thread, cleanThreadStatus(input.status), null, "client", deps.now ?? new Date());
+}
+
+export async function setStaffThreadStatus(
+  input: SetStaffThreadStatusInput,
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+) {
+  const client = resolveClient(deps.client);
+  const projectId = assertUuid("projectId", input.projectId);
+  const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
+  const thread = await requireStaffThread(client, projectId, actorProfileId, input.actorRole ?? null, input.threadId);
+  return persistThreadStatus(client, thread, cleanThreadStatus(input.status), actorProfileId, "psg", deps.now ?? new Date());
+}
+
 export async function getGuestReviewWorkspace(
   sessionHash: string,
   deps: { client?: ReviewWorkspaceDbClient } = {},
@@ -1688,7 +2054,7 @@ export async function getGuestReviewWorkspace(
   const client = resolveClient(deps.client);
   const access = await requireGuestReviewSession(client, sessionHash);
 
-  const [{ data: project }, { data: round }, { data: docs }, { data: comments }, { data: decisions }] = await Promise.all([
+  const [{ data: project }, { data: round }, { data: docs }, { data: comments }, { data: threads }, { data: decisions }] = await Promise.all([
     client.from("bsm_content_review_projects").select("id, title, description, status").eq("id", access.projectId).single(),
     client.from("bsm_content_review_rounds").select("id, status").eq("id", access.roundId).single(),
     client
@@ -1699,10 +2065,17 @@ export async function getGuestReviewWorkspace(
       .eq("shop_id", access.shopId),
     client
       .from("bsm_content_review_comments")
-      .select("id, review_item_id, version_id, body, comment_kind, pin_number, draft_status, viewport, x_ratio, y_ratio, selection_jsonb")
+      .select("id, review_item_id, version_id, thread_id, author_profile_id, body, comment_kind, pin_number, draft_status, viewport, x_ratio, y_ratio, selection_jsonb, created_at")
       .eq("round_id", access.roundId)
       .eq("invitation_id", access.invitationId)
       .order("created_at", { ascending: true }),
+    client
+      .from("bsm_content_review_comment_threads")
+      .select("id, status, pin_number")
+      .eq("round_id", access.roundId)
+      .eq("project_id", access.projectId)
+      .eq("shop_id", access.shopId)
+      .eq("owner_invitation_id", access.invitationId),
     client
       .from("bsm_content_review_decisions")
       .select("review_item_id, version_id, decision, message, submitted_at")
@@ -1724,10 +2097,13 @@ export async function getGuestReviewWorkspace(
   const { data: versions } = versionIds.length
     ? await client
         .from("bsm_content_review_versions")
-        .select("id, project_id, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb")
+        .select("id, project_id, version_number, original_filename, content_type, preview_url, generated_page_path, storage_bucket, storage_path, processed_storage_bucket, processed_storage_path, processed_content_type, source_metadata_jsonb, snapshot_jsonb")
         .in("id", versionIds)
     : { data: [] };
   const versionsById = new Map(((versions ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
+  const commentRows = (comments ?? []) as Array<Record<string, unknown>>;
+  const profileNames = await loadProfileNames(client, commentRows.flatMap((row) => typeof row.author_profile_id === "string" ? [row.author_profile_id] : []));
+  const threadsById = new Map(((threads ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
   const sectionIds = Array.from(
     new Set(
       ((items ?? []) as Array<Record<string, unknown>>)
@@ -1778,6 +2154,7 @@ export async function getGuestReviewWorkspace(
       return {
         itemId: row.review_item_id as string,
         versionId: row.version_id as string,
+        versionNumber: typeof version?.version_number === "number" ? version.version_number : null,
         title: (item?.title as string | null) ?? "Review document",
         note: (item?.admin_context_note as string | null) ?? null,
         processingStatus: (item?.processing_status as string | null) ?? "pending",
@@ -1790,19 +2167,33 @@ export async function getGuestReviewWorkspace(
         proofContent: proofContentFromMetadata(metadata) ?? proofContentFromMetadata(snapshot),
       };
     })),
-    comments: ((comments ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    comments: commentRows.flatMap((row) => {
+      const threadId = typeof row.thread_id === "string" ? row.thread_id : null;
+      if (!threadId) return [];
+      const thread = threadsById.get(threadId);
+      const authorProfileId = typeof row.author_profile_id === "string" ? row.author_profile_id : null;
+      const authorRole = row.comment_kind === "psg_reply" || authorProfileId ? "psg" as const : "client" as const;
+      return [{
       id: row.id as string,
       reviewItemId: row.review_item_id as string,
       versionId: row.version_id as string,
+      threadId,
       body: row.body as string,
-      commentKind: row.comment_kind === "highlight" ? "highlight" : "pin",
-      pinNumber: (row.pin_number as number | null) ?? null,
+      commentKind: readCommentKind(row.comment_kind),
+      pinNumber: (row.pin_number as number | null) ?? (thread?.pin_number as number | null) ?? null,
+      threadStatus: (thread?.status as string | null) ?? "open",
       draftStatus: row.draft_status as string,
+      authorRole,
+      authorDisplayName: authorRole === "psg"
+        ? (authorProfileId ? profileNames.get(authorProfileId) : null) ?? "PSG team"
+        : access.reviewerName ?? access.reviewerEmail,
+      createdAt: (row.created_at as string | null) ?? null,
       viewport: (row.viewport as string | null) ?? null,
       xRatio: row.x_ratio == null ? null : Number(row.x_ratio),
       yRatio: row.y_ratio == null ? null : Number(row.y_ratio),
       selection: readTextSelection(row.selection_jsonb),
-    })),
+      }];
+    }),
     decisions: ((decisions ?? []) as Array<Record<string, unknown>>).map((row) => ({
       reviewItemId: row.review_item_id as string,
       versionId: row.version_id as string,
@@ -2007,6 +2398,14 @@ export async function submitGuestReviewRound(
     .eq("invitation_id", access.invitationId);
   if (commentLockError) throw new Error(`Could not lock reviewer comments: ${commentLockError.message}`);
 
+  const { error: threadSubmitError } = await client
+    .from("bsm_content_review_comment_threads")
+    .update({ status: "submitted", updated_at: now.toISOString() })
+    .eq("round_id", access.roundId)
+    .eq("owner_invitation_id", access.invitationId)
+    .eq("status", "draft");
+  if (threadSubmitError) throw new Error(`Could not submit reviewer comment threads: ${threadSubmitError.message}`);
+
   const { error: reviewerUpdateError } = await client
     .from("bsm_content_review_reviewers")
     .update({ submission_status: "submitted", submitted_at: now.toISOString() })
@@ -2087,6 +2486,14 @@ export async function reopenGuestReviewRound(
     .eq("round_id", access.roundId)
     .eq("invitation_id", access.invitationId);
   if (reviewerUpdateError) throw new Error(`Could not reopen reviewer submission: ${reviewerUpdateError.message}`);
+
+  const { error: threadReopenError } = await client
+    .from("bsm_content_review_comment_threads")
+    .update({ status: "open", updated_at: now.toISOString() })
+    .eq("round_id", access.roundId)
+    .eq("owner_invitation_id", access.invitationId)
+    .eq("status", "submitted");
+  if (threadReopenError) throw new Error(`Could not reopen reviewer comment threads: ${threadReopenError.message}`);
 
   await insertEvent(client, {
     shop_id: access.shopId,

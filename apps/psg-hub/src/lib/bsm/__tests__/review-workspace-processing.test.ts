@@ -67,9 +67,16 @@ describe("review workspace processing contract", () => {
       sanitizationStatus: "pending",
     });
 
-    expect(() => classifyReviewWorkspaceFile({ fileName: "image.png", contentType: "image/png", byteSize: 1024 })).toThrow(
-      "Unsupported file type",
-    );
+    expect(classifyReviewWorkspaceFile({ fileName: "image.png", contentType: "image/png", byteSize: 1024 })).toMatchObject({
+      fileKind: "image",
+      normalizedMimeType: "image/png",
+      requiredCapabilities: ["malware_scan", "safe_passthrough"],
+    });
+    expect(classifyReviewWorkspaceFile({ fileName: "notes.md", contentType: "text/markdown", byteSize: 1024 })).toMatchObject({
+      fileKind: "text",
+      normalizedMimeType: "text/plain",
+      requiredCapabilities: ["malware_scan", "safe_passthrough"],
+    });
     expect(() => classifyReviewWorkspaceFile({ fileName: "huge.pdf", contentType: "application/pdf", byteSize: 26 * 1024 * 1024 })).toThrow(
       "25 MB",
     );
@@ -197,6 +204,26 @@ describe("review workspace processing contract", () => {
     expect(commands.some((command) => command.cmd === "bash" || command.cmd.includes("soffice"))).toBe(false);
     expect(locked).toBe(true);
     expect(stopped).toBe(true);
+  });
+
+  it("returns a valid image unchanged after the malware scan", async () => {
+    const source = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+    const sandbox = {
+      name: "sandbox-clean-image",
+      fs: { mkdir: async () => undefined, writeFile: async () => undefined, readFile: async () => Buffer.alloc(0) },
+      async runCommand(input: { args?: string[] }) {
+        return { exitCode: 0, stdout: async () => input.args?.includes("--version") ? "ClamAV 1.5.2" : "", stderr: async () => "" };
+      },
+      async updateNetworkPolicy() {},
+      async stop() {},
+    };
+
+    const result = await processReviewFileInSandbox(
+      { fileName: "proof.png", contentType: "image/png", data: source },
+      { createSandbox: async () => sandbox },
+    );
+
+    expect(result).toMatchObject({ data: source, contentType: "image/png", converter: null });
   });
 
   it("allows email-style HTML with HTTPS images and links", () => {
