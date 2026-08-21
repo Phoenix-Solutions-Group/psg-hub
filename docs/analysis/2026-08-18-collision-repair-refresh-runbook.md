@@ -85,6 +85,27 @@ ownership remain separately controlled actions.
   import would update the governed snapshot, but this shop still fails the 14-day
   repair-arrival gate.
 
+## FileMaker operations recheck — 2026-08-20
+
+- A read-only SSH recheck at 20:57 CT found FileMaker Server active. The collision
+  refresh timer remains disabled and inactive; its service is also inactive.
+- The operations secret remains mode `0600` and the runtime directory mode `0700`,
+  both owned by the non-login `psg-refresh` account. No secret values were read.
+- Event.log shows both `FMS` at midnight and `Backup` at 3:00 AM completed normally
+  on August 20. Each retained output contains all five hosted `.fmp12` files, no
+  zero-byte files, and no `_InProgress` directory. The prior daily-error-809 claim is
+  not current evidence for this run.
+- Both schedules still write below the same root. That root now holds 38 GB of backups
+  with only 5.6 GB free on a 93%-used filesystem; the separate mounted volume still
+  has about 75 GB free. A successful run does not resolve this capacity risk.
+- The same overnight log contains 92 FileMaker scripting-error entries across 15
+  schedules: codes 3, 13, and 101. FileMaker records each schedule as completed, so
+  the FileMaker owner must classify which errors are expected empty-set/UI cleanup
+  behavior and which indicate missed nightly source processing before recurring PSG
+  refresh is enabled.
+- No backup schedule, database, timer, secret, or file was changed. A restore drill
+  and a named refresh-failure recipient are still unproven.
+
 ## One-time FileMaker configuration
 
 The FileMaker administrator must:
@@ -193,13 +214,13 @@ normal `db push`. Five already-applied collision migrations have different times
 locally and remotely. Their recorded SQL is byte-identical; the first differs only by
 the local file's final newline.
 
-| Local version  | Remote version | Migration name                      |
-| -------------- | -------------- | ----------------------------------- |
-| 20260818212107 | 20260818212317 | `collision_repair_feed_freshness`   |
-| 20260818220330 | 20260818220842 | `collision_multiweek_forecasts`     |
-| 20260818220953 | 20260818221002 | `index_collision_horizon_company`   |
-| 20260818221806 | 20260818221905 | `collision_forecast_monitoring`     |
-| 20260818222352 | 20260818222601 | `collision_insurer_alias_review`    |
+| Local version  | Remote version | Migration name                    |
+| -------------- | -------------- | --------------------------------- |
+| 20260818212107 | 20260818212317 | `collision_repair_feed_freshness` |
+| 20260818220330 | 20260818220842 | `collision_multiweek_forecasts`   |
+| 20260818220953 | 20260818221002 | `index_collision_horizon_company` |
+| 20260818221806 | 20260818221905 | `collision_forecast_monitoring`   |
+| 20260818222352 | 20260818222601 | `collision_insurer_alias_review`  |
 
 Do not run broad `db push`, `migration repair`, or `db pull` during this release. A
 future scoped history repair requires its own approval and coordination with the other
@@ -212,6 +233,8 @@ approval, apply these reviewed files in order through the migration runner:
 2. `20260819201319_collision_forecast_readiness.sql`
 3. `20260819210842_harden_collision_example_functions.sql`
 4. `20260820215207_fix_collision_weather_coverage.sql`
+5. `20260821012506_collision_forecast_candidate_evaluations.sql`
+6. `20260821013156_collision_shop_identity_evidence.sql`
 
 The current production preconditions are: 3,986 provisional events and no matching
 source-ledger row for `noaa_spc_preliminary-20260801-20260817`; neither new view exists;
@@ -229,7 +252,10 @@ Postflight must prove:
    `anon`, and `authenticated`, and allow `service_role`; and
 5. weather coverage equals repair volume in ZIPs with loaded boundaries while missing
    ZIP-month event rows contribute zero exposure; and
-6. the Supabase security advisor no longer reports the two collision example-function
+6. candidate-evaluation and shop-identity tables remain service-role-only, their
+   mutation RPCs deny browser roles, and shop mapping rejects missing or mismatched
+   governed address evidence; and
+7. the Supabase security advisor no longer reports the two collision example-function
    search-path warnings.
 
 The first three files were applied together in a local transaction and rolled back.
@@ -243,14 +269,12 @@ The local database ledger itself remains intentionally unrepaired.
   on 2026-08-19. The staged systemd timer runs at 4:30 AM America/Chicago with up to
   ten minutes of jitter.
 - Two enabled FileMaker backup schedules currently target the same backup root. `FMS`
-  runs at midnight, retains up to seven backups, and is healthy. `Backup` runs at 3:00
-  AM, retains three, and has failed daily with FileMaker error 809 (`Disk full`). The
-  root filesystem currently has about 23 GB free; the healthy backup root contains two
-  snapshots totaling about 19 GB.
-- A read-only 2026-08-19 16:16 CT recheck confirmed the latest midnight snapshot is
-  9.4 GB and contains all five hosted database files. The Advantage and Survey backup
-  entries both report `Normal`. The 3:00 AM schedule still aborts for insufficient
-  destination space. Backup existence is proven; a restore drill is not.
+  runs at midnight and `Backup` at 3:00 AM. Both August 20 runs completed and each
+  output contains all five hosted databases; backup existence is proven, but a restore
+  drill is not.
+- The backup root now contains 38 GB with only 5.6 GB free on a 93%-used filesystem.
+  The current risk is shared-root capacity, not a proven failure of the latest 3:00 AM
+  run.
 - A separate persistent ext4 volume at `/mnt/HC_Volume_105029819` has about 75 GB free.
   No backup configuration or files were changed. The FileMaker owner must either confirm
   the 3:00 AM schedule is redundant and disable it, or move it to a FileMaker-owned
@@ -258,8 +282,9 @@ The local database ledger itself remains intentionally unrepaired.
   midnight backups to make room.
 - Install `apps/psg-hub/ops/systemd/psg-collision-refresh.{service,timer}` under
   `/etc/systemd/system/`. Keep the timer disabled until the first manual service run
-  passes every acceptance check, the backup conflict is resolved, and a named
-  operational owner receives failures.
+  passes every acceptance check, the shared-root capacity risk and nightly scripting
+  errors are dispositioned, a restore drill passes, and a named operational owner
+  receives failures.
 - The service runs as the non-login `psg-refresh` account, reads only the mode-0600
   operations secret, writes only `/opt/psg/runtime`, lowers CPU and I/O priority, and
   applies systemd filesystem and privilege hardening.

@@ -20,9 +20,11 @@
   without a matching source-ledger row. This branch adds an idempotent provenance
   backfill, a service-role-only reconciliation view, and a cron health gate. They are
   tested locally but are not applied or deployed to production.
-- Two enabled FileMaker backups target the same root. The midnight job is healthy;
-  the 3:00 AM job fails daily with error 809. No backup configuration or files were
-  changed, and the collision refresh timer remains disabled.
+- A current read-only FileMaker recheck found both the midnight and 3:00 AM August 20
+  backups completed with all five hosted files. They still share a root that is now
+  93% used with 5.6 GB free, and 15 overnight schedules logged 92 scripting errors
+  despite completing. No server state changed; restore proof, error classification,
+  capacity disposition, and alert ownership still gate the disabled refresh timer.
 - The superadmin Data Review page supports explicit source-shop mapping approval
   with target selection, written identity evidence, confirmation, and an atomic audit
   entry. This branch also adds repair freshness, storm-ledger reconciliation, KDOT
@@ -331,10 +333,11 @@ staging, model approval, scoring, and publication remain separate audited action
 
 ## Next execution order
 
-1. Resolve the FileMaker operations gate: the owner must decide whether to disable or
-   relocate the failing duplicate 3:00 AM backup, prove backup/restore recovery, and
-   name the person or channel that receives refresh failures. Keep the daily refresh
-   timer disabled until those controls are approved and verified.
+1. Resolve the FileMaker operations gate: the owner must decide whether the duplicate
+   3:00 AM backup is intentional and either free or relocate capacity safely, classify
+   the nightly script errors as expected or failed processing, prove restore recovery,
+   and name the person or channel that receives refresh failures. Keep the daily
+   refresh timer disabled until those controls are approved and verified.
 2. After separate production approval, apply the storm source-reconciliation,
    forecast-readiness, example-function hardening, weather-coverage, governed shop
    identity, and forecast-candidate evidence migrations, then deploy the matching
