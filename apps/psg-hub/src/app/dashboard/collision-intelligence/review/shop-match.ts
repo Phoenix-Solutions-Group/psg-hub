@@ -11,12 +11,24 @@ export type ShopDirectoryEntry = {
 };
 
 export type ShopIdentityEvidence = {
+  source: "governed" | "preview";
   street: string;
   locality: string;
   region: string;
   postalCode: string;
   checkedAt: string;
   sources: Array<[string, string]>;
+};
+
+export type ShopIdentityEvidenceRow = {
+  source_shop_key: string;
+  address_street: string;
+  address_locality: string;
+  address_region: string;
+  address_postal_code: string;
+  source_name: string;
+  source_url: string;
+  reviewed_at: string;
 };
 
 export type ForecastCandidateEvidence = {
@@ -65,6 +77,7 @@ export function approvedPoliciesWithoutCustomerAudience<
 // ponytail: two verified pilot locations; move to governed identity rows when review coverage expands.
 export const shopIdentityEvidence: Record<string, ShopIdentityEvidence> = {
   PS228: {
+    source: "preview",
     street: "4538 Cornhusker Hwy",
     locality: "Lincoln",
     region: "NE",
@@ -82,6 +95,7 @@ export const shopIdentityEvidence: Record<string, ShopIdentityEvidence> = {
     ],
   },
   PS229: {
+    source: "preview",
     street: "1500 Center Park Rd",
     locality: "Lincoln",
     region: "NE",
@@ -95,6 +109,32 @@ export const shopIdentityEvidence: Record<string, ShopIdentityEvidence> = {
     ],
   },
 };
+
+export function shopIdentityEvidenceFromRow(
+  row: ShopIdentityEvidenceRow,
+): ShopIdentityEvidence | null {
+  if (
+    !row.source_shop_key.match(/^PS[0-9]+$/) ||
+    !row.address_street.trim() ||
+    !row.address_locality.trim() ||
+    !row.address_region.match(/^[A-Z]{2}$/) ||
+    !row.address_postal_code.match(/^[0-9]{5}$/) ||
+    !row.source_name.trim() ||
+    !row.source_url.startsWith("https://")
+  ) {
+    return null;
+  }
+
+  return {
+    source: "governed",
+    street: row.address_street,
+    locality: row.address_locality,
+    region: row.address_region,
+    postalCode: row.address_postal_code,
+    checkedAt: row.reviewed_at,
+    sources: [[row.source_name, row.source_url]],
+  };
+}
 
 // ponytail: preview fallback until the governed candidate-evidence migration is released.
 export const forecastCandidateEvidence: Record<
@@ -277,8 +317,9 @@ export function matchesVerifiedShopLocation(
     | "address_region"
     | "address_postal_code"
   >,
+  evidenceByShop: Record<string, ShopIdentityEvidence> = shopIdentityEvidence,
 ) {
-  const evidence = shopIdentityEvidence[sourceShopKey];
+  const evidence = evidenceByShop[sourceShopKey];
   if (!evidence) return false;
   return (
     normalizeStreet(shop.address_street ?? "") ===

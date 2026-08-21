@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   matchesVerifiedShopLocation,
-  shopIdentityEvidence,
+  shopIdentityEvidenceFromRow,
+  type ShopIdentityEvidenceRow,
 } from "@/app/dashboard/collision-intelligence/review/shop-match";
 
 const destination = "/dashboard/collision-intelligence/review";
@@ -79,7 +80,33 @@ export async function POST(request: Request) {
   }
 
   const service = createServiceClient();
-  if (!shopIdentityEvidence[parsed.data.sourceShopKey]) {
+  const identityEvidenceResult = await service
+    .from("collision_shop_identity_evidence")
+    .select(
+      "source_shop_key,address_street,address_locality,address_region,address_postal_code,source_name,source_url,reviewed_at",
+    )
+    .eq("source_shop_key", parsed.data.sourceShopKey)
+    .maybeSingle();
+  if (identityEvidenceResult.error) {
+    if (identityEvidenceResult.error.code !== "PGRST205") {
+      console.error(
+        "[collision-shop-mapping-review] evidence lookup failed:",
+        identityEvidenceResult.error.message,
+      );
+      return redirectToQueue(request, "mapping_error");
+    }
+    return redirectToQueue(
+      request,
+      "mapping_evidence_missing",
+      parsed.data.sourceShopKey,
+    );
+  }
+  const identityEvidence = identityEvidenceResult.data
+    ? shopIdentityEvidenceFromRow(
+        identityEvidenceResult.data as ShopIdentityEvidenceRow,
+      )
+    : null;
+  if (!identityEvidence) {
     return redirectToQueue(
       request,
       "mapping_evidence_missing",
@@ -102,7 +129,9 @@ export async function POST(request: Request) {
   }
   if (
     !targetShop.data ||
-    !matchesVerifiedShopLocation(parsed.data.sourceShopKey, targetShop.data)
+    !matchesVerifiedShopLocation(parsed.data.sourceShopKey, targetShop.data, {
+      [parsed.data.sourceShopKey]: identityEvidence,
+    })
   ) {
     return redirectToQueue(
       request,

@@ -7,6 +7,7 @@ import {
   preferredForecastPilot,
   rankShopMatches,
   shopMemberCount,
+  shopIdentityEvidenceFromRow,
   summarizeForecastCandidateEvidence,
   type ShopDirectoryEntry,
 } from "../shop-match";
@@ -98,6 +99,25 @@ describe("shop identity matching", () => {
         .filter((match) => matchesVerifiedShopLocation("PS229", match.shop))
         .map((match) => match.shop.id),
     ).toEqual(["body-shop"]);
+  });
+
+  it("uses a governed Supabase row as exact-address evidence", () => {
+    expect(
+      shopIdentityEvidenceFromRow({
+        source_shop_key: "PS229",
+        address_street: "1500 Center Park Rd",
+        address_locality: "Lincoln",
+        address_region: "NE",
+        address_postal_code: "68512",
+        source_name: "BBB business profile",
+        source_url: "https://example.com/shop",
+        reviewed_at: "2026-08-20T12:00:00Z",
+      }),
+    ).toMatchObject({
+      source: "governed",
+      street: "1500 Center Park Rd",
+      postalCode: "68512",
+    });
   });
 
   it("keeps preview evidence separate from release readiness", () => {

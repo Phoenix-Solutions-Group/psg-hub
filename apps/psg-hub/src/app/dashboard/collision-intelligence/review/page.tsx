@@ -28,9 +28,11 @@ import {
   rankShopMatches,
   shopMemberCount,
   shopIdentityEvidence,
+  shopIdentityEvidenceFromRow,
   summarizeForecastCandidateEvidence,
   type ForecastCandidateEvaluationRow,
   type ShopDirectoryEntry,
+  type ShopIdentityEvidenceRow,
 } from "./shop-match";
 
 type Props = {
@@ -202,6 +204,12 @@ const notices: Record<string, string> = {
     "That Hub shop does not have the verified address for this imported location. No mapping was changed.",
   mapping_evidence_missing:
     "This imported location does not have governed address evidence yet. No mapping was changed.",
+  mapping_evidence_recorded:
+    "Address evidence recorded. You can now compare and connect the exact Hub location.",
+  mapping_evidence_release_pending:
+    "Address evidence is read-only until the reviewed database migration is applied.",
+  mapping_evidence_error:
+    "The address evidence could not be saved. No shop mapping was changed.",
   mapping_error: "The shop mapping could not be saved. No mapping was changed.",
   forecast_model_approved:
     "All four forecast policies were approved. No forecast was generated or published; run the governed scorer separately after confirming source freshness.",
@@ -264,6 +272,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     hubShopResult,
     customerRoleResult,
     mappedShopResult,
+    identityEvidenceResult,
     repairSourceResult,
     repairFeedResult,
     stormSourceResult,
@@ -317,6 +326,12 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       .select("shop_id")
       .eq("mapping_status", "mapped"),
     service
+      .from("collision_shop_identity_evidence")
+      .select(
+        "source_shop_key,address_street,address_locality,address_region,address_postal_code,source_name,source_url,reviewed_at",
+      )
+      .eq("source_system", "filemaker_repair_customer"),
+    service
       .from("collision_repair_sources")
       .select("row_count,accepted_count,rejected_count,arrival_max")
       .eq("status", "loaded")
@@ -365,6 +380,10 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     forecastResult.error,
     "v_collision_forecast_readiness",
   );
+  const identityEvidenceReleasePending = isMissingReviewView(
+    identityEvidenceResult.error,
+    "collision_shop_identity_evidence",
+  );
 
   if (
     aliasResult.error ||
@@ -375,6 +394,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     hubShopResult.error ||
     customerRoleResult.error ||
     mappedShopResult.error ||
+    (identityEvidenceResult.error && !identityEvidenceReleasePending) ||
     repairSourceResult.error ||
     repairFeedResult.error ||
     (stormSourceResult.error && !stormHealthUnavailable) ||
@@ -392,6 +412,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         hubShopResult.error?.message ??
         customerRoleResult.error?.message ??
         mappedShopResult.error?.message ??
+        identityEvidenceResult.error?.message ??
         repairSourceResult.error?.message ??
         repairFeedResult.error?.message ??
         stormSourceResult.error?.message ??
@@ -599,6 +620,24 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   const customerProfileIds = new Set(
     (customerRoleResult.data ?? []).map((row) => row.profile_id as string),
   );
+  const governedShopIdentityEvidence = Object.create(null) as Record<
+    string,
+    (typeof shopIdentityEvidence)[string]
+  >;
+  for (const row of (identityEvidenceResult.data ??
+    []) as unknown as ShopIdentityEvidenceRow[]) {
+    const evidence = shopIdentityEvidenceFromRow(row);
+    if (!evidence) {
+      throw new Error(
+        `Shop identity evidence for ${row.source_shop_key} is malformed`,
+      );
+    }
+    governedShopIdentityEvidence[row.source_shop_key] = evidence;
+  }
+  const reviewedShopIdentityEvidence = {
+    ...shopIdentityEvidence,
+    ...governedShopIdentityEvidence,
+  };
   const availableHubShops = hubShops.filter(
     (shop) => !mappedShopIds.has(shop.id),
   );
@@ -655,7 +694,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     featuredShops[0] ??
     null;
   const selectedShopEvidence = selectedShop
-    ? shopIdentityEvidence[selectedShop.source_shop_key]
+    ? reviewedShopIdentityEvidence[selectedShop.source_shop_key]
     : null;
   const selectedForecastReadiness = selectedShop
     ? forecastEvaluationReadiness(
@@ -716,6 +755,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         locationVerified: matchesVerifiedShopLocation(
           selectedShop.source_shop_key,
           match.shop,
+          reviewedShopIdentityEvidence,
         ),
       }))
     : [];
@@ -1959,9 +1999,22 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                   role="note"
                   className="rounded-lg border border-primary/30 bg-primary/5 p-4"
                 >
-                  <p className="font-heading font-semibold">
-                    Public location evidence
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-heading font-semibold">
+                      Public location evidence
+                    </p>
+                    <Badge
+                      variant={
+                        selectedShopEvidence.source === "governed"
+                          ? "success"
+                          : "outline"
+                      }
+                    >
+                      {selectedShopEvidence.source === "governed"
+                        ? "Supabase evidence"
+                        : "Preview evidence"}
+                    </Badge>
+                  </div>
                   <p className="mt-1 text-sm text-foreground/75">
                     {selectedShopEvidence.street},{" "}
                     {selectedShopEvidence.locality},{" "}
@@ -1969,7 +2022,11 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     {selectedShopEvidence.postalCode}
                   </p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Checked {selectedShopEvidence.checkedAt}. Sources:{" "}
+                    Checked{" "}
+                    {selectedShopEvidence.source === "governed"
+                      ? formatReviewDate(selectedShopEvidence.checkedAt)
+                      : selectedShopEvidence.checkedAt}
+                    . Sources:{" "}
                     {selectedShopEvidence.sources.map(([label, url], index) => (
                       <span key={url}>
                         {index ? " · " : ""}
@@ -1985,22 +2042,152 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                     ))}
                     . Use this to distinguish North from South, then confirm the
                     PSG agreement and exact Hub location before saving.
+                    {selectedShopEvidence.source === "preview"
+                      ? " Preview evidence explains the candidate but cannot authorize a mapping; record it in Supabase below first."
+                      : " This governed row is the address the database will enforce."}
                   </p>
                 </div>
-              ) : selectedShop ? (
-                <div
-                  role="status"
-                  className="rounded-lg border border-warning/50 bg-warning/10 p-4"
+              ) : null}
+
+              {selectedShop && selectedShopEvidence?.source !== "governed" ? (
+                <form
+                  action="/api/collision-intelligence/shop-identity-evidence-review"
+                  method="post"
+                  className="space-y-4 rounded-lg border border-warning/50 bg-warning/10 p-4"
                 >
-                  <p className="font-heading font-semibold">
-                    Governed address evidence required
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-foreground/75">
-                    This imported location is not eligible for connection yet.
-                    Record an authoritative source plus the expected street,
-                    city, state, and ZIP before a Hub shop can be selected.
-                  </p>
-                </div>
+                  <input
+                    type="hidden"
+                    name="source_shop_key"
+                    value={selectedShop.source_shop_key}
+                  />
+                  <div>
+                    <p className="font-heading font-semibold">
+                      Record governed address evidence
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-foreground/75">
+                      Copy the physical address from an authoritative public or
+                      PSG source. This does not connect the shop; it defines the
+                      exact address a later mapping must match.
+                    </p>
+                  </div>
+                  <fieldset
+                    disabled={identityEvidenceReleasePending}
+                    className="space-y-4 disabled:opacity-60"
+                  >
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="text-sm font-medium">
+                        Street address
+                        <input
+                          name="address_street"
+                          required
+                          minLength={3}
+                          maxLength={200}
+                          defaultValue={selectedShopEvidence?.street ?? ""}
+                          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                        />
+                      </label>
+                      <label className="text-sm font-medium">
+                        City
+                        <input
+                          name="address_locality"
+                          required
+                          minLength={2}
+                          maxLength={100}
+                          defaultValue={selectedShopEvidence?.locality ?? ""}
+                          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                        />
+                      </label>
+                      <label className="text-sm font-medium">
+                        State
+                        <input
+                          name="address_region"
+                          required
+                          pattern="[A-Z]{2}"
+                          maxLength={2}
+                          defaultValue={selectedShopEvidence?.region ?? ""}
+                          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal uppercase"
+                        />
+                      </label>
+                      <label className="text-sm font-medium">
+                        ZIP code
+                        <input
+                          name="address_postal_code"
+                          required
+                          inputMode="numeric"
+                          pattern="[0-9]{5}"
+                          maxLength={5}
+                          defaultValue={selectedShopEvidence?.postalCode ?? ""}
+                          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                        />
+                      </label>
+                      <label className="text-sm font-medium">
+                        Evidence source
+                        <input
+                          name="source_name"
+                          required
+                          minLength={3}
+                          maxLength={200}
+                          placeholder="PSG agreement or public registry"
+                          defaultValue={
+                            selectedShopEvidence?.sources[0]?.[0] ?? ""
+                          }
+                          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                        />
+                      </label>
+                      <label className="text-sm font-medium">
+                        Source URL
+                        <input
+                          type="url"
+                          name="source_url"
+                          required
+                          maxLength={1000}
+                          placeholder="https://"
+                          defaultValue={
+                            selectedShopEvidence?.sources[0]?.[1] ?? ""
+                          }
+                          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                        />
+                      </label>
+                    </div>
+                    <label className="block text-sm font-medium">
+                      Review notes
+                      <textarea
+                        name="review_notes"
+                        required
+                        minLength={20}
+                        maxLength={1000}
+                        rows={3}
+                        placeholder="Explain why this source establishes the exact physical location."
+                        className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
+                      />
+                    </label>
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="evidence_confirmed"
+                        value="confirmed"
+                        required
+                        className="mt-1"
+                      />
+                      <span>
+                        I verified this source identifies the imported shop at
+                        this exact physical address.
+                      </span>
+                    </label>
+                    <button
+                      type="submit"
+                      className="rounded-md bg-primary px-3 py-2 font-heading text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                    >
+                      Record address evidence
+                    </button>
+                  </fieldset>
+                  {identityEvidenceReleasePending ? (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      The reviewed Supabase migration must be applied before
+                      this evidence can be saved.
+                    </p>
+                  ) : null}
+                </form>
               ) : null}
 
               {selectedForecastReadiness ? (
@@ -2133,7 +2320,8 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                 </div>
               ) : null}
 
-              {selectedShopEvidence && selectableShopMatches.length ? (
+              {selectedShopEvidence?.source === "governed" &&
+              selectableShopMatches.length ? (
                 <form
                   action="/api/collision-intelligence/shop-mapping-review"
                   method="post"
@@ -2290,7 +2478,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
                   role="status"
                   className="rounded-md border border-border bg-secondary/40 p-4 text-sm leading-6 text-muted-foreground"
                 >
-                  {!selectedShopEvidence
+                  {selectedShopEvidence?.source !== "governed"
                     ? "This source cannot be connected until governed address evidence is recorded. Name similarity alone is not accepted."
                     : shopMatches.length
                       ? "No available Hub shop has the verified street address for this imported location. Create or update the exact Hub location first."

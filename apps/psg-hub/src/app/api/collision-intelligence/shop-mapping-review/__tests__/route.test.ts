@@ -21,6 +21,17 @@ vi.mock("@/lib/supabase/service", () => ({
 const { POST } =
   await import("@/app/api/collision-intelligence/shop-mapping-review/route");
 
+const governedEvidence = {
+  source_shop_key: "PS229",
+  address_street: "1500 Center Park Rd",
+  address_locality: "Lincoln",
+  address_region: "NE",
+  address_postal_code: "68512",
+  source_name: "BBB business profile",
+  source_url: "https://example.com/shop",
+  reviewed_at: "2026-08-20T12:00:00Z",
+};
+
 function request(fields: Record<string, string>) {
   const body = new FormData();
   for (const [name, value] of Object.entries(fields)) body.set(name, value);
@@ -77,15 +88,17 @@ describe("POST collision shop mapping review", () => {
       role: "psg_superadmin",
       shopIds: [],
     });
-    maybeSingle.mockResolvedValue({
-      data: {
-        address_street: "1500 Center Park Road",
-        address_locality: "Lincoln",
-        address_region: "NE",
-        address_postal_code: "68512",
-      },
-      error: null,
-    });
+    maybeSingle
+      .mockResolvedValueOnce({ data: governedEvidence, error: null })
+      .mockResolvedValueOnce({
+        data: {
+          address_street: "1500 Center Park Road",
+          address_locality: "Lincoln",
+          address_region: "NE",
+          address_postal_code: "68512",
+        },
+        error: null,
+      });
 
     const response = await POST(
       request({
@@ -115,6 +128,7 @@ describe("POST collision shop mapping review", () => {
       role: "psg_superadmin",
       shopIds: [],
     });
+    maybeSingle.mockResolvedValue({ data: null, error: null });
 
     const response = await POST(
       request({
@@ -129,7 +143,7 @@ describe("POST collision shop mapping review", () => {
     expect(response.headers.get("location")).toContain(
       "result=mapping_evidence_missing",
     );
-    expect(from).not.toHaveBeenCalled();
+    expect(from).toHaveBeenCalledWith("collision_shop_identity_evidence");
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -139,15 +153,17 @@ describe("POST collision shop mapping review", () => {
       role: "psg_superadmin",
       shopIds: [],
     });
-    maybeSingle.mockResolvedValue({
-      data: {
-        address_street: null,
-        address_locality: null,
-        address_region: null,
-        address_postal_code: null,
-      },
-      error: null,
-    });
+    maybeSingle
+      .mockResolvedValueOnce({ data: governedEvidence, error: null })
+      .mockResolvedValueOnce({
+        data: {
+          address_street: null,
+          address_locality: null,
+          address_region: null,
+          address_postal_code: null,
+        },
+        error: null,
+      });
 
     const response = await POST(
       request({

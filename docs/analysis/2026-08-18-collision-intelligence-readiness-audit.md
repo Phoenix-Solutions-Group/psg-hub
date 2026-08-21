@@ -30,6 +30,15 @@
   the browser. Forecast readiness now covers every mapped shop across all four target
   horizons rather than sampling four rows globally. One mapping remains active; 198
   candidates remain unapproved.
+- Shop address evidence is now modeled as a separate service-only, audited
+  Supabase decision before mapping. The branch keeps the two researched pilot
+  addresses as clearly labeled display-only previews, adds a superadmin evidence
+  form, and adds a database trigger that rejects missing or mismatched evidence.
+  This migration is rollback-tested but not applied to production.
+- Pre-mapping forecast evidence is now modeled as a reproducible service-only
+  snapshot keyed by source shop, completed-week cutoff, input hash, and evaluator
+  hash. It cannot map, approve, score, or publish. The branch reads the newest
+  governed snapshot when present and labels the current code fallback as preview.
 - The review route is discoverable in dashboard navigation only for superadmins. The
   page and mutation endpoint retain independent server-side role checks.
 - The branch preview is deployed at
@@ -323,23 +332,26 @@ staging, model approval, scoring, and publication remain separate audited action
    name the person or channel that receives refresh failures. Keep the daily refresh
    timer disabled until those controls are approved and verified.
 2. After separate production approval, apply the storm source-reconciliation,
-   forecast-readiness, example-function hardening, and weather-coverage corrections,
-   then deploy the matching cron health checks. Because
+   forecast-readiness, example-function hardening, weather-coverage, governed shop
+   identity, and forecast-candidate evidence migrations, then deploy the matching
+   cron health checks. Because
    the shared migration ledger is divergent, use
    individually reviewed migration execution after approval rather than `db push`,
    `migration repair`, or `db pull`. Confirm every NCEI/SPC batch is reconciled, every
    mapped shop/horizon has an explainable state, weather coverage equals loaded
    boundary coverage, and browser roles cannot read the service-only views or RPCs.
 3. Use `/dashboard/collision-intelligence/review` as a superadmin to review the
-   highest-volume insurer aliases and source-shop mappings. Mapping approval requires
-   target selection, written identity evidence, and explicit confirmation, and it is
-   committed with its audit entry in one transaction. For the first current forecast
-   pilot, verify the intended member audience for South Lincoln, then review PS229
-   against its exact 1500 Center Park Road address. After mapping approval, rerun the
-   frozen evaluation, stage the four passing horizons, and review model approval as a
-   separate action. PS773 to Tedesco Auto Body remains ineligible because only 62 weeks
-   remain after a multi-year coverage gap. Never infer a mapping or insurer alias from
-   name similarity alone.
+   highest-volume insurer aliases and source-shop mappings. First record an
+   authoritative physical address in the governed evidence form; mapping approval
+   then requires an exact Hub address, written identity notes, and explicit
+   confirmation, and it is committed with its audit entry in one transaction. For
+   the first current forecast pilot, verify the intended member audience for South
+   Lincoln, then review PS229 against its exact 1500 Center Park Road address. After
+   mapping approval, rerun the evaluator, record the reproducible snapshot, stage the
+   four passing horizons, and review model approval as a separate action. PS773 to
+   Tedesco Auto Body remains ineligible because only 62 weeks remain after a
+   multi-year coverage gap. Never infer a mapping or insurer alias from name
+   similarity alone.
 4. After 13 observed forecasts accrue per horizon, review the live monitoring status.
    Manual review is requested when rolling MAE loses to seasonal or 80% interval
    coverage falls below 70%; the scorecard never changes promotion automatically.
