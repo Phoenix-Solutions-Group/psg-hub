@@ -90,6 +90,15 @@ export type CollisionAlertCaseRow = {
     | "not_evaluable";
   outcome_notes: string | null;
   closed_at: string | null;
+  evidence_source_latest_arrival_date: string | null;
+  evidence_baseline_source_span_complete: boolean;
+  evidence_follow_up_weeks_complete: Numeric;
+  evidence_prior_52_week_repair_orders: Numeric;
+  evidence_week_1_repair_orders: Numeric;
+  evidence_week_2_repair_orders: Numeric;
+  evidence_week_3_repair_orders: Numeric;
+  evidence_week_4_repair_orders: Numeric;
+  evidence_mature_for_close: boolean;
 };
 
 export type CollisionForecastStatusRow = {
@@ -750,29 +759,67 @@ export function buildCollisionDashboard(
     alertReviewAvailable,
     weatherReviewCases: [...alertCaseRows]
       .sort((left, right) => right.event_date.localeCompare(left.event_date))
-      .map((reviewCase) => ({
-        id: reviewCase.id,
-        zipCode: reviewCase.zip_code,
-        eventType: reviewCase.event_type,
-        eventDate: reviewCase.event_date,
-        thresholdBasis: reviewCase.threshold_basis,
-        latestEventAt: reviewCase.latest_event_at,
-        magnitude:
-          reviewCase.peak_magnitude === null
-            ? null
-            : numberOf(reviewCase.peak_magnitude),
-        magnitudeUnit: reviewCase.magnitude_unit,
-        historicalRepairOrders: numberOf(
-          reviewCase.historical_repair_orders,
-        ),
-        reportCount: numberOf(reviewCase.report_count),
-        ownerProfileId: reviewCase.owner_profile_id,
-        status: reviewCase.status,
-        acknowledgedAt: reviewCase.acknowledged_at,
-        outcome: reviewCase.outcome,
-        outcomeNotes: reviewCase.outcome_notes,
-        closedAt: reviewCase.closed_at,
-      })),
+      .map((reviewCase) => {
+        const prior52WeekRepairOrders = numberOf(
+          reviewCase.evidence_prior_52_week_repair_orders,
+        );
+        const weeklyRepairOrders = [
+          numberOf(reviewCase.evidence_week_1_repair_orders),
+          numberOf(reviewCase.evidence_week_2_repair_orders),
+          numberOf(reviewCase.evidence_week_3_repair_orders),
+          numberOf(reviewCase.evidence_week_4_repair_orders),
+        ];
+        const observedFourWeekRepairOrders = weeklyRepairOrders.reduce(
+          (sum, count) => sum + count,
+          0,
+        );
+        const followThroughThresholdRepairOrders = Math.max(
+          2,
+          Math.floor(prior52WeekRepairOrders / 13) + 1,
+        );
+        const derivedOutcome = reviewCase.evidence_mature_for_close
+          ? observedFourWeekRepairOrders >= followThroughThresholdRepairOrders
+            ? ("observed_follow_through" as const)
+            : ("no_observed_follow_through" as const)
+          : null;
+
+        return {
+          id: reviewCase.id,
+          zipCode: reviewCase.zip_code,
+          eventType: reviewCase.event_type,
+          eventDate: reviewCase.event_date,
+          thresholdBasis: reviewCase.threshold_basis,
+          latestEventAt: reviewCase.latest_event_at,
+          magnitude:
+            reviewCase.peak_magnitude === null
+              ? null
+              : numberOf(reviewCase.peak_magnitude),
+          magnitudeUnit: reviewCase.magnitude_unit,
+          historicalRepairOrders: numberOf(reviewCase.historical_repair_orders),
+          reportCount: numberOf(reviewCase.report_count),
+          ownerProfileId: reviewCase.owner_profile_id,
+          status: reviewCase.status,
+          acknowledgedAt: reviewCase.acknowledged_at,
+          outcome: reviewCase.outcome,
+          outcomeNotes: reviewCase.outcome_notes,
+          closedAt: reviewCase.closed_at,
+          evidence: {
+            sourceLatestArrivalDate:
+              reviewCase.evidence_source_latest_arrival_date,
+            baselineSourceSpanComplete:
+              reviewCase.evidence_baseline_source_span_complete,
+            followUpWeeksComplete: numberOf(
+              reviewCase.evidence_follow_up_weeks_complete,
+            ),
+            prior52WeekRepairOrders,
+            weeklyRepairOrders,
+            observedFourWeekRepairOrders,
+            followThroughThresholdRepairOrders,
+            derivedOutcome,
+            matureForClose: reviewCase.evidence_mature_for_close,
+          },
+        };
+      }),
     operationalForecasts,
     operationalForecast: operationalForecasts[0] ?? null,
     planningGuidance: [

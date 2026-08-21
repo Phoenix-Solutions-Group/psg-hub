@@ -93,9 +93,9 @@ export async function getCollisionDashboard(shopId: string) {
       // ponytail: 500 raw 72-hour reports per shop; move clustering into SQL if this cap is reached.
       .limit(500),
     service
-      .from("collision_weather_alert_cases")
+      .from("v_collision_weather_alert_case_evidence")
       .select(
-        "id,zip_code,event_type,event_date,alert_level,threshold_basis,latest_event_at,peak_magnitude,magnitude_unit,historical_repair_orders,report_count,owner_profile_id,status,acknowledged_at,outcome,outcome_notes,closed_at",
+        "id,zip_code,event_type,event_date,alert_level,threshold_basis,latest_event_at,peak_magnitude,magnitude_unit,historical_repair_orders,report_count,owner_profile_id,status,acknowledged_at,outcome,outcome_notes,closed_at,evidence_source_latest_arrival_date,evidence_baseline_source_span_complete,evidence_follow_up_weeks_complete,evidence_prior_52_week_repair_orders,evidence_week_1_repair_orders,evidence_week_2_repair_orders,evidence_week_3_repair_orders,evidence_week_4_repair_orders,evidence_mature_for_close",
       )
       .eq("shop_id", shopId)
       .order("event_date", { ascending: false })
@@ -189,8 +189,7 @@ export async function getCollisionDashboard(shopId: string) {
 
   const alertReviewUnavailable = Boolean(
     alertCases.error &&
-      (alertCases.error.code === "PGRST205" ||
-        alertCases.error.code === "42P01"),
+    (alertCases.error.code === "PGRST205" || alertCases.error.code === "42P01"),
   );
   const error =
     weekly.error ??

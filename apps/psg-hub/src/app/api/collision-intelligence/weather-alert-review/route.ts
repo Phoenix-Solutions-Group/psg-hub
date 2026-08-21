@@ -111,13 +111,20 @@ export async function POST(request: Request) {
 
   if (error) {
     console.error("[weather-alert-review] update failed:", error.message);
+    const evidenceIncomplete =
+      parsed.data.action === "close" &&
+      error.code === "55000" &&
+      (error.message.includes("Four complete follow-up weeks") ||
+        error.message.includes("Repair-arrival evidence"));
     return redirectToDashboard(
       request,
-      error.code === "42883" || error.code === "PGRST202"
-        ? "release_pending"
-        : error.code === "55000" || error.code === "P0002"
-          ? "stale"
-          : "error",
+      evidenceIncomplete
+        ? "evidence_incomplete"
+        : error.code === "42883" || error.code === "PGRST202"
+          ? "release_pending"
+          : error.code === "55000" || error.code === "P0002"
+            ? "stale"
+            : "error",
     );
   }
 

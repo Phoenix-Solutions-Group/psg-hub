@@ -39,6 +39,8 @@ const weatherReviewNotices: Record<string, string> = {
   closed: "Weather follow-up closed with an observed repair-demand outcome.",
   release_pending:
     "Weather review decisions stay read-only until the reviewed database migration is applied.",
+  evidence_incomplete:
+    "Keep this follow-up open. Four complete weeks and repair history spanning the prior 52 weeks are required before an observed outcome can be recorded.",
   stale:
     "That weather signal or follow-up changed before it could be saved. The dashboard has been refreshed.",
   error: "The weather review could not be saved. No review state changed.",
@@ -510,10 +512,26 @@ export default async function CollisionIntelligencePage({
                           action="/api/collision-intelligence/weather-alert-review"
                           method="post"
                         >
-                          <input type="hidden" name="action" value="acknowledge" />
-                          <input type="hidden" name="zip_code" value={alert.zipCode} />
-                          <input type="hidden" name="event_type" value={alert.eventType} />
-                          <input type="hidden" name="event_date" value={alert.eventDate} />
+                          <input
+                            type="hidden"
+                            name="action"
+                            value="acknowledge"
+                          />
+                          <input
+                            type="hidden"
+                            name="zip_code"
+                            value={alert.zipCode}
+                          />
+                          <input
+                            type="hidden"
+                            name="event_type"
+                            value={alert.eventType}
+                          />
+                          <input
+                            type="hidden"
+                            name="event_date"
+                            value={alert.eventDate}
+                          />
                           <button
                             type="submit"
                             className="rounded-md border border-border px-3 py-2 font-heading text-sm font-medium hover:bg-secondary"
@@ -538,9 +556,9 @@ export default async function CollisionIntelligencePage({
                       Owned follow-ups
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      Record whether unusual repair arrivals were observed during
-                      the pre-registered follow-up window. This does not validate
-                      the preliminary weather report itself.
+                      Compare the next four weeks of repair arrivals with this
+                      ZIP&apos;s prior 52 weeks, then record what PSG observed.
+                      This does not prove the weather caused the repairs.
                     </p>
                   </div>
                   {openWeatherReviewCases.map((reviewCase) => (
@@ -551,43 +569,121 @@ export default async function CollisionIntelligencePage({
                       className="space-y-3 rounded-md border border-border p-3"
                     >
                       <input type="hidden" name="action" value="close" />
-                      <input type="hidden" name="case_id" value={reviewCase.id} />
+                      <input
+                        type="hidden"
+                        name="case_id"
+                        value={reviewCase.id}
+                      />
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="font-heading text-sm font-semibold">
-                            {eventLabels[reviewCase.eventType] ?? reviewCase.eventType} · ZIP{" "}
-                            {reviewCase.zipCode}
+                            {eventLabels[reviewCase.eventType] ??
+                              reviewCase.eventType}{" "}
+                            · ZIP {reviewCase.zipCode}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Signal date {formatDate(reviewCase.eventDate)} ·{" "}
                             {reviewCase.reportCount} preliminary{" "}
-                            {reviewCase.reportCount === 1 ? "report" : "reports"}
+                            {reviewCase.reportCount === 1
+                              ? "report"
+                              : "reports"}
                           </p>
                         </div>
                         <Badge variant="outline">Acknowledged</Badge>
                       </div>
+                      <div className="space-y-2 rounded-md bg-secondary/40 p-3 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="font-medium">
+                            {reviewCase.evidence.followUpWeeksComplete} of 4
+                            follow-up weeks complete
+                          </p>
+                          <span className="text-xs text-muted-foreground">
+                            Repair data through{" "}
+                            {formatDate(
+                              reviewCase.evidence.sourceLatestArrivalDate,
+                            )}
+                          </span>
+                        </div>
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                          {reviewCase.evidence.weeklyRepairOrders.map(
+                            (repairOrders, index) => (
+                              <div key={index}>
+                                <dt className="text-xs text-muted-foreground">
+                                  Week {index + 1}
+                                </dt>
+                                <dd className="font-heading font-semibold">
+                                  {index <
+                                  reviewCase.evidence.followUpWeeksComplete
+                                    ? `${repairOrders} repairs`
+                                    : "Waiting for data"}
+                                </dd>
+                              </div>
+                            ),
+                          )}
+                        </dl>
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          Prior 52 weeks:{" "}
+                          {reviewCase.evidence.baselineSourceSpanComplete
+                            ? `${reviewCase.evidence.prior52WeekRepairOrders} repairs (${(
+                                reviewCase.evidence.prior52WeekRepairOrders / 52
+                              ).toFixed(1)} per week)`
+                            : "repair history does not span the prior 52 weeks; observed outcomes cannot be evaluated"}
+                          . Same-day arrivals are excluded.
+                        </p>
+                      </div>
                       {canReviewWeather ? (
                         <div className="grid gap-3 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)_auto] md:items-end">
-                          <label className="text-sm font-medium">
-                            Repair-demand outcome
-                            <select
-                              name="outcome"
-                              required
-                              defaultValue=""
-                              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-normal"
-                            >
-                              <option value="" disabled>
-                                Select an observed outcome
-                              </option>
-                              <option value="observed_follow_through">
-                                Unusual repair increase observed
-                              </option>
-                              <option value="no_observed_follow_through">
-                                No unusual increase observed
-                              </option>
-                              <option value="not_evaluable">Not evaluable</option>
-                            </select>
-                          </label>
+                          {reviewCase.evidence.matureForClose ? (
+                            <div className="text-sm">
+                              <input
+                                type="hidden"
+                                name="outcome"
+                                value={
+                                  reviewCase.evidence.derivedOutcome ??
+                                  "not_evaluable"
+                                }
+                              />
+                              <p className="font-medium">
+                                Measured repair-arrival outcome
+                              </p>
+                              <p className="mt-1 font-heading font-semibold">
+                                {reviewCase.evidence.derivedOutcome ===
+                                "observed_follow_through"
+                                  ? "Above historical repair pace"
+                                  : "At or below historical repair pace"}
+                              </p>
+                              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                {
+                                  reviewCase.evidence
+                                    .observedFourWeekRepairOrders
+                                }{" "}
+                                repairs observed; follow-through requires{" "}
+                                {
+                                  reviewCase.evidence
+                                    .followThroughThresholdRepairOrders
+                                }{" "}
+                                or more.
+                              </p>
+                            </div>
+                          ) : (
+                            <label className="flex items-start gap-2 text-sm leading-5">
+                              <input
+                                type="checkbox"
+                                name="outcome"
+                                value="not_evaluable"
+                                required
+                                aria-describedby={`weather-evidence-${reviewCase.id}`}
+                                className="mt-1"
+                              />
+                              <span>
+                                <strong className="block font-medium">
+                                  Close as not evaluable
+                                </strong>
+                                Use only when the missing source span cannot be
+                                recovered.
+                              </span>
+                            </label>
+                          )}
                           <label className="text-sm font-medium">
                             Outcome evidence
                             <textarea
@@ -604,8 +700,18 @@ export default async function CollisionIntelligencePage({
                             type="submit"
                             className="rounded-md bg-primary px-3 py-2 font-heading text-sm font-medium text-primary-foreground hover:bg-primary/90"
                           >
-                            Close follow-up
+                            {reviewCase.evidence.matureForClose
+                              ? "Record measured outcome"
+                              : "Close as not evaluable"}
                           </button>
+                          <p
+                            id={`weather-evidence-${reviewCase.id}`}
+                            className="text-xs leading-5 text-muted-foreground md:col-span-3"
+                          >
+                            {reviewCase.evidence.matureForClose
+                              ? "The four-week window and 52-week baseline are complete. The database derives the outcome from repair arrivals; use the note for booked-work context and limitations."
+                              : "Keep this follow-up open until all four weeks are complete. Close it only if the missing source span cannot be recovered."}
+                          </p>
                         </div>
                       ) : (
                         <p className="text-xs text-muted-foreground">
@@ -624,9 +730,18 @@ export default async function CollisionIntelligencePage({
                   <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
                     {closedWeatherReviewCases.map((reviewCase) => (
                       <li key={reviewCase.id}>
-                        {eventLabels[reviewCase.eventType] ?? reviewCase.eventType} · ZIP{" "}
-                        {reviewCase.zipCode} ·{" "}
-                        {reviewCase.outcome.replaceAll("_", " ")}
+                        {eventLabels[reviewCase.eventType] ??
+                          reviewCase.eventType}{" "}
+                        · ZIP {reviewCase.zipCode} ·{" "}
+                        {reviewCase.outcome === "observed_follow_through"
+                          ? "above historical repair pace"
+                          : reviewCase.outcome === "no_observed_follow_through"
+                            ? "at or below historical repair pace"
+                            : "not evaluable"}{" "}
+                        · weeks 1–4:{" "}
+                        {reviewCase.evidence.weeklyRepairOrders.join(" / ")}{" "}
+                        repairs · four-week threshold{" "}
+                        {reviewCase.evidence.followThroughThresholdRepairOrders}
                       </li>
                     ))}
                   </ul>

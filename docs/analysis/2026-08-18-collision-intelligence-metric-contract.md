@@ -21,6 +21,7 @@ insurance claim volume.
 | `v_collision_ksdot_monthly`                      | Company and month                               | Official KDOT crashes in the customer-ZIP portfolio    |
 | `v_collision_forecast_training_weekly`           | Company and continuous week                     | Leakage-safe baseline and forecast training frame      |
 | `v_collision_zip_alert_candidates`               | Company, ZIP, and preliminary event             | Review-only SPC signals from the last 72 hours         |
+| `v_collision_weather_alert_case_evidence`        | Shop, ZIP, event type, and UTC event date       | Exact 1–4 week repair-arrival follow-through review    |
 | `v_collision_filemaker_shop_summary`             | FileMaker source shop                           | Coverage, freshness, repair value, and quality summary |
 | `v_collision_filemaker_shop_monthly`             | FileMaker source shop and month                 | Repair volume, value, insurance mix, and cycle time    |
 | `v_collision_filemaker_insurers`                 | FileMaker source shop and normalized insurer    | Carrier-tagged repair volume and value                 |
@@ -103,6 +104,10 @@ the prior completed month so that training does not learn from future weather to
 | Notification state | Disabled; the dashboard is a review queue, not an automated alert sender                               |
 | Review case        | One shop, ZIP, event type, and UTC event date acknowledged by a current shop owner or manager          |
 | Demand outcome     | `observed_follow_through`, `no_observed_follow_through`, or `not_evaluable`, with 20–2,000 character evidence |
+| Follow-up weeks    | Four non-overlapping seven-day windows after the UTC event date; same-day arrivals are excluded                         |
+| Follow-up baseline | Repair arrivals for the same shop and customer ZIP during the 364 calendar days before the event                       |
+| Mature outcome     | Four complete follow-up weeks plus repair history spanning from at least 364 days before the event through the event date; otherwise only `not_evaluable` may close the case |
+| Follow-through classification | The four-week total is `observed_follow_through` at `max(2, floor(prior_52_week_repairs / 13) + 1)` repairs; otherwise it is `no_observed_follow_through`. The database derives and validates this outcome |
 
 SPC reports are preliminary and may be revised. A candidate indicates weather in a
 historical customer market; it is not evidence of a damaged vehicle, repair order, or
@@ -278,6 +283,12 @@ Before dashboard publication or model retraining:
 16. Evaluation excludes pre-gap history after an internal run longer than 26
     zero-repair weeks and reports insufficient post-gap history instead of calibrating
     a zero-width interval.
+17. Observed weather follow-through cannot be recorded until all four seven-day
+    windows and the prior 52-week source baseline are complete. The close transaction
+    snapshots week-level counts and source freshness in both the case and audit event.
+18. The database derives the observed outcome from the registered four-week threshold
+    and rejects a contradictory selection. This validation threshold measures repair
+    follow-through; it is not authorization for notifications or operational changes.
 
 ## Known limitations
 

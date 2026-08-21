@@ -71,16 +71,13 @@ describe("POST collision weather alert review", () => {
     expect(response.headers.get("location")).toContain(
       "weather_review=acknowledged",
     );
-    expect(rpc).toHaveBeenCalledWith(
-      "acknowledge_collision_weather_alert",
-      {
-        p_shop_id: shopId,
-        p_zip_code: "67037",
-        p_event_type: "hail",
-        p_event_date: "2026-08-18",
-        p_actor_profile_id: "owner-1",
-      },
-    );
+    expect(rpc).toHaveBeenCalledWith("acknowledge_collision_weather_alert", {
+      p_shop_id: shopId,
+      p_zip_code: "67037",
+      p_event_type: "hail",
+      p_event_date: "2026-08-18",
+      p_actor_profile_id: "owner-1",
+    });
   });
 
   it("requires a governed outcome and substantive evidence to close", async () => {
@@ -124,18 +121,44 @@ describe("POST collision weather alert review", () => {
     );
 
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toContain(
-      "weather_review=closed",
-    );
-    expect(rpc).toHaveBeenCalledWith(
-      "close_collision_weather_alert_case",
-      {
-        p_case_id: "22222222-2222-4222-8222-222222222222",
-        p_shop_id: shopId,
-        p_outcome: "no_observed_follow_through",
-        p_outcome_notes: notes,
-        p_actor_profile_id: "manager-1",
+    expect(response.headers.get("location")).toContain("weather_review=closed");
+    expect(rpc).toHaveBeenCalledWith("close_collision_weather_alert_case", {
+      p_case_id: "22222222-2222-4222-8222-222222222222",
+      p_shop_id: shopId,
+      p_outcome: "no_observed_follow_through",
+      p_outcome_notes: notes,
+      p_actor_profile_id: "manager-1",
+    });
+  });
+
+  it("keeps an immature follow-up open with an actionable notice", async () => {
+    user = { id: "manager-1" };
+    getActiveShopContext.mockResolvedValue({
+      shops: [{ id: shopId, name: "Pilot", role: "manager" }],
+      activeShopId: shopId,
+    });
+    rpc.mockResolvedValue({
+      data: null,
+      error: {
+        code: "55000",
+        message:
+          "Four complete follow-up weeks and repair history spanning the prior 52 weeks are required",
       },
+    });
+
+    const response = await POST(
+      request({
+        action: "close",
+        case_id: "22222222-2222-4222-8222-222222222222",
+        outcome: "observed_follow_through",
+        outcome_notes:
+          "The user attempted to close this before the repair history span matured.",
+      }),
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toContain(
+      "weather_review=evidence_incomplete",
     );
   });
 });

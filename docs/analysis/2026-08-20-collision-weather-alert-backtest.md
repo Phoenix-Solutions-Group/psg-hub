@@ -81,9 +81,17 @@ enough for automated outreach.
 The staged dashboard lifecycle now covers the manual-review portion: a current shop
 owner or manager can acknowledge and own a severe-threshold signal, then close it as
 observed follow-through, no observed follow-through, or not evaluable with written
-evidence. It remains unapplied in production, sends nothing externally, and does not
-replace the still-missing organization-level notification owner, economic threshold,
-or prospective matched-control validation.
+evidence. The governed case view measures the same shop/customer-ZIP arrivals in four
+non-overlapping seven-day windows after the event date, excludes same-day arrivals,
+and shows the prior 364-day baseline. Observed outcomes stay blocked until all four
+weeks are complete and repair history spans the prior 364 days; closure snapshots the counts and
+source freshness in the case and audit event. The database classifies follow-through
+when the four-week total reaches `max(2, floor(prior_52_week_repairs / 13) + 1)`;
+operators confirm context but cannot contradict the repair-arrival result. This
+measurement rule is not an economic notification threshold. The lifecycle remains
+unapplied in production, sends nothing externally, and does not replace the
+still-missing organization-level notification owner, economic threshold, or
+prospective matched-control validation.
 
 ## Limitations
 
