@@ -20,7 +20,7 @@ test("dashboard is the portfolio tool home", async ({ page }) => {
   ]) {
     await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
   }
-  await expect(page.getByRole("link", { name: "Agents" })).toHaveCount(0);
+  await expect(page.locator('[data-tool="agents"]')).toHaveCount(0);
 
   const analytics = page.locator('[data-tool="analytics"]');
   await expect(analytics.getByText("2 ready", { exact: true })).toBeVisible();
