@@ -183,12 +183,43 @@ export type ContentBrief = z.infer<typeof contentBriefSchema>;
 export const CONTENT_TYPES = ["blog_post", "service_page", "meta_description"] as const;
 export type ContentType = (typeof CONTENT_TYPES)[number];
 
+export const CONTENT_WRITING_GUIDANCE_PRODUCTS = ["local_reach_ai"] as const;
+export type ContentWritingGuidanceProduct = (typeof CONTENT_WRITING_GUIDANCE_PRODUCTS)[number];
+
+export const contentWritingGuidanceSourceSchema = z.object({
+  issueIdentifier: z.string().min(1),
+  documentKey: z.string().min(1).optional(),
+  title: z.string().min(1),
+});
+export type ContentWritingGuidanceSource = z.infer<typeof contentWritingGuidanceSourceSchema>;
+
+export const approvedRewriteSchema = z.object({
+  avoid: z.string().min(1),
+  use: z.string().min(1),
+  reason: z.string().min(1),
+});
+export type ApprovedRewrite = z.infer<typeof approvedRewriteSchema>;
+
+export const contentWritingGuidanceSchema = z.object({
+  product: z.enum(CONTENT_WRITING_GUIDANCE_PRODUCTS),
+  voiceName: z.string().min(1),
+  sourceDocuments: z.array(contentWritingGuidanceSourceSchema).min(1),
+  mustFollow: z.array(z.string().min(1)).min(1),
+  mustAvoid: z.array(z.string().min(1)).min(1),
+  approvedRewrites: z.array(approvedRewriteSchema).default([]),
+  reviewGates: z.array(z.string().min(1)).default([]),
+});
+export type ContentWritingGuidance = z.infer<typeof contentWritingGuidanceSchema>;
+
 /**
  * What the Content Writer receives to start a draft. It binds a ContentBrief to
  * an explicit set of keyword targets (which may include extra targets the writer
  * "asks the SEO auditor for mid-draft", ORIGINAL-PLANNING §293) and the shopId
  * whose verified-facts record the output will be gated against via
- * `checkClaimIntegrity` (PSG-143). Construction lives in content-writer-handoff.ts.
+ * `checkClaimIntegrity` (PSG-143). Product-specific `writingGuidance` carries
+ * approved voice and claims rules into the Content Writer skill when a draft is
+ * for a named PSG product such as LocalReach AI. Construction lives in
+ * content-writer-handoff.ts.
  */
 export const contentDraftRequestSchema = z.object({
   shopId: z.string().min(1),
@@ -196,5 +227,6 @@ export const contentDraftRequestSchema = z.object({
   /** Effective keyword targets for this draft (brief targets ∪ mid-draft asks). */
   keywordTargets: z.array(keywordTargetSchema).min(1),
   contentType: z.enum(CONTENT_TYPES),
+  writingGuidance: contentWritingGuidanceSchema.optional(),
 });
 export type ContentDraftRequest = z.infer<typeof contentDraftRequestSchema>;

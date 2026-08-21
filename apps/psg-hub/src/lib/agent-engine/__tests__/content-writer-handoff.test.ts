@@ -11,9 +11,12 @@ import {
   adaptSeoKeywordTargets,
   buildContentDraftRequest,
   buildContentDraftRequestFromSeoTargets,
+  buildLocalReachAiContentDraftRequest,
   contentBriefSchema,
   contentDraftRequestSchema,
+  contentWritingGuidanceSchema,
   keywordTargetSchema,
+  LOCAL_REACH_AI_WRITING_GUIDANCE,
   type ContentBrief,
   type KeywordTarget,
 } from "../index";
@@ -112,6 +115,75 @@ describe("buildContentDraftRequest", () => {
     const before = brief.targetKeywords.map((t) => t.keyword);
     buildContentDraftRequest(brief, [{ keyword: "x", intent: "service", priority: 1 }], "blog_post");
     expect(brief.targetKeywords.map((t) => t.keyword)).toEqual(before);
+  });
+
+  it("leaves product-specific writing guidance absent by default", () => {
+    const req = buildContentDraftRequest(briefWith(briefKeywords), [], "blog_post");
+    expect(req.writingGuidance).toBeUndefined();
+  });
+});
+
+describe("LocalReach AI writing guidance", () => {
+  it("is a schema-valid guardrail bundle sourced to the approved voice and claims work", () => {
+    expect(() => contentWritingGuidanceSchema.parse(LOCAL_REACH_AI_WRITING_GUIDANCE)).not.toThrow();
+    expect(LOCAL_REACH_AI_WRITING_GUIDANCE.product).toBe("local_reach_ai");
+    expect(LOCAL_REACH_AI_WRITING_GUIDANCE.sourceDocuments.map((s) => s.issueIdentifier)).toEqual([
+      "PSG-2179",
+      "PSG-2043",
+      "PSG-2150",
+    ]);
+  });
+
+  it("attaches the approved Neil Patel-adapted voice to LocalReach AI draft requests", () => {
+    const req = buildLocalReachAiContentDraftRequest(briefWith(briefKeywords), [], "service_page");
+    expect(() => contentDraftRequestSchema.parse(req)).not.toThrow();
+    expect(req.writingGuidance?.voiceName).toContain("Neil Patel-adapted");
+    expect(req.writingGuidance?.mustFollow).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Hook in the first line"),
+        expect.stringContaining("Use proof instead of adjectives"),
+        expect.stringContaining("being named or cited in AI answers"),
+        expect.stringContaining("Attribute Neil Patel's third-party statistic"),
+      ]),
+    );
+  });
+
+  it("carries the approved honest-claims rewrites and forbidden LocalReach AI claims", () => {
+    const req = buildLocalReachAiContentDraftRequest(briefWith(briefKeywords), [], "blog_post");
+    expect(req.writingGuidance?.mustAvoid).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Do not promise a Top 10"),
+        expect.stringContaining("Do not call PSG or the shop the #1 authority"),
+        expect.stringContaining("Do not guarantee extra repair jobs"),
+        expect.stringContaining("Do not invent or imply certifications"),
+      ]),
+    );
+    expect(req.writingGuidance?.approvedRewrites).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          avoid: "Top 10 Position on Google in 90 days",
+          use: expect.stringContaining("reported not guaranteed"),
+        }),
+        expect.objectContaining({
+          avoid: "#1 Authority for AI models like ChatGPT & Gemini",
+          use: expect.stringContaining("Built to be the shop AI recommends"),
+        }),
+        expect.objectContaining({
+          avoid: "At least one additional repair job per month",
+          use: expect.stringContaining("tracked and reported"),
+        }),
+      ]),
+    );
+  });
+
+  it("keeps LocalReach AI output behind claims review and Nick approval before go-live", () => {
+    const req = buildLocalReachAiContentDraftRequest(briefWith(briefKeywords), [], "meta_description");
+    expect(req.writingGuidance?.reviewGates).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Run claim-integrity before persistence"),
+        expect.stringContaining("Nothing customer-facing goes live without claims review and Nick's approval"),
+      ]),
+    );
   });
 });
 

@@ -82,6 +82,7 @@ vi.mock("@/lib/auth/ops-access", () => ({
 }));
 
 const customerRoute = await import("../route");
+const customerReplyRoute = await import("../[requestId]/route");
 const opsRoute = await import("@/app/api/ops/google-ads/requests/[id]/route");
 
 function customerRequest(body: unknown) {
@@ -94,6 +95,14 @@ function customerRequest(body: unknown) {
 
 function opsRequest(body: unknown) {
   return new NextRequest(`http://test/api/ops/google-ads/requests/${REQUEST_ID}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function customerReplyRequest(body: unknown) {
+  return new Request(`http://test/api/shops/${VALID_SHOP}/google-ads/requests/${REQUEST_ID}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -142,7 +151,8 @@ describe("Google Ads customer request workflow", () => {
         requestType: "new_campaign",
         title: "Launch a new campaign",
         details: "Please build a new campaign for aluminum repair leads.",
-        budgetNotes: "Keep budget near the current monthly level.",
+        requestValues: { Service: "Aluminum repair" },
+        acknowledged: true,
       }),
       { params: Promise.resolve({ shopId: VALID_SHOP }) },
     );
@@ -153,6 +163,8 @@ describe("Google Ads customer request workflow", () => {
       requested_by_profile_id: "user-1",
       request_type: "new_campaign",
       status: "submitted",
+      request_values: { Service: "Aluminum repair" },
+      acknowledged_at: expect.any(String),
     });
     expect(mockAuditEvents).toMatchObject([
       {
@@ -169,9 +181,11 @@ describe("Google Ads customer request workflow", () => {
 
     const res = await customerRoute.POST(
       customerRequest({
-        requestType: "campaign_adjustment",
+        requestType: "performance_review",
         title: "Pause one campaign",
         details: "Please pause the campaign while we update intake capacity.",
+        requestValues: { Question: "Why did leads change?" },
+        acknowledged: true,
       }),
       { params: Promise.resolve({ shopId: OTHER_SHOP }) },
     );
@@ -179,6 +193,40 @@ describe("Google Ads customer request workflow", () => {
     expect(res.status).toBe(403);
     expect(mockServiceInsert).toBeNull();
     expect(mockAuditEvents).toEqual([]);
+  });
+
+  it("does not let a read-only viewer submit a request", async () => {
+    mockMembership = { role: "viewer" };
+
+    const res = await customerRoute.POST(
+      customerRequest({
+        requestType: "performance_review",
+        title: "Review performance",
+        details: "Please explain the change in lead volume.",
+        requestValues: { Question: "Why did leads change?" },
+        acknowledged: true,
+      }),
+      { params: Promise.resolve({ shopId: VALID_SHOP }) },
+    );
+
+    expect(res.status).toBe(403);
+    expect(mockServiceInsert).toBeNull();
+  });
+
+  it("requires the customer to acknowledge PSG review", async () => {
+    const res = await customerRoute.POST(
+      customerRequest({
+        requestType: "problem_report",
+        title: "Report a problem",
+        details: "Ads numbers have not updated since yesterday.",
+        requestValues: { Problem: "Numbers are stale" },
+        acknowledged: false,
+      }),
+      { params: Promise.resolve({ shopId: VALID_SHOP }) },
+    );
+
+    expect(res.status).toBe(422);
+    expect(mockServiceInsert).toBeNull();
   });
 
   it("lets PSG staff move a request through status/reply and audits the change", async () => {
@@ -209,6 +257,55 @@ describe("Google Ads customer request workflow", () => {
         }),
       },
     ]);
+  });
+
+  it("lets a shop member answer a request only when PSG needs more info", async () => {
+    mockExistingRequest = {
+      id: REQUEST_ID,
+      shop_id: VALID_SHOP,
+      status: "needs_more_info",
+    };
+
+    const res = await customerReplyRoute.PATCH(
+      customerReplyRequest({ response: "Please focus on certified aluminum repair." }),
+      { params: Promise.resolve({ shopId: VALID_SHOP, requestId: REQUEST_ID }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockServiceUpdate).toMatchObject({
+      status: "psg_reviewing",
+      psg_response: "Customer replied: Please focus on certified aluminum repair.",
+      updated_by_profile_id: "user-1",
+    });
+    expect(mockAuditEvents).toMatchObject([
+      {
+        actorProfileId: "user-1",
+        targetShopId: VALID_SHOP,
+        action: "google_ads_request.customer_reply",
+        payload: expect.objectContaining({
+          requestId: REQUEST_ID,
+          previousStatus: "needs_more_info",
+          status: "psg_reviewing",
+          executesGoogleAdsChange: false,
+        }),
+      },
+    ]);
+  });
+
+  it("does not let a customer update a request that is not waiting on them", async () => {
+    mockExistingRequest = {
+      id: REQUEST_ID,
+      shop_id: VALID_SHOP,
+      status: "submitted",
+    };
+
+    const res = await customerReplyRoute.PATCH(
+      customerReplyRequest({ response: "Extra context." }),
+      { params: Promise.resolve({ shopId: VALID_SHOP, requestId: REQUEST_ID }) },
+    );
+
+    expect(res.status).toBe(409);
+    expect(mockServiceUpdate).toBeNull();
   });
 
   it("requires a reason when PSG declines a request", async () => {

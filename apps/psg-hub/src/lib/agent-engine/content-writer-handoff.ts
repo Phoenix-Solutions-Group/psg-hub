@@ -19,9 +19,11 @@
 
 import {
   contentDraftRequestSchema,
+  contentWritingGuidanceSchema,
   type ContentBrief,
   type ContentDraftRequest,
   type ContentType,
+  type ContentWritingGuidance,
   type KeywordIntent,
   type KeywordTarget,
 } from "./types";
@@ -35,6 +37,77 @@ import type {
   KeywordPriority as SeoKeywordPriority,
   KeywordTarget as SeoKeywordTargetDTO,
 } from "@/types/keyword-target";
+
+export type ContentDraftRequestOptions = {
+  writingGuidance?: ContentWritingGuidance;
+};
+
+export const LOCAL_REACH_AI_WRITING_GUIDANCE: ContentWritingGuidance = contentWritingGuidanceSchema.parse({
+  product: "local_reach_ai",
+  voiceName: "LocalReach AI approved Neil Patel-adapted voice",
+  sourceDocuments: [
+    {
+      issueIdentifier: "PSG-2179",
+      documentKey: "positioning-guide",
+      title: "LocalReach AI - Positioning & Voice Guide",
+    },
+    {
+      issueIdentifier: "PSG-2043",
+      documentKey: "content-standards",
+      title: "Local Reach Content Standards - Collision-Repair Recommendations",
+    },
+    {
+      issueIdentifier: "PSG-2150",
+      title: "Approved LocalReach AI sales claims wording",
+    },
+  ],
+  mustFollow: [
+    "Hook in the first line with a direct question, surprise, or problem a shop owner immediately understands.",
+    "Use short sentences, plain words, and skimmable blocks; if a body-shop owner needs a second read, rewrite it.",
+    "Use proof instead of adjectives: lead with checkable facts, real mechanisms, confirmed certifications, services, locations, or dated sources.",
+    "Keep one idea per block and one clear call to action per asset.",
+    "Explain the shift from ranking in search results to being named or cited in AI answers without promising a final position.",
+    "Teach one true thing about AI search before selling LocalReach AI.",
+    "Describe LocalReach AI as structured, hyper-local pages that help AI answer engines find, understand, and cite a shop's real services, locations, and certifications.",
+    "Attribute Neil Patel's third-party statistic about ChatGPT traffic by name every time it is used, or drop it.",
+  ],
+  mustAvoid: [
+    "Do not promise a Top 10, first-page, or #1 Google ranking.",
+    "Do not call PSG or the shop the #1 authority for ChatGPT, Gemini, Google AI, or any AI model.",
+    "Do not guarantee extra repair jobs, revenue, traffic, quote volume, or a specific return.",
+    "Do not use unverifiable superlatives such as best, premium, leading, #1, or top-rated unless a named, dated source backs the exact claim.",
+    "Do not invent or imply certifications, OEM approvals, insurer relationships, direct repair relationships, warranties, ratings, reviews, or service areas.",
+    "Do not present third-party statistics, including Neil Patel research, as PSG-owned data.",
+    "Do not claim AI models will definitely recommend or cite the shop; PSG can build the structured content and report visibility, but the platforms decide the final answer.",
+  ],
+  approvedRewrites: [
+    {
+      avoid: "Top 10 Position on Google in 90 days",
+      use: "See exactly where you rank - every month. Your core local terms, tracked and reported. 90-day goal: measurable gains, reported not guaranteed.",
+      reason: "PSG tracks rankings, but Google sets the final position.",
+    },
+    {
+      avoid: "#1 Authority for AI models like ChatGPT & Gemini",
+      use: "Built to be the shop AI recommends. Structured, hyper-local pages written so ChatGPT, Google AI, and Gemini can find and cite your services, locations, and certifications.",
+      reason: "The mechanism is real, but there is no verifiable #1 authority scoreboard inside AI models.",
+    },
+    {
+      avoid: "At least one additional repair job per month",
+      use: "Turn more local searches into repair inquiries. New orders attributed to the program are tracked and reported.",
+      reason: "More inquiries can be tracked; one guaranteed repair job cannot be promised.",
+    },
+    {
+      avoid: "10x more results",
+      use: "Dozens of hyper-local pages - far more coverage than manual SEO.",
+      reason: "Page output is a real deliverable; a traffic multiplier is not guaranteed.",
+    },
+  ],
+  reviewGates: [
+    "Run claim-integrity before persistence; unbacked or mismatched claims reject the draft.",
+    "Run the Local Reach content standards checklist before customer review.",
+    "Nothing customer-facing goes live without claims review and Nick's approval.",
+  ],
+});
 
 /**
  * Assemble a validated ContentDraftRequest for the Content Writer.
@@ -54,6 +127,7 @@ export function buildContentDraftRequest(
   brief: ContentBrief,
   keywordTargets: KeywordTarget[],
   contentType: ContentType,
+  options: ContentDraftRequestOptions = {},
 ): ContentDraftRequest {
   const seen = new Set<string>();
   const effectiveKeywordTargets: KeywordTarget[] = [];
@@ -68,6 +142,21 @@ export function buildContentDraftRequest(
     brief,
     keywordTargets: effectiveKeywordTargets,
     contentType,
+    writingGuidance: options.writingGuidance,
+  });
+}
+
+/**
+ * Build a Content Writer request for LocalReach AI marketing copy with the
+ * approved voice guide and honesty rules attached for the generation skill.
+ */
+export function buildLocalReachAiContentDraftRequest(
+  brief: ContentBrief,
+  keywordTargets: KeywordTarget[],
+  contentType: ContentType,
+): ContentDraftRequest {
+  return buildContentDraftRequest(brief, keywordTargets, contentType, {
+    writingGuidance: LOCAL_REACH_AI_WRITING_GUIDANCE,
   });
 }
 
@@ -175,6 +264,7 @@ export function buildContentDraftRequestFromSeoTargets(
   brief: ContentBrief,
   seoKeywordTargets: SeoKeywordTargetDTO[],
   contentType: ContentType,
+  options: ContentDraftRequestOptions = {},
 ): ContentDraftRequest {
-  return buildContentDraftRequest(brief, adaptSeoKeywordTargets(seoKeywordTargets), contentType);
+  return buildContentDraftRequest(brief, adaptSeoKeywordTargets(seoKeywordTargets), contentType, options);
 }

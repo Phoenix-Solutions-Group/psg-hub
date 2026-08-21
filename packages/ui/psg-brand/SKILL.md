@@ -13,17 +13,17 @@ Read **README.md** in this skill first — it covers brand philosophy, voice, co
 - **`README.md`** — full design language (philosophy, content fundamentals, visual foundations, iconography). The source of truth.
 - **`colors_and_type.css`** — drop-in stylesheet. Defines all color tokens (`--psg-midnight`, `--psg-ember`, `--psg-slate`, neutrals, semantic), type scale, font families (Gotham + Didact Gothic, with `@font-face` to local files), spacing, radii, shadows, motion. Always link this first.
 - **`fonts/`** — the full Gotham family (Thin → Ultra, regular + italic) and Didact Gothic. Used by `colors_and_type.css`.
-- **`assets/`** — logo SVGs (`psg-logo-primary`, `psg-logo-reverse`, `psg-logo-horizontal`, `psg-mark`).
+- **`assets/`** — official logo SVGs: `psg-logo-primary` / `-reverse`, `psg-logo-simple` / `-reverse`, `psg-logo-vertical` / `-reverse`, `psg-logo-stacked` / `-reverse`, `psg-mark`, `psg-mark-white`, `psg-mark-square`.
 - **`preview/`** — small HTML cards demonstrating tokens (type, color, spacing, components, brand). Useful as visual reference.
 - **`ui_kits/marketing_site/`** — full interactive marketing-site recreation (Nav, Hero, CapabilityGrid, Proof, Testimonial, CtaBanner, Footer, ConsultModal) with shared `styles.css`. Copy components from here when building marketing pages.
 
 ## Brand rules at a glance
 
-- **Headings:** Gotham, never heavier than Medium (500). Hero/display use Light (300) or Thin (100).
+- **Headings:** Gotham, Medium (500) default ceiling. Hero/display use Light (300) or Thin (100). Bold (700) only for UI emphasis (buttons, strong labels); nothing above 700.
 - **Body:** Didact Gothic 400, 16px, line-height 1.65.
 - **Eyebrows:** Gotham Medium, uppercase, 0.18em tracking, in `--psg-ember`.
 - **Color anchors:** `#1E3A52` Midnight (primary), `#B8483E` Ember (accent — single focal moment per view), `#4A4257` Slate (secondary).
-- **Backgrounds:** warm `--psg-paper` (#FAF8F5) or `--psg-midnight`. No gradients except occasional protection-gradient on full-bleed photos.
+- **Backgrounds:** neutral `--psg-paper` (#FAFAFA) or `--psg-midnight`. No gradients except occasional protection-gradient on full-bleed photos.
 - **Voice:** understated luxury — confident, never salesy. No emoji. Em-dashes welcome. Sentence case for body and UI labels.
 - **Motion:** ease-out `cubic-bezier(0.22, 0.61, 0.36, 1)`. Durations 140 / 220 / 420ms. No bounce, no spring overshoot.
 - **Corners:** 6px default. Square-leaning. Pill shape only for tags/badges.
@@ -39,5 +39,6 @@ If the user asks for "more like" something, look at `ui_kits/marketing_site/inde
 
 ## Caveats to flag if relevant
 
-- The PSG logo SVGs in `assets/` are a **reconstruction** built from the brand brief. If the user has an official vector logo, swap them in.
+- The PSG logo SVGs in `assets/` carry **official v3.0 vector path data** (source: `uploads/PSG-Logo-Resrouce-Files/`) with brand fills inlined. Use them as-is; do not redraw or restyle.
+- Gotham font files are commercially licensed (Adobe Fonts). Do not copy the `.otf` files into public repos or public client deliverables — see `fonts/LICENSE.md`.
 - No on-brand photography is included. Imagery should be warm, documentary, slightly desaturated — collision-shop work, craftspeople, real cars in real bays. Never stock-cool.

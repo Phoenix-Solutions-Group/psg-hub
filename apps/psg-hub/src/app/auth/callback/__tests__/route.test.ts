@@ -64,4 +64,16 @@ describe("GET /auth/callback", () => {
     expect(mockExchangeCode).not.toHaveBeenCalled();
     expect(mockVerifyOtp).not.toHaveBeenCalled();
   });
+
+  it("falls back to /dashboard for protocol-relative next paths", async () => {
+    const res = await GET(req("http://localhost/auth/callback?code=abc&next=%2F%2Fevil.com"));
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("http://localhost/dashboard");
+  });
+
+  it("falls back to /auth/reset-password for protocol-relative recovery next paths", async () => {
+    const res = await GET(req("http://localhost/auth/callback?token=tok&token_hash=hash&type=recovery&next=%2F%2Fevil.com"));
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("http://localhost/auth/reset-password");
+  });
 });

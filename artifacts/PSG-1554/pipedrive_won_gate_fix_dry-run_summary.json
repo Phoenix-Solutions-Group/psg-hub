@@ -1,7 +1,7 @@
 {
   "issue": "PSG-1554",
   "mode": "dry-run",
-  "generatedAt": "2026-07-15T18:35:02.684Z",
+  "generatedAt": "2026-07-15T21:10:23.656Z",
   "sourceEndpoints": [
     "GET /api/v1/dealFields",
     "GET /api/v2/dealFields?include_fields=ui_visibility,required_fields",
@@ -122,10 +122,10 @@
         "options": []
       },
       {
-        "id": 12567,
-        "key": "3191064d5c1d6d9d298b2e4c721a90f39c79d13d",
-        "name": "Billing Contact",
-        "type": "people",
+        "id": 12576,
+        "key": "d318a4cf86fc9a9fae395cd7a4e8785862ded54c",
+        "name": "Billing Contact Name",
+        "type": "varchar",
         "active": true,
         "required_fields": {
           "enabled": true,
@@ -222,12 +222,12 @@
           }
         },
         "options": [
-          "Due on Receipt",
-          "NET 7",
-          "NET 14",
-          "NET 15 (standard)",
-          "NET 30",
-          "Payment Plan - see Special Terms"
+          "Net 15",
+          "Due on receipt",
+          "Net 14",
+          "Net 30",
+          "Payment Plan",
+          "Custom - see notes"
         ]
       },
       {
@@ -246,9 +246,10 @@
           }
         },
         "options": [
-          "Standard Onboarding (fallback)",
-          "Web - New Website Build",
-          "Custom - approved"
+          "New-client onboarding",
+          "New Website Build",
+          "Custom Delivery Project",
+          "Needs Production decision"
         ]
       },
       {

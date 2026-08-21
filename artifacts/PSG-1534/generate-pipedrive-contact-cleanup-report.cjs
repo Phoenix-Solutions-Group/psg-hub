@@ -82,12 +82,50 @@ function namesMatchExactly(org, source) {
 }
 
 function normalizeUrl(value) {
-  const text = asText(value).toLowerCase().trim();
+  const text = cleanWebsiteUrl(value).toLowerCase().trim();
   if (!text) return "";
-  return text
-    .replace(/^https?:\/\//, "")
-    .replace(/^www\./, "")
-    .replace(/\/+$/, "");
+  return text.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "");
+}
+
+function decodeUrlPieces(value) {
+  let text = value;
+  for (let i = 0; i < 3; i += 1) {
+    try {
+      const decoded = decodeURIComponent(text);
+      if (decoded === text) return text;
+      text = decoded;
+    } catch {
+      return text;
+    }
+  }
+  return text;
+}
+
+function stripTrackingFromPath(pathname) {
+  let pathText = decodeUrlPieces(pathname);
+  pathText = pathText.replace(/[?#].*$/, "");
+  pathText = pathText.replace(/\/+$/, "");
+  if (!pathText || pathText === "/") return "";
+  return pathText;
+}
+
+function cleanWebsiteUrl(value) {
+  const raw = asText(value).trim();
+  if (!raw) return "";
+
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const url = new URL(candidate);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    if (!host) return "";
+    const pathText = stripTrackingFromPath(url.pathname);
+    return `${url.protocol.toLowerCase()}//${host}${pathText}`;
+  } catch {
+    const decoded = decodeUrlPieces(raw)
+      .replace(/[?#].*$/, "")
+      .replace(/\/+$/, "");
+    return decoded;
+  }
 }
 
 function normalizePostalCode(value) {
@@ -189,7 +227,7 @@ function orgPhone(org) {
 }
 
 function orgWebsite(org) {
-  return asText(
+  return cleanWebsiteUrl(
     org.website ??
       org[CUSTOM_WEBSITE_FIELD_KEY] ??
       org.custom_fields?.website ??
@@ -234,7 +272,7 @@ function sourcePhone(source) {
 }
 
 function sourceWebsite(source) {
-  return asText(source.row.website);
+  return cleanWebsiteUrl(source.row.website);
 }
 
 function sourceId(source) {

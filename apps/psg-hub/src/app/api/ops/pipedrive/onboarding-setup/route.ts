@@ -9,7 +9,10 @@ import {
 import { runQaSmoke } from "@/lib/pipedrive/qa-smoke";
 import { runProposalQaSmoke } from "@/lib/pipedrive/proposal-qa-smoke";
 import { runRecurringQaSmoke } from "@/lib/pipedrive/recurring-qa-smoke";
-import { runWebBuildQaSmoke } from "@/lib/pipedrive/web-build-qa-smoke";
+import {
+  runTwoTemplateQaSmoke,
+  runWebBuildQaSmoke,
+} from "@/lib/pipedrive/web-build-qa-smoke";
 import { runAssigneeAudit } from "@/lib/pipedrive/assignee-audit";
 import { runAssigneeBackfill } from "@/lib/pipedrive/assignee-backfill";
 import {
@@ -155,6 +158,34 @@ export async function POST(request: Request): Promise<NextResponse> {
         salesPipelineId,
         companyDomain,
         // Prod role→user map (UX/QA env-backed, PSG-589/PSG-668) — proves live assignment.
+        roleUserMap: loadRoleUserMap(),
+        runTag,
+      });
+      return NextResponse.json({ ok: evidence.allChecksPass, evidence });
+    }
+
+    if (body.action === "two-template-qa-smoke") {
+      // PSG-694 / PSG-678 — genuine live smoke for the multi-template delivery gate:
+      // one marked test deal sold Website Build + Landing Page must create two separate
+      // project plans, and a replay must not create duplicates.
+      const boardId = Number(process.env.PIPEDRIVE_ONBOARDING_BOARD_ID);
+      const phaseId = Number(process.env.PIPEDRIVE_ONBOARDING_PHASE_ID);
+      if (!Number.isFinite(boardId) || !Number.isFinite(phaseId)) {
+        return NextResponse.json(
+          { ok: false, reason: "board_not_configured" },
+          { status: 503 },
+        );
+      }
+      const salesPipelineId = process.env.PIPEDRIVE_SALES_PIPELINE_ID
+        ? Number(process.env.PIPEDRIVE_SALES_PIPELINE_ID)
+        : 8;
+      const runTag =
+        (typeof body.runTag === "string" && body.runTag.trim()) || `run-${Date.now()}`;
+      const evidence = await runTwoTemplateQaSmoke({
+        defaultBoardId: boardId,
+        defaultPhaseId: phaseId,
+        salesPipelineId,
+        companyDomain,
         roleUserMap: loadRoleUserMap(),
         runTag,
       });

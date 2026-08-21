@@ -32,15 +32,19 @@ import "server-only";
 import {
   createProjectsClient,
   deliveryProjectTitle,
+  onboardingProjectTitle,
   type PipedriveProjectsClient,
   type WonDeal,
   type DealProduct,
 } from "./projects";
 import type { OnboardingRole } from "./onboarding-template";
 import { dueDateFor } from "./onboarding-template";
+import type { OnboardingPhase } from "./onboarding-template";
+import { LANDING_PAGE_TEMPLATE } from "./landing-page-template";
 import { NEW_WEBSITE_BUILD_TEMPLATE } from "./web-build-template";
 import {
   provisionForDeal,
+  LANDING_PAGE_TEMPLATE_DEF,
   WEB_BUILD_TEMPLATE_DEF,
 } from "./template-registry";
 import {
@@ -58,6 +62,13 @@ import {
 export const WEB_BUILD_TEST_PRODUCT: DealProduct = {
   sku: "PSG_P_026",
   name: "Website Design & Build",
+  productId: null,
+};
+
+/** The landing-page line item that maps to the second live delivery template. */
+export const LANDING_PAGE_TEST_PRODUCT: DealProduct = {
+  sku: "PSG_P_026",
+  name: "Landing Page / Campaign Page",
   productId: null,
 };
 
@@ -155,6 +166,60 @@ export interface WebBuildQaSmokeEvidence {
   allChecksPass: boolean;
 }
 
+export interface TwoTemplateProjectEvidence {
+  templateId: string;
+  templateFamily: string;
+  matchedTemplate: boolean;
+  project: {
+    id: number;
+    title: string;
+    board_id: number | null;
+    phase_id: number | null;
+    start_date: string | null;
+    org_ids: number[];
+    person_ids: number[];
+  };
+  expectedBoardId: number;
+  expectedPhaseId: number;
+  tree: {
+    totalTasks: number;
+    containerTasks: number;
+    gateTasks: number;
+  };
+  phases: PhaseStampCheck;
+  finalDueSpotCheck: {
+    title: string | null;
+    due: string | null;
+    expected: string;
+    ok: boolean;
+  };
+}
+
+export interface TwoTemplateQaSmokeEvidence {
+  ok: boolean;
+  dealId: number;
+  wonDate: string | null;
+  selection: {
+    templateIds: string[];
+    matchedTemplates: boolean;
+  };
+  projects: TwoTemplateProjectEvidence[];
+  idempotency: {
+    skippedExistingCount: number;
+    projectIdsMatch: boolean;
+    projectCountAfterRerun: number;
+    projectsListHasMore: boolean;
+  };
+  cleanup: {
+    projectsDeleted: number;
+    dealDeleted: boolean;
+    residualTestProjectRemains: boolean;
+    lateReprovisionsDeleted: number;
+  };
+  checks: Record<string, boolean>;
+  allChecksPass: boolean;
+}
+
 const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Throw unless `title` carries the QA marker — the load-bearing delete guard. */
@@ -181,6 +246,329 @@ function roleFromDescription(description: string | null): OnboardingRole | null 
     "QA",
   ];
   return (known.find((r) => r === code) as OnboardingRole | undefined) ?? null;
+}
+
+function templateTaskCount(phases: readonly OnboardingPhase[]): number {
+  return phases.reduce((s, p) => s + p.tasks.length, 0);
+}
+
+function summarizeProject(opts: {
+  provisioned: {
+    projectId: number;
+    templateId: string;
+    templateFamily: string;
+    matchedTemplate: boolean;
+  };
+  project: QaProject;
+  tasks: Awaited<ReturnType<QaRestClient["listProjectTasks"]>>;
+  plan: Awaited<ReturnType<QaRestClient["getProjectPlan"]>>;
+  boardPhases: Awaited<ReturnType<QaRestClient["listBoardPhases"]>>;
+  template: readonly OnboardingPhase[];
+  expectedBoardId: number;
+  expectedPhaseId: number;
+  finalDueNeedle: string;
+  finalDueOffset: number;
+  wonDate: string;
+}): TwoTemplateProjectEvidence {
+  const parentIds = new Set(
+    opts.tasks.map((t) => t.parent_task_id).filter((id): id is number => id != null),
+  );
+  const containers = opts.tasks.filter((t) => parentIds.has(t.id));
+  const gates = opts.tasks.filter((t) => t.title.toUpperCase().includes("GATE"));
+  const phases = checkPhaseStamping({
+    tasks: opts.tasks,
+    plan: opts.plan,
+    boardPhases: opts.boardPhases,
+    template: opts.template,
+  });
+  const finalTask = opts.tasks.find((t) =>
+    t.title.toLowerCase().includes(opts.finalDueNeedle),
+  );
+  const finalExpected = dueDateFor(opts.wonDate, opts.finalDueOffset);
+
+  return {
+    templateId: opts.provisioned.templateId,
+    templateFamily: opts.provisioned.templateFamily,
+    matchedTemplate: opts.provisioned.matchedTemplate,
+    project: {
+      id: opts.project.id,
+      title: opts.project.title,
+      board_id: opts.project.board_id,
+      phase_id: opts.project.phase_id,
+      start_date: opts.project.start_date,
+      org_ids: opts.project.org_ids,
+      person_ids: opts.project.person_ids,
+    },
+    expectedBoardId: opts.expectedBoardId,
+    expectedPhaseId: opts.expectedPhaseId,
+    tree: {
+      totalTasks: opts.tasks.length,
+      containerTasks: containers.length,
+      gateTasks: gates.length,
+    },
+    phases,
+    finalDueSpotCheck: {
+      title: finalTask?.title ?? null,
+      due: finalTask?.due_date ?? null,
+      expected: finalExpected,
+      ok: finalTask?.due_date === finalExpected,
+    },
+  };
+}
+
+/**
+ * Run the genuine two-template live smoke for PSG-694 / PSG-678: one marked won deal
+ * with Website Build + Landing Page line items must create two separate delivery
+ * projects, and a rerun must not create duplicates.
+ */
+export async function runTwoTemplateQaSmoke(
+  opts: WebBuildQaSmokeOptions,
+  provisionClient?: PipedriveProjectsClient,
+): Promise<TwoTemplateQaSmokeEvidence> {
+  const sleep = opts.sleep ?? realSleep;
+  const env = opts.env ?? process.env;
+  const roleUserMap = opts.roleUserMap ?? {};
+  const rest: QaRestClient = createQaRestClient({
+    apiKey: opts.apiKey,
+    companyDomain: opts.companyDomain ?? null,
+    fetchImpl: opts.fetchImpl,
+  });
+  const client =
+    provisionClient ??
+    createProjectsClient({
+      apiKey: opts.apiKey,
+      companyDomain: opts.companyDomain ?? null,
+      fetchImpl: opts.fetchImpl,
+    });
+
+  const dealTitle = `${QA_TEST_MARKER} — TwoTemplate E2E ${opts.runTag}`;
+  let dealId = 0;
+  let orgId = 0;
+  let personId = 0;
+  const projectTitles: string[] = [];
+  const cleanup: TwoTemplateQaSmokeEvidence["cleanup"] = {
+    projectsDeleted: 0,
+    dealDeleted: false,
+    residualTestProjectRemains: false,
+    lateReprovisionsDeleted: 0,
+  };
+
+  const webExpectedBoardId =
+    envInt(env, WEB_BUILD_TEMPLATE_DEF.boardIdEnv) ?? opts.defaultBoardId;
+  const webExpectedPhaseId =
+    envInt(env, WEB_BUILD_TEMPLATE_DEF.phaseIdEnv) ?? opts.defaultPhaseId;
+  const landingExpectedBoardId =
+    envInt(env, LANDING_PAGE_TEMPLATE_DEF.boardIdEnv) ?? opts.defaultBoardId;
+  const landingExpectedPhaseId =
+    envInt(env, LANDING_PAGE_TEMPLATE_DEF.phaseIdEnv) ?? opts.defaultPhaseId;
+
+  try {
+    const orgName = `${QA_TEST_MARKER} Org — ${opts.runTag}`;
+    const org = await rest.createOrganization(orgName);
+    orgId = org.id;
+    const person = await rest.createPerson(`${QA_TEST_MARKER} Person — ${opts.runTag}`, orgId);
+    personId = person.id;
+
+    const created = await rest.createDeal(dealTitle, opts.salesPipelineId, {
+      orgId,
+      personId,
+    });
+    dealId = created.id;
+    await rest.winDeal(dealId);
+    const won = await rest.getDeal(dealId);
+    const wonDate = won.wonDate ?? new Date().toISOString().slice(0, 10);
+    const deal: WonDeal = {
+      id: dealId,
+      title: won.title || dealTitle,
+      orgName: null,
+      orgId: won.orgId,
+      personId: won.personId,
+      pipelineId: won.pipelineId,
+      wonDate,
+    };
+
+    projectTitles.push(deliveryProjectTitle(WEB_BUILD_TEMPLATE_DEF.titlePrefix, deal));
+    projectTitles.push(deliveryProjectTitle(LANDING_PAGE_TEMPLATE_DEF.titlePrefix, deal));
+    // If the real Pipedrive webhook races this local smoke before line items are visible,
+    // it may create the conservative onboarding fallback. It is still a marked test
+    // artifact for the same deal, so include its deterministic title in cleanup.
+    projectTitles.push(onboardingProjectTitle({ ...deal, orgName }));
+
+    const first = await provisionForDeal({
+      client,
+      deal,
+      defaultBoardId: opts.defaultBoardId,
+      defaultPhaseId: opts.defaultPhaseId,
+      roleUserMap,
+      products: [WEB_BUILD_TEST_PRODUCT, LANDING_PAGE_TEST_PRODUCT],
+      env,
+    });
+
+    const projects: TwoTemplateProjectEvidence[] = [];
+    for (const provisioned of first.projects) {
+      const project = await rest.getProject(provisioned.projectId);
+      const tasks = await rest.listProjectTasks(provisioned.projectId);
+      const plan = await rest.getProjectPlan(provisioned.projectId);
+      const isLanding = provisioned.templateId === LANDING_PAGE_TEMPLATE_DEF.id;
+      const expectedBoardId = isLanding ? landingExpectedBoardId : webExpectedBoardId;
+      const expectedPhaseId = isLanding ? landingExpectedPhaseId : webExpectedPhaseId;
+      const boardPhases = await rest.listBoardPhases(expectedBoardId);
+      projects.push(
+        summarizeProject({
+          provisioned,
+          project,
+          tasks,
+          plan,
+          boardPhases,
+          template: isLanding ? LANDING_PAGE_TEMPLATE : NEW_WEBSITE_BUILD_TEMPLATE,
+          expectedBoardId,
+          expectedPhaseId,
+          finalDueNeedle: "post-launch qa",
+          finalDueOffset: isLanding ? 18 : 63,
+          wonDate,
+        }),
+      );
+    }
+
+    const again = await provisionForDeal({
+      client,
+      deal,
+      defaultBoardId: opts.defaultBoardId,
+      defaultPhaseId: opts.defaultPhaseId,
+      roleUserMap,
+      products: [WEB_BUILD_TEST_PRODUCT, LANDING_PAGE_TEST_PRODUCT],
+      env,
+    });
+    const page = await rest.listProjectsPage(500);
+    const matchingAfterRerun = page.items.filter((p) => projectTitles.includes(p.title));
+
+    const evidence: TwoTemplateQaSmokeEvidence = {
+      ok: true,
+      dealId,
+      wonDate,
+      selection: {
+        templateIds: first.templateIds,
+        matchedTemplates: first.matchedTemplates,
+      },
+      projects,
+      idempotency: {
+        skippedExistingCount: again.projects.filter((p) => p.skippedExisting).length,
+        projectIdsMatch:
+          again.projects.length === first.projects.length &&
+          again.projects.every((p, i) => p.projectId === first.projects[i]?.projectId),
+        projectCountAfterRerun: matchingAfterRerun.length,
+        projectsListHasMore: page.hasMore,
+      },
+      cleanup,
+      checks: {},
+      allChecksPass: false,
+    };
+
+    const web = projects.find((p) => p.templateId === WEB_BUILD_TEMPLATE_DEF.id);
+    const landing = projects.find((p) => p.templateId === LANDING_PAGE_TEMPLATE_DEF.id);
+    const c = evidence.checks;
+    c.selectedExactlyTwoTemplates =
+      first.templateIds.length === 2 &&
+      first.templateIds[0] === WEB_BUILD_TEMPLATE_DEF.id &&
+      first.templateIds[1] === LANDING_PAGE_TEMPLATE_DEF.id &&
+      first.matchedTemplates === true;
+    c.projectTitlesAreSeparate =
+      web?.project.title === projectTitles[0] &&
+      landing?.project.title === projectTitles[1] &&
+      projectTitles[0] !== projectTitles[1];
+    c.webBuildStructureCorrect =
+      web != null &&
+      web.tree.totalTasks === templateTaskCount(NEW_WEBSITE_BUILD_TEMPLATE) &&
+      web.tree.totalTasks === 22 &&
+      web.tree.containerTasks === 0 &&
+      web.tree.gateTasks === 4 &&
+      web.phases.everyTaskStamped &&
+      web.phases.tasksInUnassigned === 0 &&
+      web.finalDueSpotCheck.ok;
+    c.landingPageStructureCorrect =
+      landing != null &&
+      landing.tree.totalTasks === templateTaskCount(LANDING_PAGE_TEMPLATE) &&
+      landing.tree.totalTasks === 17 &&
+      landing.tree.containerTasks === 0 &&
+      landing.tree.gateTasks === 4 &&
+      landing.phases.everyTaskStamped &&
+      landing.phases.tasksInUnassigned === 0 &&
+      landing.finalDueSpotCheck.ok;
+    c.projectsUseExpectedBoards =
+      web?.project.board_id === webExpectedBoardId &&
+      web?.project.phase_id === webExpectedPhaseId &&
+      landing?.project.board_id === landingExpectedBoardId &&
+      landing?.project.phase_id === landingExpectedPhaseId;
+    c.projectLinksRoundTrip =
+      projects.every(
+        (p) =>
+          won.orgId != null &&
+          won.personId != null &&
+          p.project.org_ids.includes(won.orgId) &&
+          p.project.person_ids.includes(won.personId),
+      );
+    c.idempotentNoDuplicateProjects =
+      evidence.idempotency.skippedExistingCount === 2 &&
+      evidence.idempotency.projectIdsMatch &&
+      evidence.idempotency.projectCountAfterRerun === 2;
+    evidence.allChecksPass = Object.values(c).every(Boolean);
+
+    return evidence;
+  } finally {
+    for (const projectTitle of projectTitles) {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        let found: QaProject | null = null;
+        try {
+          const page = await rest.listProjectsPage(500);
+          found = page.items.find((p) => p.title === projectTitle) ?? null;
+        } catch {
+          found = null;
+        }
+        if (!found) break;
+        try {
+          assertDeletable("project", found.id, found.title);
+          await rest.deleteProject(found.id);
+          if (attempt === 0) cleanup.projectsDeleted += 1;
+          else cleanup.lateReprovisionsDeleted += 1;
+        } catch {
+          // fall through; residual reported below
+        }
+        await sleep(1500);
+      }
+    }
+    if (dealId) {
+      try {
+        const d = await rest.getDeal(dealId);
+        assertDeletable("deal", dealId, d.title || dealTitle);
+        await rest.deleteDeal(dealId);
+        cleanup.dealDeleted = true;
+      } catch {
+        cleanup.dealDeleted = false;
+      }
+    }
+    if (personId) {
+      try {
+        await rest.deletePerson(personId);
+      } catch {
+        /* best-effort */
+      }
+    }
+    if (orgId) {
+      try {
+        await rest.deleteOrganization(orgId);
+      } catch {
+        /* best-effort */
+      }
+    }
+    try {
+      const page = await rest.listProjectsPage(500);
+      cleanup.residualTestProjectRemains = page.items.some((p) =>
+        projectTitles.includes(p.title),
+      );
+    } catch {
+      cleanup.residualTestProjectRemains = false;
+    }
+  }
 }
 
 /**

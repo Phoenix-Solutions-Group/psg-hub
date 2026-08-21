@@ -1,7 +1,7 @@
 {
   "issue": "PSG-1554",
   "mode": "apply",
-  "generatedAt": "2026-07-15T18:34:55.029Z",
+  "generatedAt": "2026-07-15T21:07:26.909Z",
   "sourceEndpoints": [
     "GET /api/v1/dealFields",
     "GET /api/v2/dealFields?include_fields=ui_visibility,required_fields",
@@ -9,7 +9,7 @@
   ],
   "counts": {
     "plannedActions": 0,
-    "appliedActions": 1,
+    "appliedActions": 14,
     "gate1RequiredFields": 14,
     "optionalFields": 3,
     "gate2Fields": 5,
@@ -24,9 +24,74 @@
   },
   "applied": [
     {
-      "type": "syncDeliveryTemplateOptions",
+      "type": "requireGate1Field",
+      "id": 12533,
+      "fieldName": "Signed Contract / Approval Link"
+    },
+    {
+      "type": "requireGate1Field",
+      "id": 12534,
+      "fieldName": "Contract Start Date"
+    },
+    {
+      "type": "requireGate1Field",
+      "id": 12540,
+      "fieldName": "Billing Model"
+    },
+    {
+      "type": "requireGate1Field",
+      "id": 12541,
+      "fieldName": "Consolidated Invoicing Required"
+    },
+    {
+      "type": "requireGate1Field",
+      "id": 12545,
+      "fieldName": "Legal Customer Name"
+    },
+    {
+      "type": "requireGate1Field",
+      "id": 12576,
+      "fieldName": "Billing Contact Name"
+    },
+    {
+      "type": "requireGate1Field",
+      "id": 12543,
+      "fieldName": "Billing Email"
+    },
+    {
+      "type": "requireGate1Field",
+      "id": 12548,
+      "fieldName": "One-Time Setup Fees"
+    },
+    {
+      "type": "requireGate1Field",
+      "id": 12549,
+      "fieldName": "Monthly Recurring Fees"
+    },
+    {
+      "type": "requireGate1Field",
+      "id": 12551,
+      "fieldName": "First Invoice Date"
+    },
+    {
+      "type": "requireGate1Field",
+      "id": 12572,
+      "fieldName": "Payment Terms (deal)"
+    },
+    {
+      "type": "requireGate1Field",
       "id": 12554,
       "fieldName": "Delivery Template"
+    },
+    {
+      "type": "requireGate1Field",
+      "id": 12555,
+      "fieldName": "Missing Access List"
+    },
+    {
+      "type": "requireGate1Field",
+      "id": 12556,
+      "fieldName": "Asset Request List"
     }
   ],
   "remainingActions": [],
@@ -128,10 +193,10 @@
         "options": []
       },
       {
-        "id": 12567,
-        "key": "3191064d5c1d6d9d298b2e4c721a90f39c79d13d",
-        "name": "Billing Contact",
-        "type": "people",
+        "id": 12576,
+        "key": "d318a4cf86fc9a9fae395cd7a4e8785862ded54c",
+        "name": "Billing Contact Name",
+        "type": "varchar",
         "active": true,
         "required_fields": {
           "enabled": true,
@@ -228,12 +293,12 @@
           }
         },
         "options": [
-          "Due on Receipt",
-          "NET 7",
-          "NET 14",
-          "NET 15 (standard)",
-          "NET 30",
-          "Payment Plan - see Special Terms"
+          "Net 15",
+          "Due on receipt",
+          "Net 14",
+          "Net 30",
+          "Payment Plan",
+          "Custom - see notes"
         ]
       },
       {
@@ -252,9 +317,10 @@
           }
         },
         "options": [
-          "Standard Onboarding (fallback)",
-          "Web - New Website Build",
-          "Custom - approved"
+          "New-client onboarding",
+          "New Website Build",
+          "Custom Delivery Project",
+          "Needs Production decision"
         ]
       },
       {

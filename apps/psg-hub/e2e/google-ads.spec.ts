@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { OPS_STAFF, OWNER, MULTI, PASSWORD } from "./fixtures";
+import { OPS_STAFF, OWNER, MULTI, PASSWORD, SHOTS_DIR } from "./fixtures";
 import { checkA11y, shoot } from "./_helpers";
 
 // Phase 10 / 10-01. Two proofs against the LOCAL migrated DB:
@@ -319,6 +319,46 @@ test.describe("google ads — customer-facing hub", () => {
       { onConflict: "id" },
     );
     expect(reportErr, `report insert: ${reportErr?.message}`).toBeNull();
+  });
+
+  test("request dialog works by keyboard and does not overflow phone screens", async ({ page }) => {
+    await page.goto("/dashboard/ads");
+    const trigger = page.getByRole("button", { name: "Request a change" });
+    const focusStayedInside: boolean[] = [];
+
+    for (const width of [320, 360]) {
+      await page.setViewportSize({ width, height: 800 });
+      await trigger.click();
+
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Tell PSG what you need" })).toBeFocused();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await page.screenshot({ path: `${SHOTS_DIR}/google-ads-request-${width}px.png`, fullPage: true });
+
+      await page.keyboard.press("Tab");
+      const focusedStyle = await page.evaluate(() => {
+        const element = document.activeElement;
+        return element instanceof HTMLElement ? getComputedStyle(element).boxShadow : "none";
+      });
+      expect(focusedStyle).not.toBe("none");
+
+      await page.keyboard.press("Shift+Tab");
+      focusStayedInside.push(await dialog.evaluate((element) => element.contains(document.activeElement)));
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+      await expect(trigger).toBeFocused();
+    }
+
+    await trigger.click();
+    await page.getByRole("dialog").evaluate((element) => {
+      element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(trigger).toBeFocused();
+    expect(focusStayedInside, "Keyboard focus must remain inside the open request window").toEqual([true, true]);
   });
 
   test("renders the customer hub, request workflow, reports, and screenshot evidence", async ({ page }) => {

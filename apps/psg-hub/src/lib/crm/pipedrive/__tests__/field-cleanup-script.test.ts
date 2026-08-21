@@ -195,6 +195,42 @@ describe("pipedrive-field-cleanup plan", () => {
           }),
         }),
         expect.objectContaining({
+          label: "Payment Terms",
+          body: expect.objectContaining({
+            field_name: "Payment Terms",
+            field_type: "enum",
+            options: [
+              { label: "Due on receipt" },
+              { label: "Net 14" },
+              { label: "Net 15" },
+              { label: "Net 30" },
+              { label: "Payment Plan" },
+              { label: "Custom - see notes" },
+            ],
+          }),
+          defaultOptionLabel: "Net 15",
+        }),
+        expect.objectContaining({
+          label: "Discount Type",
+          body: expect.objectContaining({
+            field_name: "Discount Type",
+            field_type: "enum",
+            options: [
+              { label: "None" },
+              { label: "Fixed $ per month" },
+              { label: "Percent %" },
+              { label: "Custom - see notes" },
+            ],
+          }),
+        }),
+        expect.objectContaining({
+          label: "Discount Value",
+          body: expect.objectContaining({
+            field_name: "Discount Value",
+            field_type: "double",
+          }),
+        }),
+        expect.objectContaining({
           label: "Signed Contract / Approval Link",
           body: expect.objectContaining({
             field_type: "varchar",
@@ -238,6 +274,227 @@ describe("pipedrive-field-cleanup plan", () => {
               statuses: {},
             },
           }),
+        }),
+        expect.objectContaining({
+          label: "Missing Access List",
+          body: expect.objectContaining({
+            required_fields: {
+              enabled: true,
+              stage_ids: [],
+              statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
+            },
+          }),
+        }),
+        expect.objectContaining({
+          label: "Asset Request List",
+          body: expect.objectContaining({
+            required_fields: {
+              enabled: true,
+              stage_ids: [],
+              statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
+            },
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("replaces legacy Discounts / Credits text with reportable discount type and value fields", () => {
+    const wonFieldsExceptDiscounts = WON_HANDOFF_DEAL_FIELDS
+      .filter(
+        (spec) =>
+          spec.create.field_name !== "Discount Type" &&
+          spec.create.field_name !== "Discount Value",
+      )
+      .map((spec, index) => custom(spec.create.field_name, `won_field_${index}`));
+
+    const plan = buildCleanupPlan({
+      dealFields: [
+        custom("Lead Source (Channel)", "lead_source_channel"),
+        system("Organization", "org_id"),
+        system("Contact person", "person_id"),
+        custom("First Contact Date", "first_contact_date"),
+        custom("Service Line", "service_line"),
+        system("Value", "value"),
+        system("Expected Close Date", "expected_close_date"),
+        custom("Revenue Type", "revenue_type"),
+        custom("Proposal Link", "proposal_link"),
+        system("Lost reason", "lost_reason"),
+        custom("Discounts / Credits", "12550"),
+        ...wonFieldsExceptDiscounts,
+      ],
+      organizationFields: [],
+      productFields: [],
+    });
+
+    expect(plan.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "createDealField",
+          label: "Discount Type",
+          body: expect.objectContaining({ field_type: "enum" }),
+        }),
+        expect.objectContaining({
+          type: "createDealField",
+          label: "Discount Value",
+          body: expect.objectContaining({ field_type: "double" }),
+        }),
+        expect.objectContaining({
+          type: "deleteDealField",
+          label: "Legacy Discounts / Credits",
+          fieldCode: "12550",
+        }),
+      ]),
+    );
+    expect(plan.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "updateDealFieldRequired",
+          label: "Discount Type",
+          fieldCode: "12550",
+        }),
+      ]),
+    );
+  });
+
+  it("reconciles existing Payment Terms options to the six Finance-approved choices", () => {
+    const wonFields = WON_HANDOFF_DEAL_FIELDS
+      .filter((spec) => spec.create.field_name !== "Payment Terms")
+      .map((spec, index) => custom(spec.create.field_name, `won_field_${index}`));
+
+    const plan = buildCleanupPlan({
+      dealFields: [
+        custom("Lead Source (Channel)", "lead_source_channel"),
+        system("Organization", "org_id"),
+        system("Contact person", "person_id"),
+        custom("First Contact Date", "first_contact_date"),
+        custom("Service Line", "service_line"),
+        system("Value", "value"),
+        system("Expected Close Date", "expected_close_date"),
+        custom("Revenue Type", "revenue_type"),
+        custom("Proposal Link", "proposal_link"),
+        system("Lost reason", "lost_reason"),
+        custom("Payment Terms", "12552", {
+          options: [
+            { id: 1, label: "Due on Receipt" },
+            { id: 2, label: "NET 7" },
+            { id: 3, label: "NET 14" },
+            { id: 4, label: "NET 15 (standard)" },
+            { id: 5, label: "NET 30" },
+            { id: 6, label: "Payment Plan - see Special Terms" },
+          ],
+        }),
+        ...wonFields,
+      ],
+      organizationFields: [],
+      productFields: [],
+    });
+
+    expect(plan.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "addDealFieldOptions",
+          label: "Payment Terms options",
+          fieldCode: "12552",
+          body: [{ label: "Net 15" }, { label: "Payment Plan" }, { label: "Custom - see notes" }],
+        }),
+        expect.objectContaining({
+          type: "updateDealFieldOptions",
+          label: "Payment Terms option labels",
+          fieldCode: "12552",
+          body: [
+            { id: 1, label: "Due on receipt" },
+            { id: 3, label: "Net 14" },
+            { id: 5, label: "Net 30" },
+          ],
+        }),
+        expect.objectContaining({
+          type: "deleteDealFieldOptions",
+          label: "Payment Terms unsupported options",
+          fieldCode: "12552",
+          body: [{ id: 2 }, { id: 4 }, { id: 6 }],
+        }),
+        expect.objectContaining({
+          type: "updateDealFieldRequired",
+          label: "Payment Terms",
+          fieldCode: "12552",
+          body: expect.objectContaining({
+            required_fields: expect.objectContaining({
+              statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
+            }),
+          }),
+        }),
+      ]),
+    );
+    expect(plan.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "addDealFieldOptions",
+          body: expect.arrayContaining([{ label: "AutoPay" }, { label: "NET 7" }]),
+        }),
+      ]),
+    );
+  });
+
+  it("matches the live Payment Terms (deal) field instead of planning a duplicate", () => {
+    const wonFields = WON_HANDOFF_DEAL_FIELDS
+      .filter((spec) => spec.create.field_name !== "Payment Terms")
+      .map((spec, index) => custom(spec.create.field_name, `won_field_${index}`));
+
+    const plan = buildCleanupPlan({
+      dealFields: [
+        custom("Lead Source (Channel)", "lead_source_channel"),
+        system("Organization", "org_id"),
+        system("Contact person", "person_id"),
+        custom("First Contact Date", "first_contact_date"),
+        custom("Service Line", "service_line"),
+        system("Value", "value"),
+        system("Expected Close Date", "expected_close_date"),
+        custom("Revenue Type", "revenue_type"),
+        custom("Proposal Link", "proposal_link"),
+        system("Lost reason", "lost_reason"),
+        custom("Payment Terms (deal)", "12572", {
+          options: [
+            { id: 1, label: "Due on receipt" },
+            { id: 2, label: "Net 14" },
+            { id: 3, label: "Net 15" },
+            { id: 4, label: "Net 30" },
+            { id: 5, label: "Payment Plan" },
+            { id: 6, label: "Custom - see notes" },
+          ],
+        }),
+        ...wonFields,
+      ],
+      organizationFields: [],
+      productFields: [],
+    });
+
+    expect(plan.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "createDealField",
+          label: "Payment Terms",
+        }),
+        expect.objectContaining({
+          type: "addDealFieldOptions",
+          label: "Payment Terms options",
+        }),
+        expect.objectContaining({
+          type: "deleteDealFieldOptions",
+          label: "Payment Terms unsupported options",
+        }),
+        expect.objectContaining({
+          type: "updateDealFieldOptions",
+          label: "Payment Terms option labels",
+        }),
+      ]),
+    );
+    expect(plan.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "updateDealFieldRequired",
+          label: "Payment Terms",
+          fieldCode: "12572",
         }),
       ]),
     );
@@ -317,8 +574,6 @@ describe("pipedrive-field-cleanup plan", () => {
 
     for (const label of [
       "MSO Parent Company",
-      "Missing Access List",
-      "Asset Request List",
       "Finance Handoff Sign-Off",
       "Production Handoff Sign-Off",
     ]) {
@@ -339,8 +594,6 @@ describe("pipedrive-field-cleanup plan", () => {
         required_fields: {
           enabled: [
             "MSO Parent Company",
-            "Missing Access List",
-            "Asset Request List",
             "Finance Handoff Sign-Off",
             "Production Handoff Sign-Off",
           ].includes(spec.create.field_name),
@@ -369,8 +622,6 @@ describe("pipedrive-field-cleanup plan", () => {
 
     for (const label of [
       "MSO Parent Company",
-      "Missing Access List",
-      "Asset Request List",
       "Finance Handoff Sign-Off",
       "Production Handoff Sign-Off",
     ]) {

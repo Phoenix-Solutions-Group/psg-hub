@@ -10,7 +10,7 @@ This design system codifies the visual, verbal, and interaction language of **Ph
 
 | Source | Type | Path / Link | Status |
 |---|---|---|---|
-| `PSG Logo Variations_3.0_PSG 01.pdf` | Logo PDF (10 pages) | `uploads/PSG Logo Variations_3.0_PSG 01.pdf` | ⚠ Could not raster-extract logo art in this environment. SVG wordmark in `assets/` is a faithful **reconstruction** built from brand spec — replace with the official vector files when available. |
+| Official logo files v3.0 | Vector + raster library | `uploads/PSG-Logo-Resrouce-Files/` | ✓ All SVGs in `assets/` are built from the official v3.0 vector files (path data verified identical), with brand fills applied inline. |
 | Brand brief | Verbal spec | provided in chat | Captured in this README |
 | Brand colors | Hex | `#1E3A52`, `#B8483E`, `#4A4257` | Implemented in `colors_and_type.css` |
 | Typography | Names | Gotham (headings), Didact Gothic (body) | ✓ Both fully installed: full Gotham family in `fonts/Gotham-*.otf`, Didact Gothic in `fonts/DidactGothic-Regular.ttf`. |
@@ -76,18 +76,19 @@ PSG writes like a senior consultant in a tailored sport coat — warm, precise, 
 ## Visual foundations
 
 ### Color
-The palette is **three signature hues + a warm-paper neutral system**.
+The palette is **three signature hues + a neutral paper system**.
 
 | Token | Hex | Use |
 |---|---|---|
 | `--psg-midnight` | `#1E3A52` | Primary — headers, dark surfaces, body ink alt, deep CTA |
 | `--psg-ember`    | `#B8483E` | Accent — single-use focal moments, links on hover, the Phoenix |
-| `--psg-slate`    | `#4A4257` | Secondary — muted heading variants, secondary buttons, badges |
-| `--psg-paper`    | `#FAF8F5` | Default page background — warm, off-white, never pure |
-| `--psg-bone`     | `#F2EEE8` | Alt surface, panels, subtle cards |
-| `--psg-stone`    | `#E4DED5` | Hairlines, dividers |
-| `--psg-graphite` | `#2A2826` | Body ink |
-| `--psg-mist`     | `#9A958E` | Secondary copy |
+| `--psg-dark-ash` | `#4B5058` | Secondary — muted heading variants, secondary buttons, badges |
+| `--psg-slate`    | `#4B5058` | Legacy alias for dark ash |
+| `--psg-paper`    | `#FAFAFA` | Default page background |
+| `--psg-bone`     | `#F0F0F0` | Alt surface, panels, subtle cards |
+| `--psg-stone`    | `#E0E0E0` | Hairlines, dividers |
+| `--psg-graphite` | `#2A2A2A` | Body ink |
+| `--psg-mist`     | `#949494` | Secondary copy |
 
 **Rules.**
 - Ember is precious — use **once per view** in most cases.
@@ -96,7 +97,7 @@ The palette is **three signature hues + a warm-paper neutral system**.
 - No gradients except the rare protection-gradient on full-bleed photography (deep midnight at 0–40% alpha).
 
 ### Type
-- **Display:** Gotham — Thin 100 / Light 300 for hero scale, Book 400 for h2, Medium 500 for h3–h6 (**Medium is the maximum weight** for any heading or display use, by brand rule), with **negative tracking** at large sizes.
+- **Display:** Gotham — Thin 100 / Light 300 for hero scale, Book 400 for h2, Medium 500 for h3–h6, with **negative tracking** at large sizes. Medium 500 is the default ceiling for headings and display; **Bold 700 is the absolute maximum**, reserved for UI emphasis (buttons, strong labels), never for hero or editorial headings. Nothing above 700.
 - **Body:** Didact Gothic 400 — clean, humanist, generous x-height, set at 16px / 1.65 line-height.
 - **Eyebrows:** Gotham Medium 12px, **uppercase**, `letter-spacing: 0.18em`, in ember.
 - **Numerals:** Tabular figures preferred for any tabular data.
@@ -192,10 +193,12 @@ See **Iconography** section below.
 **Logo & marks.** Vector SVG only, in `assets/`:
 - `psg-logo-primary.svg` — full lockup, primary use, paper background
 - `psg-logo-reverse.svg` — knockout for midnight backgrounds
-- `psg-logo-horizontal.svg` — horizontal compact lockup
+- `psg-logo-simple.svg` — compact lockup
+- `psg-logo-vertical.svg` — vertical lockup
+- `psg-logo-stacked.svg` — stacked square lockup
 - `psg-mark.svg` — just the phoenix/triangle mark; favicon, app tile, social avatar
 
-⚠ **Substitution flag.** The current SVGs were reconstructed from the brand brief because the official PDF could not be rasterized in this environment. **Please attach the official PSG logo as PNG/SVG** so we can swap them in.
+The SVGs carry official v3.0 vector path data from `uploads/PSG-Logo-Resrouce-Files/` with brand fills applied inline. Use them as-is; do not redraw or restyle.
 
 **Emoji.** Not used. Anywhere.
 
@@ -214,8 +217,12 @@ See **Iconography** section below.
 ├─ assets/
 │  ├─ psg-logo-primary.svg
 │  ├─ psg-logo-reverse.svg
-│  ├─ psg-logo-horizontal.svg
-│  └─ psg-mark.svg
+│  ├─ psg-logo-simple.svg
+│  ├─ psg-logo-vertical.svg
+│  ├─ psg-logo-stacked.svg
+│  ├─ psg-mark.svg
+│  ├─ psg-mark-white.svg
+│  └─ psg-mark-square.svg
 ├─ preview/                 ← Design System tab cards
 │  ├─ type-display.html         (Gotham Thin → Medium specimen)
 │  ├─ type-body.html            (Didact Gothic body + eyebrow)
@@ -248,13 +255,13 @@ See **Iconography** section below.
 └─ uploads/                 ← original source files
 ```
 
-**Brand rule applied throughout:** headings are Gotham, never heavier than Medium (500). Hero and large display set in Light (300) or Thin (100).
+**Brand rule applied throughout:** headings are Gotham, Medium (500) by default. Hero and large display set in Light (300) or Thin (100). Bold (700) appears only on UI emphasis such as buttons and strong labels; nothing above 700.
 
 ---
 
 ## Caveats & open items
 
-1. **Logo art** — could not raster the provided PDF in-environment. SVGs in `assets/` are a faithful reconstruction. Need official vectors (Illustrator AI, EPS, or print-quality SVG/PNG).
-2. **Gotham** — full family installed (`/fonts/Gotham-*.otf`). Brand rule: headings never heavier than Medium (500); hero/display use Light (300) or Thin (100).
-3. **Photography** — no imagery provided. UI kits use deliberate placeholders. Need on-brand photo direction (collision-repair shop work, craftspeople, before/afters).
+1. **Logo art** — resolved. `assets/` SVGs carry official v3.0 path data from `uploads/PSG-Logo-Resrouce-Files/` with inline brand fills.
+2. **Gotham** — full family installed (`/fonts/Gotham-*.otf`), licensed via Adobe Fonts. See `fonts/LICENSE.md` before shipping font files anywhere public. Weight rule: headings default Medium (500); hero/display Light (300) or Thin (100); Bold (700) for UI emphasis only.
+3. **Photography** — no imagery provided. UI kits use deliberate placeholders. Need on-brand photo direction (collision-repair shop work, craftspeople).
 4. **Tone examples** — synthesized from the brief. Would benefit from real PSG marketing copy samples to refine.

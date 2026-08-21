@@ -22,12 +22,20 @@ vi.mock("@/lib/pipedrive/projects", async (importActual) => {
 // helpers; keep the real resolveRecurringBoardConfig so the env-pair/fallback is exercised.
 const { runRecurringQaSmoke } = vi.hoisted(() => ({ runRecurringQaSmoke: vi.fn() }));
 const { runProposalQaSmoke } = vi.hoisted(() => ({ runProposalQaSmoke: vi.fn() }));
+const { runTwoTemplateQaSmoke, runWebBuildQaSmoke } = vi.hoisted(() => ({
+  runTwoTemplateQaSmoke: vi.fn(),
+  runWebBuildQaSmoke: vi.fn(),
+}));
 const { activeRecurringAccounts, runRecurringCycle } = vi.hoisted(() => ({
   activeRecurringAccounts: vi.fn(),
   runRecurringCycle: vi.fn(),
 }));
 vi.mock("@/lib/pipedrive/proposal-qa-smoke", () => ({ runProposalQaSmoke }));
 vi.mock("@/lib/pipedrive/recurring-qa-smoke", () => ({ runRecurringQaSmoke }));
+vi.mock("@/lib/pipedrive/web-build-qa-smoke", () => ({
+  runTwoTemplateQaSmoke,
+  runWebBuildQaSmoke,
+}));
 vi.mock("@/lib/pipedrive/recurring-accounts", async (importActual) => {
   const actual =
     await importActual<typeof import("@/lib/pipedrive/recurring-accounts")>();
@@ -253,6 +261,47 @@ describe("POST /api/ops/pipedrive/onboarding-setup — proposal-qa-smoke (PSG-24
       companyDomain: null,
       runTag: "tess",
     });
+  });
+});
+
+describe("POST /api/ops/pipedrive/onboarding-setup — two-template-qa-smoke (PSG-694)", () => {
+  beforeEach(() => {
+    process.env.PIPEDRIVE_ONBOARDING_BOARD_ID = "1";
+    process.env.PIPEDRIVE_ONBOARDING_PHASE_ID = "2";
+    process.env.PIPEDRIVE_SALES_PIPELINE_ID = "8";
+    runTwoTemplateQaSmoke.mockResolvedValue({
+      allChecksPass: true,
+      selection: { templateIds: ["new-website-build", "landing-page"] },
+      projects: [{ templateId: "new-website-build" }, { templateId: "landing-page" }],
+      idempotency: { projectCountAfterRerun: 2 },
+    });
+  });
+
+  it("200 returns two-template smoke evidence through the production config", async () => {
+    const res = await POST(makeReq({ action: "two-template-qa-smoke", runTag: "psg-694" }, SECRET));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      evidence: {
+        selection: { templateIds: ["new-website-build", "landing-page"] },
+        idempotency: { projectCountAfterRerun: 2 },
+      },
+    });
+    expect(runTwoTemplateQaSmoke.mock.calls[0][0]).toMatchObject({
+      defaultBoardId: 1,
+      defaultPhaseId: 2,
+      salesPipelineId: 8,
+      runTag: "psg-694",
+    });
+  });
+
+  it("503 board_not_configured when the fallback board/phase is missing", async () => {
+    delete process.env.PIPEDRIVE_ONBOARDING_BOARD_ID;
+    delete process.env.PIPEDRIVE_ONBOARDING_PHASE_ID;
+    const res = await POST(makeReq({ action: "two-template-qa-smoke" }, SECRET));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ reason: "board_not_configured" });
+    expect(runTwoTemplateQaSmoke).not.toHaveBeenCalled();
   });
 });
 

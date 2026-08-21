@@ -15,6 +15,7 @@ import {
 import {
   ResponseModal,
   type ExistingResponse,
+  type ReviewResponseComment,
 } from "@/components/dashboard/response-modal";
 
 type Review = {
@@ -41,6 +42,7 @@ type Props = {
   reviews: Review[];
   shops: Shop[];
   responsesByReviewId: Record<string, ExistingResponse>;
+  commentsByReviewId: Record<string, ReviewResponseComment[]>;
   rolesByShopId: Record<string, ShopRole>;
 };
 
@@ -123,6 +125,7 @@ export function ReviewsTable({
   reviews,
   shops,
   responsesByReviewId: initialResponses,
+  commentsByReviewId: initialComments,
   rolesByShopId,
 }: Props) {
   const [shopId, setShopId] = useState<string>("");
@@ -131,6 +134,8 @@ export function ReviewsTable({
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [responses, setResponses] =
     useState<Record<string, ExistingResponse>>(initialResponses);
+  const [commentsByReviewId, setCommentsByReviewId] =
+    useState<Record<string, ReviewResponseComment[]>>(initialComments);
   const [activeReview, setActiveReview] = useState<Review | null>(null);
   const router = useRouter();
 
@@ -202,6 +207,7 @@ export function ReviewsTable({
       <div className="flex flex-wrap items-center gap-3">
         {shops.length > 1 && (
           <select
+            aria-label="Filter by shop"
             value={shopId}
             onChange={(e) => setShopId(e.target.value)}
             className="rounded-md border bg-background px-3 py-2 text-sm"
@@ -215,6 +221,7 @@ export function ReviewsTable({
           </select>
         )}
         <select
+          aria-label="Filter by platform"
           value={platform}
           onChange={(e) => setPlatform(e.target.value)}
           className="rounded-md border bg-background px-3 py-2 text-sm"
@@ -328,9 +335,16 @@ export function ReviewsTable({
           }}
           userRole={activeRole}
           existing={activeExisting}
+          initialComments={commentsByReviewId[activeReview.id] ?? []}
           onClose={() => setActiveReview(null)}
           onSaved={(next) =>
-            setResponses((prev) => ({ ...prev, [next.id]: next }))
+            setResponses((prev) => ({ ...prev, [activeReview.id]: next }))
+          }
+          onCommentAdded={(comment) =>
+            setCommentsByReviewId((prev) => ({
+              ...prev,
+              [activeReview.id]: [...(prev[activeReview.id] ?? []), comment],
+            }))
           }
         />
       )}

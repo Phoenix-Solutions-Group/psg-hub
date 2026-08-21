@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { runWebBuildQaSmoke } from "../web-build-qa-smoke";
+import { runTwoTemplateQaSmoke, runWebBuildQaSmoke } from "../web-build-qa-smoke";
+import { LANDING_PAGE_TEMPLATE } from "../landing-page-template";
 import { NEW_WEBSITE_BUILD_TEMPLATE } from "../web-build-template";
-import { WEB_BUILD_TEMPLATE_DEF } from "../template-registry";
+import { LANDING_PAGE_TEMPLATE_DEF, WEB_BUILD_TEMPLATE_DEF } from "../template-registry";
 
 // A stateful in-memory Pipedrive so the smoke runs the REAL selector + write path
 // (template-registry.provisionForDeal → projects.ts v2 createProject/createTask/
@@ -297,5 +298,62 @@ describe("runWebBuildQaSmoke — selector → New Website Build board, full E2E 
     expect(ev.checks.boardResolvesToExpected).toBe(true);
     expect(ev.checks.phaseResolvesToExpected).toBe(true);
     expect(ev.allChecksPass).toBe(true);
+  });
+});
+
+describe("runTwoTemplateQaSmoke — selector → two delivery boards, full E2E on a fake", () => {
+  it("builds Website Build plus Landing Page as separate projects and reruns without duplicates", async () => {
+    const pd = fakePipedrive();
+    const ev = await runTwoTemplateQaSmoke({
+      defaultBoardId: 1,
+      defaultPhaseId: 1,
+      salesPipelineId: 8,
+      companyDomain: null,
+      apiKey: "test-token",
+      fetchImpl: pd.fetchImpl,
+      sleep: noSleep,
+      runTag: "two-templates",
+      roleUserMap: FULL_MAP,
+      env: {},
+    });
+
+    expect(ev.selection).toEqual({
+      templateIds: [WEB_BUILD_TEMPLATE_DEF.id, LANDING_PAGE_TEMPLATE_DEF.id],
+      matchedTemplates: true,
+    });
+    expect(ev.projects).toHaveLength(2);
+    const web = ev.projects.find((p) => p.templateId === WEB_BUILD_TEMPLATE_DEF.id)!;
+    const landing = ev.projects.find((p) => p.templateId === LANDING_PAGE_TEMPLATE_DEF.id)!;
+
+    expect(web.project.title).toContain("New Website Build");
+    expect(landing.project.title).toContain("Landing Page");
+    expect(web.project.id).not.toBe(landing.project.id);
+    expect(web.tree.totalTasks).toBe(
+      NEW_WEBSITE_BUILD_TEMPLATE.reduce((s, p) => s + p.tasks.length, 0),
+    );
+    expect(landing.tree.totalTasks).toBe(
+      LANDING_PAGE_TEMPLATE.reduce((s, p) => s + p.tasks.length, 0),
+    );
+    expect(web.tree.totalTasks).toBe(22);
+    expect(landing.tree.totalTasks).toBe(17);
+    expect(web.tree.gateTasks).toBe(4);
+    expect(landing.tree.gateTasks).toBe(4);
+    expect(web.phases.everyTaskStamped).toBe(true);
+    expect(landing.phases.everyTaskStamped).toBe(true);
+    expect(web.finalDueSpotCheck.ok).toBe(true);
+    expect(web.finalDueSpotCheck.due).toBe("2026-09-07");
+    expect(landing.finalDueSpotCheck.ok).toBe(true);
+    expect(landing.finalDueSpotCheck.due).toBe("2026-07-24");
+
+    expect(ev.idempotency.skippedExistingCount).toBe(2);
+    expect(ev.idempotency.projectIdsMatch).toBe(true);
+    expect(ev.idempotency.projectCountAfterRerun).toBe(2);
+    expect(ev.cleanup.projectsDeleted).toBe(2);
+    expect(ev.cleanup.dealDeleted).toBe(true);
+    expect(ev.cleanup.residualTestProjectRemains).toBe(false);
+    expect(ev.allChecksPass).toBe(true);
+
+    expect(pd.projects.size).toBe(0);
+    expect(pd.deals.size).toBe(0);
   });
 });

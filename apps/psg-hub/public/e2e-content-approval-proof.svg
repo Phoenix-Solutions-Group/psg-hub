@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" role="img" aria-labelledby="title desc">
+  <title id="title">Image approval proof rendered</title>
+  <desc id="desc">A local image fixture for Content Approvals browser QA.</desc>
+  <rect width="960" height="540" fill="#142838" />
+  <rect x="72" y="72" width="816" height="396" rx="8" fill="#ffffff" />
+  <text x="120" y="212" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#142838">Image proof rendered</text>
+  <text x="120" y="282" font-family="Arial, sans-serif" font-size="26" fill="#345268">Local browser QA fixture</text>
+  <circle cx="780" cy="270" r="70" fill="#b8483e" />
+</svg>

@@ -2,7 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveShopContext, type UserShop } from "@/lib/shop/context";
 import { getLatestMonthlySnapshot } from "@/lib/analytics/snapshots";
 import { ReviewsTable } from "@/components/dashboard/reviews-table";
-import type { ExistingResponse } from "@/components/dashboard/response-modal";
+import type {
+  ExistingResponse,
+  ReviewResponseComment,
+} from "@/components/dashboard/response-modal";
 
 type ShopRole = "owner" | "manager" | "viewer";
 
@@ -114,6 +117,44 @@ export default async function ReviewsPage() {
     };
   }
 
+  const { data: responseComments } = reviewIds.length
+    ? await supabase
+        .from("review_response_comments")
+        .select(
+          "id, review_id:review_item_id, response_id:review_response_id, body, created_at, profiles(display_name)"
+        )
+        .in("review_item_id", reviewIds)
+        .order("created_at", { ascending: true })
+    : { data: [] as Array<{
+        id: string;
+        review_id: string;
+        response_id: string | null;
+        body: string;
+        created_at: string;
+        profiles: { display_name: string | null } | { display_name: string | null }[] | null;
+      }> };
+
+  const commentsByReviewId: Record<string, ReviewResponseComment[]> = {};
+  for (const c of responseComments ?? []) {
+    const rawProfile = (c as { profiles?: unknown }).profiles;
+    const profile = (Array.isArray(rawProfile) ? rawProfile[0] : rawProfile) as
+      | { display_name?: string | null }
+      | null
+      | undefined;
+    const comment: ReviewResponseComment = {
+      id: c.id,
+      review_id: c.review_id,
+      response_id: c.response_id,
+      body: c.body,
+      created_at: c.created_at,
+      author_name: profile?.display_name ?? null,
+    };
+    commentsByReviewId[c.review_id] = [
+      ...(commentsByReviewId[c.review_id] ?? []),
+      comment,
+    ];
+  }
+
   // Switcher governs shop scope: pass ONLY the active shop to the table (its
   // in-page shop filter hides at <=1 shop) and derive roles from the membership list.
   const rolesByShopId: Record<string, ShopRole> = {};
@@ -138,6 +179,7 @@ export default async function ReviewsPage() {
         reviews={reviews || []}
         shops={shops || []}
         responsesByReviewId={responsesByReviewId}
+        commentsByReviewId={commentsByReviewId}
         rolesByShopId={rolesByShopId}
       />
     </div>

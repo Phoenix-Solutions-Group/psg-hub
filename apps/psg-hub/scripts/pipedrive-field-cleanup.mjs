@@ -188,11 +188,27 @@ export const WON_HANDOFF_DEAL_FIELDS = [
     },
   },
   {
-    labels: ["Discounts / Credits"],
+    labels: ["Discount Type"],
     create: {
-      field_name: "Discounts / Credits",
-      field_type: "text",
-      description: "PSG-1337: discounts, credits, waived fees, and expiration dates.",
+      field_name: "Discount Type",
+      field_type: "enum",
+      options: [
+        { label: "None" },
+        { label: "Fixed $ per month" },
+        { label: "Percent %" },
+        { label: "Custom - see notes" },
+      ],
+      description:
+        "PSG-1556: reportable discount classification for billing handoff. Use Custom - see notes for rare time-boxed or unusual discounts and explain in Custom Promises / Exclusions / Deadlines.",
+    },
+  },
+  {
+    labels: ["Discount Value"],
+    create: {
+      field_name: "Discount Value",
+      field_type: "double",
+      description:
+        "PSG-1556: numeric discount amount. Leave blank or 0 when Discount Type is None.",
     },
   },
   {
@@ -204,16 +220,19 @@ export const WON_HANDOFF_DEAL_FIELDS = [
     },
   },
   {
-    labels: ["Payment Terms"],
+    labels: ["Payment Terms", "Payment Terms (deal)"],
     create: {
       field_name: "Payment Terms",
       field_type: "enum",
       options: [
         { label: "Due on receipt" },
+        { label: "Net 14" },
         { label: "Net 15" },
         { label: "Net 30" },
+        { label: "Payment Plan" },
         { label: "Custom - see notes" },
       ],
+      default_option_label: "Net 15",
       description: "PSG-1337: invoice timing, due date, and payment terms.",
     },
   },
@@ -241,7 +260,6 @@ export const WON_HANDOFF_DEAL_FIELDS = [
   },
   {
     labels: ["Missing Access List", "Access Needs"],
-    required_on_won: false,
     create: {
       field_name: "Missing Access List",
       field_type: "text",
@@ -250,7 +268,6 @@ export const WON_HANDOFF_DEAL_FIELDS = [
   },
   {
     labels: ["Asset Request List", "Required Assets"],
-    required_on_won: false,
     create: {
       field_name: "Asset Request List",
       field_type: "text",
@@ -321,8 +338,9 @@ export const WON_HANDOFF_DEAL_FIELDS = [
 ];
 
 const PRODUCT_FIELDS_TO_ARCHIVE = ["Income Account", "Expense Account", "Supplier"];
+const LEGACY_DISCOUNT_FIELD_LABELS = ["Discounts / Credits"];
 const CUSTOM_LOST_REASON_LABELS = ["Lost Reason (custom enum)", "Lost Reason"];
-const APPLY_EXCLUDED_OPERATION_TYPES = new Set(["dedupeOrganizationWebsite", "deleteDealField"]);
+const APPLY_EXCLUDED_OPERATION_TYPES = new Set(["dedupeOrganizationWebsite", "deleteDealField", "unresolved"]);
 
 const LIVE_APPLY_SCOPE = {
   included: [
@@ -385,6 +403,14 @@ function sameField(a, b) {
   const aCodes = [a?.field_code, a?.key, a?.id].filter((value) => value != null).map(String);
   const bCodes = new Set([b?.field_code, b?.key, b?.id].filter((value) => value != null).map(String));
   return aCodes.some((value) => bCodes.has(value));
+}
+
+function optionLabel(option) {
+  return option?.label ?? option?.name ?? option?.value ?? "";
+}
+
+function optionId(option) {
+  return option?.id ?? option?.option_id ?? null;
 }
 
 export function findField(fields, labels, predicate = () => true) {
@@ -470,13 +496,15 @@ function wonRequiredClearedOperation(field, label) {
 }
 
 function createDealFieldOperation(spec) {
+  const { default_option_label: defaultOptionLabel, ...createBody } = spec.create;
   const requiredOnWon = spec.required_on_won !== false;
   return {
     type: "createDealField",
     label: spec.create.field_name,
     fieldName: spec.create.field_name,
+    ...(defaultOptionLabel ? { defaultOptionLabel } : {}),
     body: {
-      ...spec.create,
+      ...createBody,
       ui_visibility: {
         add_visible_flag: true,
         details_visible_flag: true,
@@ -490,6 +518,94 @@ function createDealFieldOperation(spec) {
       },
     },
   };
+}
+
+function optionReconciliationOperations(field, spec) {
+  if (!Array.isArray(spec.create.options)) return [];
+
+  const desiredOptions = spec.create.options.map((option) => ({
+    ...option,
+    cleanLabel: cleanLabel(option.label),
+  }));
+  const desiredLabels = new Set(desiredOptions.map((option) => option.cleanLabel));
+  const existingOptions = Array.isArray(field.options) ? field.options : [];
+  const existingByCleanLabel = new Map(
+    existingOptions.map((option) => [cleanLabel(optionLabel(option)), option]),
+  );
+  const existingLabels = new Set(existingByCleanLabel.keys());
+  const missing = desiredOptions
+    .filter((option) => !existingLabels.has(option.cleanLabel))
+    .map(({ cleanLabel: _cleanLabel, ...option }) => option);
+  const renamed = desiredOptions.flatMap((desired) => {
+    const existing = existingByCleanLabel.get(desired.cleanLabel);
+    if (!existing || optionLabel(existing) === desired.label) return [];
+    const id = optionId(existing);
+    if (id == null) return [];
+    return [{ id, label: desired.label }];
+  });
+  const extra = existingOptions.filter((option) => {
+    const label = cleanLabel(optionLabel(option));
+    return label && !desiredLabels.has(label);
+  });
+  const fieldCodeValue = fieldCode(field);
+  if (fieldCodeValue == null) {
+    return [
+      {
+        type: "unresolved",
+        label: `${spec.create.field_name} options`,
+        reason: "matched field has no API field code, so picklist options cannot be reconciled",
+      },
+    ];
+  }
+
+  const operations = [];
+  if (missing.length > 0) {
+    operations.push({
+      type: "addDealFieldOptions",
+      label: `${spec.create.field_name} options`,
+      fieldCode: String(fieldCodeValue),
+      fieldName: fieldName(field),
+      body: missing,
+    });
+  }
+  if (renamed.length > 0) {
+    operations.push({
+      type: "updateDealFieldOptions",
+      label: `${spec.create.field_name} option labels`,
+      fieldCode: String(fieldCodeValue),
+      fieldName: fieldName(field),
+      body: renamed,
+    });
+  }
+  if (extra.length > 0) {
+    const deletable = [];
+    const missingIds = [];
+    for (const option of extra) {
+      const id = optionId(option);
+      if (id == null) {
+        missingIds.push(optionLabel(option));
+      } else {
+        deletable.push({ id });
+      }
+    }
+    if (deletable.length > 0) {
+      operations.push({
+        type: "deleteDealFieldOptions",
+        label: `${spec.create.field_name} unsupported options`,
+        fieldCode: String(fieldCodeValue),
+        fieldName: fieldName(field),
+        body: deletable,
+      });
+    }
+    if (missingIds.length > 0) {
+      operations.push({
+        type: "unresolved",
+        label: `${spec.create.field_name} unsupported options`,
+        reason: `unsupported options have no option id and cannot be removed safely: ${missingIds.join(", ")}`,
+      });
+    }
+  }
+  return operations;
 }
 
 /**
@@ -548,6 +664,13 @@ export function buildCleanupPlan({
       operations.push(createDealFieldOperation(spec));
       continue;
     }
+    for (const op of optionReconciliationOperations(field, spec)) {
+      if (op.type === "unresolved") {
+        unresolved.push({ label: op.label, reason: op.reason });
+      } else {
+        operations.push(op);
+      }
+    }
     if (spec.required_on_won === false) {
       if (field.required_fields?.enabled) {
         operations.push(wonRequiredClearedOperation(field, spec.create.field_name));
@@ -559,6 +682,20 @@ export function buildCleanupPlan({
         statuses: { [String(PSG_SALES_PIPELINE_ID)]: ["won"] },
       }, requiredFieldOpts),
     );
+  }
+
+  const legacyDiscountField = findField(
+    dealFields,
+    LEGACY_DISCOUNT_FIELD_LABELS,
+    (f) => !isDeleted(f),
+  );
+  if (legacyDiscountField) {
+    operations.push({
+      type: "deleteDealField",
+      label: "Legacy Discounts / Credits",
+      fieldCode: String(fieldCode(legacyDiscountField)),
+      fieldName: fieldName(legacyDiscountField),
+    });
   }
 
   const builtInLostReason = findField(
@@ -746,6 +883,18 @@ class PipedriveAdminApi {
     }
     if (op.type === "createDealField") {
       await this.request("POST", "v2", "/dealFields", op.body);
+      return;
+    }
+    if (op.type === "addDealFieldOptions") {
+      await this.request("POST", "v2", `/dealFields/${encodeURIComponent(op.fieldCode)}/options`, op.body);
+      return;
+    }
+    if (op.type === "updateDealFieldOptions") {
+      await this.request("PATCH", "v2", `/dealFields/${encodeURIComponent(op.fieldCode)}/options`, op.body);
+      return;
+    }
+    if (op.type === "deleteDealFieldOptions") {
+      await this.request("DELETE", "v2", `/dealFields/${encodeURIComponent(op.fieldCode)}/options`, op.body);
       return;
     }
     if (op.type === "deleteDealField") {

@@ -1,0 +1,995 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PSG-1236 Survey Customer Dashboard Wireframes</title>
+    <style>
+      :root {
+        --psg-midnight: #1e3a52;
+        --psg-ember: #b8483e;
+        --psg-dark-ash: #4b5058;
+        --psg-paper: #fafafa;
+        --psg-bone: #f0f0f0;
+        --psg-stone: #e0e0e0;
+        --psg-graphite: #2a2a2a;
+        --psg-ink: #161616;
+        --psg-mist: #949494;
+        --success: #526b51;
+        --warning: #c28e3a;
+        --danger: #b8483e;
+        --info: #ff8700;
+        --radius: 6px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--psg-paper);
+        color: var(--psg-ink);
+        font-family: "Didact Gothic", Arial, sans-serif;
+        line-height: 1.5;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      .metric-value,
+      .label,
+      .button,
+      .eyebrow,
+      .tab {
+        font-family: "Gotham", "Avenir Next", Arial, sans-serif;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .page {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 32px;
+      }
+
+      .cover {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
+        gap: 24px;
+        align-items: start;
+        margin-bottom: 32px;
+      }
+
+      .cover h1 {
+        color: var(--psg-midnight);
+        font-size: 32px;
+        font-weight: 400;
+        letter-spacing: 0;
+        line-height: 1.15;
+        margin-top: 8px;
+      }
+
+      .eyebrow {
+        color: var(--psg-ember);
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .note,
+      .assumption-list {
+        background: #fff;
+        border: 1px solid var(--psg-stone);
+        border-radius: var(--radius);
+        padding: 20px;
+      }
+
+      .note p,
+      .assumption-list li {
+        color: var(--psg-dark-ash);
+        font-size: 15px;
+      }
+
+      .assumption-list ul {
+        margin: 12px 0 0;
+        padding-left: 20px;
+      }
+
+      .frames {
+        display: grid;
+        gap: 32px;
+      }
+
+      .frame-shell {
+        background: #fff;
+        border: 1px solid var(--psg-stone);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+
+      .frame-label {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: center;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--psg-stone);
+        background: var(--psg-bone);
+      }
+
+      .frame-label h2 {
+        color: var(--psg-midnight);
+        font-size: 18px;
+        font-weight: 500;
+      }
+
+      .frame-label p {
+        color: var(--psg-dark-ash);
+        font-size: 13px;
+      }
+
+      .dashboard {
+        background: var(--psg-paper);
+        min-height: 900px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 72px;
+        padding: 0 24px;
+        background: #fff;
+        border-bottom: 1px solid var(--psg-stone);
+      }
+
+      .brand {
+        color: var(--psg-midnight);
+        font-family: "Gotham", "Avenir Next", Arial, sans-serif;
+        font-size: 18px;
+        font-weight: 500;
+      }
+
+      .nav {
+        display: flex;
+        gap: 18px;
+        color: var(--psg-dark-ash);
+        font-family: "Gotham", "Avenir Next", Arial, sans-serif;
+        font-size: 13px;
+      }
+
+      .nav span:first-child {
+        color: var(--psg-ember);
+      }
+
+      .dashboard-body {
+        padding: 24px;
+      }
+
+      .header-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 20px;
+        align-items: end;
+        margin-bottom: 20px;
+      }
+
+      .page-title h2 {
+        color: var(--psg-midnight);
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.2;
+        margin-top: 6px;
+      }
+
+      .page-title p {
+        color: var(--psg-dark-ash);
+        font-size: 14px;
+        margin-top: 6px;
+      }
+
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+
+      .filter {
+        min-height: 40px;
+        padding: 9px 12px;
+        border: 1px solid var(--psg-stone);
+        border-radius: var(--radius);
+        background: #fff;
+        color: var(--psg-dark-ash);
+        font-size: 13px;
+      }
+
+      .button {
+        min-height: 40px;
+        padding: 9px 14px;
+        border: 1px solid var(--psg-midnight);
+        border-radius: var(--radius);
+        background: var(--psg-midnight);
+        color: #fff;
+        font-size: 13px;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: 1.3fr repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+
+      .metric-card,
+      .panel,
+      .alert-row,
+      .role-row {
+        background: #fff;
+        border: 1px solid var(--psg-stone);
+        border-radius: var(--radius);
+      }
+
+      .metric-card {
+        min-height: 126px;
+        padding: 16px;
+      }
+
+      .metric-card.primary {
+        background: var(--psg-midnight);
+        color: #fff;
+        border-color: var(--psg-midnight);
+      }
+
+      .label {
+        color: var(--psg-dark-ash);
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .primary .label {
+        color: #dce3ea;
+      }
+
+      .metric-value {
+        color: var(--psg-midnight);
+        font-size: 34px;
+        font-weight: 400;
+        line-height: 1.1;
+        margin-top: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .primary .metric-value {
+        color: #fff;
+        font-size: 44px;
+      }
+
+      .metric-detail {
+        color: var(--psg-dark-ash);
+        font-size: 13px;
+        margin-top: 8px;
+      }
+
+      .primary .metric-detail {
+        color: #f1f4f7;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 3px 8px;
+        border-radius: var(--radius);
+        font-family: "Gotham", "Avenir Next", Arial, sans-serif;
+        font-size: 12px;
+        font-weight: 500;
+        margin-top: 12px;
+      }
+
+      .status.danger {
+        background: #faeeec;
+        color: var(--danger);
+      }
+
+      .status.good {
+        background: #eef3ee;
+        color: var(--success);
+      }
+
+      .main-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.9fr);
+        gap: 20px;
+      }
+
+      .left-stack,
+      .right-stack {
+        display: grid;
+        gap: 20px;
+      }
+
+      .panel {
+        padding: 18px;
+      }
+
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: start;
+        margin-bottom: 16px;
+      }
+
+      .panel h3 {
+        color: var(--psg-midnight);
+        font-size: 18px;
+        font-weight: 500;
+      }
+
+      .panel p {
+        color: var(--psg-dark-ash);
+        font-size: 13px;
+      }
+
+      .funnel {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .funnel-step {
+        min-height: 94px;
+        padding: 12px;
+        background: var(--psg-bone);
+        border: 1px solid var(--psg-stone);
+        border-radius: var(--radius);
+      }
+
+      .funnel-step strong {
+        display: block;
+        color: var(--psg-midnight);
+        font-family: "Gotham", "Avenir Next", Arial, sans-serif;
+        font-size: 22px;
+        font-weight: 400;
+        margin-top: 10px;
+      }
+
+      .chart {
+        position: relative;
+        height: 220px;
+        border: 1px solid var(--psg-stone);
+        border-radius: var(--radius);
+        background:
+          linear-gradient(to top, var(--psg-stone) 1px, transparent 1px) 0 0 / 100% 44px,
+          #fff;
+        overflow: hidden;
+      }
+
+      .chart svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      .drivers {
+        display: grid;
+        gap: 12px;
+      }
+
+      .driver-row {
+        display: grid;
+        grid-template-columns: 130px minmax(0, 1fr) 48px;
+        gap: 12px;
+        align-items: center;
+        color: var(--psg-dark-ash);
+        font-size: 13px;
+      }
+
+      .bar {
+        height: 10px;
+        background: var(--psg-bone);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      .bar span {
+        display: block;
+        height: 100%;
+        background: var(--psg-midnight);
+      }
+
+      .bar.warning span {
+        background: var(--warning);
+      }
+
+      .bar.danger span {
+        background: var(--danger);
+      }
+
+      .alerts {
+        display: grid;
+        gap: 10px;
+      }
+
+      .alert-row,
+      .role-row {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+      }
+
+      .alert-row {
+        grid-template-columns: 64px minmax(0, 1fr) 104px;
+        align-items: start;
+      }
+
+      .score {
+        color: var(--danger);
+        font-family: "Gotham", "Avenir Next", Arial, sans-serif;
+        font-size: 24px;
+        font-weight: 500;
+      }
+
+      .comment {
+        color: var(--psg-graphite);
+        font-size: 13px;
+      }
+
+      .meta {
+        color: var(--psg-mist);
+        font-size: 12px;
+      }
+
+      .role-row {
+        grid-template-columns: minmax(0, 1fr) 64px 64px;
+        align-items: center;
+      }
+
+      .review-split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .review-box {
+        min-height: 110px;
+        padding: 12px;
+        border: 1px solid var(--psg-stone);
+        border-radius: var(--radius);
+        background: var(--psg-bone);
+      }
+
+      .drill-note {
+        margin-top: 14px;
+        padding: 12px;
+        border-left: 3px solid var(--psg-ember);
+        background: #fff;
+        color: var(--psg-dark-ash);
+        font-size: 13px;
+      }
+
+      .mobile-frame {
+        max-width: 390px;
+        margin: 0 auto;
+        border-left: 1px solid var(--psg-stone);
+        border-right: 1px solid var(--psg-stone);
+      }
+
+      .mobile-frame .dashboard {
+        min-height: 1200px;
+      }
+
+      .mobile-frame .topbar {
+        min-height: 64px;
+        padding: 0 16px;
+      }
+
+      .mobile-frame .nav {
+        display: none;
+      }
+
+      .mobile-frame .dashboard-body {
+        padding: 16px;
+      }
+
+      .mobile-frame .header-row,
+      .mobile-frame .summary-grid,
+      .mobile-frame .main-grid,
+      .mobile-frame .review-split {
+        grid-template-columns: 1fr;
+      }
+
+      .mobile-frame .page-title h2 {
+        font-size: 24px;
+      }
+
+      .mobile-frame .filters {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        justify-content: stretch;
+      }
+
+      .mobile-frame .filter,
+      .mobile-frame .button {
+        width: 100%;
+      }
+
+      .mobile-frame .summary-grid {
+        gap: 10px;
+      }
+
+      .mobile-frame .metric-card {
+        min-height: 106px;
+      }
+
+      .mobile-frame .metric-card.primary {
+        min-height: 136px;
+      }
+
+      .mobile-frame .metric-value,
+      .mobile-frame .primary .metric-value {
+        font-size: 34px;
+      }
+
+      .mobile-frame .funnel {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .mobile-frame .chart {
+        height: 190px;
+      }
+
+      .mobile-frame .panel-head {
+        display: grid;
+      }
+
+      .mobile-frame .alert-row {
+        grid-template-columns: 52px minmax(0, 1fr);
+      }
+
+      .mobile-frame .alert-row .status {
+        grid-column: 2;
+        margin-top: 0;
+      }
+
+      .mobile-frame .role-row {
+        grid-template-columns: minmax(0, 1fr) 54px 54px;
+      }
+
+      .spec-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 32px;
+      }
+
+      .spec-card {
+        background: #fff;
+        border: 1px solid var(--psg-stone);
+        border-radius: var(--radius);
+        padding: 18px;
+      }
+
+      .spec-card h3 {
+        color: var(--psg-midnight);
+        font-size: 16px;
+        font-weight: 500;
+        margin-bottom: 8px;
+      }
+
+      .spec-card ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--psg-dark-ash);
+        font-size: 14px;
+      }
+
+      @media (max-width: 900px) {
+        .page {
+          padding: 18px;
+        }
+
+        .cover,
+        .spec-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .desktop-only {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="cover">
+        <div>
+          <p class="eyebrow">PSG-1236 wireframe package</p>
+          <h1>Survey Customer Dashboard for BSM shop owners</h1>
+        </div>
+        <div class="note">
+          <p>
+            Version-one focus: answer “Are customers happy, and what needs
+            attention?” before deeper coaching or automation workflows. This
+            applies <strong>Selective Attention</strong>, <strong>Hick's Law</strong>,
+            and the conversion rule of one clear primary action per page.
+          </p>
+        </div>
+      </section>
+
+      <section class="frames">
+        <article class="frame-shell">
+          <div class="frame-label">
+            <div>
+              <h2>Desktop wireframe</h2>
+              <p>Target viewport: 1440 x 900. First screen shows health, alert state, and immediate follow-up work.</p>
+            </div>
+            <p class="desktop-only">Uses PSG cards, panels, badges, filters, and tabular numerals.</p>
+          </div>
+          <div class="dashboard">
+            <header class="topbar">
+              <div class="brand">Body Shop Marketer</div>
+              <nav class="nav" aria-label="Primary">
+                <span>Customer Dashboard</span>
+                <span>Campaigns</span>
+                <span>Reviews</span>
+                <span>Reports</span>
+              </nav>
+            </header>
+            <div class="dashboard-body">
+              <div class="header-row">
+                <div class="page-title">
+                  <p class="eyebrow">Customer experience</p>
+                  <h2>Customer Dashboard</h2>
+                  <p>Oak Ridge Collision · Last 90 days · 214 surveys sent</p>
+                </div>
+                <div class="filters" aria-label="Dashboard filters">
+                  <div class="filter">Date: Last 90 days</div>
+                  <div class="filter">Shop: Oak Ridge</div>
+                  <div class="filter">Role: All roles</div>
+                  <div class="filter">Alert: Open only</div>
+                  <button class="button">View source surveys</button>
+                </div>
+              </div>
+
+              <section class="summary-grid" aria-label="Customer Experience Summary">
+                <div class="metric-card primary">
+                  <div class="label">Customer satisfaction score</div>
+                  <div class="metric-value">86.4%</div>
+                  <div class="metric-detail">Below the 88% alert threshold.</div>
+                  <div class="status danger">3 alerts need follow-up</div>
+                </div>
+                <div class="metric-card">
+                  <div class="label">Response rate</div>
+                  <div class="metric-value">41%</div>
+                  <div class="metric-detail">88 returned from 214 sent.</div>
+                  <div class="status good">Healthy sample</div>
+                </div>
+                <div class="metric-card">
+                  <div class="label">Surveys returned</div>
+                  <div class="metric-value">88</div>
+                  <div class="metric-detail">18 more than last period.</div>
+                </div>
+                <div class="metric-card">
+                  <div class="label">Would recommend</div>
+                  <div class="metric-value">79%</div>
+                  <div class="metric-detail">Goal: 85% or higher.</div>
+                </div>
+                <div class="metric-card">
+                  <div class="label">Public review sentiment</div>
+                  <div class="metric-value">4.2</div>
+                  <div class="metric-detail">Private surveys are softer than public reviews.</div>
+                </div>
+              </section>
+
+              <div class="main-grid">
+                <div class="left-stack">
+                  <section class="panel">
+                    <div class="panel-head">
+                      <div>
+                        <h3>Funnel Health</h3>
+                        <p>Tracks the customer-feedback path from sent survey to public reputation.</p>
+                      </div>
+                      <button class="button">Open funnel detail</button>
+                    </div>
+                    <div class="funnel">
+                      <div class="funnel-step"><div class="label">Sent</div><strong>214</strong><p>Surveys</p></div>
+                      <div class="funnel-step"><div class="label">Returned</div><strong>88</strong><p>Responses</p></div>
+                      <div class="funnel-step"><div class="label">Responded</div><strong>41%</strong><p>Rate</p></div>
+                      <div class="funnel-step"><div class="label">Recommend</div><strong>79%</strong><p>Yes</p></div>
+                      <div class="funnel-step"><div class="label">Low score</div><strong>3</strong><p>Open alerts</p></div>
+                      <div class="funnel-step"><div class="label">Review</div><strong>4.2</strong><p>Public avg.</p></div>
+                    </div>
+                    <div class="drill-note">
+                      Drill-down path: selecting any funnel step opens a filtered source list of matching surveys or reviews. This supports <strong>Recognition over Recall</strong> because owners can inspect the exact customer records behind a number.
+                    </div>
+                  </section>
+
+                  <section class="panel">
+                    <div class="panel-head">
+                      <div>
+                        <h3>Trend</h3>
+                        <p>Monthly customer satisfaction score with survey volume bars.</p>
+                      </div>
+                      <div class="status danger">May and June below target</div>
+                    </div>
+                    <div class="chart" aria-label="Trend chart wireframe">
+                      <svg viewBox="0 0 720 220" role="img" aria-label="CSI trend and survey volume">
+                        <rect x="40" y="152" width="44" height="40" fill="#dce3ea" />
+                        <rect x="146" y="132" width="44" height="60" fill="#dce3ea" />
+                        <rect x="252" y="118" width="44" height="74" fill="#dce3ea" />
+                        <rect x="358" y="100" width="44" height="92" fill="#dce3ea" />
+                        <rect x="464" y="112" width="44" height="80" fill="#dce3ea" />
+                        <rect x="570" y="106" width="44" height="86" fill="#dce3ea" />
+                        <polyline points="62,82 168,74 274,88 380,112 486,118 592,104" fill="none" stroke="#1e3a52" stroke-width="4" />
+                        <line x1="24" y1="96" x2="696" y2="96" stroke="#b8483e" stroke-width="2" stroke-dasharray="6 6" />
+                      </svg>
+                    </div>
+                  </section>
+
+                  <section class="panel">
+                    <div class="panel-head">
+                      <div>
+                        <h3>Drivers</h3>
+                        <p>Quality, cleanliness, communication, and courtesy compared with the benchmark.</p>
+                      </div>
+                    </div>
+                    <div class="drivers">
+                      <div class="driver-row"><span>Quality</span><div class="bar"><span style="width: 91%"></span></div><strong>91%</strong></div>
+                      <div class="driver-row"><span>Cleanliness</span><div class="bar warning"><span style="width: 84%"></span></div><strong>84%</strong></div>
+                      <div class="driver-row"><span>Communication</span><div class="bar danger"><span style="width: 77%"></span></div><strong>77%</strong></div>
+                      <div class="driver-row"><span>Courtesy</span><div class="bar"><span style="width: 89%"></span></div><strong>89%</strong></div>
+                    </div>
+                    <div class="drill-note">
+                      Benchmark line should use same-market or network benchmark only after Ada confirms the comparison set. Until then, label it “network benchmark” and show sample size.
+                    </div>
+                  </section>
+                </div>
+
+                <aside class="right-stack">
+                  <section class="panel">
+                    <div class="panel-head">
+                      <div>
+                        <h3>Alerts Needing Follow-Up</h3>
+                        <p>Lowest-scoring surveys, complaint theme, customer comment, date, and status.</p>
+                      </div>
+                    </div>
+                    <div class="alerts">
+                      <div class="alert-row">
+                        <div class="score">62%</div>
+                        <div>
+                          <div class="comment">“Nobody called me with updates during the supplement delay.”</div>
+                          <div class="meta">Communication · June 28 · Survey response</div>
+                        </div>
+                        <div class="status danger">Open</div>
+                      </div>
+                      <div class="alert-row">
+                        <div class="score">70%</div>
+                        <div>
+                          <div class="comment">Vehicle was clean outside but dusty inside at pickup.</div>
+                          <div class="meta">Cleanliness · June 19 · Survey response</div>
+                        </div>
+                        <div class="status danger">Needs owner</div>
+                      </div>
+                      <div class="alert-row">
+                        <div class="score">73%</div>
+                        <div>
+                          <div class="comment">Repair quality was good, but delivery moved twice.</div>
+                          <div class="meta">Cycle communication · May 31 · Survey response</div>
+                        </div>
+                        <div class="status good">Assigned</div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="panel">
+                    <div class="panel-head">
+                      <div>
+                        <h3>Role Attribution</h3>
+                        <p>Only show when the repair order and employee join is reliable.</p>
+                      </div>
+                    </div>
+                    <div class="role-row"><strong>Estimator</strong><span>84%</span><span>n=31</span></div>
+                    <div class="role-row"><strong>Body technician</strong><span>89%</span><span>n=24</span></div>
+                    <div class="role-row"><strong>Painter</strong><span>91%</span><span>n=20</span></div>
+                    <div class="role-row"><strong>Customer service</strong><span>78%</span><span>n=17</span></div>
+                    <div class="drill-note">
+                      Use <strong>Progressive Disclosure</strong>: first show role-level health, then drill into source jobs. Do not rank individuals when sample size is low.
+                    </div>
+                  </section>
+
+                  <section class="panel">
+                    <div class="panel-head">
+                      <div>
+                        <h3>Review Mirror</h3>
+                        <p>Public reviews stay separate from private survey feedback.</p>
+                      </div>
+                    </div>
+                    <div class="review-split">
+                      <div class="review-box">
+                        <div class="label">Private surveys</div>
+                        <div class="metric-value">86%</div>
+                        <p>Top concern: communication.</p>
+                      </div>
+                      <div class="review-box">
+                        <div class="label">Public reviews</div>
+                        <div class="metric-value">4.2</div>
+                        <p>Top praise: repair quality.</p>
+                      </div>
+                    </div>
+                  </section>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="frame-shell">
+          <div class="frame-label">
+            <div>
+              <h2>Mobile wireframe</h2>
+              <p>Target viewport: 390 x 844. Prioritizes summary, alerts, and trend before tables.</p>
+            </div>
+          </div>
+          <div class="mobile-frame">
+            <div class="dashboard">
+              <header class="topbar">
+                <div class="brand">BSM</div>
+                <button class="button">Menu</button>
+              </header>
+              <div class="dashboard-body">
+                <div class="header-row">
+                  <div class="page-title">
+                    <p class="eyebrow">Customer experience</p>
+                    <h2>Customer Dashboard</h2>
+                    <p>Oak Ridge Collision · Last 90 days</p>
+                  </div>
+                  <div class="filters">
+                    <div class="filter">Last 90 days</div>
+                    <div class="filter">Oak Ridge</div>
+                    <div class="filter">All roles</div>
+                    <div class="filter">Open alerts</div>
+                  </div>
+                </div>
+
+                <section class="summary-grid" aria-label="Mobile Customer Experience Summary">
+                  <div class="metric-card primary">
+                    <div class="label">Customer satisfaction score</div>
+                    <div class="metric-value">86.4%</div>
+                    <div class="metric-detail">Below the 88% alert threshold.</div>
+                    <div class="status danger">3 alerts need follow-up</div>
+                  </div>
+                  <div class="metric-card">
+                    <div class="label">Response rate</div>
+                    <div class="metric-value">41%</div>
+                    <div class="metric-detail">88 returned from 214 sent.</div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-head">
+                    <div>
+                      <h3>Alerts Needing Follow-Up</h3>
+                      <p>Show the work owner should inspect first.</p>
+                    </div>
+                    <button class="button">View all</button>
+                  </div>
+                  <div class="alerts">
+                    <div class="alert-row">
+                      <div class="score">62%</div>
+                      <div>
+                        <div class="comment">“Nobody called me with updates during the supplement delay.”</div>
+                        <div class="meta">Communication · June 28</div>
+                      </div>
+                      <div class="status danger">Open</div>
+                    </div>
+                    <div class="alert-row">
+                      <div class="score">70%</div>
+                      <div>
+                        <div class="comment">Vehicle was clean outside but dusty inside at pickup.</div>
+                        <div class="meta">Cleanliness · June 19</div>
+                      </div>
+                      <div class="status danger">Needs owner</div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-head">
+                    <div>
+                      <h3>Trend</h3>
+                      <p>Monthly score with survey volume.</p>
+                    </div>
+                  </div>
+                  <div class="chart" aria-label="Mobile trend chart wireframe">
+                    <svg viewBox="0 0 360 190" role="img" aria-label="Mobile CSI trend and survey volume">
+                      <rect x="24" y="130" width="26" height="34" fill="#dce3ea" />
+                      <rect x="78" y="112" width="26" height="52" fill="#dce3ea" />
+                      <rect x="132" y="102" width="26" height="62" fill="#dce3ea" />
+                      <rect x="186" y="92" width="26" height="72" fill="#dce3ea" />
+                      <rect x="240" y="104" width="26" height="60" fill="#dce3ea" />
+                      <rect x="294" y="98" width="26" height="66" fill="#dce3ea" />
+                      <polyline points="37,68 91,62 145,78 199,96 253,102 307,88" fill="none" stroke="#1e3a52" stroke-width="4" />
+                      <line x1="16" y1="82" x2="344" y2="82" stroke="#b8483e" stroke-width="2" stroke-dasharray="6 6" />
+                    </svg>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-head">
+                    <div>
+                      <h3>Funnel Health</h3>
+                      <p>Collapsed into two-column cards for thumb-friendly scanning.</p>
+                    </div>
+                  </div>
+                  <div class="funnel">
+                    <div class="funnel-step"><div class="label">Sent</div><strong>214</strong></div>
+                    <div class="funnel-step"><div class="label">Returned</div><strong>88</strong></div>
+                    <div class="funnel-step"><div class="label">Recommend</div><strong>79%</strong></div>
+                    <div class="funnel-step"><div class="label">Low score</div><strong>3</strong></div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-head">
+                    <div>
+                      <h3>Drivers</h3>
+                      <p>Communication is the first coaching opportunity.</p>
+                    </div>
+                  </div>
+                  <div class="drivers">
+                    <div class="driver-row"><span>Quality</span><div class="bar"><span style="width: 91%"></span></div><strong>91%</strong></div>
+                    <div class="driver-row"><span>Communication</span><div class="bar danger"><span style="width: 77%"></span></div><strong>77%</strong></div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="spec-grid" aria-label="Wireframe notes">
+        <div class="spec-card">
+          <h3>Filter model</h3>
+          <ul>
+            <li>Date range defaults to last 90 days.</li>
+            <li>Shop filter defaults to the signed-in shop.</li>
+            <li>Role filter supports estimator, body technician, painter, and customer service representative when data supports it.</li>
+            <li>Alert state supports all, open, assigned, resolved, below-threshold, negative comment, and public review issue.</li>
+          </ul>
+        </div>
+        <div class="spec-card">
+          <h3>Drill-down paths</h3>
+          <ul>
+            <li>Summary cards open filtered source surveys.</li>
+            <li>Funnel steps open the matching sent, returned, recommended, low-score, or review records.</li>
+            <li>Trend points open that month’s source surveys.</li>
+            <li>Role rows open attributed jobs and surveys only when join confidence is confirmed.</li>
+          </ul>
+        </div>
+        <div class="spec-card">
+          <h3>UX assumptions to resolve</h3>
+          <ul>
+            <li>Ada must confirm repair-order and employee role joins before role attribution becomes customer-visible.</li>
+            <li>PMO must confirm whether follow-up status exists now or starts as read-only alert state.</li>
+            <li>Vera must confirm public-review sentiment is safe for version-one customer visibility.</li>
+            <li>Survey sub-score labels must be verified against customer-facing survey wording.</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

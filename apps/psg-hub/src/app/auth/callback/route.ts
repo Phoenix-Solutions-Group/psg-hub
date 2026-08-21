@@ -13,6 +13,7 @@ type OtpType =
 function resolveNextPath(rawNext: string | null, fallback: string): string {
   if (!rawNext) return fallback;
   if (!rawNext.startsWith("/")) return fallback;
+  if (rawNext.startsWith("//")) return fallback;
   return rawNext;
 }
 

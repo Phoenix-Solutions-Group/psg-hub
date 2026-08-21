@@ -24,6 +24,15 @@ export type ExistingResponse = {
   approved_at: string | null;
 };
 
+export type ReviewResponseComment = {
+  id: string;
+  review_id: string;
+  response_id: string | null;
+  body: string;
+  author_name: string | null;
+  created_at: string;
+};
+
 type Review = {
   id: string;
   author: string | null;
@@ -38,8 +47,19 @@ type Props = {
   review: Review;
   userRole: ShopRole;
   existing: ExistingResponse | null;
+  initialComments: ReviewResponseComment[];
   onClose: () => void;
   onSaved: (response: ExistingResponse) => void;
+  onCommentAdded: (comment: ReviewResponseComment) => void;
+};
+
+type ResponseVersion = {
+  id: string;
+  version: number;
+  body: string | null;
+  status: ReviewResponseStatus;
+  recorded_at: string;
+  restored_from_version: number | null;
 };
 
 const TONES: ReviewResponseTone[] = [
@@ -68,15 +88,23 @@ export function ResponseModal({
   review,
   userRole,
   existing,
+  initialComments,
   onClose,
   onSaved,
+  onCommentAdded,
 }: Props) {
   const [draft, setDraft] = useState<ExistingResponse | null>(existing);
+  const [comments, setComments] =
+    useState<ReviewResponseComment[]>(initialComments);
+  const [commentsExpanded, setCommentsExpanded] = useState(true);
+  const [commentBody, setCommentBody] = useState("");
   const [editBody, setEditBody] = useState<string>(existing?.body ?? "");
   const [tone, setTone] = useState<ReviewResponseTone>(
     existing?.tone_preset ?? "default"
   );
   const [message, setMessage] = useState<string | null>(null);
+  const [versions, setVersions] = useState<ResponseVersion[] | null>(null);
+  const [versionMessage, setVersionMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
 
@@ -87,6 +115,8 @@ export function ResponseModal({
   // Capture opener for focus return + initial focus + ESC key.
   useEffect(() => {
     openerRef.current = document.activeElement as HTMLElement | null;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     firstFocusableRef.current?.focus();
 
     function onKey(e: KeyboardEvent) {
@@ -98,6 +128,7 @@ export function ResponseModal({
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousBodyOverflow;
       openerRef.current?.focus();
     };
   }, [onClose]);
@@ -188,6 +219,36 @@ export function ResponseModal({
     });
   }
 
+  async function loadVersions() {
+    setVersionMessage(null);
+    startTransition(async () => {
+      const res = await fetch(`/api/reviews/${review.id}/versions`);
+      const data = await res.json();
+      if (!res.ok) {
+        setVersionMessage(data.error || `Version history failed (${res.status})`);
+        return;
+      }
+      setVersions(data.versions as ResponseVersion[]);
+    });
+  }
+
+  async function requestRestore(version: number) {
+    setVersionMessage(null);
+    startTransition(async () => {
+      const res = await fetch(`/api/reviews/${review.id}/restore-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setVersionMessage(data.error || `Restore request failed (${res.status})`);
+        return;
+      }
+      setVersionMessage(`Restore request for v${data.request.requested_version} sent to PSG.`);
+    });
+  }
+
   async function copyToClipboard() {
     if (!draft) return;
     try {
@@ -199,9 +260,37 @@ export function ResponseModal({
     }
   }
 
+  async function addComment() {
+    const body = commentBody.trim();
+    if (!body) {
+      setMessage("Add a comment before posting.");
+      return;
+    }
+    setMessage(null);
+    startTransition(async () => {
+      const res = await fetch(`/api/reviews/${review.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          body,
+          responseId: draft?.id ?? null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.error || `Comment failed (${res.status})`);
+        return;
+      }
+      const nextComment = data.comment as ReviewResponseComment;
+      setComments((prev) => [...prev, nextComment]);
+      onCommentAdded(nextComment);
+      setCommentBody("");
+    });
+  }
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/50 p-4 sm:items-center"
       onClick={onClose}
     >
       <div
@@ -211,7 +300,7 @@ export function ResponseModal({
         aria-labelledby="response-modal-title"
         onKeyDown={onKeyDown}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl rounded-md border bg-background p-6 shadow-lg"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-md border bg-background p-6 shadow-lg"
       >
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
@@ -304,6 +393,60 @@ export function ResponseModal({
           <p className="mt-2 text-sm text-muted-foreground">{message}</p>
         )}
 
+        {draft && (
+          <div className="mt-4 rounded-md border p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">Version history</div>
+                <p className="text-xs text-muted-foreground">
+                  Request a restore; PSG must approve before it becomes active.
+                </p>
+              </div>
+              <Button variant="outline" onClick={loadVersions} disabled={pending}>
+                {versions ? "Refresh" : "View"}
+              </Button>
+            </div>
+            {versionMessage && (
+              <p className="mt-2 text-sm text-muted-foreground">{versionMessage}</p>
+            )}
+            {versions && (
+              <div className="mt-3 max-h-48 space-y-2 overflow-auto">
+                {versions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No previous versions yet.</p>
+                ) : (
+                  versions.map((v) => (
+                    <div
+                      key={v.id}
+                      className="flex items-start justify-between gap-3 rounded-md border bg-muted/20 p-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium">
+                          v{v.version} · {v.status}
+                          {v.restored_from_version
+                            ? ` · restored from v${v.restored_from_version}`
+                            : ""}
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {v.body || "No response text"}
+                        </p>
+                      </div>
+                      {v.version !== draft.version && (
+                        <Button
+                          variant="outline"
+                          onClick={() => requestRestore(v.version)}
+                          disabled={pending}
+                        >
+                          Request restore
+                        </Button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mt-4 flex flex-wrap gap-2">
           {!draft ? (
             <Button onClick={callDraft} disabled={pending}>
@@ -376,6 +519,70 @@ export function ResponseModal({
               )}
             </>
           )}
+        </div>
+
+        <div className="mt-6 border-t pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-medium">Team comments</h3>
+            <Button
+              type="button"
+              variant="outline"
+              aria-expanded={commentsExpanded}
+              aria-controls="response-team-comments"
+              onClick={() => setCommentsExpanded((expanded) => !expanded)}
+            >
+              {commentsExpanded ? "Collapse comments" : "Expand comments"}
+            </Button>
+          </div>
+          <div id="response-team-comments" hidden={!commentsExpanded}>
+            <div className="mt-2 max-h-40 space-y-2 overflow-y-auto">
+            {comments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No comments yet.
+              </p>
+            ) : (
+              comments.map((comment) => (
+                <div key={comment.id} className="rounded-md border bg-muted/20 p-3">
+                  <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>{comment.author_name || "Team member"}</span>
+                    <span>
+                      {new Date(comment.created_at).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <p className="whitespace-pre-wrap text-sm">{comment.body}</p>
+                </div>
+              ))
+            )}
+            </div>
+            <div className="mt-3 flex flex-col gap-2">
+            <textarea
+              value={commentBody}
+              onChange={(e) => setCommentBody(e.target.value)}
+              rows={3}
+              maxLength={2000}
+              className="w-full rounded-md border bg-background p-3 text-sm"
+              aria-label="Add a team comment"
+              placeholder="Add a note for the team before a decision is made."
+            />
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">
+                {commentBody.length}/2000
+              </span>
+              <Button
+                variant="outline"
+                onClick={addComment}
+                disabled={pending || commentBody.trim().length === 0}
+              >
+                Add comment
+              </Button>
+            </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -19,8 +19,6 @@ user-invocable: true
 
 # Phoenix Solutions Group — Design Skill
 
-> **Non-canonical mirror.** This exported docs copy is retained for historical reference only. Use `packages/ui/psg-brand/` as the writable, current PSG brand source.
-
 Read **README.md** in this skill first — it covers brand philosophy, voice, color, type, layout rules, and iconography in full. Explore the other available files before producing anything.
 
 ## Quick map
@@ -28,7 +26,7 @@ Read **README.md** in this skill first — it covers brand philosophy, voice, co
 - **`README.md`** — full design language (philosophy, content fundamentals, visual foundations, iconography). The source of truth.
 - **`colors_and_type.css`** — drop-in stylesheet. Defines all color tokens (`--psg-midnight`, `--psg-ember`, `--psg-slate`, neutrals, semantic), type scale, font families (Gotham + Didact Gothic, with `@font-face` to local files), spacing, radii, shadows, motion. Always link this first.
 - **`fonts/`** — the full Gotham family (Thin → Ultra, regular + italic) and Didact Gothic. Used by `colors_and_type.css`.
-- **`assets/`** — historical exported logo SVGs. For current production work, use the official v3.0 logo assets in `packages/ui/psg-brand/assets/`.
+- **`assets/`** — logo SVGs (`psg-logo-primary`, `psg-logo-reverse`, `psg-logo-horizontal`, `psg-mark`).
 - **`preview/`** — small HTML cards demonstrating tokens (type, color, spacing, components, brand). Useful as visual reference.
 - **`ui_kits/marketing_site/`** — full interactive marketing-site recreation (Nav, Hero, CapabilityGrid, Proof, Testimonial, CtaBanner, Footer, ConsultModal) with shared `styles.css`. Copy components from here when building marketing pages.
 
@@ -54,5 +52,5 @@ If the user asks for "more like" something, look at `ui_kits/marketing_site/inde
 
 ## Caveats to flag if relevant
 
-- Logo guidance in this docs mirror is historical. The current PSG brand package in `packages/ui/psg-brand/` uses official v3.0 logo assets and should be treated as the source for production work.
+- The PSG logo SVGs in `assets/` are a **reconstruction** built from the brand brief. If the user has an official vector logo, swap them in.
 - No on-brand photography is included. Imagery should be warm, documentary, slightly desaturated — collision-shop work, craftspeople, real cars in real bays. Never stock-cool.

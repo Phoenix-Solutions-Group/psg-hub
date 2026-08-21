@@ -11,8 +11,6 @@ tags:
 
 # README
 
-> **Non-canonical mirror.** This exported docs copy is retained for historical reference only. Use `packages/ui/psg-brand/` as the writable, current PSG brand source.
-
 # Marketing Site UI Kit
 
 A high-fidelity recreation of a typical Phoenix Solutions Group marketing-website view — built as a click-through prototype that demonstrates the brand's voice, layout vocabulary, and component patterns end-to-end.
@@ -36,4 +34,4 @@ Click **Schedule consultation** anywhere (nav, hero, CTA banner) to open the con
 
 ## Notes
 - Imagery is intentionally absent — see README "Caveats" for photo direction.
-- Logo guidance in this docs mirror is historical. The current PSG brand package in `packages/ui/psg-brand/` uses official v3.0 logo assets and should be treated as the source for production work.
+- Logo art is a reconstruction. Replace SVGs in `/assets/` with official PSG vectors when available.

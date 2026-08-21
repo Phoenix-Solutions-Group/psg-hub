@@ -10,9 +10,12 @@ export { synthesizeContentBrief, type SynthesizeBriefOptions } from "./market-re
 export { selectKeywordTargets, type SelectKeywordTargetsOptions } from "./seo-auditor";
 export {
   buildContentDraftRequest,
+  buildLocalReachAiContentDraftRequest,
   buildContentDraftRequestFromSeoTargets,
+  LOCAL_REACH_AI_WRITING_GUIDANCE,
   adaptSeoKeywordTarget,
   adaptSeoKeywordTargets,
+  type ContentDraftRequestOptions,
 } from "./content-writer-handoff";
 export {
   renderAssetText,
