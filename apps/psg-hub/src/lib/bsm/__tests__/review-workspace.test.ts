@@ -86,6 +86,7 @@ function createFakeClient(options: FakeClientOptions = {}) {
   const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const upserts: Array<{ table: string; payload: Record<string, unknown>; options: Record<string, unknown> | undefined }> = [];
   const updates: Array<{ table: string; payload: Record<string, unknown>; filters: Record<string, unknown> }> = [];
+  const selects: Array<{ table: string; columns: string }> = [];
   const schemaCacheMisses = new Map(
     Object.entries(options.missingSchemaCacheColumns ?? {}).map(([table, columns]) => [table, [...columns]]),
   );
@@ -97,6 +98,12 @@ function createFakeClient(options: FakeClientOptions = {}) {
           createSignedUrl(path: string) {
             return Promise.resolve({
               data: { signedUrl: `https://storage.example/${bucket}/${path}?token=review` },
+              error: null,
+            });
+          },
+          download() {
+            return Promise.resolve({
+              data: new Blob(["review-file"], { type: "application/pdf" }),
               error: null,
             });
           },
@@ -152,13 +159,14 @@ function createFakeClient(options: FakeClientOptions = {}) {
         update(payload: Record<string, unknown>) {
           return new MutationQuery(table, payload, updates);
         },
-        select() {
+        select(columns = "") {
+          selects.push({ table, columns });
           return new Query(table, options);
         },
       };
     },
   };
-  return { client, inserts, upserts, updates };
+  return { client, inserts, upserts, updates, selects };
 }
 
 type FakeClientOptions = {
@@ -1224,6 +1232,25 @@ describe("BSM review workspace foundation service", () => {
     });
     expect(workspace.comments[0]).toMatchObject({ authorRole: "client", authorDisplayName: "Shop Owner" });
     expect(workspace.comments.map((comment) => comment.body)).not.toContain("PSG private escalation note");
+  });
+
+  it("qualifies the version-to-item relationship when downloading review files", async () => {
+    const { client, selects } = createFakeClient({ uploadedFileProof: true });
+
+    const file = await getStaffReviewWorkspaceFileDownload(
+      {
+        projectId: PROJECT_ID,
+        actorProfileId: ACTOR_ID,
+        reviewItemId: REVIEW_ITEM_ID,
+        versionId: VERSION_ID,
+      },
+      { client: client as never },
+    );
+
+    expect(file).toMatchObject({ contentType: "application/pdf", byteSize: 11 });
+    expect(selects.find(({ table, columns }) =>
+      table === "bsm_content_review_versions" && columns.includes("item:bsm_content_review_items"),
+    )?.columns).toContain("!bsm_content_review_versions_review_item_id_fkey!inner");
   });
 
   it("records assigned reviewer comments and decisions as the logged-in customer", async () => {
