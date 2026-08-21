@@ -21,6 +21,7 @@ import {
   RIVERSIDE_ANALYTICS_DEMO_SHOP,
   getRiversideAnalyticsPreviewShop,
   isRiversideDemoUser,
+  shouldShowRiversideAnalyticsPreviewMetrics,
   shouldUseRiversideAnalyticsPreviewFallback,
 } from "@/lib/bsm/riverside-analytics-demo";
 import {
@@ -265,6 +266,10 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     }
   }
   activeShopName ??= "Your shop";
+  const showPrivatePreviewMetrics = shouldShowRiversideAnalyticsPreviewMetrics({
+    userEmail: user.email,
+    requestHost,
+  });
   const showGoogleDemoCards =
     !scopeAll && activeShopName === RIVERSIDE_ANALYTICS_DEMO_SHOP.name;
   // 11-01: the GA4 + GSC link is owner-only (the authorize route also enforces it).
@@ -818,7 +823,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </Card>
         ) : (
           <>
-            {showGoogleDemoCards ? (
+            {showPrivatePreviewMetrics ? (
               <GooglePreviewNotice source="Google Ads" />
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -944,7 +949,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </Card>
         ) : (
           <>
-            {showGoogleDemoCards ? (
+            {showPrivatePreviewMetrics ? (
               <GooglePreviewNotice source="Google Analytics" />
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -1027,7 +1032,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </Card>
         ) : (
           <>
-            {showGoogleDemoCards ? (
+            {showPrivatePreviewMetrics ? (
               <GooglePreviewNotice source="Search Console" />
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -1108,7 +1113,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                   <p className="text-sm text-muted-foreground">
                     {presence.rating === null
                       ? "No reviews yet"
-                      : `${formatNumber(presence.reviews ?? 0)} reviews`}
+                      : `Rating · ${formatNumber(presence.reviews ?? 0)} reviews`}
                   </p>
                 </div>
                 {presence.statusLabel ? (
@@ -1155,7 +1160,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </Card>
         ) : (
           <>
-            {showGoogleDemoCards ? (
+            {showPrivatePreviewMetrics ? (
               <GooglePreviewNotice source="Google Business Profile" />
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -1210,145 +1215,165 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         )}
       </section>
 
-      {!scopeAll ? (
-        <section aria-labelledby="local-falcon-heading" className="space-y-4">
-          <h2
-            id="local-falcon-heading"
-            className="font-heading text-lg font-semibold tracking-tight"
-          >
-            Local map visibility
-          </h2>
-          {localFalcon ? (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Latest Local Falcon scan
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
-                  <div>
-                    <p className="text-2xl font-bold tracking-tight">
-                      {localFalcon.shareOfLocalVoice === null
-                        ? "—"
-                        : `${localFalcon.shareOfLocalVoice.toFixed(1)}%`}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Share of Local Voice
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold tracking-tight">
-                      {localFalcon.averageRank === null
-                        ? "—"
-                        : localFalcon.averageRank.toFixed(1)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Average map rank
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-base font-medium">
-                      {formatShortDate(localFalcon.capturedAt)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Scan date</p>
-                  </div>
-                </div>
-                {localFalcon.priorityNotes.length > 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    {localFalcon.priorityNotes.join("; ")}
+      <section aria-labelledby="local-falcon-heading" className="space-y-4">
+        <h2
+          id="local-falcon-heading"
+          className="font-heading text-lg font-semibold tracking-tight"
+        >
+          Local map visibility
+        </h2>
+        {scopeAll ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Available by individual shop</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Local map visibility cannot be combined accurately across shops.
+                Select This shop to review Share of Local Voice and average map
+                rank for one location.
+              </p>
+            </CardContent>
+          </Card>
+        ) : localFalcon ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Latest Local Falcon scan
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                <div>
+                  <p className="text-2xl font-bold tracking-tight">
+                    {localFalcon.shareOfLocalVoice === null
+                      ? "—"
+                      : `${localFalcon.shareOfLocalVoice.toFixed(1)}%`}
                   </p>
-                ) : null}
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>No Local Falcon scan imported</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Local Falcon visibility will appear here after PSG imports the
-                  first scan export for this shop.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </section>
-      ) : null}
-
-      {!scopeAll ? (
-        <section aria-labelledby="sentiment-heading" className="space-y-4">
-          <h2
-            id="sentiment-heading"
-            className="font-heading text-lg font-semibold tracking-tight"
-          >
-            Review sentiment
-          </h2>
-          {sentiment && sentiment.total > 0 ? (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Across {formatNumber(sentiment.total)} classified reviews
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
-                  <div>
-                    <p className="text-2xl font-bold tracking-tight">
-                      {Math.round((sentiment.positive / sentiment.total) * 100)}
-                      %
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatNumber(sentiment.positive)} positive
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold tracking-tight">
-                      {Math.round((sentiment.negative / sentiment.total) * 100)}
-                      %
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatNumber(sentiment.negative)} negative
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold tracking-tight">
-                      {formatNumber(sentiment.actionableOpen)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Actionable complaints
-                    </p>
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Share of Local Voice
+                  </p>
                 </div>
-                {sentiment.topThemes.length > 0 ? (
-                  <div>
-                    <p className="text-sm font-medium">Top themes</p>
-                    <p className="text-sm text-muted-foreground">
-                      {sentiment.topThemes
-                        .map((t) => `${t.theme} (${t.count})`)
-                        .join(", ")}
-                    </p>
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>No sentiment yet</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Sentiment is generated from your Google reviews. Once reviews
-                  are ingested and classified, polarity, themes, and actionable
-                  complaints appear here.
+                <div>
+                  <p className="text-2xl font-bold tracking-tight">
+                    {localFalcon.averageRank === null
+                      ? "—"
+                      : localFalcon.averageRank.toFixed(1)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Average map rank
+                  </p>
+                </div>
+                <div>
+                  <p className="text-base font-medium">
+                    {formatShortDate(localFalcon.capturedAt)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Scan date</p>
+                </div>
+              </div>
+              {localFalcon.priorityNotes.length > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {localFalcon.priorityNotes.join("; ")}
                 </p>
-              </CardContent>
-            </Card>
-          )}
-        </section>
-      ) : null}
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>No Local Falcon scan imported</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Local Falcon visibility will appear here after PSG imports the
+                first scan export for this shop.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </section>
+
+      <section aria-labelledby="sentiment-heading" className="space-y-4">
+        <h2
+          id="sentiment-heading"
+          className="font-heading text-lg font-semibold tracking-tight"
+        >
+          Review sentiment
+        </h2>
+        {scopeAll ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Available by individual shop</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Review sentiment cannot be combined responsibly across shops.
+                Select This shop to review positive and negative feedback,
+                common themes, and actionable complaints for one location.
+              </p>
+            </CardContent>
+          </Card>
+        ) : sentiment && sentiment.total > 0 ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Across {formatNumber(sentiment.total)} classified reviews
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                <div>
+                  <p className="text-2xl font-bold tracking-tight">
+                    {Math.round((sentiment.positive / sentiment.total) * 100)}%
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatNumber(sentiment.positive)} positive
+                  </p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold tracking-tight">
+                    {Math.round((sentiment.negative / sentiment.total) * 100)}%
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatNumber(sentiment.negative)} negative
+                  </p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold tracking-tight">
+                    {formatNumber(sentiment.actionableOpen)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Actionable complaints
+                  </p>
+                </div>
+              </div>
+              {sentiment.topThemes.length > 0 ? (
+                <div>
+                  <p className="text-sm font-medium">Top themes</p>
+                  <p className="text-sm text-muted-foreground">
+                    {sentiment.topThemes
+                      .map((t) => `${t.theme} (${t.count})`)
+                      .join(", ")}
+                  </p>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>No sentiment yet</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Sentiment is generated from your Google reviews. Once reviews
+                are ingested and classified, polarity, themes, and actionable
+                complaints appear here.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </section>
 
       {activeRole === "owner" ? (
         <section aria-labelledby="connect-google-heading" className="space-y-4">

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { getActiveShopContext } from "@/lib/shop/context";
+import { getSnapshotsForShops } from "@/lib/analytics/snapshots";
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((path: string) => {
@@ -180,6 +182,7 @@ describe("AnalyticsPage private preview", () => {
     expect(html).toContain(">58<");
     expect(html).toContain("Profile calls");
     expect(html).toContain(">27<");
+    expect(html).toContain("Rating · 186 reviews");
     expect(html).toContain("41.8%");
     expect(html).toContain("Share of Local Voice");
     expect(html).toContain("Google Analytics &amp; Search Console");
@@ -198,5 +201,57 @@ describe("AnalyticsPage private preview", () => {
     expect(html).toContain("trailing 90 days");
     expect(html).toContain("Website sessions over the last 90 days");
     expect(html).toContain('href="/dashboard/analytics?days=90"');
+  });
+
+  it("keeps preview disclosure and honest per-shop states in all-shops scope", async () => {
+    vi.mocked(getActiveShopContext).mockResolvedValueOnce({
+      shops: [
+        { id: "riverside_shop", name: "Riverside Collision", role: "owner" },
+        { id: "second_shop", name: "Second Demo Shop", role: "owner" },
+      ],
+      activeShopId: "riverside_shop",
+    });
+    vi.mocked(getSnapshotsForShops).mockResolvedValue([
+      {
+        id: "snapshot_1",
+        shop_id: "riverside_shop",
+        location_id: null,
+        source: "ga4",
+        period: "daily",
+        date: "2026-08-05",
+        synced_at: "2026-08-05T14:00:00.000Z",
+        created_at: "2026-08-05T14:00:00.000Z",
+        metrics: {
+          organic_traffic: 1,
+          organic_keywords: 1,
+          organic_traffic_cost: 1,
+          backlinks: 1,
+          spend: 1,
+          impressions: 1,
+          clicks: 1,
+          conversions: 1,
+          sessions: 1,
+          total_users: 1,
+          key_events: 1,
+          call_clicks: 1,
+          website_clicks: 1,
+          direction_requests: 1,
+          impressions_total: 1,
+        },
+      },
+    ]);
+
+    const html = renderToStaticMarkup(
+      await AnalyticsPage({
+        searchParams: Promise.resolve({ scope: "all", days: "90" }),
+      }),
+    );
+
+    expect(html).toContain("Local map visibility");
+    expect(html).toContain("Review sentiment");
+    expect(html).toContain("cannot be combined accurately across shops");
+    expect(html).toContain("cannot be combined responsibly across shops");
+    expect(html).toContain("Private preview note");
+    expect(html).toContain('href="/dashboard/analytics?scope=all&amp;days=90"');
   });
 });
