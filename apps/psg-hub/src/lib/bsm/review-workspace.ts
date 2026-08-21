@@ -1933,6 +1933,17 @@ export async function addStaffReviewAnnotation(
   }
   const roundId = (project.current_round_id as string | null) ?? null;
   if (roundId) {
+    const { data: round, error: roundError } = await client
+      .from("bsm_content_review_rounds")
+      .select("status")
+      .eq("id", roundId)
+      .eq("project_id", access.projectId)
+      .eq("shop_id", access.shopId)
+      .single();
+    if (roundError || !round) throw new Error(`Could not load review comment round: ${roundError?.message ?? "not found"}`);
+    if (round.status !== "active" && round.status !== "inviting") {
+      throw new ReviewWorkspaceInputError(409, "This review round is no longer open");
+    }
     await requireRoundDocumentAccess(
       client,
       { roundId, projectId: access.projectId, shopId: access.shopId },
@@ -1963,28 +1974,34 @@ export async function addStaffReviewAnnotation(
     .eq("review_item_id", reviewItemId)
     .eq("version_id", versionId);
   if (priorThreadsError) throw new Error(`Could not load review comment pins: ${priorThreadsError.message}`);
-  const pinNumber = Math.max(
+  let pinNumber = Math.max(
     0,
     ...((priorThreads ?? []) as Array<Record<string, unknown>>).map((row) => Number(row.pin_number ?? 0)),
   ) + 1;
   const threadId = randomUUID();
   const commentId = randomUUID();
 
-  const { error: threadError } = await client
-    .from("bsm_content_review_comment_threads")
-    .insert({
-      id: threadId,
-      project_id: access.projectId,
-      round_id: roundId,
-      shop_id: access.shopId,
-      review_item_id: reviewItemId,
-      version_id: versionId,
-      owner_invitation_id: null,
-      root_comment_id: null,
-      pin_number: pinNumber,
-      status: "open",
-    });
-  if (threadError) throw new Error(`Could not create PSG review comment thread: ${threadError.message}`);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { error: threadError } = await client
+      .from("bsm_content_review_comment_threads")
+      .insert({
+        id: threadId,
+        project_id: access.projectId,
+        round_id: roundId,
+        shop_id: access.shopId,
+        review_item_id: reviewItemId,
+        version_id: versionId,
+        owner_invitation_id: null,
+        root_comment_id: null,
+        pin_number: pinNumber,
+        status: "open",
+      });
+    if (!threadError) break;
+    if (threadError.code !== "23505" || attempt === 2) {
+      throw new Error(`Could not create PSG review comment thread: ${threadError.message}`);
+    }
+    pinNumber += 1;
+  }
 
   const { data, error: commentError } = await client
     .from("bsm_content_review_comments")
@@ -2256,7 +2273,7 @@ export async function getGuestReviewWorkspace(
       itemIds.includes(row.review_item_id as string) &&
       versionIds.includes(row.version_id as string) &&
       ((row.invitation_id === access.invitationId && row.round_id === access.roundId) ||
-        (typeof row.author_profile_id === "string" &&
+        (row.invitation_id == null && typeof row.author_profile_id === "string" &&
           (row.round_id == null || row.round_id === access.roundId))),
   );
   const profileNames = await loadProfileNames(client, commentRows.flatMap((row) => typeof row.author_profile_id === "string" ? [row.author_profile_id] : []));

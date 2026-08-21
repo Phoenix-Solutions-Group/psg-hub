@@ -78,6 +78,7 @@ function createFakeClient(options: FakeClientOptions = {}) {
   const schemaCacheMisses = new Map(
     Object.entries(options.missingSchemaCacheColumns ?? {}).map(([table, columns]) => [table, [...columns]]),
   );
+  let duplicateStaffThreadInserts = options.duplicateStaffThreadInsertOnce ? 1 : 0;
   const client = {
     storage: {
       from(bucket: string) {
@@ -102,11 +103,18 @@ function createFakeClient(options: FakeClientOptions = {}) {
             options.legacyEventsRequireReviewItem &&
             table === "bsm_content_review_events" &&
             payload.review_item_id == null;
+          const duplicateStaffThreadError =
+            table === "bsm_content_review_comment_threads" &&
+            payload.owner_invitation_id == null &&
+            duplicateStaffThreadInserts > 0;
+          if (duplicateStaffThreadError) duplicateStaffThreadInserts -= 1;
           const error = missingColumn
             ? {
                 code: "PGRST204",
                 message: `Could not find the '${missingColumn}' column of '${table}' in the schema cache`,
               }
+            : duplicateStaffThreadError
+              ? { code: "23505", message: "duplicate staff pin number" }
             : legacyEventNullItemError
               ? {
                   code: "23502",
@@ -163,6 +171,7 @@ type FakeClientOptions = {
   itemVersionId?: string;
   commentRows?: Array<Record<string, unknown>>;
   roundlessStaffThread?: boolean;
+  duplicateStaffThreadInsertOnce?: boolean;
 };
 
 class Query {
@@ -1080,6 +1089,18 @@ describe("BSM review workspace foundation service", () => {
           comment_kind: "pin",
           draft_status: "submitted",
         },
+        {
+          id: "comment-psg-private-reply",
+          invitation_id: "55555555-5555-4555-8555-555555555556",
+          round_id: ROUND_ID,
+          review_item_id: REVIEW_ITEM_ID,
+          version_id: VERSION_ID,
+          thread_id: THREAD_ID,
+          author_profile_id: ACTOR_ID,
+          body: "PSG reply to another reviewer",
+          comment_kind: "psg_reply",
+          draft_status: "submitted",
+        },
       ],
     });
 
@@ -1268,6 +1289,45 @@ describe("BSM review workspace foundation service", () => {
       x_ratio: 0.25,
       y_ratio: 0.5,
     });
+  });
+
+  it("rejects PSG pin comments after the review round closes", async () => {
+    const { client } = createFakeClient({ currentRoundStatus: "completed" });
+
+    await expect(addStaffReviewAnnotation(
+      {
+        projectId: PROJECT_ID,
+        reviewItemId: REVIEW_ITEM_ID,
+        versionId: VERSION_ID,
+        body: "Late note.",
+        viewport: "desktop",
+        xRatio: 0.25,
+        yRatio: 0.5,
+        actorProfileId: ACTOR_ID,
+      },
+      { client: client as never },
+    )).rejects.toThrow("This review round is no longer open");
+  });
+
+  it("retries a simultaneous PSG pin number collision", async () => {
+    const { client, inserts } = createFakeClient({ duplicateStaffThreadInsertOnce: true });
+
+    await addStaffReviewAnnotation(
+      {
+        projectId: PROJECT_ID,
+        reviewItemId: REVIEW_ITEM_ID,
+        versionId: VERSION_ID,
+        body: "Concurrent note.",
+        viewport: "desktop",
+        xRatio: 0.25,
+        yRatio: 0.5,
+        actorProfileId: ACTOR_ID,
+      },
+      { client: client as never },
+    );
+
+    expect(inserts.filter((entry) => entry.table === "bsm_content_review_comment_threads").map((entry) => entry.payload.pin_number)).toEqual([2, 3]);
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_comments")?.payload.pin_number).toBe(3);
   });
 
   it("stores a reviewer text highlight without fabricated pin coordinates", async () => {
