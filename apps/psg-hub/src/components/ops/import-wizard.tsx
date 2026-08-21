@@ -20,19 +20,21 @@ type ValidatedRow = {
   values: Record<string, string | number | boolean | null>;
   errors: string[];
   warnings: string[];
+  excludedReasons: string[];
 };
 
 type Preview = {
   table: { format: string; headers: string[]; rowCount: number };
   mapping: Record<string, string>;
   suggested: Record<string, string>;
-  validation: { kind: ImportKind; total: number; valid: number; invalid: number; rows: ValidatedRow[]; unmappedRequired: string[] };
+  validation: { kind: ImportKind; total: number; valid: number; invalid: number; excluded: number; rows: ValidatedRow[]; unmappedRequired: string[] };
 };
 
 type CommitResult = {
   total: number;
   inserted: number;
   skipped: number;
+  excluded: number;
   failedRows: Array<{ index: number; error: string }>;
 };
 
@@ -86,6 +88,7 @@ export function ImportWizard({
       const fd = new FormData();
       fd.set("file", file);
       fd.set("kind", kind);
+      fd.set("company_id", companyId);
       if (useMapping) fd.set("mapping", JSON.stringify(useMapping));
       else if (templateId) fd.set("template_id", templateId);
       const res = await fetch("/api/ops/import/validate", { method: "POST", body: fd });
@@ -160,6 +163,9 @@ export function ImportWizard({
         <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           1 · Source file
         </h2>
+        <p className="text-sm text-muted-foreground">
+          Board demo fixture: <a className="underline" href="/demo-fixtures/riverside-import-safety-demo.csv" download>Riverside import safety demo.csv</a>. It contains one valid row, one invalid row, one duplicate, and one do-not-mail record.
+        </p>
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <Label htmlFor="kind">Type</Label>
@@ -281,7 +287,7 @@ export function ImportWizard({
               {preview.validation.valid === 1 ? "" : "s"}
             </Button>
             <span className="text-sm text-muted-foreground">
-              {preview.validation.valid} valid · {preview.validation.invalid} with errors · {preview.table.rowCount} total
+              {preview.validation.valid} ready · {preview.validation.invalid} invalid · {preview.validation.excluded} safely excluded · {preview.table.rowCount} total
             </span>
           </div>
         </section>
@@ -294,7 +300,7 @@ export function ImportWizard({
             3 · Result
           </h2>
           <p className="text-sm">
-            Imported <strong>{commit.inserted}</strong> · skipped {commit.skipped} duplicates · {commit.failedRows.length} failed.
+            Imported <strong>{commit.inserted}</strong> · skipped {commit.skipped} already-imported records · safely excluded {commit.excluded} · {commit.failedRows.length} failed.
           </p>
           {commit.failedRows.length > 0 && (
             <ul className="list-inside list-disc text-sm text-ember">
@@ -331,12 +337,16 @@ function PreviewTable({ preview }: { preview: Preview }) {
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.index} className={r.errors.length ? "bg-ember/5" : undefined}>
+            <tr key={r.index} className={r.errors.length ? "bg-ember/5" : r.excludedReasons.length ? "bg-amber-50" : undefined}>
               <td className="px-3 py-2 text-muted-foreground">{r.index}</td>
               <td className="px-3 py-2">
                 {r.errors.length ? (
                   <span className="text-ember" title={r.errors.join("; ")}>
                     ✗ {r.errors[0]}
+                  </span>
+                ) : r.excludedReasons.length ? (
+                  <span className="text-amber-700" title={r.excludedReasons.join("; ")}>
+                    Excluded: {r.excludedReasons[0]}
                   </span>
                 ) : r.warnings.length ? (
                   <span className="text-amber-600" title={r.warnings.join("; ")}>

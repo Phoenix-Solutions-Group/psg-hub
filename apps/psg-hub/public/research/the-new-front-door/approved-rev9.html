@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Found When It Matters Most — PSG Flagship White Paper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Didact+Gothic&family=IBM+Plex+Mono:wght@400;500&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --midnight:#1E3A52; --midnight-90:#33556f; --midnight-70:#5b7488;
+  --ember:#B8483E; --ember-soft:#f4e3e0;
+  --ash:#2b2b2b; --fg2:#5b6b78; --line:#e2e8ee; --bg:#eef2f6; --paper:#ffffff;
+  --green:#2f7d5b; --amber:#c98a1e;
+  --display:'Montserrat','Helvetica Neue',Arial,sans-serif;
+  --body:'Didact Gothic','Segoe UI',Helvetica,Arial,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--ash);font-family:var(--body);line-height:1.68;font-size:17.5px;}
+.wrap{max-width:840px;margin:28px auto;background:var(--paper);box-shadow:0 2px 30px rgba(30,58,82,.10);}
+.content{padding:8px 62px 30px;}
+
+/* Cover */
+.cover{position:relative;overflow:hidden;background:linear-gradient(155deg,#16293a 0%,#1E3A52 55%,#24506f 100%);color:#fff;padding:72px 62px 60px;}
+.cover-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:34px 34px;opacity:.5;}
+.cover-inner{position:relative;}
+.kicker{font-family:var(--mono);letter-spacing:.18em;text-transform:uppercase;font-size:11.5px;color:#9fc0d8;margin:0 0 30px;}
+.cover h1{font-family:var(--display);font-weight:800;font-size:62px;line-height:.98;margin:0 0 22px;letter-spacing:-1.2px;}
+.cover h1 em{font-style:normal;color:#e88b7f;}
+.cover .sub{font-family:var(--display);font-weight:600;font-size:21px;color:#d7e6f1;margin:0 0 22px;max-width:34ch;}
+.ember-rule{height:5px;width:82px;background:var(--ember);border-radius:3px;margin:0 0 24px;}
+.cover .tag{font-size:15.5px;color:#b9d1e2;max-width:60ch;line-height:1.6;}
+.cover-stats{display:flex;gap:40px;margin-top:40px;padding-top:26px;border-top:1px solid rgba(255,255,255,.14);}
+.cstat .n{display:block;font-family:var(--display);font-weight:800;font-size:34px;color:#fff;line-height:1;}
+.cstat .l{display:block;font-size:12.5px;color:#9fc0d8;margin-top:8px;line-height:1.35;}
+
+/* Headings */
+h2{font-family:var(--display);font-weight:700;font-size:27px;color:var(--midnight);margin:52px 0 8px;padding-top:26px;border-top:2px solid var(--line);line-height:1.18;letter-spacing:-.3px;}
+h3{font-family:var(--display);font-weight:700;font-size:18.5px;color:var(--ember);margin:30px 0 4px;}
+h4{font-family:var(--display);font-weight:700;font-size:16px;color:var(--midnight);margin:22px 0 4px;text-transform:none;}
+p{margin:14px 0;}
+ul,ol{margin:14px 0;padding-left:24px;}
+li{margin:7px 0;}
+strong{color:var(--midnight);font-weight:700;}
+code{background:#eef2f6;font-family:var(--mono);font-size:.82em;padding:2px 6px;border-radius:4px;color:var(--midnight);}
+a{color:var(--ember);}
+.content > p:first-of-type{font-size:18.5px;color:var(--fg2);}
+blockquote{margin:30px 0;padding:22px 26px;background:var(--midnight);border-radius:10px;color:#fff;}
+blockquote p{margin:0;font-family:var(--display);font-weight:600;font-size:19px;line-height:1.4;}
+
+/* Checklist */
+ul.checklist{list-style:none;padding-left:2px;}
+ul.checklist li{position:relative;padding-left:32px;font-family:var(--body);font-size:16px;margin:9px 0;}
+ul.checklist li:before{content:"";position:absolute;left:0;top:3px;width:18px;height:18px;border:2px solid var(--midnight);border-radius:5px;background:#fff;}
+
+/* Figures / visuals */
+.visual{margin:34px 0 30px;padding:26px 26px 22px;background:#f6f9fb;border:1px solid var(--line);border-radius:14px;}
+.vcap{font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:.02em;color:var(--midnight);text-transform:uppercase;margin:0 0 18px;}
+.vnote{font-size:14px;color:var(--fg2);margin:16px 0 0;font-style:italic;}
+.svg{width:100%;height:auto;}
+.s-label{font-family:var(--mono);font-size:10px;fill:#5b7488;letter-spacing:.06em;}
+.ans-q{font-family:var(--body);font-size:14px;fill:#cfe0ec;}
+.ans-shop{font-family:var(--display);font-weight:700;font-size:14px;fill:#fff;}
+.ans-meta{font-family:var(--body);font-size:11.5px;fill:#9fc0d8;}
+.ans-btn{font-family:var(--display);font-weight:700;font-size:12px;fill:#fff;}
+.ans-btn2{font-family:var(--display);font-weight:700;font-size:12px;fill:#cfe0ec;}
+
+/* Acronym cards */
+.cardrow{display:flex;gap:16px;margin:30px 0;}
+.acard{flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px 20px;position:relative;}
+.acard.hot{background:var(--midnight);border-color:var(--midnight);}
+.acard-tag{font-family:var(--display);font-weight:800;font-size:26px;color:var(--midnight);letter-spacing:-.5px;}
+.acard.hot .acard-tag{color:#fff;}
+.acard-name{font-family:var(--display);font-weight:600;font-size:13px;color:var(--fg2);margin:2px 0 12px;}
+.acard.hot .acard-name{color:#9fc0d8;}
+.acard-cap{font-size:14.5px;margin:0;color:var(--ash);}
+.acard.hot .acard-cap{color:#e6eef4;}
+.acard.hot .acard-cap b{color:#fff;}
+.acard-cap b{color:var(--midnight);}
+.frontline{display:inline-block;margin-top:14px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#fff;background:var(--ember);padding:4px 10px;border-radius:20px;}
+
+/* Split exposed/defensible */
+.split{display:flex;gap:18px;margin:30px 0;}
+.split-col{flex:1;border-radius:12px;padding:22px 22px 10px;}
+.exposed-col{background:#fff;border:1px solid var(--line);}
+.defensible-col{background:#f2f7f4;border:1px solid #d5e6dd;}
+.split-h{margin:0 0 10px;font-size:15px;}
+.exposed-col .split-h{color:var(--ember);}
+.defensible-col .split-h{color:var(--green);}
+.split-list{list-style:none;padding:0;margin:0;}
+.split-list li{display:flex;gap:12px;align-items:flex-start;margin:12px 0;font-size:14.5px;}
+.x-mark{flex:none;width:20px;height:20px;border-radius:5px;background:var(--ember-soft);color:var(--ember);font-family:var(--display);font-weight:800;font-size:13px;text-align:center;line-height:20px;}
+.c-mark{flex:none;width:20px;height:20px;border-radius:5px;background:#d9ece1;color:var(--green);font-weight:800;font-size:12px;text-align:center;line-height:20px;}
+
+/* Trust Stack */
+.stackfig{background:#fff;}
+.stack{display:flex;flex-direction:column;gap:8px;}
+.layer{display:flex;align-items:center;gap:16px;background:var(--midnight);color:#fff;border-radius:9px;padding:13px 18px;transition:none;}
+.layer-num{flex:none;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.13);color:#fff;font-family:var(--display);font-weight:800;font-size:15px;text-align:center;line-height:30px;}
+.layer-title{font-family:var(--display);font-weight:700;font-size:15.5px;line-height:1.2;}
+.layer-sub{font-size:12.5px;color:#a9c2d3;margin-top:2px;}
+.layer.ember-cap{background:linear-gradient(90deg,var(--ember),#c85a4f);}
+.layer.ember-cap .layer-num{background:rgba(255,255,255,.22);}
+.layer.ember-cap .layer-sub{color:#f6dcd7;}
+.layer.base{box-shadow:0 6px 16px rgba(30,58,82,.22);}
+
+/* Timeline / plan */
+.timeline{position:relative;display:flex;gap:16px;padding-top:10px;}
+.tl-line{position:absolute;top:16px;left:6%;right:6%;height:3px;background:linear-gradient(90deg,var(--midnight),var(--ember));border-radius:2px;}
+.phase{flex:1;position:relative;background:#fff;border:1px solid var(--line);border-radius:12px;padding:26px 18px 20px;margin-top:14px;}
+.phase-dot{position:absolute;top:-22px;left:22px;width:14px;height:14px;border-radius:50%;background:var(--ember);border:3px solid #fff;box-shadow:0 0 0 2px var(--ember);}
+.phase-days{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--fg2);text-transform:uppercase;}
+.phase-title{font-family:var(--display);font-weight:800;font-size:19px;color:var(--midnight);margin:4px 0 2px;}
+.phase-layers{font-size:12.5px;color:var(--ember);font-family:var(--display);font-weight:700;}
+.phase-job{font-size:13.5px;color:var(--ash);margin:12px 0 0;padding-top:12px;border-top:1px dashed var(--line);}
+
+/* Scorecard meter */
+.meter{display:flex;flex-direction:column;gap:10px;}
+.band{display:flex;align-items:center;gap:18px;border-radius:10px;padding:14px 18px;color:#fff;}
+.band .bn{font-family:var(--display);font-weight:800;font-size:22px;flex:none;width:70px;}
+.band .bl{font-size:14px;line-height:1.4;}
+.band-green{background:var(--green);}
+.band-amber{background:var(--amber);}
+.band-red{background:var(--ember);}
+.layerref{color:var(--ember);font-family:var(--display);font-weight:700;font-size:12.5px;}
+.myscore{margin-top:14px;padding:12px 16px;background:#f4f7fa;border-left:4px solid var(--midnight);border-radius:6px;font-size:15px;}
+
+/* Footer */
+.foot{background:var(--midnight);color:#c7dcea;padding:34px 62px;font-family:var(--body);font-size:13.5px;}
+.foot .frule{height:4px;width:60px;background:var(--ember);border-radius:3px;margin-bottom:18px;}
+.foot strong{color:#fff;}
+
+/* SERP anatomy */
+.serpfig{background:#fff;}
+.serp-grid{display:flex;gap:22px;align-items:stretch;}
+.serp-screen{flex:1.05;background:#f0f4f8;border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0;}
+.serp-bar{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:22px;padding:8px 14px;font-family:var(--body);font-size:13px;color:var(--fg2);}
+.serp-bar .dot{width:12px;height:12px;border-radius:50%;border:2px solid var(--midnight-70);flex:none;}
+.ai-ovw{background:#eaf1f7;border:1px solid #d3e2ee;border-left:4px solid var(--midnight);border-radius:10px;padding:12px 14px;margin:14px 0;}
+.ai-tag{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#fff;background:var(--midnight);border-radius:5px;padding:2px 8px;margin-bottom:8px;}
+.ai-ovw p{margin:0;font-size:14px;line-height:1.5;color:var(--ash);}
+.ai-ovw b{color:var(--midnight);}
+.mappack{display:flex;gap:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;}
+.mp-map{flex:none;width:66px;border-radius:8px;background:linear-gradient(135deg,#cfe0d6,#9fc0d8);position:relative;}
+.mp-map:after{content:"";position:absolute;left:50%;top:44%;width:12px;height:12px;margin-left:-6px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--ember);box-shadow:0 2px 4px rgba(0,0,0,.25);}
+.mp-body{flex:1;min-width:0;}
+.mp-name{font-family:var(--display);font-weight:700;font-size:14.5px;color:var(--midnight);}
+.mp-meta{font-size:12px;color:var(--fg2);margin:3px 0 10px;}
+.mp-btns{display:flex;gap:8px;}
+.mp-btns span{font-family:var(--display);font-weight:700;font-size:11.5px;padding:5px 14px;border-radius:18px;background:var(--midnight);color:#fff;}
+.mp-btns span.ghost{background:#fff;color:var(--midnight);border:1px solid var(--midnight-70);}
+.serp-src{flex:1;background:#fbfcfe;border:1px solid var(--line);border-radius:14px;padding:18px 20px;}
+.serp-src h4{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--midnight);}
+.serp-src ul{list-style:none;padding:0;margin:0;}
+.serp-src li{font-size:13.5px;line-height:1.4;padding:9px 0;border-bottom:1px dashed var(--line);color:var(--ash);}
+.serp-src li:last-child{border-bottom:none;}
+.serp-src li b{color:var(--midnight);}
+.serp-src .lyr{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--ember);background:var(--ember-soft);border-radius:5px;padding:1px 7px;margin-top:4px;}
+
+/* Layer detail cards */
+.laycard{background:#fff;border:1px solid var(--line);border-left:5px solid var(--midnight);border-radius:12px;padding:18px 22px;margin:18px 0;}
+.laycard.cap{border-left-color:var(--ember);}
+.lc-head{display:flex;align-items:center;gap:13px;margin:0 0 12px;}
+.lc-num{flex:none;width:30px;height:30px;border-radius:50%;background:var(--midnight);color:#fff;font-family:var(--display);font-weight:800;font-size:14px;text-align:center;line-height:30px;}
+.laycard.cap .lc-num{background:var(--ember);}
+.lc-title{font-family:var(--display);font-weight:700;font-size:17px;color:var(--midnight);line-height:1.22;}
+.lc-row{margin:9px 0;font-size:15.5px;line-height:1.55;}
+.lc-job{background:#f6f9fb;border-radius:8px;padding:11px 14px;margin:11px 0;font-size:15.5px;line-height:1.55;}
+.lc-tag{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;padding:2px 8px;border-radius:5px;margin-right:9px;vertical-align:1px;}
+.lc-what .lc-tag{background:#eef2f6;color:var(--midnight-70);}
+.lc-job .lc-tag{background:var(--midnight);color:#fff;}
+.lc-why .lc-tag{background:var(--ember-soft);color:var(--ember);}
+.lc-why{color:var(--ash);}
+
+@media print{
+  body{background:#fff;font-size:11.5pt;}
+  .wrap{box-shadow:none;margin:0;max-width:100%;}
+  .cover,.foot{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .layer,.acard.hot,blockquote,.band,.phase-dot,.cover,.foot,.visual{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  h2{page-break-after:avoid;}
+  .visual,.split,.cardrow,.timeline,figure{page-break-inside:avoid;}
+}
+@media(max-width:720px){
+  .content,.cover,.foot{padding-left:24px;padding-right:24px;}
+  .cover h1{font-size:44px;}
+  .cardrow,.split,.timeline{flex-direction:column;}
+  .cover-stats{flex-wrap:wrap;gap:22px;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="cover">
+  <div class="cover-grid" aria-hidden="true"></div>
+  <div class="cover-inner">
+    <p class="kicker">PSG Flagship White Paper &middot; AEO / SEO for Collision Repair</p>
+    <h1>Found when it<br>matters <em>most</em></h1>
+    <p class="sub">A body shop owner's field guide to winning the age of AI search.</p>
+    <div class="ember-rule"></div>
+    <div class="cover-stats">
+      <div class="cstat"><span class="n">10&rarr;1</span><span class="l">From a list of links<br>to a single answer</span></div>
+      <div class="cstat"><span class="n">7</span><span class="l">Layers in the<br>Answer Engine Trust Stack</span></div>
+      <div class="cstat"><span class="n">90</span><span class="l">Days to become<br>the shop AI names</span></div>
+    </div>
+  </div>
+</header>
+<main class="content">
+<h2>Before you read: what this paper is, in one paragraph</h2>
+<p>The way people find a body shop is changing faster than at any point since Google replaced the phone book. For twenty years, "getting found" meant ranking on a page of ten blue links. That page is disappearing. In its place is a single spoken or typed answer, delivered by Google's AI, by ChatGPT, by your customer's phone assistant, that names one or two shops and then moves on. This paper explains, in plain language, what changed, why collision repair is unusually exposed to it, and the specific, checkable steps that decide whether the AI names your shop or your competitor's when a scared driver with a wrecked car asks, "Who can fix my car near me?" You do not need to be technical to use it. Everything here is something you can do this week, hand to someone on your team, or ask PSG to run for you.</p>
+<h2>Executive summary (read this if you read nothing else)</h2>
+<ol><li><strong>Search is collapsing from a list into an answer.</strong> Google now answers many searches itself, at the top of the page, with an AI-written summary, before the customer ever sees a shop's website. Millions of people also now start their search inside AI assistants like ChatGPT and the voice assistant on their phone. Fewer clicks, and a much smaller number of shops that get named at all.</li></ol>
+<ol><li><strong>Collision repair is one of the most exposed trades, and one of the most defensible.</strong> Exposed, because nearly every collision customer searches locally, in a stressed moment, and takes the first credible answer. Defensible, because the signals AI trusts most are real reviews, verified certifications, a complete Google profile, consistent business information, and honest answers to real questions. Those are things a genuinely established shop already has &mdash; and a bargain, out-of-town &ldquo;template&rdquo; competitor (a generic, mass-produced website with no real local shop, real technicians, or real reviews behind it) cannot fake.</li></ol>
+<ol><li><strong>The winning move is not "more marketing." It is becoming the most quotable shop in your town.</strong> AI answer engines do not reward the loudest advertiser. They reward the business whose information is the most complete, the most consistent, the most trusted, and the most clearly structured so a machine can read it and feel safe recommending it. The way to earn that is the Answer Engine Trust Stack, the seven layers in Section 5.</li></ol>
+<ol><li><strong>This is winnable now, cheaply, by shops that move first.</strong> Most independent body shops have done none of this. The 90-day plan in Section 6 is not expensive. It is mostly discipline. First movers in a local market lock in an advantage that compounds, because AI systems and review counts reward the shop that got there earliest.</li></ol>
+<ol><li><strong>The one thing AI cannot copy is the reason customers refer you.</strong> The final section connects this playbook to the human truth underneath it. AI is standardizing how a shop gets found, which makes the human encounter that earns a referral the last real source of growth. Getting found gets you the at-bat. Being worth talking about wins you the market.</li></ol>
+
+<figure class="visual">
+  <figcaption class="vcap">The collapse: what "getting found" used to look like, and what it looks like now</figcaption>
+  <svg viewBox="0 0 720 230" role="img" aria-label="Ten blue links collapsing into one AI answer" class="svg">
+    <text x="0" y="12" class="s-label">YESTERDAY &middot; A PAGE OF TEN LINKS</text>
+    <g transform="translate(0,6)"><rect x="0" y="20" width="150" height="10" rx="3" fill="#c7d2dc"/><rect x="0" y="20" width="46" height="10" rx="3" fill="#8ba0b2"/><rect x="0" y="37" width="150" height="10" rx="3" fill="#c7d2dc"/><rect x="0" y="37" width="46" height="10" rx="3" fill="#8ba0b2"/><rect x="0" y="54" width="150" height="10" rx="3" fill="#c7d2dc"/><rect x="0" y="54" width="46" height="10" rx="3" fill="#8ba0b2"/><rect x="0" y="71" width="150" height="10" rx="3" fill="#c7d2dc"/><rect x="0" y="71" width="46" height="10" rx="3" fill="#8ba0b2"/><rect x="0" y="88" width="150" height="10" rx="3" fill="#c7d2dc"/><rect x="0" y="88" width="46" height="10" rx="3" fill="#8ba0b2"/><rect x="0" y="105" width="150" height="10" rx="3" fill="#c7d2dc"/><rect x="0" y="105" width="46" height="10" rx="3" fill="#8ba0b2"/><rect x="0" y="122" width="150" height="10" rx="3" fill="#c7d2dc"/><rect x="0" y="122" width="46" height="10" rx="3" fill="#8ba0b2"/><rect x="0" y="139" width="150" height="10" rx="3" fill="#c7d2dc"/><rect x="0" y="139" width="46" height="10" rx="3" fill="#8ba0b2"/><rect x="0" y="156" width="150" height="10" rx="3" fill="#c7d2dc"/><rect x="0" y="156" width="46" height="10" rx="3" fill="#8ba0b2"/><rect x="0" y="173" width="150" height="10" rx="3" fill="#c7d2dc"/><rect x="0" y="173" width="46" height="10" rx="3" fill="#8ba0b2"/></g>
+    <g transform="translate(300,95)">
+      <path d="M0 8 H80" stroke="#1E3A52" stroke-width="2.5"/>
+      <path d="M72 1 L82 8 L72 15" fill="none" stroke="#1E3A52" stroke-width="2.5"/>
+    </g>
+    <text x="430" y="12" class="s-label">TODAY &middot; ONE ANSWER, ONE OR TWO NAMES</text>
+    <g transform="translate(430,24)">
+      <rect x="0" y="0" width="290" height="170" rx="12" fill="#1E3A52"/>
+      <rect x="0" y="0" width="6" height="170" rx="3" fill="#B8483E"/>
+      <text x="24" y="34" class="ans-q">"Who can fix my car near me?"</text>
+      <line x1="24" y1="48" x2="266" y2="48" stroke="#33556f" stroke-width="1"/>
+      <g transform="translate(24,66)">
+        <circle cx="7" cy="7" r="7" fill="#B8483E"/>
+        <text x="26" y="12" class="ans-shop">Your Shop, Collision &amp; Glass</text>
+        <text x="26" y="30" class="ans-meta">4.9 &#9733; &middot; 212 reviews &middot; Open now</text>
+      </g>
+      <g transform="translate(24,116)">
+        <rect x="0" y="0" width="118" height="30" rx="6" fill="#B8483E"/>
+        <text x="59" y="20" text-anchor="middle" class="ans-btn">Call now</text>
+        <rect x="128" y="0" width="118" height="30" rx="6" fill="none" stroke="#7f98ab" stroke-width="1.3"/>
+        <text x="187" y="20" text-anchor="middle" class="ans-btn2">Directions</text>
+      </g>
+    </g>
+  </svg>
+  <p class="vnote">The prize for being that answer went up. The penalty for being invisible went to nearly total.</p>
+</figure>
+<h2>1. The moment that pays your bills</h2>
+<p>Start with the customer, because AI does.</p>
+<p>A collision repair customer is almost never shopping in a calm, considered way. They have just had an accident, or discovered hail damage, or backed into a pole in a parking lot. They are stressed and often a little shaken, and they have three questions, in this order:</p>
+<ol><li><strong>Can you fix my car?</strong></li><li><strong>How fast, and how much will it cost me?</strong></li><li><strong>Will you deal with my insurance so I don't have to?</strong></li></ol>
+<p>They reach for their phone. They type or say something like <em>"body shop near me,"</em> <em>"collision repair open now,"</em> or <em>"who fixes bumper damage near me."</em> Here is the decisive fact: they will act on the first answer that feels credible. They are not building a spreadsheet of five shops. In a stressed, local, high-trust purchase, the first believable answer usually wins.</p>
+<blockquote><p>In a stressed, local, high-trust purchase, the first credible answer usually wins. Your entire job is to be it.</p></blockquote>
+<p>This is the <strong>Local Intent First</strong> lens, and it governs everything downstream. Every technical recommendation in this paper exists to serve that single stressed moment. If a tactic does not help you be the credible first answer to "can you fix my car, fast, and will you handle my insurance?", it does not belong in your marketing.</p>
+<p>What has changed is not the customer's question. It is who answers it. For twenty years the answer was a list, and your job was to climb the list. Now the answer is an answer, and your job is to be it.</p>
+<h2>2. What just changed: from ten blue links to one answer</h2>
+<p>Three shifts happened at roughly the same time, and together they rewrote the rules.</p>
+<figure class="visual evofig">
+  <figcaption class="vcap">The evolution of search: from a page of links, to the local map pack, to one answer</figcaption>
+  <svg viewBox="0 0 720 250" role="img" aria-label="Search evolving from ten blue links to the local three-pack to one AI answer" class="svg">
+    <text x="0" y="16" style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.05em;fill:#5b7488">STAGE 1 &middot; A PAGE OF LINKS</text>
+    <g transform="translate(0,30)"><rect x="0" y="0" width="190" height="150" rx="10" fill="#f0f4f8" stroke="#e2e8ee"/><rect x="16" y="14" width="120" height="8" rx="3" fill="#3a6ea5"/><rect x="16" y="26" width="150" height="6" rx="3" fill="#c7d2dc"/><rect x="16" y="40" width="120" height="8" rx="3" fill="#3a6ea5"/><rect x="16" y="52" width="150" height="6" rx="3" fill="#c7d2dc"/><rect x="16" y="66" width="120" height="8" rx="3" fill="#3a6ea5"/><rect x="16" y="78" width="150" height="6" rx="3" fill="#c7d2dc"/><rect x="16" y="92" width="120" height="8" rx="3" fill="#3a6ea5"/><rect x="16" y="104" width="150" height="6" rx="3" fill="#c7d2dc"/><rect x="16" y="118" width="120" height="8" rx="3" fill="#3a6ea5"/><rect x="16" y="130" width="150" height="6" rx="3" fill="#c7d2dc"/></g>
+    <text x="0" y="204" style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;fill:#1E3A52">The web era</text>
+    <text x="0" y="222" style="font-family:'Didact Gothic',sans-serif;font-size:11.5px;fill:#5b6b78">Ten links. Your job: climb the list.</text>
+    <g transform="translate(200,100)"><path d="M0 5 H46" stroke="#B8483E" stroke-width="2.5"/><path d="M40 -2 L50 5 L40 12" fill="none" stroke="#B8483E" stroke-width="2.5"/></g>
+    <text x="265" y="16" style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.05em;fill:#5b7488">STAGE 2 &middot; THE MAP PACK</text>
+    <g transform="translate(265,30)"><rect x="0" y="0" width="190" height="150" rx="10" fill="#fff" stroke="#e2e8ee"/><rect x="14" y="14" width="52" height="122" rx="8" fill="#cfe0d6"/><path d="M20 30 c 7 0 12 5 12 12 c 0 8 -12 20 -12 20 c 0 0 -12 -12 -12 -20 c 0 -7 5 -12 12 -12 z" fill="#B8483E"/><text x="20" y="46" text-anchor="middle" style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:10px;fill:#fff">1</text><path d="M52 64 c 7 0 12 5 12 12 c 0 8 -12 20 -12 20 c 0 0 -12 -12 -12 -20 c 0 -7 5 -12 12 -12 z" fill="#B8483E"/><text x="52" y="80" text-anchor="middle" style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:10px;fill:#fff">2</text><path d="M120 44 c 7 0 12 5 12 12 c 0 8 -12 20 -12 20 c 0 0 -12 -12 -12 -20 c 0 -7 5 -12 12 -12 z" fill="#B8483E"/><text x="120" y="60" text-anchor="middle" style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:10px;fill:#fff">3</text><rect x="78" y="18" width="98" height="9" rx="3" fill="#1E3A52"/><text x="78" y="40" style="font-family:'Didact Gothic',sans-serif;font-size:10px;fill:#5b6b78">&#9733;&#9733;&#9733;&#9733;&#9733; &middot; call &middot; route</text><rect x="78" y="58" width="98" height="9" rx="3" fill="#1E3A52"/><text x="78" y="80" style="font-family:'Didact Gothic',sans-serif;font-size:10px;fill:#5b6b78">&#9733;&#9733;&#9733;&#9733;&#9733; &middot; call &middot; route</text><rect x="78" y="98" width="98" height="9" rx="3" fill="#1E3A52"/><text x="78" y="120" style="font-family:'Didact Gothic',sans-serif;font-size:10px;fill:#5b6b78">&#9733;&#9733;&#9733;&#9733;&#9733; &middot; call &middot; route</text></g>
+    <text x="265" y="204" style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;fill:#1E3A52">The maps era</text>
+    <text x="265" y="222" style="font-family:'Didact Gothic',sans-serif;font-size:11.5px;fill:#5b6b78">Three shops. Your job: make the three.</text>
+    <g transform="translate(465,100)"><path d="M0 5 H46" stroke="#B8483E" stroke-width="2.5"/><path d="M40 -2 L50 5 L40 12" fill="none" stroke="#B8483E" stroke-width="2.5"/></g>
+    <text x="515" y="16" style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.05em;fill:#5b7488">STAGE 3 &middot; ONE ANSWER</text>
+    <g transform="translate(515,30)"><rect x="0" y="0" width="190" height="150" rx="10" fill="#1E3A52"/><rect x="0" y="0" width="5" height="150" rx="3" fill="#B8483E"/>
+      <text x="18" y="26" style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.08em;fill:#9fc0d8">AI ANSWER</text>
+      <text x="18" y="62" style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;fill:#fff">Your Shop, Collision</text>
+      <text x="18" y="82" style="font-family:'Didact Gothic',sans-serif;font-size:11px;fill:#9fc0d8">4.9 &#9733; &middot; 212 reviews &middot; Open now</text>
+      <rect x="18" y="100" width="90" height="28" rx="6" fill="#B8483E"/><text x="63" y="118" text-anchor="middle" style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;fill:#fff">Call now</text></g>
+    <text x="515" y="204" style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;fill:#1E3A52">The answer era</text>
+    <text x="515" y="222" style="font-family:'Didact Gothic',sans-serif;font-size:11.5px;fill:#5b6b78">One name. Your job: be it.</text>
+  </svg>
+  <p class="vnote">Each shift shrank the number of shops a customer ever sees &mdash; and raised the prize for being one of them.</p>
+</figure>
+<p><strong>Google started answering for itself.</strong> Google now frequently places an AI Overview, a short AI-written summary, at the very top of the results page, above the traditional links. For many everyday questions the customer reads that summary and never scrolls. This is the acceleration of a long trend the industry calls the "zero-click search," where the searcher gets what they need without clicking through to anyone's website. For a body shop, that means your beautifully built website may never be seen unless you are the source the AI summary trusts and cites.</p>
+<p><strong>People started searching inside AI assistants.</strong> A large and fast-growing number of people now begin with ChatGPT, Google's Gemini, Perplexity, or the voice assistant built into their phone. They ask a full-sentence question, something like <em>"What's a good, well-reviewed collision shop near Derby that works with my insurance?"</em>, and they expect a short list of one to three names, not a page of links. These systems do not show ten options. Being option number eleven is the same as not existing.</p>
+<p><strong>The map pack became the real front page.</strong> For any "near me" search, the three-business local map pack at the top of Google, the little map with three shops, their star ratings, and a "Directions" or "Call" button, is now the most valuable real estate in local search. Most local clicks and calls go to those three. If you are not in the local three, you are on page two of a page-one world.</p>
+<figure class="visual serpfig">
+  <figcaption class="vcap">What the &ldquo;map pack&rdquo; actually is &mdash; and why it&#39;s the most valuable spot in local search</figcaption>
+  <div class="serp-grid">
+    <div class="serp-screen">
+      <div class="serp-bar"><span class="dot"></span><span>body shop near me</span></div>
+      <svg viewBox="0 0 320 150" role="img" aria-label="A Google local map pack with three shops" class="svg" style="margin:10px 0 4px">
+        <rect x="0" y="0" width="320" height="150" rx="10" fill="#dbe7de"/>
+        <path d="M0 40 H320 M0 96 H320 M110 0 V150 M215 0 V150" stroke="#c2d4c8" stroke-width="2" fill="none"/>
+        <path d="M60 44 c 9 0 16 7 16 16 c 0 11 -16 27 -16 27 c 0 0 -16 -16 -16 -27 c 0 -9 7 -16 16 -16 z" fill="#B8483E"/><text x="60" y="66" text-anchor="middle" style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:13px;fill:#fff">1</text>
+        <path d="M175 30 c 8 0 14 6 14 14 c 0 9 -14 23 -14 23 c 0 0 -14 -14 -14 -23 c 0 -8 6 -14 14 -14 z" fill="#1E3A52"/><text x="175" y="49" text-anchor="middle" style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:11px;fill:#fff">2</text>
+        <path d="M245 92 c 8 0 14 6 14 14 c 0 9 -14 23 -14 23 c 0 0 -14 -14 -14 -23 c 0 -8 6 -14 14 -14 z" fill="#1E3A52"/><text x="245" y="111" text-anchor="middle" style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:11px;fill:#fff">3</text>
+      </svg>
+      <div class="mappack">
+        <div class="mp-map" style="width:44px"></div>
+        <div class="mp-body">
+          <div class="mp-name">1. Your Shop, Collision &amp; Glass</div>
+          <div class="mp-meta">4.9 &#9733; &middot; 212 reviews &middot; &ldquo;I-CAR certified&rdquo; &middot; Open now</div>
+          <div class="mp-btns"><span>Call</span><span class="ghost">Directions</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="serp-src">
+      <h4>Why this box wins the customer</h4>
+      <ul>
+        <li><b>Only three shops appear.</b> For a &ldquo;near me&rdquo; search this box sits at the very top &mdash; above the regular links. Being #4 is being invisible.<br><span class="lyr">The local three-pack</span></li>
+        <li><b>The star rating and review count</b> are the first thing a scared driver reads. Recent, plentiful reviews decide the order.<br><span class="lyr">Layer 3 &middot; Reviews</span></li>
+        <li><b>Call and Directions are one tap.</b> Most local calls and drive-ins start right here, before anyone opens a website.<br><span class="lyr">Layer 2 &middot; Google Business Profile</span></li>
+      </ul>
+    </div>
+  </div>
+  <p class="vnote">The map pack is powered by your free Google Business Profile and your reviews &mdash; not your website. That&#39;s why Layers 2 and 3 come before everything else.</p>
+</figure>
+<p>Put the three together and the picture is stark. The number of businesses that get seen at the decisive moment has shrunk from a page of ten to an answer of about three, and increasingly to one. The prize for being that answer went up. The penalty for being invisible went to nearly total.</p>
+<p><strong>What the new results page actually looks like, and where its facts come from.</strong> It helps to see it. When a customer searches today, the top of the screen is no longer a list of links you can climb. It is an AI-written answer and a three-shop map pack, and every fact inside them, the shop that gets named, the star rating, the &ldquo;open now,&rdquo; the &ldquo;works with your insurance,&rdquo; is pulled from a specific source you either control or neglect. The picture below is the anatomy of that new results page: what the customer sees on the left, and the exact place each piece of information comes from on the right. Read it as a map of the rest of this paper: everything the AI shows the customer traces back to one of the seven layers in Section 5.</p>
+
+<figure class="visual serpfig">
+  <figcaption class="vcap">Anatomy of the new results page: what the customer sees, and where each fact comes from</figcaption>
+  <div class="serp-grid">
+    <div class="serp-screen">
+      <div class="serp-bar"><span class="dot"></span><span>collision repair near me</span></div>
+      <div class="ai-ovw">
+        <span class="ai-tag">Google AI Overview</span>
+        <p>For collision repair near Derby, <b>Your Shop Collision &amp; Glass</b> is highly rated (4.9&#9733;, 212 reviews), is I-CAR certified, and works with most major insurers, including State Farm. It offers free estimates and a lifetime warranty on repairs.</p>
+      </div>
+      <div class="mappack">
+        <div class="mp-map"></div>
+        <div class="mp-body">
+          <div class="mp-name">Your Shop Collision &amp; Glass</div>
+          <div class="mp-meta">4.9 &#9733; &middot; 212 reviews &middot; Auto body shop &middot; Open now</div>
+          <div class="mp-btns"><span>Call</span><span class="ghost">Directions</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="serp-src">
+      <h4>Where each fact comes from</h4>
+      <ul>
+        <li><b>The shop that gets named at all</b> &mdash; one consistent identity plus a complete Google Business Profile.<br><span class="lyr">Layers 1 &amp; 2</span></li>
+        <li><b>&ldquo;4.9&#9733;, 212 reviews&rdquo;</b> &mdash; your real Google reviews and how fast you earn them.<br><span class="lyr">Layer 3</span></li>
+        <li><b>&ldquo;I-CAR certified,&rdquo; warranty, free estimates</b> &mdash; your published proof, labeled so machines can read it.<br><span class="lyr">Layers 4 &amp; 6</span></li>
+        <li><b>&ldquo;works with State Farm&rdquo;</b> &mdash; your answer-shaped content and what customers say in reviews.<br><span class="lyr">Layers 3 &amp; 5</span></li>
+        <li><b>&ldquo;Open now,&rdquo; the map pin, Call &amp; Directions</b> &mdash; your Google Business Profile, kept current.<br><span class="lyr">Layer 2</span></li>
+      </ul>
+    </div>
+  </div>
+  <p class="vnote">Nothing here is luck. Every element the AI shows the customer is pulled from a layer you control. Neglect the layer, and that line goes to the shop that didn't.</p>
+</figure>
+<blockquote><p>The goal is no longer "rank on Google." The goal is to be the shop the answer names.</p></blockquote>
+<h2>3. Three acronyms, in plain English (SEO, AEO, GEO)</h2>
+<p>The industry has invented new letters. Here is what they actually mean, with no jargon.</p>
+<ul><li><strong>SEO, Search Engine Optimization.</strong> The long-standing practice of making your website and business information easy for a search engine to find, understand, and trust, so you appear when someone searches. Still essential. It is the foundation the newer work stands on.</li></ul>
+<ul><li><strong>AEO, Answer Engine Optimization.</strong> Making your business the one an answer engine (Google's AI Overview, ChatGPT, a voice assistant) names when it gives a single spoken or written answer. SEO fights to appear on the list. AEO fights to be the answer. This is the new front line.</li></ul>
+<ul><li><strong>GEO, Generative Engine Optimization.</strong> A newer term, often used interchangeably with AEO, that specifically means getting cited or recommended inside AI-generated text, like a ChatGPT reply. For a local body shop you can treat AEO and GEO as the same job: be the trusted, quotable local answer.</li></ul>
+<p>You do not need to memorize the letters. You need to internalize the shift they describe. Optimization used to be about ranking a page. Now it is about earning a recommendation. A machine is now doing what a friend used to do, telling the customer which shop to trust. Your job is to give that machine every honest reason to trust yours.</p>
+<div class="cardrow"><div class="acard">
+          <div class="acard-tag">SEO</div>
+          <div class="acard-name">Search Engine Optimization</div>
+          <p class="acard-cap">Fights to appear <b>on the list</b>.</p>
+        </div><div class="acard hot">
+          <div class="acard-tag">AEO</div>
+          <div class="acard-name">Answer Engine Optimization</div>
+          <p class="acard-cap">Fights to <b>be the answer</b>.</p><span class="frontline">The new front line</span>
+        </div><div class="acard">
+          <div class="acard-tag">GEO</div>
+          <div class="acard-name">Generative Engine Optimization</div>
+          <p class="acard-cap">Fights to be <b>quoted inside AI text</b>.</p>
+        </div></div>
+<h2>4. Why collision repair is uniquely exposed, and uniquely defensible</h2>
+<p>Not every business is equally affected by this shift. Collision repair sits at a rare intersection that makes the stakes especially high.</p>
+<p><strong>Why you're exposed:</strong></p>
+<ul><li><strong>Nearly every search is local.</strong> Nobody drives two hours for a bumper. That means the map pack and "near me" answers, the most AI-transformed part of search, are the entire game for you.</li><li><strong>The purchase is emotional and urgent.</strong> Stressed customers take the first credible answer. There is little patient comparison shopping to save a shop that shows up late.</li><li><strong>Your best customer never comes back.</strong> A great repair means that customer, ideally, never needs you again. Unlike a restaurant or a dentist, you cannot live on repeat visits. You live on being found by the next new stranger, over and over. That makes discovery existential, not optional.</li><li><strong>Insurance adds a second gatekeeper.</strong> Direct Repair Program (DRP) relationships and insurer steering already shape where cars go. AI answers are becoming a third gatekeeper layered on top.</li></ul>
+<p><strong>Why you're defensible, and this is the good news:</strong></p>
+<p>The signals AI answer engines trust most are exactly the signals a genuinely good shop can produce and a fly-by-night competitor cannot fake.</p>
+<ul><li><strong>Real reviews, in volume, answered like a human.</strong> AI reads your reviews to judge whether to recommend you. A shop with 200 real four- and five-star reviews and thoughtful owner responses is a safe recommendation. A cookie-cutter template website with six reviews is not.</li><li><strong>Verifiable certifications.</strong> I-CAR training and OEM certifications are proof a machine can find and trust, if you publish them clearly.</li><li><strong>Consistency and completeness.</strong> AI rewards a business whose name, address, phone number, hours, and services say the exact same thing everywhere on the internet. This is boring, unglamorous, and most of your competitors have not done it.</li><li><strong>Real proof of work.</strong> Genuine before-and-after photos, real technician names, a real address with a real building. These are the things that separate a 35-year family shop from a lead-generation shell.</li></ul>
+<blockquote><p>The age of AI search rewards the shop that is most obviously, verifiably real &mdash; not the one with the cleverest slogan.</p></blockquote>
+<p>This is the <strong>Trust Over Flash</strong> and <strong>Proof, Not Adjectives</strong> principle in action. The age of AI search does not reward the shop with the cleverest slogan. It rewards the shop that is most obviously, verifiably real. If you are a good, established shop that has simply never been organized about your online presence, this shift is a gift, as long as you act on it before your competitor does.</p>
+
+<div class="split">
+  <div class="split-col exposed-col">
+    <h4 class="split-h">Why you're exposed</h4>
+    <ul class="split-list"><li><span class="x-mark">!</span><span>Nearly every search is local. The map pack is the whole game.</span></li><li><span class="x-mark">!</span><span>The purchase is emotional and urgent. First credible answer wins.</span></li><li><span class="x-mark">!</span><span>Your best customer never comes back. You live on the next stranger.</span></li><li><span class="x-mark">!</span><span>Insurance steering adds a gatekeeper. AI answers add a third.</span></li></ul>
+  </div>
+  <div class="split-col defensible-col">
+    <h4 class="split-h">Why you're defensible</h4>
+    <ul class="split-list"><li><span class="c-mark">&#10003;</span><span>Real reviews, in volume, answered like a human.</span></li><li><span class="c-mark">&#10003;</span><span>Verifiable I-CAR and OEM certifications you actually hold.</span></li><li><span class="c-mark">&#10003;</span><span>One consistent name, address, and phone everywhere.</span></li><li><span class="c-mark">&#10003;</span><span>Real before-and-after proof a shell competitor can't fake.</span></li></ul>
+  </div>
+</div>
+<h2>5. The Answer Engine Trust Stack: PSG's framework</h2>
+<p>Here is the core of the paper: the seven layers that decide whether an answer engine trusts your shop enough to name it. Think of them as a stack, bottom to top. Each layer makes the ones above it stronger. Skipping the bottom layers to chase the top ones is the most common and most expensive mistake shops make.</p>
+
+<figure class="visual stackfig">
+  <figcaption class="vcap">The Answer Engine Trust Stack&trade;: build it bottom to top</figcaption>
+  <div class="stack"><div class="layer ember-cap" style="margin-left:18.6%;margin-right:18.6%">
+          <div class="layer-num">7</div>
+          <div class="layer-body"><div class="layer-title">Measure what matters</div><div class="layer-sub">Calls, quotes, map-pack visibility, review velocity</div></div>
+        </div><div class="layer" style="margin-left:15.5%;margin-right:15.5%">
+          <div class="layer-num">6</div>
+          <div class="layer-body"><div class="layer-title">Publish your proof</div><div class="layer-sub">Certifications, warranty, years, real before/after (E-E-A-T)</div></div>
+        </div><div class="layer" style="margin-left:12.4%;margin-right:12.4%">
+          <div class="layer-num">5</div>
+          <div class="layer-body"><div class="layer-title">Content shaped like answers</div><div class="layer-sub">Real FAQs and question pages, not brochures</div></div>
+        </div><div class="layer" style="margin-left:9.3%;margin-right:9.3%">
+          <div class="layer-num">4</div>
+          <div class="layer-body"><div class="layer-title">Speak the machines' language</div><div class="layer-sub">LocalBusiness, FAQ, and review schema</div></div>
+        </div><div class="layer" style="margin-left:6.2%;margin-right:6.2%">
+          <div class="layer-num">3</div>
+          <div class="layer-body"><div class="layer-title">Reviews the machine reads</div><div class="layer-sub">A steady, honest Google review routine</div></div>
+        </div><div class="layer" style="margin-left:3.1%;margin-right:3.1%">
+          <div class="layer-num">2</div>
+          <div class="layer-body"><div class="layer-title">Your Google Business Profile</div><div class="layer-sub">Claimed, complete, and alive</div></div>
+        </div><div class="layer base" style="margin-left:0.0%;margin-right:0.0%">
+          <div class="layer-num">1</div>
+          <div class="layer-body"><div class="layer-title">Consistent identity (NAP)</div><div class="layer-sub">One exact name, address, phone everywhere</div></div>
+        </div></div>
+  <p class="vnote">Build bottom-up. Most shops win the majority of the ground just by getting Layers 1&ndash;3 genuinely right, because almost none of their competitors have.</p>
+</figure>
+<p>Each layer below is laid out the same way, so it is easy to skim: a plain-English <strong>what it is</strong>, then <strong>the job</strong> (the one thing to actually do), then <strong>why this matters to your shop</strong> (what you win or lose).</p>
+
+<div class="laycard base">
+  <div class="lc-head"><span class="lc-num">1</span><span class="lc-title">Your identity is consistent everywhere (Name, Address, Phone)</span></div>
+  <p class="lc-row lc-what"><span class="lc-tag">What it is</span>NAP is shorthand for Name, Address, Phone. AI systems build their picture of your business by cross-checking your NAP everywhere it appears online, and that is a lot of places: Google, Apple Maps, Bing, Yelp, Facebook, insurance and industry directories, and the data aggregators that quietly feed all of them, commonly 50 or more listings for a single local shop. When those sources disagree, an old address here, a wrong phone number there, "Collision Center" in one place and "Collision Centre" in another, the machine's confidence drops and it hesitates to name you.</p>
+  <p class="lc-job"><span class="lc-tag">The job</span>Pick one exact version of your name, address, and phone, and make every one of those listings match it, character for character.</p>
+  <p class="lc-row lc-why"><span class="lc-tag">Why this matters to your shop</span>This is the cheapest, most-overlooked edge in local search: boring, mostly one-time, and almost none of your competitors have done it. It is also the discipline PSG has run for shops for close to a decade, a practice we call Directory Presence Management (DPM), keeping a shop's information identical across that whole web of directories. We built DPM long before AI answers made it decisive, which is exactly why our shops start this new era on solid ground while others are still cleaning up conflicting listings.</p>
+</div>
+
+<div class="laycard">
+  <div class="lc-head"><span class="lc-num">2</span><span class="lc-title">Your Google Business Profile is your number-one marketing asset</span></div>
+  <p class="lc-row lc-what"><span class="lc-tag">What it is</span>Your Google Business Profile, the free listing that powers the map pack, is more important than your website for local discovery. It feeds the map pack, the "near me" answers, and much of what Google's AI knows about you.</p>
+  <p class="lc-job"><span class="lc-tag">The job</span>Claim it, verify it, and keep it complete and alive: correct primary category ("Auto body shop"), every service listed, real photos added regularly, hours accurate including holidays, Q&amp;A seeded with real questions, and Google Posts published consistently.</p>
+  <p class="lc-row lc-why"><span class="lc-tag">Why this matters to your shop</span>A complete, active profile beats a neglected one every time, no matter how long each shop has been around. This is where most of your local calls and directions requests will actually come from.</p>
+</div>
+
+<div class="laycard">
+  <div class="lc-head"><span class="lc-num">3</span><span class="lc-title">Reviews are the trust signal the machine reads</span></div>
+  <p class="lc-row lc-what"><span class="lc-tag">What it is</span>Reviews are no longer just social proof for humans. They are now primary evidence AI reads to decide whether you are safe to recommend, and what you are good at. A review that says "they fixed my hail damage and handled State Farm for me" literally teaches the AI that you do hail repair and work with insurers.</p>
+  <p class="lc-job"><span class="lc-tag">The job</span>Build a simple, consistent routine to earn Google reviews from every happy customer (ask at delivery, when relief and gratitude peak), respond to every review, good and bad, like a real human, and never buy fake reviews or solicit them dishonestly. Focus on Google, where it moves the local answer most, and stay inside every platform's rules.</p>
+  <p class="lc-row lc-why"><span class="lc-tag">Why this matters to your shop</span>Recent, specific, well-answered reviews are the single strongest signal that tips an AI answer toward your name instead of the shop down the road.</p>
+</div>
+
+<div class="laycard">
+  <div class="lc-head"><span class="lc-num">4</span><span class="lc-title">You speak the machines' language (structured data / schema)</span></div>
+  <p class="lc-row lc-what"><span class="lc-tag">What it is</span>Schema markup is invisible code on your website that labels your information for machines: "this is our address," "this is a service we offer," "this is a customer review," "this is our answer to a frequently asked question." Humans never see it; AI relies on it.</p>
+  <p class="lc-job"><span class="lc-tag">The job</span>Add proper LocalBusiness or AutoRepair, FAQ, and review schema to your site. This is the one technical item on the list you will likely hand to a specialist (or to PSG). It is high-leverage and mostly one-time, with light maintenance.</p>
+  <p class="lc-row lc-why"><span class="lc-tag">Why this matters to your shop</span>It is the difference between handing the AI a clean, labeled file about your shop and asking it to guess. When the machine has to guess, it leaves you out.</p>
+</div>
+
+<div class="laycard">
+  <div class="lc-head"><span class="lc-num">5</span><span class="lc-title">Your content is shaped like answers, not brochures</span></div>
+  <p class="lc-row lc-what"><span class="lc-tag">What it is</span>Answer engines quote content that is already shaped like an answer. A page titled "Services" full of adjectives is nearly useless to them. A page that directly answers "How much does it cost to fix a bumper?", "Will my insurance cover this?", "How long does collision repair take?", and "Do I have to use the shop my insurer recommends?" is quotable gold.</p>
+  <p class="lc-job"><span class="lc-tag">The job</span>Build a genuine FAQ and a set of question-shaped pages that answer the real questions your customers ask at the counter, in clear, honest, scannable language. Keep cost answers in honest ranges and explain what drives them; never publish a precise price you cannot stand behind.</p>
+  <p class="lc-row lc-why"><span class="lc-tag">Why this matters to your shop</span>When the AI needs one sentence to quote about insurance or cost, it quotes the shop that already wrote the clear answer. That shop gets named. The brochure shop does not.</p>
+</div>
+
+<div class="laycard">
+  <div class="lc-head"><span class="lc-num">6</span><span class="lc-title">You publish your proof (expertise and trust, E-E-A-T)</span></div>
+  <p class="lc-row lc-what"><span class="lc-tag">What it is</span>Google and AI systems increasingly weigh what the industry calls E-E-A-T: Experience, Expertise, Authoritativeness, Trustworthiness. In plain terms, can this business prove it actually knows what it is doing and is who it says it is?</p>
+  <p class="lc-job"><span class="lc-tag">The job</span>Publish your I-CAR and OEM certifications (only those you truly hold), your years in business, your warranty terms, real named technicians, real photos of your real facility, and real before-and-after work. Never imply a certification, insurance relationship, or OEM approval you do not hold.</p>
+  <p class="lc-row lc-why"><span class="lc-tag">Why this matters to your shop</span>Your real, verifiable proof is the one thing a fly-by-night competitor cannot fake, and it is exactly what an AI looks for before it puts its own credibility behind a recommendation. This is the <strong>Honest Claims</strong> line that must never be crossed.</p>
+</div>
+
+<div class="laycard cap">
+  <div class="lc-head"><span class="lc-num">7</span><span class="lc-title">You measure what matters in a zero-click world</span></div>
+  <p class="lc-row lc-what"><span class="lc-tag">What it is</span>When customers get answers without clicking, old metrics like "website visits" tell you less and less.</p>
+  <p class="lc-job"><span class="lc-tag">The job</span>Shift your scoreboard to what predicts revenue: phone calls, quote and appointment requests, direction requests and map-pack visibility, and review velocity (how fast you are earning new reviews). Track the moment a stranger becomes a lead, not just a page view.</p>
+  <p class="lc-row lc-why"><span class="lc-tag">Why this matters to your shop</span>You cannot defend a position you cannot see. This is how you know the other six layers are actually bringing cars in, and it is exactly the five-metric body-shop scoreboard PSG publishes and runs.</p>
+</div>
+<blockquote><p>How to use the stack: build bottom-up. A shop with a messy NAP and a neglected Google profile should not spend a dollar on clever content until Layers 1 through 3 are solid. Most shops win the majority of the available ground just by getting the bottom three layers genuinely right, because almost none of their competitors have.</p></blockquote>
+<h2>6. Your 90-day action plan</h2>
+<p>One job per phase. Do them in order. None of this requires a big budget. It requires discipline and a decision to start.</p>
+
+<figure class="visual planfig">
+  <figcaption class="vcap">The 90-day plan: one job per phase, in order</figcaption>
+  <div class="timeline"><div class="tl-line"></div><div class="phase">
+          <div class="phase-dot"></div>
+          <div class="phase-days">Days 1&ndash;30</div>
+          <div class="phase-title">Fix the foundation</div>
+          <div class="phase-layers">Layers 1&ndash;3</div>
+          <p class="phase-job">One job: earn more calls from the map pack.</p>
+        </div><div class="phase">
+          <div class="phase-dot"></div>
+          <div class="phase-days">Days 31&ndash;60</div>
+          <div class="phase-title">Speak the language</div>
+          <div class="phase-layers">Layers 4&ndash;5</div>
+          <p class="phase-job">One job: be the answer quoted on cost &amp; insurance.</p>
+        </div><div class="phase">
+          <div class="phase-dot"></div>
+          <div class="phase-days">Days 61&ndash;90</div>
+          <div class="phase-title">Publish your proof</div>
+          <div class="phase-layers">Layers 6&ndash;7</div>
+          <p class="phase-job">One job: turn credibility into machine-readable proof.</p>
+        </div></div>
+</figure>
+<p><strong>Days 1 to 30: Fix the foundation (Layers 1 to 3).</strong></p>
+<ul><li>Lock one exact Name, Address, Phone. Correct it on Google, Yelp, Facebook, Apple Maps, Bing, and the top listing sites.</li><li>Fully claim and complete your Google Business Profile: correct primary category, every service, real photos, accurate hours, seeded Q&amp;A.</li><li>Launch a dead-simple review routine: ask every satisfied customer for a Google review at delivery, and respond to every existing review this month.</li><li>One conversion job for this phase: earn more calls from the map pack.</li></ul>
+<p><strong>Days 31 to 60: Speak the language and answer the questions (Layers 4 to 5).</strong></p>
+<ul><li>Add LocalBusiness or AutoRepair, FAQ, and review schema to your site (hand to a specialist or PSG).</li><li>Publish a real FAQ and question-shaped pages: cost ranges, the insurance and claims process, turnaround time, "do I have to use the insurer's shop," rental cars, and warranty.</li><li>One conversion job for this phase: be the shop the AI answer quotes on insurance and cost questions.</li></ul>
+<p><strong>Days 61 to 90: Publish your proof and set the scoreboard (Layers 6 to 7).</strong></p>
+<ul><li>Publish certifications (only those you truly hold), warranty, years in business, named team, and real before-and-after galleries.</li><li>Stand up a simple scoreboard: calls, quote requests, map-pack visibility, review velocity. Review it monthly.</li><li>One conversion job for this phase: turn your real-world credibility into recommendations a machine can read.</li></ul>
+<p><strong>After 90 days, compound it.</strong> Keep the profile alive, keep earning reviews, and keep answering new questions as they come up at the counter. This is not a project you finish. It is a position you hold. The shop that keeps feeding the machine honest, complete, current information stays the answer. This is the always-on capability PSG's <strong>Local Reach</strong> service is built to run for shops that would rather fix cars than manage schema.</p>
+<h2>7. The self-assessment: score your shop today</h2>
+<p>Everything up to this point explained <em>what</em> wins in AI search. This section is where you find out <em>where your own shop stands right now</em> &mdash; in about ten minutes, with no tools, no login, and no cost. Think of it as a quick physical for your online presence. You answer fourteen plain yes-or-no questions, add up your &ldquo;yes&rdquo; answers, and land on a score that tells you exactly how visible you are today and what to fix first.</p>
+<p>Why score it instead of just reading the list? Because a number you can see is a number you can improve. It turns a vague worry (&ldquo;are we doing enough online?&rdquo;) into a starting line and a finish line. Run it today, write your score down, and run it again in 90 days after you work the action plan &mdash; the jump is your proof that the work paid off.</p>
+
+<figure class="visual scorefig">
+  <figcaption class="vcap">Score your shop: add 1 point per honest &ldquo;yes,&rdquo; out of 14</figcaption>
+  <div class="meter">
+    <div class="band band-green"><span class="bn">12&ndash;14</span><span class="bl">Ahead of nearly every shop in your market. Defend the lead.</span></div>
+    <div class="band band-amber"><span class="bn">7&ndash;11</span><span class="bl">Foundation is there. You're leaving the decisive layers on the table.</span></div>
+    <div class="band band-red"><span class="bn">0&ndash;6</span><span class="bl">Close to invisible in AI search. Your highest-return opportunity right now.</span></div>
+  </div>
+</figure>
+
+<h3>How to score yourself &mdash; three steps</h3>
+<ol>
+  <li><strong>Answer every question honestly.</strong> Check the box only if the answer is a clear, true &ldquo;yes&rdquo; today &mdash; not &ldquo;we're getting to it&rdquo; and not &ldquo;mostly.&rdquo; A generous &ldquo;yes&rdquo; only fools you, not the customer or the AI.</li>
+  <li><strong>Give yourself 1 point for each box you can honestly check.</strong> Every question is worth exactly one point. There are fourteen questions, so the highest possible score is <strong>14</strong>.</li>
+  <li><strong>Add up your points and write the number down.</strong> That total, out of 14, is your AI-search readiness score. Match it to the three result bands below.</li>
+</ol>
+<p>The questions are grouped by the five parts of the Trust Stack from Section 5, so a &ldquo;no&rdquo; doesn't just cost you a point &mdash; it points straight at the layer to go fix. Each &ldquo;no&rdquo; is a point your competitor down the road can take instead.</p>
+
+<h3>The 14 questions</h3>
+<p><strong>Foundation</strong> <span class="layerref">(Trust Stack Layers 1&ndash;2)</span></p>
+<ul class="checklist"><li>Our Name, Address, and Phone are identical on Google, Yelp, Facebook, and Apple Maps.</li><li>Our Google Business Profile is claimed, verified, and 100% complete.</li><li>Our primary category is "Auto body shop" and every service is listed.</li><li>We add real photos to Google at least monthly.</li></ul>
+<p><strong>Reputation</strong> <span class="layerref">(Trust Stack Layer 3)</span></p>
+<ul class="checklist"><li>We ask every happy customer for a Google review, every time.</li><li>We respond to every review, positive and negative, in a human voice.</li><li>We have more recent reviews than our nearest competitor.</li></ul>
+<p><strong>Machine-readability</strong> <span class="layerref">(Trust Stack Layers 4&ndash;5)</span></p>
+<ul class="checklist"><li>Our website has LocalBusiness or AutoRepair, FAQ, and review schema (the behind-the-scenes labels that let a machine read your site).</li><li>We have a real FAQ answering cost, insurance, and turnaround questions.</li></ul>
+<p><strong>Proof</strong> <span class="layerref">(Trust Stack Layer 6)</span></p>
+<ul class="checklist"><li>Our certifications, warranty, and years in business are published clearly, and every claim is true.</li><li>We show real before-and-after photos of real work.</li></ul>
+<p><strong>Measurement</strong> <span class="layerref">(Trust Stack Layer 7)</span></p>
+<ul class="checklist"><li>We track calls and quote requests, not just website visits.</li><li>We know our review velocity and map-pack visibility this month.</li></ul>
+<p class="myscore"><strong>My score: _____ out of 14</strong></p>
+
+<h3>What your score means, and what to do next</h3>
+<ul>
+  <li><strong>12&ndash;14 &mdash; You're ahead.</strong> You're doing what nearly no other independent shop in your market is doing. Your job now is to defend the lead: keep the profile current, keep earning reviews, and keep answering new customer questions. Don't coast &mdash; the shop that keeps feeding the machine honest, current information stays the answer.</li>
+  <li><strong>7&ndash;11 &mdash; You have the foundation but are leaving the decisive layers on the table.</strong> The basics are in place, but the pieces that actually win the AI's recommendation &mdash; reviews, machine-readable answers, and published proof &mdash; aren't finished. Start with your lowest-scoring group above and work the 90-day plan in Section 6 in order.</li>
+  <li><strong>0&ndash;6 &mdash; You're close to invisible in AI search.</strong> This isn't a criticism; it's the single highest-return marketing opportunity in front of you right now, because almost everything you fix is a point your competitors haven't taken yet. Begin at Day 1 of the 90-day plan (Section 6) and fix the foundation first &mdash; Name/Address/Phone and your Google Business Profile &mdash; before anything else.</li>
+</ul>
+<p>Whatever your number, the path forward is the same 90-day plan in Section 6. The score just tells you how much of it you still have to run &mdash; and gives you a before-and-after you can measure.</p>
+<h2>8. The advantage no algorithm can copy</h2>
+<p>Everything in this paper helps a machine find you and recommend you. That is necessary. It is not sufficient &mdash; and it is worth being honest about why, because it points at the one advantage no competitor and no algorithm can copy.</p>
+<p>AI is standardizing the entire discovery process. When every shop in your town can, in principle, run this same seven-layer playbook, being found stops being a differentiator and becomes the price of entry &mdash; the way a phone number or a sign on the building is today. So once everyone is findable, where does durable advantage come from?</p>
+<p>It comes from the parts of your business a machine can describe but never actually do. An answer engine can tell a customer that you handle insurance. It cannot sit across from a shaken driver an hour after a wreck and make them feel taken care of. That gap is your moat.</p>
+<h4>The work no answer engine can perform for you</h4>
+<p>Here is what still lives entirely on your side of the counter &mdash; and every item is a moment where a customer quietly decides whether to talk about you:</p>
+<ul>
+<li><strong>Reading the person, not just the car.</strong> The customer who walks in after a collision is stressed, sometimes frightened, often angry at an insurer. Calming them, explaining plainly what happens next, and earning their trust in the first five minutes is a human act. No chatbot can do it, and it is where the referral is won or lost.</li>
+<li><strong>The judgment inside the estimate.</strong> Spotting hidden structural damage, knowing when a panel must be replaced to the manufacturer's specification rather than repaired, deciding what is genuinely safe &mdash; this is craftsmanship built over years. AI can summarize a repair procedure; it cannot stand behind the call that a family's car is safe to drive again.</li>
+<li><strong>Fighting the insurance battle for the customer.</strong> Documenting the damage, holding the line for the right parts and the right procedure, and shielding the customer from the back-and-forth is real advocacy. A customer who watched you go to bat for them tells everyone they know.</li>
+<li><strong>The delivery moment.</strong> The cleaned, detailed car handed back looking better than expected, the honest walkaround, the &ldquo;here's exactly what we did&rdquo; &mdash; that is the moment that produces the unprompted five-star review an AI can read but could never write into existence.</li>
+<li><strong>Standing behind the work.</strong> A real warranty, honored by a real person who answers the phone six months later, is a promise no template website can make and no algorithm can keep.</li>
+</ul>
+<p>In a trade where your best customer, ideally, never comes back, word of mouth &mdash; a neighbor telling a neighbor, a review written because someone was genuinely moved to write it &mdash; is the only growth that compounds. AI is quietly eroding the old discovery channels while being completely unable to manufacture that referable moment. That makes the human encounter more valuable, not less.</p>
+<p>So read this paper as half of a whole. This half makes sure that when a stressed driver asks the machine &ldquo;who can fix my car,&rdquo; the answer is your name. The other half &mdash; the subject of PSG's companion flagship <em>&ldquo;The Customer-Centric Body Shop: Winning Trust When AI Runs the Transaction&rdquo;</em> &mdash; makes sure that when that driver pulls away in a car that looks new again, they can't help but tell someone.</p>
+<blockquote><p>Getting found gets you the at-bat. Being worth talking about wins you the market.</p></blockquote>
+<p><strong>Differentiation discipline, applied to this whole paper:</strong> if your online presence could belong to any shop in town, the AI has no reason to prefer you &mdash; and neither does a customer. The wedge is always the same: your real, specific, verifiable proof, and the human experience behind it. Publish the proof. Structure it so a machine can read it. Keep it current. Then deliver an encounter worth repeating. That is the whole game.</p>
+<h2>9. How PSG helps</h2>
+<p>Phoenix Solutions Group is built for one industry: independent collision, paint, and glass repair. We are not a generalist agency renting you a template. Everything in this paper is something we do, hands-on, for the shops we serve, and something we will teach you to do yourself if you would rather.</p>
+<ul><li><strong>Local Reach</strong> runs the always-on version of this playbook: continuously watching what customers in your market are asking, keeping your profile and website current, structuring your proof for the machines, and keeping you the answer.</li><li><strong>The Body Shop Marketer</strong> system produces the answer-shaped, honest, on-brand content this playbook depends on, in your shop's real voice, never generic filler.</li><li><strong>Our scoreboard</strong> measures the things that actually predict revenue, so you know it is working.</li></ul>
+<p>We hold one line above all others, and it is the same line that makes AI search winnable for good shops: we never publish a claim you can't back. No fake reviews, no implied certifications, no invented insurance relationships. Your real credibility is your advantage. Our job is to make sure the machines, and the customers, can see it.</p>
+<h2>Where this comes from, and what we won't fake</h2>
+<p>This guide draws on three things: documented shifts in how people search (AI Overviews, answer engines, the growth of voice and "near me" search, and the long-standing pull of the local map pack for anyone searching close to home); our own work marketing collision shops through the Body Shop Marketer program; and proven local-search practice applied to what matters for a body shop.</p>
+<p>One rule holds at PSG: we don't quote precise statistics we can't stand behind, and anything about the future is labeled as our read, not fact. Every shop-specific number, your prices, turnaround times, certifications, and insurer relationships, gets checked against how your shop really runs before it goes public. And if this paper is used a year from now, check its industry claims against current data first.</p>
+<p><em>Phoenix Solutions Group. Marketing built for the body shop, and for the way customers actually find one now.</em></p>
+</main>
+<footer class="foot">
+  <div class="frule"></div>
+  <p><strong>Phoenix Solutions Group.</strong> Marketing built for the body shop, and for the way customers actually find one now.</p>
+  <p>Honest-claims standard: we never publish a claim a shop can't back. No fake reviews, no implied certifications, no invented insurance relationships. Any shop-specific number must be verified against that shop's real operations before publication.</p>
+</footer>
+</div>
+</body>
+</html>

@@ -101,11 +101,15 @@ export async function POST(request: NextRequest) {
   const numberCol = kind === "ro" ? "ro_number" : "estimate_number";
   const targetTable = kind === "ro" ? "repair_orders" : "estimates";
 
-  const result = { inserted: 0, skipped: 0, failedRows: [] as Array<{ index: number; error: string }> };
+  const result = { inserted: 0, skipped: 0, excluded: 0, failedRows: [] as Array<{ index: number; error: string }> };
 
   for (const row of validation.rows) {
     if (row.errors.length > 0) {
       result.failedRows.push({ index: row.index, error: row.errors[0] });
+      continue;
+    }
+    if ((row.excludedReasons?.length ?? 0) > 0) {
+      result.excluded++;
       continue;
     }
     const rec = toCommitRecord(kind, row);

@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { runMonthlyReports } = vi.hoisted(() => ({ runMonthlyReports: vi.fn() }));
-const { serviceStub } = vi.hoisted(() => ({ serviceStub: { rpc: vi.fn() } }));
+const { serviceStub } = vi.hoisted(() => ({
+  serviceStub: {
+    rpc: vi.fn(),
+    from: vi.fn(),
+    auth: { admin: { getUserById: vi.fn() } },
+  },
+}));
 
 vi.mock("@/lib/report/monthly", () => ({ runMonthlyReports }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceClient: () => serviceStub }));
@@ -10,6 +16,7 @@ import { POST } from "../route";
 import type { MonthlyDeps } from "@/lib/report/monthly";
 
 const SECRET = "monthly-retest-secret";
+const APPROVED_RETEST_RECIPIENT = "nick@phoenixsolutionsgroup.net";
 const CONFIGURED = {
   REPORT_RENDER_URL: "https://render.example.com",
   RENDER_TOKEN: "render-token",
@@ -28,12 +35,43 @@ function lastDeps(): MonthlyDeps {
   return runMonthlyReports.mock.calls.at(-1)![1] as MonthlyDeps;
 }
 
+function queryResult(data: unknown) {
+  return { select: vi.fn(() => ({ in: vi.fn(async () => ({ data, error: null })) })) };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("VERCEL_ENV", "production");
   vi.stubEnv("MONTHLY_REPORT_RETEST_SECRET", SECRET);
   for (const [key, value] of Object.entries(CONFIGURED)) vi.stubEnv(key, value);
   serviceStub.rpc.mockResolvedValue({ data: true, error: null });
+  serviceStub.from.mockImplementation((table: string) => {
+    if (table === "shops") {
+      return queryResult([
+        { id: "shop-demo", name: "Demo Body Shop" },
+        { id: "shop-tracy", name: "Tracy's Body Shop" },
+      ]);
+    }
+    if (table === "shop_users") {
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: [
+                { shop_id: "shop-demo", user_id: "user-demo" },
+                { shop_id: "shop-tracy", user_id: "user-tracy" },
+              ],
+              error: null,
+            })),
+          })),
+        })),
+      };
+    }
+    throw new Error(`unexpected table ${table}`);
+  });
+  serviceStub.auth.admin.getUserById.mockImplementation(async (userId: string) => ({
+    data: { user: { email: `${userId}@example.com` } },
+  }));
   runMonthlyReports.mockResolvedValue({
     period: "2026-06",
     results: [
@@ -88,6 +126,15 @@ describe("POST /api/ops/monthly-report/retest", () => {
     expect(runMonthlyReports).not.toHaveBeenCalled();
   });
 
+  it("accepts the temporary run secret without exposing the stored retest secret", async () => {
+    vi.stubEnv("MONTHLY_REPORT_RETEST_RUN_SECRET", "one-time-run-secret");
+
+    const res = await POST(req("one-time-run-secret"));
+
+    expect(res.status).toBe(200);
+    expect(runMonthlyReports).toHaveBeenCalledTimes(1);
+  });
+
   it("503s after auth when report dependencies are not configured", async () => {
     vi.stubEnv("REPORT_RENDER_URL", "");
     const res = await POST(req(SECRET));
@@ -105,6 +152,7 @@ describe("POST /api/ops/monthly-report/retest", () => {
 
     const body = await res.json();
     expect(body.force).toBe(false);
+    expect(body.recipientOverride).toBe("none");
     expect(body.targetShops).toEqual([
       "Tracy's Body Shop",
       "Wallace Collision",
@@ -119,6 +167,31 @@ describe("POST /api/ops/monthly-report/retest", () => {
       "claim_monthly_report",
       expect.objectContaining({ p_force: false })
     );
+  });
+
+  it("addresses retest shops to the approved internal recipient when configured", async () => {
+    vi.stubEnv("MONTHLY_REPORT_RETEST_RECIPIENT_EMAIL", APPROVED_RETEST_RECIPIENT);
+    const res = await POST(req(SECRET));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.recipientOverride).toBe("approved_internal_retest_recipient");
+
+    const shops = await lastDeps().listShops();
+    expect(shops).toEqual([
+      { id: "shop-tracy", name: "Tracy's Body Shop", ownerEmail: APPROVED_RETEST_RECIPIENT },
+      { id: "shop-demo", name: "Demo Body Shop", ownerEmail: APPROVED_RETEST_RECIPIENT },
+    ]);
+  });
+
+  it("fails closed when the retest recipient override is not the approved address", async () => {
+    vi.stubEnv("MONTHLY_REPORT_RETEST_RECIPIENT_EMAIL", "customer@example.com");
+
+    const res = await POST(req(SECRET));
+
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "invalid_retest_recipient" });
+    expect(runMonthlyReports).not.toHaveBeenCalled();
   });
 
   it("returns sanitized evidence only", async () => {

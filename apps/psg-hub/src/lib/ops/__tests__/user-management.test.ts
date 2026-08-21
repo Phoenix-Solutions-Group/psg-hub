@@ -29,9 +29,9 @@ describe("user-management helpers", () => {
     expect(asAdminTier("multi_location")).toBeNull();
   });
 
-  it("uses revoke audit action when the next global role is customer", () => {
+  it("uses the matching audit action for each global role", () => {
     expect(auditActionForRoleChange("customer")).toBe("role.revoke");
     expect(auditActionForRoleChange("psg_internal")).toBe("role.grant");
-    expect(auditActionForRoleChange("psg_superadmin")).toBe("role.grant");
+    expect(auditActionForRoleChange("psg_superadmin")).toBe("superadmin.add");
   });
 });

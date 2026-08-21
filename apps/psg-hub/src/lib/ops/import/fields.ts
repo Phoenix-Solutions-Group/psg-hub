@@ -92,6 +92,13 @@ const CUSTOMER_FIELDS: FieldDef[] = [
 const RO_FIELDS: FieldDef[] = [
   ...CUSTOMER_FIELDS,
   {
+    key: "do_not_mail",
+    label: "Do not mail",
+    required: false,
+    type: "boolean",
+    aliases: ["do not mail", "do_not_mail", "donotmail", "mail opt out", "mail suppression"],
+  },
+  {
     key: "ro_number",
     label: "RO number",
     required: true,

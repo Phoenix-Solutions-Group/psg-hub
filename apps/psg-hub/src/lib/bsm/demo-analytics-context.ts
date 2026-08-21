@@ -10,14 +10,34 @@ const LEGACY_DEMO_SHOP_NAMES = new Set([
   "psg pilot body shop",
   "tedesco auto body",
 ]);
+const RIVERSIDE_PREVIEW_DEMO_EMAILS = [
+  "test@psghub.me",
+  "nick@phoenixsolutionsgroup.net",
+] as const;
 
 type DemoAnalyticsEnv = {
   DEMO_SHOP_EMAIL?: string;
+  DEMO_REVIEWER_EMAILS?: string;
   VERCEL_ENV?: string;
 };
 
 function normalizeEmail(email?: string | null): string {
   return (email ?? "").trim().toLowerCase();
+}
+
+function splitEmails(value?: string): string[] {
+  return (value ?? "")
+    .split(",")
+    .map(normalizeEmail)
+    .filter((email) => email.length > 0);
+}
+
+function configuredDemoEmails(env: DemoAnalyticsEnv | NodeJS.ProcessEnv) {
+  return new Set([
+    ...RIVERSIDE_PREVIEW_DEMO_EMAILS,
+    normalizeEmail(env.DEMO_SHOP_EMAIL),
+    ...splitEmails(env.DEMO_REVIEWER_EMAILS),
+  ]);
 }
 
 export function isRiversideDemoShop(shop: Pick<DemoAnalyticsShop, "name">): boolean {
@@ -70,15 +90,9 @@ export function shouldUseRiversidePreviewDemoFallback({
   if (hasRiversideMembership) return false;
   if (activeShopName === RIVERSIDE_DEMO_SHOP_NAME) return false;
 
-  const configuredDemoEmail = normalizeEmail(runtimeEnv.DEMO_SHOP_EMAIL);
-  const isConfiguredDemoLogin =
-    configuredDemoEmail.length > 0 &&
-    normalizeEmail(userEmail) === configuredDemoEmail;
+  const allowedDemoEmails = configuredDemoEmails(runtimeEnv);
+  const isAllowedDemoLogin = allowedDemoEmails.has(normalizeEmail(userEmail));
   const isLegacyDemoShop = isLegacyDemoAnalyticsShopName(activeShopName);
 
-  if (configuredDemoEmail.length > 0) {
-    return isConfiguredDemoLogin && isLegacyDemoShop;
-  }
-
-  return isLegacyDemoShop;
+  return isAllowedDemoLogin && isLegacyDemoShop;
 }

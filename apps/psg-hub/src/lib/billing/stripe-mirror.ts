@@ -101,6 +101,19 @@ function minimizeInvoice(inv: Stripe.Invoice): Record<string, unknown> {
     period_start: inv.period_start ?? null,
     period_end: inv.period_end ?? null,
     created: inv.created ?? null,
+    due_date: unixToIso(inv.due_date),
+    subtotal: inv.subtotal ?? null,
+    tax: inv.total_taxes?.reduce((sum, tax) => sum + tax.amount, 0) ?? null,
+    total: inv.total ?? null,
+    lines: (inv.lines?.data ?? []).map((line) => ({
+      id: line.id,
+      description: line.description ?? null,
+      quantity: line.quantity ?? null,
+      unit_amount: line.pricing?.unit_amount_decimal
+        ? Math.round(Number(line.pricing.unit_amount_decimal))
+        : null,
+      amount: line.amount,
+    })),
   };
 }
 

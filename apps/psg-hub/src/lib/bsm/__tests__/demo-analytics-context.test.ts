@@ -92,6 +92,20 @@ describe("Riverside demo analytics context", () => {
     ).toBe(true);
   });
 
+  it("activates the preview fallback for Nick even when another demo email is configured", () => {
+    expect(
+      shouldUseRiversidePreviewDemoFallback({
+        userEmail: "Nick@PhoenixSolutionsGroup.net",
+        activeShopName: "Tedesco Auto Body",
+        hasRiversideMembership: false,
+        env: {
+          DEMO_SHOP_EMAIL: "someone-else@example.test",
+          VERCEL_ENV: "preview",
+        },
+      })
+    ).toBe(true);
+  });
+
   it("does not activate the preview fallback for production, other users, or existing Riverside membership", () => {
     const env = {
       DEMO_SHOP_EMAIL: "demo-shop@example.test",
@@ -115,11 +129,11 @@ describe("Riverside demo analytics context", () => {
     ).toBe(false);
     expect(
       shouldUseRiversidePreviewDemoFallback({
-        userEmail: "test@psghub.me",
+        userEmail: "someone-else@example.test",
         activeShopName: "PSG Pilot Body Shop",
         hasRiversideMembership: false,
         env: {
-          DEMO_SHOP_EMAIL: "someone-else@example.test",
+          DEMO_SHOP_EMAIL: "demo-shop@example.test",
           VERCEL_ENV: "preview",
         },
       })

@@ -50,7 +50,7 @@ function StatusBadge({ row }: { row: TemplateGateRow }) {
   );
 }
 
-export function TemplateGateCard({ row }: { row: TemplateGateRow }) {
+export function TemplateGateCard({ row, boardSafeMode = false }: { row: TemplateGateRow; boardSafeMode?: boolean }) {
   const router = useRouter();
   const [approver, setApprover] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -90,13 +90,14 @@ export function TemplateGateCard({ row }: { row: TemplateGateRow }) {
         <StatusBadge row={row} />
       </div>
 
-      {row.approvedByName && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Approved by <span className="font-medium">{row.approvedByName}</span>
-          {row.approvedAt ? ` on ${new Date(row.approvedAt).toLocaleString()}` : ""}
-          {row.releasedAt ? ` · released ${new Date(row.releasedAt).toLocaleString()}` : ""}
-        </p>
-      )}
+      <div className="mt-3 rounded-md bg-muted/40 p-3 text-xs">
+        <p className="font-medium">Approval and status history</p>
+        <ul className="mt-1 space-y-1 text-muted-foreground">
+          <li>Current status: {row.status ?? "draft"}</li>
+          {row.approvedByName ? <li>Approved by {row.approvedByName}{row.approvedAt ? ` on ${new Date(row.approvedAt).toLocaleString()}` : ""}</li> : <li>No approval recorded</li>}
+          {row.releasedAt && <li>Released on {new Date(row.releasedAt).toLocaleString()}</li>}
+        </ul>
+      </div>
 
       {/* Missing-token report. */}
       {row.missingTokens.length > 0 ? (
@@ -184,14 +185,14 @@ export function TemplateGateCard({ row }: { row: TemplateGateRow }) {
 
         <Button
           size="sm"
-          disabled={busy !== null || row.status !== "approved"}
+          disabled={boardSafeMode || busy !== null || row.status !== "approved"}
           onClick={() =>
             run("release", () =>
               postJson(`${base}/release`, { contentHash: row.contentHash })
             )
           }
         >
-          {busy === "release" ? "Releasing…" : "Release for live"}
+          {boardSafeMode ? "Live release disabled in demo" : busy === "release" ? "Releasing…" : "Release for live"}
         </Button>
 
         <Button

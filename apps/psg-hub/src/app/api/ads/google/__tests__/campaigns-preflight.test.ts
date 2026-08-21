@@ -91,6 +91,13 @@ vi.mock("@/lib/google-ads/campaigns", () => ({
     });
   },
 }));
+vi.mock("@/lib/auth/ops-access", () => ({
+  requireOpsFn: vi.fn(async () => ({
+    ok: true,
+    userId: "u1",
+    access: { role: "psg_superadmin", functions: new Set() },
+  })),
+}));
 
 const { POST } = await import("@/app/api/ads/google/campaigns/route");
 

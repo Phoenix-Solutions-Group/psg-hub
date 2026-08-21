@@ -19,6 +19,8 @@ import {
 import {
   EMPTY_DIRECT_MAIL_METRICS,
   getDirectMailMetrics,
+  getRiversidePreviewDirectMailMetrics,
+  isDirectMailMetricsEmpty,
 } from "@/lib/analytics/direct-mail";
 import {
   aggregateByDate,
@@ -53,6 +55,8 @@ const WINDOW_DAYS = 30;
 const SOURCE = "semrush" as const;
 const PAID_SOURCE = "google_ads" as const;
 const PERIOD = "daily" as const;
+
+export const dynamic = "force-dynamic";
 
 /** KPI definitions. Aggregate view drops authority_score — a summed score lies. */
 const PER_SHOP_KPIS = [
@@ -485,7 +489,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const directMailShopNames = scopeAll
     ? shops.map((shop) => shop.name)
     : [activeShopName];
-  const directMail = await readAnalyticsSection(
+  const directMailResult = await readAnalyticsSection(
     "direct mail",
     () =>
       getDirectMailMetrics({
@@ -496,6 +500,13 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     EMPTY_DIRECT_MAIL_METRICS,
     readWarnings
   );
+  const directMail =
+    isRiversideDemoContext &&
+    !scopeAll &&
+    activeShopId &&
+    isDirectMailMetricsEmpty(directMailResult)
+      ? getRiversidePreviewDirectMailMetrics({ shopId: activeShopId, from })
+      : directMailResult;
 
   // Header status reflects the most recent sync across ALL sources, not just
   // organic. A shop with only GA4/GSC/GBP linked is "Last synced", not "Awaiting".
@@ -529,7 +540,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             aria-label="Analytics scope"
             className="flex rounded-md border border-border p-0.5"
           >
-            <Link
+            <a
               href="/dashboard/analytics"
               aria-current={!scopeAll ? "page" : undefined}
               className={`rounded px-3 py-1.5 font-heading text-sm font-medium transition-colors ${
@@ -539,8 +550,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               }`}
             >
               This shop
-            </Link>
-            <Link
+            </a>
+            <a
               href="/dashboard/analytics?scope=all"
               aria-current={scopeAll ? "page" : undefined}
               className={`rounded px-3 py-1.5 font-heading text-sm font-medium transition-colors ${
@@ -550,7 +561,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               }`}
             >
               All shops
-            </Link>
+            </a>
           </nav>
         ) : null}
       </div>

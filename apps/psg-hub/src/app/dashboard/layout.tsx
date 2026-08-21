@@ -4,26 +4,50 @@ import { Logo } from "@/components/brand/logo";
 import { OnboardingScreen } from "@/components/dashboard/onboarding-screen";
 import { ShopSwitcher } from "@/components/dashboard/shop-switcher";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
-import { getDashboardAccess, decideDashboardAccess } from "@/lib/auth/shop-access";
+import {
+  getDashboardAccess,
+  decideDashboardAccess,
+} from "@/lib/auth/shop-access";
 import { getOpsAccess, isOpsStaff } from "@/lib/auth/ops-access";
+import { resolveCollisionDemoShopContext } from "@/lib/collision-intelligence/demo-scope";
 import { getActiveShopContext } from "@/lib/shop/context";
 
-function dashboardNav(activeShopId: string | null) {
+export function dashboardNav(
+  activeShopId: string | null,
+  isSuperadmin: boolean,
+) {
   const invoiceHref = activeShopId
     ? `/dashboard/shop/${encodeURIComponent(activeShopId)}/invoices`
     : "/dashboard";
   return [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/analytics", label: "Analytics" },
-  { href: "/dashboard/audit", label: "SEO Audit" },
-  { href: "/dashboard/content", label: "Content" },
-  { href: "/dashboard/approvals", label: "Approvals" },
-  { href: "/dashboard/reviews", label: "Reviews" },
-  { href: "/dashboard/billing", label: "Billing" },
-  { href: invoiceHref, label: "Invoices" },
-  { href: "/dashboard/ads", label: "Ads" },
-  { href: "/dashboard/agents", label: "Agents" },
-  { href: "/dashboard/settings", label: "Settings" },
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard/analytics", label: "Analytics" },
+    {
+      href: "/dashboard/collision-intelligence",
+      label: "Collision Intelligence",
+    },
+    ...(isSuperadmin
+      ? [
+          {
+            href: "/dashboard/collision-intelligence/review",
+            label: "Data Quality & Matching",
+          },
+          {
+            href: "/dashboard/collision-intelligence/body-shop-insurance",
+            label: "Body Shop Insurance",
+          },
+        ]
+      : []),
+    { href: "/dashboard/audit", label: "SEO Audit" },
+    { href: "/dashboard/local-reach", label: "Local Reach" },
+    { href: "/dashboard/content", label: "Content" },
+    { href: "/dashboard/approvals", label: "Approvals" },
+    { href: "/dashboard/reviews", label: "Reviews" },
+    { href: "/dashboard/billing", label: "Billing" },
+    { href: invoiceHref, label: "Invoices" },
+    { href: "/dashboard/ads", label: "Ads" },
+    { href: "/dashboard/agents", label: "Agents" },
+    { href: "/dashboard/settings", label: "Settings" },
   ];
 }
 
@@ -51,7 +75,15 @@ export default async function DashboardLayout({
 
   // Active-shop context for the switcher (additive; the gate above is unchanged).
   const { shops, activeShopId } = await getActiveShopContext(user.id);
-  const nav = dashboardNav(activeShopId);
+  const shopContext = resolveCollisionDemoShopContext(
+    user.email,
+    shops,
+    activeShopId,
+  );
+  const nav = dashboardNav(
+    shopContext.activeShopId,
+    access.role === "psg_superadmin",
+  );
 
   // Internal-ops staff (psg_internal / psg_superadmin) land here on /dashboard with
   // no visible path to the /ops backbone (PSG-107 / PSG-111). Surface an "Internal
@@ -68,9 +100,12 @@ export default async function DashboardLayout({
         <div className="flex h-16 items-center border-b border-sidebar-border px-5">
           <Logo variant="reverse" className="h-7 w-auto" />
         </div>
-        {shops.length > 0 && (
+        {shopContext.shops.length > 0 && (
           <div className="border-b border-sidebar-border px-3 py-3">
-            <ShopSwitcher shops={shops} activeShopId={activeShopId} />
+            <ShopSwitcher
+              shops={shopContext.shops}
+              activeShopId={shopContext.activeShopId}
+            />
           </div>
         )}
         <nav className="flex-1 space-y-1 p-3">
@@ -92,10 +127,14 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-border px-6">
           <div className="flex items-center gap-3">
-            <MobileNav nav={nav} shops={shops} activeShopId={activeShopId} />
+            <MobileNav
+              nav={nav}
+              shops={shopContext.shops}
+              activeShopId={shopContext.activeShopId}
+            />
             <Logo variant="primary" className="h-5 w-auto lg:hidden" />
             <span className="hidden font-heading text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground lg:inline">
               Client Hub
