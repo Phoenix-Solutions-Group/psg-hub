@@ -118,6 +118,20 @@ ownership remain separately controlled actions.
 - No backup schedule, database, timer, secret, or file was changed. A restore drill
   and a named refresh-failure recipient are still unproven.
 
+## Bounded refresh probe — 2026-08-21
+
+- The production exporter and importer on `fm3` matched the reviewed local SHA-256
+  hashes. The operations secret remained mode `0600`, the runtime directory remained
+  mode `0700`, and both collision refresh units remained inactive.
+- A read-only probe was first canceled after the FileMaker OData request had returned
+  no response for more than four minutes. A clean retry with the exporter request
+  timeout explicitly reduced to 60 seconds failed on the first `$top=1` request with
+  `The read operation timed out`.
+- No CSV was written, no Supabase import ran, no timer was enabled, and no FileMaker
+  archive, file, record, schedule, or configuration changed. Keep the last reconciled
+  330,533-row Supabase snapshot as production truth until the same bounded probe
+  succeeds.
+
 ## One-time FileMaker configuration
 
 The FileMaker administrator must:
