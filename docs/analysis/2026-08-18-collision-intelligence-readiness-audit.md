@@ -1,7 +1,8 @@
 # Collision Intelligence Readiness Audit
 
 **Audited:** 2026-08-18; updated 2026-08-21
-**Verdict:** Supabase production release verified; the operating pilot is not complete
+**Verdict:** Supabase and dashboard production releases verified; forecast monitoring
+and recurring refresh operations are not complete
 
 ## 2026-08-21 production release
 
@@ -52,6 +53,22 @@
   August 17, August 24, August 31, and September 7 predict 16.13, 15.13, 16.63, and
   16.63 repair arrivals, with 80% intervals of 9–24, 7–24, 9–24, and 9–24. All four
   readiness rows are `published` and `is_ready = true`; the source was nine days old.
+
+## 2026-08-21 production dashboard release
+
+- After explicit production-deployment approval, source HEAD `4a3c6dc3` built on
+  Vercel with Next.js 16.2.3 and deployed as
+  `dpl_3HXauW1qb9fBN6mcK3dEEpmGJBQA`. The deployment reached `READY` and owns the
+  production alias `https://hub.psgweb.me`.
+- The public health endpoint returned HTTP 200 with `status = ok`; an unauthenticated
+  collision-dashboard request returned the expected HTTP 307 redirect to `/login`.
+- An authenticated production browser smoke test as `test@psghub.me` selected South
+  Lincoln, rendered the current repair, insurance, ZIP, vehicle, crash, weather, and
+  planning sections, and showed all four published forecasts with the governed model,
+  80% intervals, source freshness, and held-out evidence. The browser console reported
+  zero errors or warnings.
+- A post-smoke Vercel scan found no runtime error events or 5xx responses for the new
+  deployment. Notifications remain off, and the deployment did not change FileMaker.
 
 ## 2026-08-20 update
 
@@ -216,7 +233,7 @@ monitoring is now pending.
 | ------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Clean, documented, privacy-safe data                                | First manual refresh reconciled; recurring operation gated | 330,533 FileMaker facts reconcile to 330,535 parsed rows and two recorded rejections; direct PII and raw identifiers are absent; the restricted export contains exactly 15 approved fields; hardened service is staged with timer disabled; duplicate 3:00 AM backup disabled; admin alert owner recorded; known letter/survey errors separated from the collision gate                                | Recover backup capacity, prove restore recovery without changing FileMaker data, then separately approve recurring refresh                                                                                           |
 | Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; production migrations applied                 | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; 411,208 KDOT rows are count-verified with a 99.93% crash ZIP match; the corrected weather definition measures 99.36% repair-weighted boundary coverage rather than event presence                                                                                 | Review insurer candidates and approve further shop mappings only after identity confirmation                                                                                                                         |
-| Operational dashboard                                               | Authenticated branch-preview QA passed; production pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build plus authenticated desktop/mobile Chromium checks pass     | Separately approve the production application deployment, then run an authenticated production smoke test                                                                                                            |
+| Operational dashboard                                               | Production deployed; authenticated smoke passed             | `hub.psgweb.me/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four published forecasts, evidence-bound planning guidance, and a live scorecard; the production health, auth redirect, customer render, and browser console checks pass | Continue production observability and verify the scheduled collision job on its next authorized run                                                                                                                  |
 | ZIP-level weather and market alerts                                 | Matched-control lifecycle live; notifications remain off   | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; historical proxy shows 4.89% follow-through versus 4.39% control; acknowledgement pre-registers the nearest eligible prior-year shop/ZIP control; closure snapshots exact 1–4 week signal and control evidence; descriptive paired monitoring excludes unevaluable cases | Name the organization-level notification owner, approve a minimum sample, economic lift, and false-positive tolerance, then accrue prospective cases before authorizing notifications                               |
 | Weekly forecasts outperform a seasonal baseline                     | Controlled PS229 pilot published; monitoring pending        | PS228 and PS229 each beat the seasonal baseline across four horizons; PS229 improves MAE 20.1%–24.1% with 17.7%–18.7% WAPE and 80.4%–85.1% held-out-shop interval coverage; PS229 is mapped, its customer audience passes, all four policies are approved, and four current forecasts are published                                                         | Accrue observed forecasts and review live error and coverage after 13 observations per horizon                                                                                                                       |
 | Clear confidence and limitations                                    | Implemented for dashboard and CSV pilot                    | Dashboard and active-shop CSV include freshness, promotion evidence, interval coverage, model scope, unknown-payment disclosure, matched weather controls, descriptive paired rates, metric contract, and evaluation reports                                                                                                                            | Add and verify the same disclosures if scheduled alerts are later authorized                                                                                                                                         |
@@ -471,9 +488,10 @@ monitoring is now pending.
 4. After 13 observed forecasts accrue per horizon, review the live monitoring status.
    Manual review is requested when rolling MAE loses to seasonal or 80% interval
    coverage falls below 70%; the scorecard never changes promotion automatically.
-5. Authenticated desktop/mobile review of the deployed branch preview passes. Keep
-   production deployment and its authenticated smoke test as separate release gates.
-6. Deploy separately, then smoke-test the Vercel cron and keep notifications disabled
-   while the staged owner/manager acknowledgement and demand-outcome lifecycle accrues
-   prospective evidence. Name the organization-level notification owner and approve
-   the business threshold before any external delivery is considered.
+5. The production dashboard deployment and authenticated customer smoke test are
+   complete. Continue production runtime-error monitoring and verify the scheduled
+   collision job on its next authorized run.
+6. Keep notifications disabled while the staged owner/manager acknowledgement and
+   demand-outcome lifecycle accrues prospective evidence. Name the organization-level
+   notification owner and approve the business threshold before any external delivery
+   is considered.
