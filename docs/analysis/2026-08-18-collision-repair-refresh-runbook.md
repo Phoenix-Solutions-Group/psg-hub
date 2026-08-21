@@ -298,10 +298,11 @@ psql "$SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 \
 ```
 
 The single result must report `ready = true` and an empty `failures` array. The
-2026-08-20 pre-release execution against `gylkkzmcmbdftxieyabw` ran 42 checks and
+2026-08-20 pre-release execution against `gylkkzmcmbdftxieyabw` ran 43 checks and
 failed 37, including every missing migration name, relation, trigger, and service-only
-function plus the unreconciled SPC source batch. The two blocked-forecast invariants
-already pass. This is the expected before-state, not a release failure.
+function plus the unreconciled SPC source batch. KDOT source/import counts, completed
+ZIP resolution, and both blocked-forecast invariants already pass. This is the
+expected before-state, not a release failure.
 
 The first three files were applied together in a local transaction and rolled back.
 The weather correction passed a separate synthetic local transaction. All views pass

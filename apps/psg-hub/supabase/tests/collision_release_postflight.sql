@@ -126,6 +126,25 @@ with required_migrations(name) as (
 
   select
     'data',
+    'ksdot_source_reconciles',
+    exists (
+      select 1
+      from public.ksdot_crash_sources source
+      where source.dataset_key = 'ksdot_accidents'
+        and source.last_sync_status = 'loaded'
+        and source.source_row_count = source.imported_row_count
+        and not exists (
+          select 1
+          from public.ksdot_crashes crash
+          where crash.dataset_key = source.dataset_key
+            and crash.zip_resolution_status = 'pending'
+        )
+    )
+
+  union all
+
+  select
+    'data',
     'blocked_forecasts_have_no_values',
     not exists (
       select 1
