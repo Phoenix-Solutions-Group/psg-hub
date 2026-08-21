@@ -1,6 +1,6 @@
 # Collision Intelligence Readiness Audit
 
-**Audited:** 2026-08-18; updated 2026-08-20
+**Audited:** 2026-08-18; updated 2026-08-21
 **Verdict:** pilot analytics foundation is implemented; the full project is not complete
 
 ## 2026-08-20 update
@@ -75,6 +75,10 @@
   migration names remain unapplied. The refresh runbook now lists
   the complete timestamp-ordered release set and postflight contract; production is
   unchanged.
+- The August 21 production postflight baseline remains the expected pre-release
+  state: 81 checks run, 74 failed because the 13 reviewed migrations and their
+  protected objects are not live. The reviewed manifest still matches all 13
+  SHA-256 hashes. No migration was applied.
 - Three legacy collision/accident RPCs and the browser grants on legacy accident,
   NHTSA, storm, and ZIP source relations now have service-role-only hardening staged
   and rollback-tested. This is the third pending collision migration; it is not applied
@@ -385,11 +389,12 @@ staging, model approval, scoring, and publication remain separate audited action
 
 ## Next execution order
 
-1. Resolve the FileMaker operations gate: the owner must decide whether the duplicate
-   3:00 AM backup is intentional and either free or relocate capacity safely, classify
-   the nightly script errors as expected or failed processing, prove restore recovery,
-   and name the person or channel that receives refresh failures. Keep the daily
-   refresh timer disabled until those controls are approved and verified.
+1. Finish the remaining FileMaker operations gate: safely archive and reconcile the
+   disabled duplicate backup before removing its source folder, classify the nightly
+   script errors as expected or failed processing, and prove restore recovery. The
+   duplicate 3:00 AM schedule is disabled and the existing admin alert path is
+   confirmed. Keep the daily refresh timer disabled until the remaining controls are
+   approved and verified.
 2. After separate production approval, apply the storm source-reconciliation,
    forecast-readiness, example-function hardening, weather-coverage, governed shop
    identity, and forecast-candidate evidence migrations, then deploy the matching
