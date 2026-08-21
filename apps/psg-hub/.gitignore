@@ -52,3 +52,11 @@ next-env.d.ts
 
 # AEGIS audit state (generated)
 .aegis/
+
+# Impeccable live runtime state; design.json remains versioned.
+.impeccable/hook.cache.json
+.impeccable/hook.pending.json
+.impeccable/config.local.json
+.impeccable/live/
+.impeccable-live.json
+.impeccable-live/

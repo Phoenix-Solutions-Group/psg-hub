@@ -35,6 +35,9 @@ __pycache__/
 .vercel/
 # graphify knowledge-graph output (local artifact, any depth)
 graphify-out/
+# local browser state and generated demo evidence
+/.playwright-mcp/
+/docs/bsm-demo-screenshots/
 supabase/.temp/
 */supabase/.temp/
 npm-debug.log*
