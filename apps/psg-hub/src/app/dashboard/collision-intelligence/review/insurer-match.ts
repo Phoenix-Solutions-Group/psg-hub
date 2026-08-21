@@ -50,6 +50,16 @@ export function findInsurerNameMatches(
     .slice(0, limit);
 }
 
+export function excludeExistingInsurerNames<T extends { display_name: string }>(
+  suggestions: T[],
+  existing: InsurerNameOption[],
+) {
+  const existingNames = new Set(existing.map(({ label }) => searchKey(label)));
+  return suggestions.filter(
+    ({ display_name }) => !existingNames.has(searchKey(display_name)),
+  );
+}
+
 export function groupRegistryMatches<T extends { match_score: number }>(
   suggestions: T[],
 ) {

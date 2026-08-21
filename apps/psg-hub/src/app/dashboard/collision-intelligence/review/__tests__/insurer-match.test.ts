@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  excludeExistingInsurerNames,
   findInsurerNameMatches,
   groupRegistryMatches,
   includeFocusedAlias,
@@ -23,6 +24,22 @@ describe("insurer name matching", () => {
     expect(findInsurerNameMatches(insurers, "Progressive")).toEqual([
       insurers[0],
     ]);
+  });
+
+  it("does not repeat an existing PSG name as an NAIC choice", () => {
+    const suggestions = [
+      { display_name: "USAA Casualty Insurance Company" },
+      { display_name: "USAA General Indemnity Company" },
+    ];
+
+    expect(
+      excludeExistingInsurerNames(suggestions, [
+        {
+          label: "USAA Casualty Insurance Company",
+          value: "saved-usaa-casualty",
+        },
+      ]),
+    ).toEqual([suggestions[1]]);
   });
 
   it("keeps a requested saved alias visible outside the ranked queue", () => {
