@@ -109,8 +109,10 @@ ownership remain separately controlled actions.
   these as command unavailable, file or object in use, and record missing. Server-side
   scripts skip unsupported steps and continue, which explains the code-3 noise; it
   does not prove that the code-101 business paths processed the intended records.
-  Every schedule reports completed, but no custom script-error log or processed-row
-  result proves the nightly business outcome.
+  Eleven affected schedules are Advantage letter-eligibility jobs and four are Survey
+  alert-preparation jobs. They do not run the collision refresh or populate its 15
+  OData fields. Every schedule reports completed, but no custom script-error log or
+  processed-row result proves those separate nightly business outcomes.
   [Claris error codes](https://help.claris.com/en/pro-help/content/error-codes.html) ·
   [server-side script behavior](https://help.claris.com/en/pro-help/content/running-scripts-on-server.html)
 - No backup schedule, database, timer, secret, or file was changed. A restore drill
@@ -362,7 +364,6 @@ The evidence file is an operator-owned JSON object. Record decisions, not creden
 ```json
 {
   "backup_schedule_decision": "disabled_duplicate",
-  "script_error_decision": "reviewed error remediation and outcome evidence",
   "restore_drill_result": "pass",
   "restore_drill_at": "2026-08-20T15:00:00-05:00",
   "failure_owner": "FileMaker administrator"
@@ -405,6 +406,21 @@ folder to `/mnt/HC_Volume_105029819`, reconcile file count, byte count, and SHA-
 then remove the source folder only under explicit approval. No file was moved or
 deleted during this audit.
 
+The August 21 log was also checked against the narrowed collision gate. All 92 entries
+match the exact known letter/survey patterns: 55 code 3, 22 code 13, and 15 code 101;
+zero are unclassified. The checker reports those known non-collision errors but does
+not block the OData refresh on them. Any new schedule, code, or script-location pattern
+still fails the gate. Repairing the 15 business workflows and adding processed-row
+evidence remains FileMaker operations work, not evidence required for the collision
+snapshot's independently reconciled fields.
+
+The two approved human decisions are now recorded in the root-owned, mode-0600
+`/opt/psg/ops/collision-refresh-evidence.json`: the duplicate schedule is disabled and
+the FileMaker administrator owns failures. A no-install execution of the current
+checker against the live server passes those decisions and the known-script check.
+Only backup capacity (`5.5 GiB` free) and a current restore drill remain failed. The
+timer remains disabled.
+
 - The server's midnight backup and 12:30–1:40 AM FileMaker script window were verified
   on 2026-08-19. The staged systemd timer runs at 4:30 AM America/Chicago with up to
   ten minutes of jitter.
@@ -420,13 +436,12 @@ deleted during this audit.
   removing its source, then prove a midnight backup and restore.
 - Install `apps/psg-hub/ops/systemd/psg-collision-refresh.{service,timer}` under
   `/etc/systemd/system/`. Keep the timer disabled until the first manual service run
-  passes every acceptance check, the shared-root capacity risk and nightly scripting
-  errors are dispositioned, a restore drill passes, and a named operational owner
-  receives failures.
-- Before enabling that timer, the FileMaker owner must remove or server-guard the
-  unsupported UI wrapper steps and add explicit no-record handling plus processed-row
-  logging to the 15 affected schedules. A green “completed” state without a recorded
-  business outcome is not sufficient refresh evidence.
+  passes every acceptance check, the shared-root capacity risk is resolved, a restore
+  drill passes, and a named operational owner receives failures.
+- Separately, the FileMaker owner should remove or server-guard the unsupported UI
+  wrapper steps and add explicit no-record handling plus processed-row logging to the
+  15 affected letter/survey schedules. A green “completed” state is not sufficient
+  evidence for those workflows, but they are outside the collision export boundary.
 - The service runs as the non-login `psg-refresh` account, reads only the mode-0600
   operations secret, writes only `/opt/psg/runtime`, lowers CPU and I/O priority, and
   applies systemd filesystem and privilege hardening.

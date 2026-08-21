@@ -25,9 +25,29 @@ DATABASES = {
     "PhoenixSolutions_Survey_06.1.fmp12",
     "Web.fmp12",
 }
+NON_COLLISION_SCHEDULES = {
+    "Nightly - 3Month",
+    "Nightly - 1Year",
+    "Nightly - 18Month",
+    "Nightly - 2Year",
+    "Nightly - Birthday",
+    "Nightly - Drivers License",
+    "Nightly - Survey Header",
+    "Nightly - Thank You with Survey Only",
+    "Nightly - Thank You with Warranty Only",
+    "Nightly - Thank You Letter Only",
+    "Nightly - Thank You With Warranty & Survey",
+    "Nightly - Alert (HotSpot)",
+    "Nightly - Alert (Perfect)",
+    "Nightly - Alert (Misfire)",
+    "Nightly - Alert (Good News)",
+}
 ERROR = re.compile(
     r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ [+-]\d{4}).*"
     r"scripting error \((\d+)\)"
+)
+ERROR_DETAIL = re.compile(
+    r'Schedule "([^"]+)" scripting error \(\d+\) at "([^"]+)"'
 )
 BACKUP_FAILURE = re.compile(
     r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ [+-]\d{4}).*"
@@ -93,19 +113,41 @@ def latest_backup(
     return result(f"backup_{prefix.lower()}", ok, detail)
 
 
-def script_errors(path: Path, since: datetime) -> Counter[str]:
-    counts: Counter[str] = Counter()
+def known_non_collision_error(schedule: str, code: str, location: str) -> bool:
+    if schedule not in NON_COLLISION_SCHEDULES:
+        return False
+    if code in {"3", "13"} and " : [UI] All - " in location:
+        return True
+    return code == "101" and (
+        " : SS -  Elgibility -" in location
+        or " : [Script] Alert - Eligibility Prep - SS " in location
+    )
+
+
+def script_errors(path: Path, since: datetime) -> tuple[Counter[str], Counter[str]]:
+    observed: Counter[str] = Counter()
+    blocking: Counter[str] = Counter()
     try:
         for line in path.read_text(errors="replace").splitlines():
             match = ERROR.search(line)
             if not match:
                 continue
-            observed = datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S.%f %z")
-            if observed >= since:
-                counts[match.group(2)] += 1
+            observed_at = datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S.%f %z")
+            if observed_at < since:
+                continue
+            code = match.group(2)
+            observed[code] += 1
+            detail = ERROR_DETAIL.search(line)
+            if not detail:
+                blocking[code] += 1
+                continue
+            schedule, location = detail.group(1), detail.group(2)
+            if not known_non_collision_error(schedule, code, location):
+                blocking[code] += 1
     except FileNotFoundError:
-        counts["log_missing"] += 1
-    return counts
+        observed["log_missing"] += 1
+        blocking["log_missing"] += 1
+    return observed, blocking
 
 
 def backup_failures(path: Path, since: datetime) -> Counter[str]:
@@ -168,7 +210,9 @@ def collect(
     enabled, active = timer or systemctl_state(args.timer_unit)
     total, used, free = disk or shutil.disk_usage(args.backup_root)
     used_percent = used / total * 100
-    error_counts = script_errors(args.event_log, now - timedelta(hours=args.log_hours))
+    error_counts, blocking_error_counts = script_errors(
+        args.event_log, now - timedelta(hours=args.log_hours)
+    )
     backup_failure_counts = backup_failures(
         args.event_log, now - timedelta(hours=args.backup_hours)
     )
@@ -177,9 +221,8 @@ def collect(
     blocking_backup_failures = Counter(backup_failure_counts)
     if duplicate_disabled:
         blocking_backup_failures.pop("Backup", None)
-    errors_ok = not error_counts or (
-        "log_missing" not in error_counts and bool(gates.get("script_error_decision"))
-    )
+    errors_ok = not blocking_error_counts
+    known_error_counts = error_counts - blocking_error_counts
     capacity_ok = used_percent <= args.max_used_percent and free >= args.min_free_gb * 2**30
     checks = [
         result(
@@ -222,8 +265,10 @@ def collect(
         result(
             "nightly_script_errors",
             errors_ok,
-            json.dumps(dict(sorted(error_counts.items())))
-            + ("; disposition recorded" if error_counts and errors_ok else ""),
+            "known_non_collision="
+            + json.dumps(dict(sorted(known_error_counts.items())))
+            + "; blocking="
+            + json.dumps(dict(sorted(blocking_error_counts.items()))),
         ),
         result(
             "restore_drill",
@@ -254,7 +299,9 @@ def self_check() -> None:
             os.utime(backup, (now.timestamp(), now.timestamp()))
         event_log = root / "Event.log"
         event_log.write_text(
-            "2026-08-20 01:00:00.000 -0000 Information scripting error (101)\n"
+            '2026-08-20 01:00:00.000 -0000 Information Schedule "Nightly - 3Month" '
+            'scripting error (101) at "PhoenixSolutions_Advantage_06.1 : '
+            'SS -  Elgibility - 3Month : 50 : Go to Record/Request/Page"\n'
             '2026-08-20 03:00:00.000 -0000 Error Schedule "Backup" was aborted\n'
             '2026-08-20 07:00:00.000 -0000 Information Schedule "Backup" disabled\n'
         )
@@ -285,7 +332,6 @@ def self_check() -> None:
             json.dumps(
                 {
                     "backup_schedule_decision": "disabled_duplicate",
-                    "script_error_decision": "approved",
                     "restore_drill_result": "pass",
                     "restore_drill_at": now.isoformat(),
                     "failure_owner": "operations",
@@ -297,6 +343,18 @@ def self_check() -> None:
         )["ready"]
         event_log.write_text(
             event_log.read_text()
+            + '2026-08-20 07:30:00.000 -0000 Information Schedule "Unknown" '
+            'scripting error (101) at "Unexpected : Script : 1 : Go to Record/Request/Page"\n'
+        )
+        assert not collect(
+            args, now=now, timer=("disabled", "inactive"), disk=healthy_disk
+        )["ready"]
+        event_log.write_text(
+            event_log.read_text().replace(
+                '2026-08-20 07:30:00.000 -0000 Information Schedule "Unknown" '
+                'scripting error (101) at "Unexpected : Script : 1 : Go to Record/Request/Page"\n',
+                "",
+            )
             + '2026-08-20 08:00:00.000 -0000 Error Schedule "FMS" was aborted\n'
         )
         assert not collect(

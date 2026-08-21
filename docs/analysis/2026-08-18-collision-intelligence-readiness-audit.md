@@ -24,17 +24,20 @@
   backups completed with all five hosted files. They still share a root that is now
   93% used with 5.6 GB free. The 92 overnight script messages are now classified:
   55 server-incompatible UI commands, 22 file/object-in-use cleanup steps, and 15
-  missing-record navigation results. The first class is explainable noise; the latter
-  two still need explicit handling and processed-row evidence. No server state changed;
-  restore proof, script disposition, capacity disposition, and alert ownership still
-  gate the disabled refresh timer.
+  missing-record navigation results. They belong to 11 Advantage letter-eligibility
+  jobs and four Survey alert-preparation jobs, not the OData collision refresh or its
+  15 approved fields. The narrowed checker reports all 92 as known non-collision
+  errors and blocks any new pattern. Their processed-row evidence remains a separate
+  FileMaker operations issue; restore proof and capacity disposition still gate the
+  disabled refresh timer.
 - The capacity risk became an observed failure on August 21: the midnight `FMS`
   backup completed, but the 3:00 AM `Backup` schedule aborted because the destination
   lacked free space. At 7:44 AM the user approved disabling the duplicate; `fmsadmin`
   verified schedule ID 3 disabled while midnight schedule ID 1 remains enabled. No
   backup folders were deleted. The user confirmed the existing FileMaker admin alert
-  path is active. Capacity, restore proof, and script outcomes still gate the disabled
-  collision refresh timer.
+  path is active. Both approved decisions are recorded in the server's mode-0600
+  operations evidence file, and the live checker passes them. Capacity and restore
+  proof are now the only failed FileMaker refresh gates; the timer remains disabled.
 - The disabled schedule's retained August 20 folder is 9.4 GB. Its two large hosted
   database files have link count one, so archiving that folder to the 75-GB-free
   mounted volume, reconciling it, and only then removing the source is the scoped
@@ -158,7 +161,7 @@ staging, model approval, scoring, and publication remain separate audited action
 
 | Goal requirement                                                    | Status                                                     | Current evidence                                                                                                                                                                                                                                                                                                                                        | Remaining work                                                                                                                                                                                                       |
 | ------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Clean, documented, privacy-safe data                                | First manual refresh reconciled; recurring operation gated | 330,533 FileMaker facts reconcile to 330,535 parsed rows and two recorded rejections; direct PII and raw identifiers are absent; the restricted export contains exactly 15 approved fields; hardened service is staged with timer disabled; duplicate 3:00 AM backup disabled and admin alert path confirmed                                                                                         | Recover backup capacity, prove restore recovery, resolve nightly script outcomes, apply storm provenance reconciliation, then separately approve recurring refresh                                                     |
+| Clean, documented, privacy-safe data                                | First manual refresh reconciled; recurring operation gated | 330,533 FileMaker facts reconcile to 330,535 parsed rows and two recorded rejections; direct PII and raw identifiers are absent; the restricted export contains exactly 15 approved fields; hardened service is staged with timer disabled; duplicate 3:00 AM backup disabled; admin alert owner recorded; known letter/survey errors separated from the collision gate                                | Recover backup capacity, prove restore recovery, apply storm provenance reconciliation, then separately approve recurring refresh                                                                                   |
 | Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; weather correction staged                     | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; 411,208 KDOT rows are count-verified with a 99.93% crash ZIP match; the corrected weather definition measures 99.36% repair-weighted boundary coverage rather than event presence                                                                                 | Apply the reviewed weather migration; review insurer candidates and approve shop mappings only after identity confirmation                                                                                           |
 | Operational dashboard                                               | Authenticated branch-preview QA passed; production pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build plus authenticated desktop/mobile Chromium checks pass     | Release only after the matching migrations are approved, then run a production authenticated smoke test                                                                                                              |
 | ZIP-level weather and market alerts                                 | Matched-control lifecycle staged; notifications remain off | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; historical proxy shows 4.89% follow-through versus 4.39% control; acknowledgement pre-registers the nearest eligible prior-year shop/ZIP control; closure snapshots exact 1–4 week signal and control evidence; descriptive paired monitoring excludes unevaluable cases | Apply the lifecycle migration, name the organization-level notification owner, approve a minimum sample, economic lift, and false-positive tolerance, then accrue prospective cases before authorizing notifications |
@@ -390,11 +393,11 @@ staging, model approval, scoring, and publication remain separate audited action
 ## Next execution order
 
 1. Finish the remaining FileMaker operations gate: safely archive and reconcile the
-   disabled duplicate backup before removing its source folder, classify the nightly
-   script errors as expected or failed processing, and prove restore recovery. The
-   duplicate 3:00 AM schedule is disabled and the existing admin alert path is
-   confirmed. Keep the daily refresh timer disabled until the remaining controls are
-   approved and verified.
+   disabled duplicate backup before removing its source folder and prove restore
+   recovery. The duplicate 3:00 AM schedule is disabled, the existing admin alert path
+   is confirmed, and the 92 known letter/survey errors are outside the collision
+   export boundary while any new pattern remains blocking. Keep the daily refresh
+   timer disabled until the remaining controls are approved and verified.
 2. After separate production approval, apply the storm source-reconciliation,
    forecast-readiness, example-function hardening, weather-coverage, governed shop
    identity, and forecast-candidate evidence migrations, then deploy the matching
