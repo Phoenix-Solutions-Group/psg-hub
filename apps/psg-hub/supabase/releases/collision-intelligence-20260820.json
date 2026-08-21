@@ -20,7 +20,7 @@
     {
       "file": "20260820153240_collision_shop_insurance_market.sql",
       "name": "collision_shop_insurance_market",
-      "sha256": "d5943feb9d03bfb7764336eeb1c07ee5c6e9cdf85f7f718603507c0575c177c7"
+      "sha256": "853837cbbafcae8ca7a0d13c5355e274ad448512acf3866d5e56ba85a09a4a86"
     },
     {
       "file": "20260820155441_collision_insurer_acronym_matching.sql",

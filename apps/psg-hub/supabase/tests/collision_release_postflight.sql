@@ -88,6 +88,12 @@ with required_migrations(name) as (
     ('collision_forecast_publication_customer_audience', 'public.collision_demand_forecasts'),
     ('collision_weather_alert_cases_updated_at', 'public.collision_weather_alert_cases'),
     ('collision_shop_mapping_identity_gate', 'public.collision_shop_mappings')
+), required_constraints(constraint_name, table_name) as (
+  values
+    (
+      'collision_shop_insurance_evidence_contract',
+      'public.collision_shop_insurance_appetite_evidence'
+    )
 ), migration_checks as (
   select
     'migration'::text as check_type,
@@ -261,6 +267,18 @@ with required_migrations(name) as (
         and not trigger.tgisinternal
     ) as passed
   from required_triggers required
+), constraint_checks as (
+  select
+    'constraint'::text as check_type,
+    required.constraint_name as check_name,
+    exists (
+      select 1
+      from pg_catalog.pg_constraint constraint_definition
+      where constraint_definition.conname = required.constraint_name
+        and constraint_definition.conrelid = pg_catalog.to_regclass(required.table_name)
+        and constraint_definition.convalidated
+    ) as passed
+  from required_constraints required
 ), data_checks as (
   select
     'data'::text as check_type,
@@ -337,6 +355,7 @@ with required_migrations(name) as (
   union all select * from index_checks
   union all select * from privilege_checks
   union all select * from trigger_checks
+  union all select * from constraint_checks
   union all select * from data_checks
 )
 select

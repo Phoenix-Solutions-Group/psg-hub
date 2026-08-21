@@ -62,9 +62,10 @@ export default async function BodyShopInsuranceMarketPage() {
             Body Shop Insurance Market
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Evidence-backed insurers that explicitly target automotive body,
-            paint, and collision shops in NAICS 811121. This is separate from
-            the carriers paying consumer repair claims.
+            Carrier groups whose own materials explicitly identify automotive
+            body, paint, and collision shops in NAICS 811121. Marketing appetite
+            is evidence—not proof that a policy is available to a specific shop.
+            This is separate from carriers paying consumer repair claims.
           </p>
         </div>
         <Link
@@ -96,7 +97,7 @@ export default async function BodyShopInsuranceMarketPage() {
         <MetricCard
           label="Industry appetite"
           value={appetiteEvidence.length.toLocaleString()}
-          detail="Explicit carrier-source matches"
+          detail="Official carrier source records"
         />
         <MetricCard
           label="State authorization"
@@ -158,7 +159,7 @@ export default async function BodyShopInsuranceMarketPage() {
                 <CardHeader>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <CardTitle>{row.carrier_name}</CardTitle>
-                    <Badge variant="success">Industry fit confirmed</Badge>
+                    <Badge variant="success">Appetite evidence found</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     NAIC group {row.registry_id}

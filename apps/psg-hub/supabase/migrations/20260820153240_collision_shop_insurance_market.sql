@@ -56,7 +56,22 @@ create table if not exists public.collision_shop_insurance_appetite_evidence (
     or array_to_string(state_codes, ',') ~ '^[A-Z]{2}(,[A-Z]{2})*$'
   ),
   check (evidence_scope <> 'state_specific' or cardinality(state_codes) > 0),
-  check (evidence_type <> 'state_authorization' or registry_type = 'company'),
+  constraint collision_shop_insurance_evidence_contract check (
+    case evidence_type
+      when 'carrier_appetite' then
+        evidence_scope in ('national_marketing', 'state_specific')
+      when 'state_authorization' then
+        registry_type = 'company'
+        and evidence_scope = 'state_specific'
+        and cardinality(state_codes) > 0
+      when 'policy_observation' then
+        registry_type = 'company'
+        and evidence_scope = 'psg_customer'
+        and cardinality(state_codes) > 0
+        and valid_through is not null
+      else false
+    end
+  ),
   check (source_name = btrim(source_name) and source_name <> ''),
   check (source_url ~ '^https://'),
   check (evidence_summary = btrim(evidence_summary) and evidence_summary <> ''),

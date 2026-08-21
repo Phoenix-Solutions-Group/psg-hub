@@ -103,6 +103,12 @@
   the later audience triggers landed. A rollback-only runtime check proved staff-only
   staging and approval fail without mutation, while a real customer membership enables
   all four review horizons and approval. Production remains unchanged.
+- The NAICS 811121 importer now accepts all three modeled evidence levels instead of
+  silently making state authorization and PSG policy observations impossible to load.
+  The pending database contract requires state authorization and policy evidence to
+  name a legal NAIC company, requires state-specific evidence where applicable, and
+  requires an active policy observation to include a term end date. Carrier marketing
+  appetite remains explicitly separate from state availability and bindability.
 
 ### Fresh exact-address forecast candidates
 

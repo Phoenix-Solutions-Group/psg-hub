@@ -324,13 +324,13 @@ psql "$SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 \
 ```
 
 The single result must report `ready = true` and an empty `failures` array. The
-2026-08-20 pre-release execution against `gylkkzmcmbdftxieyabw` now runs 79 checks and
-fails 72, including every missing migration name, governed relation, trigger,
+2026-08-20 pre-release execution against `gylkkzmcmbdftxieyabw` now runs 80 checks and
+fails 73, including every missing migration name, governed relation, trigger,
 service-only function, legacy browser grant, source sequence, the missing insurer
-foreign-key index, both direct customer-role function contracts, and the unreconciled
-SPC source batch. KDOT source/import counts, completed ZIP resolution, and both
-blocked-forecast invariants already pass. This is the expected before-state, not a
-release failure.
+foreign-key index, the insurer-evidence contract, both direct customer-role function
+contracts, and the unreconciled SPC source batch. KDOT source/import counts, completed
+ZIP resolution, and both blocked-forecast invariants already pass. This is the expected
+before-state, not a release failure.
 
 The payment-classification migration is the only notable row rewrite in the batch. A
 read-only 2026-08-20 preflight found 3,074 Hub repair orders with a null payment type;
