@@ -20,8 +20,8 @@
   score or publish a forecast, send a notification, refresh FileMaker, or deploy the
   application. Later separately governed pilot actions recorded PS229 address
   evidence, approved the exact PS229 to South Lincoln mapping, assigned the existing
-  test customer, and staged four model policies for review. No model was approved and
-  South Lincoln still has zero forecast rows.
+  test customer, staged four model policies for review, and later approved all four
+  after the user's explicit decision. South Lincoln still has zero forecast rows.
 
 ## 2026-08-21 PS229 pilot governance
 
@@ -41,8 +41,10 @@
   Riverside test membership.
 - A post-mapping evaluation snapshot was stored under input SHA-256
   `7872de309aae6baeda480148a0698d9d2dcd7586f071c7b7010cc8851a46495a`.
-  The same four passing horizons were staged with `promotion_status = review`; all
-  `approved_at` values remain null and no forecast rows were created.
+  The same four passing horizons were staged for review. After the user's explicit
+  `approve all 4` decision, one governed transaction set all four policies to
+  `approved` at `2026-08-21 15:16:49 UTC` and recorded the approval audit. The
+  approval function returned `forecasts_published = 0`; scoring remains separate.
 
 ## 2026-08-20 update
 
@@ -188,7 +190,7 @@ will cover exactly 80% of future weeks.
 | Source                                 | Exact Hub target                                         | Current history                                       | Holdout repairs | Four-horizon MAE improvement | Four-horizon WAPE | Held-out-shop interval coverage | Result and gate                                         |
 | -------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------- | --------------: | ---------------------------: | ----------------: | ------------------------------: | ------------------------------------------------------- |
 | PS228 · Tracy's Collision Center North | North Lincoln · 4538 Cornhusker Hwy, Lincoln, NE 68504   | Through 2026-08-12; one 46-week internal gap excluded |             531 |                  16.5%–21.0% |       27.5%–29.1% |                     80.4%–85.1% | All four horizons pass; unmapped; 0 target-shop members |
-| PS229 · Tracy's Collision Center South | South Lincoln · 1500 Center Park Road, Lincoln, NE 68512 | Through 2026-08-12; no long internal gap              |             844 |                  20.1%–24.1% |       17.7%–18.7% |                     80.4%–85.1% | Mapped; test customer assigned; four models in review   |
+| PS229 · Tracy's Collision Center South | South Lincoln · 1500 Center Park Road, Lincoln, NE 68512 | Through 2026-08-12; no long internal gap              |             844 |                  20.1%–24.1% |       17.7%–18.7% |                     80.4%–85.1% | Mapped; test customer assigned; four models approved    |
 
 PS229 is the recommended first live pilot because its current segment is continuous,
 its holdout contains more repair arrivals, and its error is materially lower at every
@@ -197,8 +199,8 @@ South Lincoln. A current Farm Bureau directory address was governed first, then 
 authenticated superadmin approved the exact mapping to South Lincoln at 1500 Center
 Park Road. The user selected the existing `test@psghub.me` customer account, which now
 has audited South Lincoln owner membership. The post-mapping evaluation remained
-unchanged and all four horizons were staged for review. Model approval, scoring, and
-publication remain separate audited actions.
+unchanged; all four horizons were staged and then explicitly approved together.
+Scoring and publication remain separate governed actions, and no forecast exists yet.
 
 ## Requirement status
 
@@ -208,7 +210,7 @@ publication remain separate audited actions.
 | Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; production migrations applied                 | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; 411,208 KDOT rows are count-verified with a 99.93% crash ZIP match; the corrected weather definition measures 99.36% repair-weighted boundary coverage rather than event presence                                                                                 | Review insurer candidates and approve further shop mappings only after identity confirmation                                                                                                                         |
 | Operational dashboard                                               | Authenticated branch-preview QA passed; production pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build plus authenticated desktop/mobile Chromium checks pass     | Separately approve the production application deployment, then run an authenticated production smoke test                                                                                                            |
 | ZIP-level weather and market alerts                                 | Matched-control lifecycle live; notifications remain off   | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; historical proxy shows 4.89% follow-through versus 4.39% control; acknowledgement pre-registers the nearest eligible prior-year shop/ZIP control; closure snapshots exact 1–4 week signal and control evidence; descriptive paired monitoring excludes unevaluable cases | Name the organization-level notification owner, approve a minimum sample, economic lift, and false-positive tolerance, then accrue prospective cases before authorizing notifications                               |
-| Weekly forecasts outperform a seasonal baseline                     | PS229 four-horizon model review staged; publication gated   | PS228 and PS229 each beat the seasonal baseline across four horizons; PS229 improves MAE 20.1%–24.1% with 17.7%–18.7% WAPE and 80.4%–85.1% held-out-shop interval coverage; PS229 is mapped, the test customer audience passes, and all four policies are staged in review                                                                                  | Make the separate four-horizon approval decision, score a current forecast, then accrue observed forecasts and review live error/coverage                                                                            |
+| Weekly forecasts outperform a seasonal baseline                     | PS229 four-horizon policy approved; scoring pending         | PS228 and PS229 each beat the seasonal baseline across four horizons; PS229 improves MAE 20.1%–24.1% with 17.7%–18.7% WAPE and 80.4%–85.1% held-out-shop interval coverage; PS229 is mapped, the test customer audience passes, and all four policies are approved                                                                                           | Make the separate scoring/publication decision, then accrue observed forecasts and review live error/coverage                                                                                                        |
 | Clear confidence and limitations                                    | Implemented for dashboard and CSV pilot                    | Dashboard and active-shop CSV include freshness, promotion evidence, interval coverage, model scope, unknown-payment disclosure, matched weather controls, descriptive paired rates, metric contract, and evaluation reports                                                                                                                            | Add and verify the same disclosures if scheduled alerts are later authorized                                                                                                                                         |
 
 ## Live data coverage
@@ -452,8 +454,8 @@ publication remain separate audited actions.
    then requires an exact Hub address, written identity notes, and explicit
    confirmation, and it is committed with its audit entry in one transaction. For
    the first current forecast pilot, the governed PS229 to South Lincoln mapping,
-   test-customer assignment, post-mapping snapshot, and four-horizon review staging
-   are complete. Review model approval as a separate action before scoring. PS773 to
+   test-customer assignment, post-mapping snapshot, and four-horizon approval are
+   complete. Make scoring/publication a separate action. PS773 to
    Tedesco Auto Body remains ineligible because only 62 weeks remain after a
    multi-year coverage gap. Never infer a mapping or insurer alias from name
    similarity alone.
