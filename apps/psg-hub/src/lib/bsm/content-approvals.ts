@@ -9,7 +9,7 @@ import {
   type BsmContentApprovalWorkspaceOption,
   normalizeApprovalMimeType,
 } from "@/lib/bsm/content-approvals-shared";
-import { reviewWorkspaceStoragePath } from "@/lib/bsm/review-workspace-processing";
+import { classifyReviewWorkspaceFile, reviewWorkspaceStoragePath } from "@/lib/bsm/review-workspace-processing";
 
 export {
   BSM_CONTENT_APPROVALS_BUCKET,
@@ -275,14 +275,6 @@ async function loadReviewWorkspaceForAttachment(
     throw new ApprovalUploadInputError("Choose an active Review Workspace for this shop");
   }
   const currentRoundId = (project.current_round_id as string | null) ?? null;
-  const { data: round, error: roundError } = currentRoundId
-    ? await client
-        .from("bsm_content_review_rounds")
-        .select("id, status")
-        .eq("id", currentRoundId)
-        .maybeSingle()
-    : { data: null, error: null };
-  if (roundError) throw new Error(`Could not load Review Workspace round: ${roundError.message}`);
 
   if (input.actorRole !== "psg_superadmin") {
     const { data: collaborator, error: collaboratorError } = await client
@@ -302,7 +294,7 @@ async function loadReviewWorkspaceForAttachment(
     projectId: project.id as string,
     title: project.title as string,
     roundId: currentRoundId,
-    includeInCurrentRound: Boolean(currentRoundId && (!round || !["inviting", "active"].includes(round.status as string))),
+    includeInCurrentRound: false,
   };
 }
 
@@ -595,6 +587,9 @@ export async function createBsmContentApprovalUpload(
     actorProfileId,
     actorRole: input.actorRole,
   });
+  const processingPlan = workspace
+    ? classifyReviewWorkspaceFile({ fileName, contentType: file.mimeType, byteSize: input.byteSize })
+    : null;
   const path = approvalStoragePath({
     shopId,
     itemId,
@@ -610,6 +605,7 @@ export async function createBsmContentApprovalUpload(
         fileName,
       })
     : null;
+  const uploadPath = originalStoragePath ?? path;
   const position = workspace ? await nextWorkspaceDocumentPosition(client, workspace.projectId) : null;
 
   const { error: itemError } = await client.from("bsm_content_review_items").insert({
@@ -623,7 +619,7 @@ export async function createBsmContentApprovalUpload(
     content_type: file.contentType,
     source_kind: "uploaded_file",
     status: workspace?.includeInCurrentRound ? "in_review" : "draft",
-    processing_status: workspace ? "ready" : "pending",
+    processing_status: "pending",
     admin_context_note: contextNote,
     created_by_profile_id: actorProfileId,
     metadata_jsonb: workspace ? { reviewWorkspaceProjectId: workspace.projectId } : {},
@@ -638,8 +634,8 @@ export async function createBsmContentApprovalUpload(
       shop_id: shopId,
       version_number: 1,
       status: "current",
-      storage_bucket: BSM_CONTENT_APPROVALS_BUCKET,
-      storage_path: path,
+      storage_bucket: workspace ? null : BSM_CONTENT_APPROVALS_BUCKET,
+      storage_path: workspace ? null : path,
       original_storage_bucket: workspace ? BSM_CONTENT_APPROVALS_BUCKET : null,
       original_storage_path: originalStoragePath,
       original_filename: fileName,
@@ -651,9 +647,9 @@ export async function createBsmContentApprovalUpload(
       processed_storage_bucket: null,
       processed_storage_path: null,
       processed_content_type: null,
-      scan_status: "clean",
-      conversion_status: "not_needed",
-      sanitization_status: "not_needed",
+      scan_status: processingPlan?.scanStatus ?? "pending",
+      conversion_status: processingPlan?.conversionStatus ?? "not_needed",
+      sanitization_status: processingPlan?.sanitizationStatus ?? "not_needed",
       introduced_by_round_id: workspace?.includeInCurrentRound ? workspace.roundId : null,
       created_by_profile_id: actorProfileId,
     });
@@ -692,14 +688,14 @@ export async function createBsmContentApprovalUpload(
       version_id: versionId,
       event_type: "review_item_created",
       actor_profile_id: actorProfileId,
-      payload_jsonb: { title, storagePath: path, originalFilename: fileName },
+      payload_jsonb: { title, storagePath: uploadPath, originalFilename: fileName },
     });
     if (eventError) throw new Error(`Could not record review event: ${eventError.message}`);
 
     const storage = resolveStorage(deps);
     const uploadResult = await storage
       .from(BSM_CONTENT_APPROVALS_BUCKET)
-      .createSignedUploadUrl(path);
+      .createSignedUploadUrl(uploadPath);
     data = uploadResult.data;
     if (uploadResult.error || !data) {
       throw new Error(`Could not start upload: ${uploadResult.error?.message ?? "no upload URL returned"}`);
@@ -716,7 +712,7 @@ export async function createBsmContentApprovalUpload(
       customerProfileId,
       title,
       status: workspace?.includeInCurrentRound ? "in_review" : "draft",
-      processingStatus: workspace ? "ready" : "pending",
+      processingStatus: "pending",
       contentType: file.contentType,
       sourceKind: "uploaded_file",
       contextNote,
@@ -725,13 +721,13 @@ export async function createBsmContentApprovalUpload(
       fileName,
       mimeType: file.mimeType,
       byteSize: input.byteSize,
-      storagePath: path,
+      storagePath: uploadPath,
       previewType: file.contentType === "image" ? "image" : "file",
-      workspace: workspace ? { projectId: workspace.projectId, title: workspace.title, roundId: workspace.roundId } : null,
+      workspace: workspace ? { projectId: workspace.projectId, title: workspace.title, roundId: null } : null,
     }),
     upload: {
       bucket: BSM_CONTENT_APPROVALS_BUCKET,
-      path: data.path ?? path,
+      path: data.path ?? uploadPath,
       signedUrl: data.signedUrl,
       token: data.token,
     },
@@ -863,7 +859,7 @@ export async function createBsmGeneratedPageApproval(
       storagePath: null,
       previewType: "generated_page",
       sourceMetadata,
-      workspace: workspace ? { projectId: workspace.projectId, title: workspace.title, roundId: workspace.roundId } : null,
+      workspace: workspace ? { projectId: workspace.projectId, title: workspace.title, roundId: null } : null,
     }),
   };
 }
@@ -882,7 +878,7 @@ export async function updateBsmContentApproval(
 
   const { data: item, error: itemReadError } = await client
     .from("bsm_content_review_items")
-    .select("id, shop_id, customer_profile_id, title, status, content_type, project_id, current_version_id")
+    .select("id, shop_id, customer_profile_id, title, status, content_type, processing_status, project_id, current_version_id")
     .eq("id", itemId)
     .single();
   if (itemReadError || !item) throw new ApprovalUploadInputError("Review item not found");
@@ -909,6 +905,7 @@ export async function updateBsmContentApproval(
   let versionStoragePath: string | null = null;
   let versionPreviewType = "file";
   let contentType = (row.content_type as string | null) ?? "document";
+  let processingStatus = (row.processing_status as string | null) ?? "pending";
 
   if (versionId) {
     const { data: currentVersion } = await client
@@ -929,6 +926,9 @@ export async function updateBsmContentApproval(
   if (hasReplacementFile) {
     const fileName = normalizeApprovalFileName(input.fileName);
     const file = validateApprovalFile(input.contentType, input.byteSize, fileName);
+    const processingPlan = workspace
+      ? classifyReviewWorkspaceFile({ fileName, contentType: file.mimeType, byteSize: input.byteSize as number })
+      : null;
     versionId = randomUUID();
     const path = approvalStoragePath({
       shopId,
@@ -945,6 +945,7 @@ export async function updateBsmContentApproval(
           fileName,
         })
       : null;
+    const uploadPath = originalStoragePath ?? path;
 
     const { data: existingVersions, error: versionReadError } = await client
       .from("bsm_content_review_versions")
@@ -966,8 +967,8 @@ export async function updateBsmContentApproval(
       round_id: workspace?.includeInCurrentRound ? workspace.roundId : null,
       version_number: versionNumber,
       status: "current",
-      storage_bucket: BSM_CONTENT_APPROVALS_BUCKET,
-      storage_path: path,
+      storage_bucket: workspace ? null : BSM_CONTENT_APPROVALS_BUCKET,
+      storage_path: workspace ? null : path,
       original_storage_bucket: workspace ? BSM_CONTENT_APPROVALS_BUCKET : null,
       original_storage_path: originalStoragePath,
       original_filename: fileName,
@@ -977,9 +978,9 @@ export async function updateBsmContentApproval(
       processed_storage_bucket: null,
       processed_storage_path: null,
       processed_content_type: null,
-      scan_status: "clean",
-      conversion_status: "not_needed",
-      sanitization_status: "not_needed",
+      scan_status: processingPlan?.scanStatus ?? "pending",
+      conversion_status: processingPlan?.conversionStatus ?? "not_needed",
+      sanitization_status: processingPlan?.sanitizationStatus ?? "not_needed",
       introduced_by_round_id: workspace?.includeInCurrentRound ? workspace.roundId : null,
       created_by_profile_id: actorProfileId,
     });
@@ -997,22 +998,23 @@ export async function updateBsmContentApproval(
     const storage = resolveStorage(deps);
     const { data, error: uploadError } = await storage
       .from(BSM_CONTENT_APPROVALS_BUCKET)
-      .createSignedUploadUrl(path);
+      .createSignedUploadUrl(uploadPath);
     if (uploadError || !data) {
       throw new Error(`Could not start replacement upload: ${uploadError?.message ?? "no upload URL returned"}`);
     }
     upload = {
       bucket: BSM_CONTENT_APPROVALS_BUCKET,
-      path: data.path ?? path,
+      path: data.path ?? uploadPath,
       signedUrl: data.signedUrl,
       token: data.token,
     };
     versionFileName = fileName;
     versionMimeType = file.mimeType;
     versionByteSize = input.byteSize as number;
-    versionStoragePath = path;
+    versionStoragePath = uploadPath;
     versionPreviewType = file.contentType === "image" ? "image" : "file";
     contentType = file.contentType;
+    processingStatus = "pending";
   }
 
   const { error: updateError } = await client
@@ -1022,7 +1024,7 @@ export async function updateBsmContentApproval(
       admin_context_note: contextNote,
       current_version_id: versionId,
       content_type: contentType,
-      processing_status: workspace ? "ready" : "pending",
+      processing_status: processingStatus,
       updated_at: updatedAt,
     })
     .eq("id", itemId);
@@ -1045,7 +1047,7 @@ export async function updateBsmContentApproval(
       customerProfileId,
       title,
       status: row.status as string,
-      processingStatus: workspace ? "ready" : "pending",
+      processingStatus,
       contentType,
       sourceKind: "uploaded_file",
       contextNote,
@@ -1056,7 +1058,7 @@ export async function updateBsmContentApproval(
       byteSize: versionByteSize,
       storagePath: versionStoragePath,
       previewType: versionPreviewType,
-      workspace: workspace ? { projectId: workspace.projectId, title: workspace.title, roundId: workspace.roundId } : null,
+      workspace: workspace ? { projectId: workspace.projectId, title: workspace.title, roundId: null } : null,
     }),
     upload,
   };
@@ -1095,11 +1097,20 @@ export async function attachBsmContentApprovalToWorkspace(
 
   const { data: currentVersion, error: versionReadError } = await client
     .from("bsm_content_review_versions")
-    .select("id, original_filename, content_type, byte_size, storage_path, preview_type, source_metadata_jsonb")
+    .select("id, original_filename, content_type, byte_size, storage_bucket, storage_path, preview_type, source_metadata_jsonb")
     .eq("id", versionId)
     .maybeSingle();
   if (versionReadError || !currentVersion) throw new ApprovalUploadInputError("Review item version not found");
   const version = currentVersion as Record<string, unknown>;
+  const generatedPage = row.content_type === "generated_page";
+  const processingPlan = generatedPage
+    ? null
+    : classifyReviewWorkspaceFile({
+        fileName: String(version.original_filename ?? ""),
+        contentType: String(version.content_type ?? ""),
+        byteSize: Number(version.byte_size ?? 0),
+      });
+  const processingStatus = generatedPage ? "ready" : "pending";
   const position = await nextWorkspaceDocumentPosition(client, workspace.projectId);
   const updatedAt = new Date().toISOString();
 
@@ -1110,7 +1121,7 @@ export async function attachBsmContentApprovalToWorkspace(
       position,
       required: true,
       status: workspace.includeInCurrentRound ? "in_review" : "draft",
-      processing_status: "ready",
+      processing_status: processingStatus,
       metadata_jsonb: { reviewWorkspaceProjectId: workspace.projectId },
       updated_at: updatedAt,
     })
@@ -1123,6 +1134,14 @@ export async function attachBsmContentApprovalToWorkspace(
       project_id: workspace.projectId,
       round_id: workspace.includeInCurrentRound ? workspace.roundId : null,
       introduced_by_round_id: workspace.includeInCurrentRound ? workspace.roundId : null,
+      original_storage_bucket: generatedPage ? null : version.storage_bucket,
+      original_storage_path: generatedPage ? null : version.storage_path,
+      processed_storage_bucket: null,
+      processed_storage_path: null,
+      processed_content_type: null,
+      scan_status: processingPlan?.scanStatus ?? "clean",
+      conversion_status: processingPlan?.conversionStatus ?? "not_needed",
+      sanitization_status: processingPlan?.sanitizationStatus ?? "complete",
     })
     .eq("id", versionId);
   if (versionUpdateError) throw new Error(`Could not attach review version to Review Workspace: ${versionUpdateError.message}`);
@@ -1142,6 +1161,16 @@ export async function attachBsmContentApprovalToWorkspace(
       versionId,
       actorProfileId,
     });
+  } else {
+    const { error: eventError } = await client.from("bsm_content_review_events").insert({
+      shop_id: shopId,
+      review_item_id: itemId,
+      version_id: versionId,
+      event_type: "review_workspace_document_attached",
+      actor_profile_id: actorProfileId,
+      payload_jsonb: { projectId: workspace.projectId, roundId: null, queuedForNextRound: true },
+    });
+    if (eventError) throw new Error(`Could not record Review Workspace attachment: ${eventError.message}`);
   }
 
   return {
@@ -1151,7 +1180,7 @@ export async function attachBsmContentApprovalToWorkspace(
       customerProfileId,
       title: row.title as string,
       status: workspace.includeInCurrentRound ? "in_review" : "draft",
-      processingStatus: "ready",
+      processingStatus,
       contentType: row.content_type as string,
       sourceKind: row.content_type === "generated_page" ? "generated_page" : "uploaded_file",
       contextNote: (row.admin_context_note as string | null) ?? null,
@@ -1163,7 +1192,7 @@ export async function attachBsmContentApprovalToWorkspace(
       storagePath: (version.storage_path as string | null) ?? null,
       previewType: (version.preview_type as string | null) ?? "file",
       sourceMetadata: (version.source_metadata_jsonb as Record<string, unknown> | null) ?? {},
-      workspace: { projectId: workspace.projectId, title: workspace.title, roundId: workspace.roundId },
+      workspace: { projectId: workspace.projectId, title: workspace.title, roundId: null },
     }),
   };
 }
@@ -1216,7 +1245,7 @@ export async function listBsmContentApprovalWorkspaces(
     .from("bsm_content_review_projects")
     .select("id, shop_id, title, status, current_round_id")
     .is("deleted_at", null)
-    .in("status", ["draft", "processing", "ready", "active", "completed"])
+    .in("status", ["draft", "processing", "ready", "active", "completed", "closed_early"])
     .order("updated_at", { ascending: false })
     .limit(100);
   if (opts.shopId) query = query.eq("shop_id", opts.shopId);

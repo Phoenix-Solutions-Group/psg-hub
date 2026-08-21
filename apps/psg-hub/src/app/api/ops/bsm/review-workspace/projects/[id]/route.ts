@@ -4,9 +4,13 @@ import { NextResponse } from "next/server";
 import { requireOpsFn, requireSuperadmin } from "@/lib/auth/ops-access";
 import {
   ReviewWorkspaceInputError,
+  addStaffThreadReply,
   closeReviewWorkspaceRoundEarly,
   getStaffReviewWorkspaceResult,
   removeReviewWorkspaceProject,
+  revokeReviewWorkspaceInvitation,
+  setStaffThreadStatus,
+  updateReviewWorkspaceProject,
 } from "@/lib/bsm/review-workspace";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
@@ -58,11 +62,50 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  if (payload?.action !== "close_early") {
-    return NextResponse.json({ error: "action must be close_early" }, { status: 400 });
-  }
-
   try {
+    if (payload?.action === "update_workspace") {
+      const workspace = await updateReviewWorkspaceProject({
+        projectId: id,
+        title: payload.title as string,
+        description: payload.description as string | null | undefined,
+        actorProfileId: gate.userId,
+        actorRole: gate.access.role,
+      });
+      return NextResponse.json({ workspace }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (payload?.action === "revoke_invitation") {
+      const revocation = await revokeReviewWorkspaceInvitation({
+        projectId: id,
+        invitationId: payload.invitationId as string,
+        actorProfileId: gate.userId,
+        actorRole: gate.access.role,
+        reason: typeof payload.reason === "string" ? payload.reason : "",
+      });
+      return NextResponse.json({ revocation }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (payload?.action === "reply_thread") {
+      const comment = await addStaffThreadReply({
+        projectId: id,
+        threadId: payload.threadId as string,
+        body: payload.body as string,
+        actorProfileId: gate.userId,
+        actorRole: gate.access.role,
+      });
+      return NextResponse.json({ comment }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (payload?.action === "set_thread_status") {
+      const thread = await setStaffThreadStatus({
+        projectId: id,
+        threadId: payload.threadId as string,
+        status: payload.status as "open" | "resolved",
+        actorProfileId: gate.userId,
+        actorRole: gate.access.role,
+      });
+      return NextResponse.json({ thread }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (payload?.action !== "close_early") {
+      return NextResponse.json({ error: "Unsupported review workspace action" }, { status: 400 });
+    }
     const closure = await closeReviewWorkspaceRoundEarly({
       projectId: id,
       actorProfileId: gate.userId,
@@ -75,9 +118,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error(
-      "[ops/bsm/review-workspace/projects] close early failed:",
+      "[ops/bsm/review-workspace/projects] update failed:",
       error instanceof Error ? error.message : error,
     );
-    return NextResponse.json({ error: "Could not close the review round early." }, { status: 500 });
+    return NextResponse.json({ error: "Could not update the review workspace." }, { status: 500 });
   }
 }

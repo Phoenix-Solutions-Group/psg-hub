@@ -64,3 +64,4 @@ yarn-error.log*
 # NEVER commit. Used locally only to validate the in-hub importer (PSG-51).
 /docs/Filemaker Exports/
 /docs/psg/
+/.env.local

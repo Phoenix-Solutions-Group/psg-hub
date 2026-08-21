@@ -32,12 +32,13 @@ function adminClient() {
 
 async function ensureContentApprovalsShopOption() {
   const admin = adminClient();
-  let { data: shop, error: shopError } = await admin
+  const { data: existingShop, error: shopError } = await admin
     .from("shops")
     .select("id")
     .eq("slug", "riverside-collision")
     .maybeSingle();
   expect(shopError, shopError?.message).toBeNull();
+  let shop = existingShop;
   if (!shop) {
     const fallback = await admin
       .from("shops")
@@ -77,10 +78,10 @@ async function ensureContentApprovalsShopOption() {
   return shop!.id as string;
 }
 
-test("retired BSM review workspace route redirects to Content Approvals", async ({ page }) => {
+test("retired BSM review workspace route redirects to Review Workspace", async ({ page }) => {
   await page.goto("/ops/bsm-review-workspace");
-  await expect(page).toHaveURL(/\/ops\/bsm-content-approvals$/);
-  await expect(page.getByRole("heading", { name: "Content Approvals" })).toBeVisible();
+  await expect(page).toHaveURL(/\/ops\/bsm-content-approvals(?:\?.*)?$/);
+  await expect(page.getByRole("heading", { name: "Review Workspace", exact: true })).toBeVisible();
 });
 
 test("BSM content approvals release gate: admin creates, reviewer comments and submits once", async ({ page, context }) => {
@@ -90,7 +91,7 @@ test("BSM content approvals release gate: admin creates, reviewer comments and s
   const documentTitle = `Homepage release proof ${runId}`;
 
   await page.goto("/ops/bsm-content-approvals");
-  await expect(page.getByRole("heading", { name: "Content Approvals" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review Workspace", exact: true })).toBeVisible();
   await checkA11y(page, "bsm-content-approvals-admin-empty");
 
   const manualShopInput = page.locator("input#bsm-approval-shop");
@@ -98,32 +99,32 @@ test("BSM content approvals release gate: admin creates, reviewer comments and s
     await manualShopInput.fill(shopId);
   }
 
-  await page.getByLabel("Workspace title").fill(workspaceTitle);
-  await page.getByLabel("Reviewer instructions").fill("Confirm the homepage proof before customer release.");
-  await page.getByRole("button", { name: "Create workspace" }).click();
+  await page.getByLabel("Review name").fill(workspaceTitle);
+  await page.getByLabel(/Client instructions/).fill("Confirm the homepage proof before customer release.");
+  await page.getByRole("button", { name: "Continue to upload" }).click();
   await expect(page.getByText("The Review Workspace is ready for documents and reviewers.")).toBeVisible({
     timeout: 15_000,
   });
 
   await page.getByRole("button", { name: "Generated page" }).click();
-  await page.getByLabel("Review title").fill(documentTitle);
-  await page.getByLabel("Context note for the customer").fill("Confirm the homepage proof before customer release.");
-  await page.getByLabel("Generated page path").fill(`/generated/e2e/homepage-release-proof-${runId}`);
-  await page.getByLabel("Preview URL").fill(`https://example.com/generated/e2e/homepage-release-proof-${runId}`);
-  await page.getByRole("button", { name: "Attach", exact: true }).click();
-  await expect(page.getByText("The item is attached to the selected Review Workspace.")).toBeVisible({
-    timeout: 15_000,
-  });
+  await page.getByLabel("Proof title").fill(documentTitle);
+  await page.getByLabel("Note for the reviewer").fill("Confirm the homepage proof before customer release.");
+  await page.getByLabel("PSG page path").fill(`/generated/e2e/homepage-release-proof-${runId}`);
+  await page.getByLabel(/Preview URL/).fill(`https://example.com/generated/e2e/homepage-release-proof-${runId}`);
+  await page.getByRole("button", { name: "Add to review" }).click();
+  await expect(page.getByText(documentTitle).first()).toBeVisible({ timeout: 15_000 });
 
-  await page.getByLabel("Reviewer email").fill("reviewer@e2e.test");
-  await page.getByLabel("Reviewer name").fill("E2E Reviewer");
-  await page.getByRole("button", { name: "Add reviewer" }).click();
-  await page.getByRole("button", { name: "Start review" }).click();
+  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByLabel("Email", { exact: true }).fill("reviewer@e2e.test");
+  await page.getByLabel(/Name/).fill("E2E Reviewer");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button", { name: "Send review" }).click();
 
-  const inviteLink = page.getByRole("link", { name: /\/review-workspace\?invite=/ });
-  await expect(inviteLink).toBeVisible({ timeout: 15_000 });
-  const invitePath = await inviteLink.textContent();
-  const code = await page.getByText(/^\d{6}$/).last().textContent();
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.getByRole("button", { name: "Copy link and code" }).click();
+  const invitation = await page.evaluate(() => navigator.clipboard.readText());
+  const [invitePath, codeLine] = invitation.split("\n");
+  const code = codeLine?.match(/^One-time code: (\d{6})$/)?.[1] ?? null;
   expect(invitePath).toContain("/review-workspace?invite=");
   expect(code).toMatch(/^\d{6}$/);
   await screenshotEvidence(page, "bsm-content-approvals-admin");
@@ -137,23 +138,28 @@ test("BSM content approvals release gate: admin creates, reviewer comments and s
   await expect(reviewer.getByText(documentTitle).first()).toBeVisible();
   await checkA11y(reviewer, "bsm-review-workspace-reviewer-open");
 
-  await reviewer.getByRole("button", { name: "Submit review" }).click();
-  await expect(reviewer.getByText("Add at least one private comment before requesting changes.")).toBeVisible();
+  await reviewer.getByRole("button", { name: "Submit completed review" }).click();
+  await expect(reviewer.getByText(`Choose Approve or Request changes for ${documentTitle}.`)).toBeVisible();
 
+  await reviewer.getByLabel("Request changes").check();
+  await reviewer.getByRole("button", { name: "Place pin" }).click();
+  await reviewer.getByRole("button", { name: "Place comment pin on document" }).click({ position: { x: 260, y: 180 } });
   await reviewer.getByLabel("Private comment").fill("Please update the warranty offer wording before approval.");
-  await reviewer.getByRole("button", { name: "Add suggestion" }).click();
+  await reviewer.getByRole("button", { name: "Save private comment" }).click();
   await expect(reviewer.getByText("Please update the warranty offer wording before approval.")).toBeVisible();
-  await reviewer.getByLabel("Decision note").fill("The page is close, but the warranty offer needs clearer wording.");
-  await reviewer.getByRole("button", { name: "Submit review" }).click();
+  await reviewer.getByLabel("Decision note for this document").fill("The page is close, but the warranty offer needs clearer wording.");
+  await reviewer.getByRole("button", { name: "Submit completed review" }).click();
 
   await expect(reviewer.getByText("Read-only after submit")).toBeVisible({ timeout: 15_000 });
-  await expect(reviewer.getByRole("button", { name: "Submit review" })).toHaveCount(0);
+  await expect(reviewer.getByRole("button", { name: "Submit completed review" })).toHaveCount(0);
   await screenshotEvidence(reviewer, "bsm-review-workspace-reviewer-submitted");
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Content Approvals" })).toBeVisible();
-  const resultRow = page.getByRole("row", { name: new RegExp(documentTitle) });
-  await expect(resultRow.getByText("changes requested")).toBeVisible({ timeout: 15_000 });
-  await expect(resultRow.getByText("1 comments")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review Workspace", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Open review workspace" }).click();
+  await expect(page.getByText("Review notes", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Please update the warranty offer wording before approval.").first()).toBeVisible();
+  await expect(page.getByText("changes requested", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("The page is close, but the warranty offer needs clearer wording.").first()).toBeVisible();
   await checkA11y(page, "bsm-content-approvals-admin-result");
 });

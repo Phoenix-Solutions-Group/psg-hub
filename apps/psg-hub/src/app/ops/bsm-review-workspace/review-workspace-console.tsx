@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle, ClipboardList, Eye, FileUp, Plus, Trash2 } from "lucide-react";
+import { CheckCircle, ClipboardList, Eye, FileUp, Plus, RotateCcw, Send, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +26,7 @@ type WorkspaceResult = {
   documents: Array<{
     itemId: string;
     versionId: string | null;
+    versionNumber: number | null;
     title: string;
     processingStatus: string;
     status: string;
@@ -39,8 +40,26 @@ type WorkspaceResult = {
       sourceUrl: string | null;
     } | null;
   }>;
-  submittedComments: Array<{ id: string; body: string; pinNumber: number | null; draftStatus: string }>;
-  decisions: Array<{ id: string; reviewItemId: string; decision: string; message: string | null; submittedAt: string | null }>;
+  submittedComments: Array<{
+    id: string;
+    invitationId: string | null;
+    reviewItemId: string;
+    versionId: string | null;
+    versionNumber: number | null;
+    roundId: string | null;
+    threadId: string;
+    body: string;
+    commentKind: "pin" | "highlight" | "clarification_reply" | "psg_reply" | "system_note";
+    pinNumber: number | null;
+    threadStatus: string;
+    draftStatus: string;
+    authorRole: "client" | "psg";
+    authorDisplayName: string;
+    createdAt: string | null;
+    selection: { text: string } | null;
+  }>;
+  decisions: Array<{ id: string; reviewItemId: string; versionId: string | null; versionNumber: number | null; roundId: string | null; decision: string; message: string | null; actorDisplayName: string; submittedAt: string | null }>;
+  activity: Array<{ id: string; eventType: string; reviewItemId: string | null; versionId: string | null; versionNumber: number | null; actorDisplayName: string; createdAt: string | null }>;
 };
 
 export function ReviewWorkspaceConsole({
@@ -86,7 +105,14 @@ export function ReviewWorkspaceConsole({
   const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>(initialWorkspaces);
   const [activeProjectId, setActiveProjectId] = useState(initialWorkspaces[0]?.id ?? "");
   const [result, setResult] = useState<WorkspaceResult | null>(null);
+  const [threadReplies, setThreadReplies] = useState<Record<string, string>>({});
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeProjectId) ?? null;
+  const commentThreads = useMemo(() => {
+    if (!result) return [];
+    return result.submittedComments
+      .filter((comment) => comment.commentKind === "pin" || comment.commentKind === "highlight")
+      .map((root) => ({ root, replies: result.submittedComments.filter((comment) => comment.threadId === root.threadId && comment.id !== root.id) }));
+  }, [result]);
 
   const inviteUrl = useMemo(
     () => slice ? `/review-workspace?invite=${encodeURIComponent(slice.inviteToken)}` : "",
@@ -163,6 +189,49 @@ export function ReviewWorkspaceConsole({
       setResult(body.result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the review result.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function replyToThread(threadId: string) {
+    if (!result) return;
+    const body = threadReplies[threadId]?.trim();
+    if (!body) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/ops/bsm/review-workspace/projects/${result.project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reply_thread", threadId, body }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error ?? "Could not post the PSG reply.");
+      setThreadReplies((current) => ({ ...current, [threadId]: "" }));
+      await loadResult(result.project.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not post the PSG reply.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function setThreadStatus(threadId: string, status: "open" | "resolved") {
+    if (!result) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/ops/bsm/review-workspace/projects/${result.project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set_thread_status", threadId, status }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error ?? "Could not update the comment thread.");
+      await loadResult(result.project.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update the comment thread.");
     } finally {
       setPending(false);
     }
@@ -356,7 +425,7 @@ export function ReviewWorkspaceConsole({
         <Card>
           <CardHeader>
             <CardTitle>Review result</CardTitle>
-            <CardDescription>Staff can inspect reviewer comments and decisions after submission.</CardDescription>
+            <CardDescription>Discuss current feedback and retain the version-bound comment, decision, and activity history.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {result ? (
@@ -375,7 +444,7 @@ export function ReviewWorkspaceConsole({
                         <ClipboardList className="size-4" aria-hidden="true" />
                         {doc.title}
                       </div>
-                      <div className="mt-1 text-xs text-muted-foreground">{doc.processingStatus} · {doc.status}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">Version {doc.versionNumber ?? "current"} · {doc.processingStatus} · {doc.status}</div>
                       {doc.proofContent ? (
                         <div className="mt-3 rounded-md border border-border bg-background p-3">
                           <div className="text-xs font-semibold uppercase text-ember">{doc.proofContent.eyebrow}</div>
@@ -386,12 +455,39 @@ export function ReviewWorkspaceConsole({
                     </div>
                   ))}
                 </div>
-                {result.submittedComments.map((comment) => (
-                  <div key={comment.id} className="rounded-md border border-border bg-muted/30 p-3 text-sm">
-                    <div className="font-medium">Pin {comment.pinNumber ?? "-"}</div>
-                    <p className="mt-1">{comment.body}</p>
-                  </div>
-                ))}
+                {commentThreads.map(({ root, replies }) => {
+                  const document = result.documents.find((item) => item.itemId === root.reviewItemId);
+                  const resolved = root.threadStatus === "resolved";
+                  const canMutate = Boolean(result.round && root.roundId === result.round.id && (result.round.status === "active" || result.round.status === "inviting"));
+                  return (
+                    <div key={root.id} className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-medium">{root.commentKind === "highlight" ? "Highlight" : "Pin"} {root.pinNumber ?? "-"} · {document?.title ?? "Review document"} · Version {root.versionNumber ?? "current"}</div>
+                        <Badge variant="secondary">{resolved ? "Resolved" : "Open"}</Badge>
+                      </div>
+                      {root.selection ? <p className="mt-2 border-l-2 border-warning pl-2 text-xs italic text-muted-foreground">“{root.selection.text}”</p> : null}
+                      <p className="mt-2">{root.body}</p>
+                      <div className="mt-1 text-xs text-muted-foreground">{root.authorDisplayName}{root.createdAt ? ` · ${new Date(root.createdAt).toLocaleString()}` : ""}</div>
+                      {replies.map((reply) => (
+                        <div key={reply.id} className="mt-3 border-l-2 border-border pl-3">
+                          <p>{reply.body}</p>
+                          <div className="mt-1 text-xs text-muted-foreground">{reply.authorDisplayName}{reply.createdAt ? ` · ${new Date(reply.createdAt).toLocaleString()}` : ""}</div>
+                        </div>
+                      ))}
+                      {canMutate ? <div className="mt-3 space-y-2 border-t border-border pt-3">
+                        <Label htmlFor={`staff-thread-reply-${root.threadId}`}>PSG reply</Label>
+                        <div className="flex gap-2">
+                          <Input id={`staff-thread-reply-${root.threadId}`} value={threadReplies[root.threadId] ?? ""} onChange={(event) => setThreadReplies((current) => ({ ...current, [root.threadId]: event.target.value }))} placeholder="Reply to the client" />
+                          <Button type="button" variant="outline" onClick={() => replyToThread(root.threadId)} disabled={pending || !threadReplies[root.threadId]?.trim()}><Send className="size-4" aria-hidden="true" /><span className="sr-only">Post PSG reply</span></Button>
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setThreadStatus(root.threadId, resolved ? "open" : "resolved")} disabled={pending}>
+                          {resolved ? <RotateCcw className="size-4" aria-hidden="true" /> : <CheckCircle className="size-4" aria-hidden="true" />}
+                          {resolved ? "Reopen comment" : "Resolve comment"}
+                        </Button>
+                      </div> : null}
+                    </div>
+                  );
+                })}
                 {result.decisions.map((decision) => (
                   <div key={decision.id} className="rounded-md border border-success/30 bg-success/10 p-3 text-sm">
                     <div className="flex items-center gap-2 font-medium">
@@ -399,8 +495,23 @@ export function ReviewWorkspaceConsole({
                       {decision.decision.replace("_", " ")}
                     </div>
                     {decision.message ? <p className="mt-1">{decision.message}</p> : null}
+                    <div className="mt-1 text-xs text-muted-foreground">Version {decision.versionNumber ?? "current"} · {decision.actorDisplayName}{decision.submittedAt ? ` · ${new Date(decision.submittedAt).toLocaleString()}` : ""}</div>
                   </div>
                 ))}
+                {result.activity.length ? (
+                  <div className="space-y-2 border-t border-border pt-4">
+                    <div className="font-heading text-sm font-semibold">Review activity</div>
+                    {result.activity.map((event) => (
+                      <div key={event.id} className="flex items-start justify-between gap-3 rounded-md border border-border p-3 text-xs">
+                        <div>
+                          <div className="font-medium capitalize">{event.eventType.replace("review_workspace_", "").replaceAll("_", " ")}</div>
+                          <div className="mt-1 text-muted-foreground">{event.actorDisplayName} · Version {event.versionNumber ?? "workspace"}</div>
+                        </div>
+                        <time className="shrink-0 text-muted-foreground">{event.createdAt ? new Date(event.createdAt).toLocaleString() : "Time unavailable"}</time>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </>
             ) : (
               <p className="text-sm text-muted-foreground">No submitted review has been refreshed yet.</p>

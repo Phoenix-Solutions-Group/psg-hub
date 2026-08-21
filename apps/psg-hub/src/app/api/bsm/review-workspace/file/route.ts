@@ -45,7 +45,7 @@ export async function GET(request: Request): Promise<Response> {
         "Cache-Control": "private, no-store",
         "Content-Security-Policy":
           file.contentType === "text/html"
-            ? "sandbox; default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; font-src data:;"
+            ? "sandbox allow-same-origin; default-src 'none'; script-src 'none'; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'; img-src https: data: blob:; style-src 'unsafe-inline'; font-src data:;"
             : "default-src 'none'",
         "X-Content-Type-Options": "nosniff",
       },

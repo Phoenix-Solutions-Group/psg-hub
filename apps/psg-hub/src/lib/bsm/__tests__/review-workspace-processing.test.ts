@@ -6,6 +6,7 @@ import {
   inspectHtmlSafety,
   inspectHtmlZipManifest,
   isReviewCopySafeForReviewer,
+  processReviewFileInSandbox,
   recordReviewWorkspaceProcessingResult,
   reviewWorkspaceStoragePath,
 } from "@/lib/bsm/review-workspace-processing";
@@ -66,12 +67,192 @@ describe("review workspace processing contract", () => {
       sanitizationStatus: "pending",
     });
 
-    expect(() => classifyReviewWorkspaceFile({ fileName: "image.png", contentType: "image/png", byteSize: 1024 })).toThrow(
-      "Unsupported file type",
+    expect(classifyReviewWorkspaceFile({ fileName: "image.png", contentType: "image/png", byteSize: 1024 })).toMatchObject({
+      fileKind: "image",
+      normalizedMimeType: "image/png",
+      requiredCapabilities: ["malware_scan", "safe_passthrough"],
+    });
+    expect(classifyReviewWorkspaceFile({ fileName: "notes.md", contentType: "text/markdown", byteSize: 1024 })).toMatchObject({
+      fileKind: "text",
+      normalizedMimeType: "text/plain",
+      requiredCapabilities: ["malware_scan", "safe_passthrough"],
+    });
+    expect(() => classifyReviewWorkspaceFile({ fileName: "huge.pdf", contentType: "application/pdf", byteSize: 26 * 1024 * 1024 })).toThrow(
+      "25 MB",
     );
-    expect(() => classifyReviewWorkspaceFile({ fileName: "huge.pdf", contentType: "application/pdf", byteSize: 101 * 1024 * 1024 })).toThrow(
-      "100 MB",
+  });
+
+  it("scans PDFs in an isolated network-locked sandbox and returns the clean review copy", async () => {
+    const commands: Array<{ cmd: string; args?: string[] }> = [];
+    let locked = false;
+    let stopped = false;
+    const source = Buffer.from("%PDF-1.7 clean proof");
+    const sandbox = {
+      name: "sandbox-clean-pdf",
+      fs: {
+        mkdir: async () => undefined,
+        writeFile: async () => undefined,
+        readFile: async () => Buffer.alloc(0),
+      },
+      async runCommand(input: { cmd: string; args?: string[] }) {
+        commands.push(input);
+        return {
+          exitCode: 0,
+          stdout: async () => input.args?.includes("--version") ? "ClamAV 1.5.2" : "",
+          stderr: async () => "",
+        };
+      },
+      async updateNetworkPolicy() {
+        locked = true;
+      },
+      async stop() {
+        stopped = true;
+      },
+    };
+
+    const result = await processReviewFileInSandbox(
+      { fileName: "proof.pdf", contentType: "application/pdf", data: source },
+      { createSandbox: async () => sandbox },
     );
+
+    expect(result.data).toEqual(source);
+    expect(result.scanEngine).toBe("ClamAV 1.5.2");
+    expect(result.converter).toBeNull();
+    expect(commands.some((command) => command.cmd === "dnf")).toBe(true);
+    expect(commands.some((command) => command.cmd.includes("soffice"))).toBe(false);
+    expect(locked).toBe(true);
+    expect(stopped).toBe(true);
+  });
+
+  it("converts DOCX files to an inert PDF after the malware scan", async () => {
+    const commands: Array<{ cmd: string; args?: string[] }> = [];
+    const converted = Buffer.from("%PDF converted review copy");
+    const sandbox = {
+      name: "sandbox-docx",
+      fs: {
+        mkdir: async () => undefined,
+        writeFile: async () => undefined,
+        readFile: async () => converted,
+      },
+      async runCommand(input: { cmd: string; args?: string[] }) {
+        commands.push(input);
+        return {
+          exitCode: 0,
+          stdout: async () => input.args?.includes("--version")
+            ? input.cmd.includes("soffice") ? "LibreOffice 26.2.5" : "ClamAV 1.5.2"
+            : "",
+          stderr: async () => "",
+        };
+      },
+      async updateNetworkPolicy() {},
+      async stop() {},
+    };
+
+    const result = await processReviewFileInSandbox(
+      {
+        fileName: "brief.docx",
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        data: Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0]),
+      },
+      { createSandbox: async () => sandbox },
+    );
+
+    expect(result.data).toEqual(converted);
+    expect(result.converter).toBe("LibreOffice 26.2.5");
+    expect(commands.some((command) =>
+      command.cmd === "bash" &&
+      command.args?.[1]?.includes("LibreOffice_26.2.5") &&
+      command.args[1].includes("libXinerama nss"),
+    )).toBe(true);
+    expect(commands.some((command) => command.cmd.includes("soffice") && command.args?.includes("--convert-to"))).toBe(true);
+  });
+
+  it("returns safe HTML unchanged for native sandboxed rendering after the malware scan", async () => {
+    const commands: Array<{ cmd: string; args?: string[] }> = [];
+    let locked = false;
+    let stopped = false;
+    const source = Buffer.from("<!doctype html><style>main{color:#c2410c}</style><main>Review proof</main>");
+    const sandbox = {
+      name: "sandbox-clean-html",
+      fs: {
+        mkdir: async () => undefined,
+        writeFile: async () => undefined,
+        readFile: async () => Buffer.alloc(0),
+      },
+      async runCommand(input: { cmd: string; args?: string[] }) {
+        commands.push(input);
+        return {
+          exitCode: 0,
+          stdout: async () => input.args?.includes("--version") ? "ClamAV 1.5.2" : "",
+          stderr: async () => "",
+        };
+      },
+      async updateNetworkPolicy() {
+        locked = true;
+      },
+      async stop() {
+        stopped = true;
+      },
+    };
+
+    const result = await processReviewFileInSandbox(
+      { fileName: "proof.html", contentType: "text/html", data: source },
+      { createSandbox: async () => sandbox },
+    );
+
+    expect(result).toMatchObject({ data: source, contentType: "text/html", converter: null });
+    expect(commands.some((command) => command.cmd === "bash" || command.cmd.includes("soffice"))).toBe(false);
+    expect(locked).toBe(true);
+    expect(stopped).toBe(true);
+  });
+
+  it("returns a valid image unchanged after the malware scan", async () => {
+    const source = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+    const sandbox = {
+      name: "sandbox-clean-image",
+      fs: { mkdir: async () => undefined, writeFile: async () => undefined, readFile: async () => Buffer.alloc(0) },
+      async runCommand(input: { args?: string[] }) {
+        return { exitCode: 0, stdout: async () => input.args?.includes("--version") ? "ClamAV 1.5.2" : "", stderr: async () => "" };
+      },
+      async updateNetworkPolicy() {},
+      async stop() {},
+    };
+
+    const result = await processReviewFileInSandbox(
+      { fileName: "proof.png", contentType: "image/png", data: source },
+      { createSandbox: async () => sandbox },
+    );
+
+    expect(result).toMatchObject({ data: source, contentType: "image/png", converter: null });
+  });
+
+  it("allows email-style HTML with HTTPS images and links", () => {
+    expect(inspectHtmlSafety(`
+      <img src="https://images.example.com/team.jpg" alt="Team">
+      <a href="https://www.example.com">Visit our website</a>
+    `)).toEqual({
+      ok: true,
+      warnings: ["HTTPS images and links are rendered inside the restricted review frame."],
+    });
+  });
+
+  it("rejects active HTML before provisioning a sandbox", async () => {
+    let created = false;
+    await expect(processReviewFileInSandbox(
+      { fileName: "unsafe.html", contentType: "text/html", data: Buffer.from("<script>alert(1)</script>") },
+      { createSandbox: async () => {
+        created = true;
+        throw new Error("should not create");
+      } },
+    )).rejects.toThrow("active or unsafe content");
+    expect(created).toBe(false);
+  });
+
+  it("rejects renamed files whose bytes do not match the selected document type", async () => {
+    await expect(processReviewFileInSandbox(
+      { fileName: "not-really.pdf", contentType: "application/pdf", data: Buffer.from("MZ executable") },
+      { createSandbox: async () => { throw new Error("should not create"); } },
+    )).rejects.toThrow("does not match its PDF type");
   });
 
   it("builds private v2 storage paths with separate original and review-copy artifacts", () => {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  filterCleanDemoCompanies,
+  filterCleanDemoShops,
   filterInternalDemoUsers,
   isInternalDemoUser,
 } from "@/lib/ops/demo-user-filter";
@@ -43,5 +45,21 @@ describe("demo user filter", () => {
     ];
 
     expect(filterInternalDemoUsers(users)).toEqual(users.slice(0, 2));
+  });
+
+  it("shows the seeded BSM shop to the local clean-demo operator", () => {
+    const env = { NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54351" };
+    const shops = [
+      { id: "riverside", name: "Riverside Collision", slug: "riverside-collision" },
+      { id: "local", name: "BSM Demo Collision Center", slug: "bsm-demo-collision-center" },
+      { id: "test", name: "E2E Multi Shop A", slug: "e2e-multi-shop-a" },
+    ];
+
+    expect(filterCleanDemoShops(shops, "ops-staff@e2e.test", env)).toEqual([shops[1]]);
+    expect(filterCleanDemoCompanies(
+      shops.map((shop) => ({ name: shop.name })),
+      "ops-staff@e2e.test",
+      env,
+    )).toEqual([{ name: "BSM Demo Collision Center" }]);
   });
 });

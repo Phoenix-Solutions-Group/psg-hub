@@ -4,7 +4,7 @@ import { BSM_CONTENT_APPROVALS_BUCKET } from "@/lib/bsm/content-approvals-shared
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SAFE_SEGMENT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/;
-const MAX_REVIEW_WORKSPACE_FILE_BYTES = 100 * 1024 * 1024;
+const MAX_REVIEW_WORKSPACE_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_HTML_BYTES = 15 * 1024 * 1024;
 const MAX_HTML_ZIP_ENTRIES = 250;
 const MAX_HTML_ZIP_EXPANDED_BYTES = 100 * 1024 * 1024;
@@ -12,7 +12,7 @@ const MAX_ZIP_EXPANSION_RATIO = 20;
 
 export const REVIEW_WORKSPACE_PROCESSING_CONTRACT_VERSION = 1;
 
-export type ReviewWorkspaceFileKind = "pdf" | "doc" | "docx" | "html" | "html_zip";
+export type ReviewWorkspaceFileKind = "pdf" | "doc" | "docx" | "html" | "image" | "text" | "html_zip";
 export type ReviewWorkspaceArtifactKind =
   | "original"
   | "quarantine"
@@ -32,7 +32,7 @@ export type ScanStatus = "pending" | "clean" | "infected" | "failed";
 export type ConversionStatus = "not_needed" | "pending" | "complete" | "failed" | "blocked_runtime";
 export type SanitizationStatus = "not_needed" | "pending" | "complete" | "failed";
 
-export type ProcessingCapability = "malware_scan" | "pdf_passthrough" | "doc_to_pdf" | "html_sanitize" | "html_zip_inspect";
+export type ProcessingCapability = "malware_scan" | "pdf_passthrough" | "safe_passthrough" | "doc_to_pdf" | "html_sanitize" | "html_zip_inspect";
 
 export type ReviewWorkspaceFilePlan = {
   fileKind: ReviewWorkspaceFileKind;
@@ -45,7 +45,7 @@ export type ReviewWorkspaceFilePlan = {
   scanStatus: ScanStatus;
   conversionStatus: ConversionStatus;
   sanitizationStatus: SanitizationStatus;
-  reviewCopyExpectation: "original_pdf_after_clean_scan" | "converted_pdf" | "sanitized_static_html";
+  reviewCopyExpectation: "original_pdf_after_clean_scan" | "original_file_after_clean_scan" | "converted_pdf" | "sanitized_static_html";
 };
 
 export type HtmlSafetyFinding = {
@@ -125,7 +125,7 @@ export function classifyReviewWorkspaceFile(input: {
     throw new ReviewWorkspaceProcessingError("The selected file is empty");
   }
   if (byteSize > MAX_REVIEW_WORKSPACE_FILE_BYTES) {
-    throw new ReviewWorkspaceProcessingError("The file is too large for the 100 MB review-workspace processing limit");
+    throw new ReviewWorkspaceProcessingError("The file is too large for the 25 MB review-workspace processing limit");
   }
 
   const detectedFileKind =
@@ -137,12 +137,16 @@ export function classifyReviewWorkspaceFile(input: {
           ? "docx"
           : extension === "html" || extension === "htm" || mime === "text/html"
             ? "html"
+            : ["png", "jpg", "jpeg", "webp"].includes(extension) || ["image/png", "image/jpeg", "image/webp"].includes(mime)
+              ? "image"
+              : ["md", "markdown", "txt"].includes(extension) || mime === "text/markdown" || mime === "text/plain"
+                ? "text"
             : extension === "zip" || mime === "application/zip" || mime === "application/x-zip-compressed"
               ? "html_zip"
               : null;
 
   if (!detectedFileKind) {
-    throw new ReviewWorkspaceProcessingError("Unsupported file type. Use PDF, DOC, DOCX, HTML, or an HTML ZIP package.");
+    throw new ReviewWorkspaceProcessingError("Unsupported file type. Use PDF, image, Markdown, text, DOC, DOCX, HTML, or an HTML ZIP package.");
   }
   const fileKind: ReviewWorkspaceFileKind = detectedFileKind;
 
@@ -193,6 +197,31 @@ export function classifyReviewWorkspaceFile(input: {
       reviewCopyExpectation: "sanitized_static_html",
     };
   }
+  if (fileKind === "image") {
+    const normalizedMimeType = extension === "png" || mime === "image/png"
+      ? "image/png"
+      : extension === "webp" || mime === "image/webp"
+        ? "image/webp"
+        : "image/jpeg";
+    return {
+      ...common,
+      normalizedMimeType,
+      requiredCapabilities: ["malware_scan", "safe_passthrough"],
+      conversionStatus: "not_needed",
+      sanitizationStatus: "not_needed",
+      reviewCopyExpectation: "original_file_after_clean_scan",
+    };
+  }
+  if (fileKind === "text") {
+    return {
+      ...common,
+      normalizedMimeType: "text/plain",
+      requiredCapabilities: ["malware_scan", "safe_passthrough"],
+      conversionStatus: "not_needed",
+      sanitizationStatus: "not_needed",
+      reviewCopyExpectation: "original_file_after_clean_scan",
+    };
+  }
   return {
     ...common,
     normalizedMimeType: "application/zip",
@@ -224,6 +253,7 @@ export function reviewWorkspaceStoragePath(input: {
 export function inspectHtmlSafety(html: string): UnsafeFileGateResult {
   const findings: HtmlSafetyFinding[] = [];
   const text = html.toLowerCase();
+  const hasExternalReferences = /(href|src|srcset)\s*=\s*["']?\s*https?:\/\//i.test(html);
   if (/<\s*script\b/i.test(html)) findings.push({ code: "script", detail: "script tag" });
   if (/\son[a-z]+\s*=/i.test(html)) findings.push({ code: "event_handler", detail: "inline event handler" });
   if (/<\s*form\b/i.test(html)) findings.push({ code: "form", detail: "form element" });
@@ -233,13 +263,18 @@ export function inspectHtmlSafety(html: string): UnsafeFileGateResult {
   if (/(href|src|srcset|action)\s*=\s*["']?\s*(javascript:|data:|vbscript:)/i.test(html)) {
     findings.push({ code: "unsafe_url", detail: "unsafe URL protocol" });
   }
-  if (/(href|src|srcset|action)\s*=\s*["']?\s*https?:\/\//i.test(html) || text.includes("@import url(")) {
-    findings.push({ code: "external_url", detail: "external network reference" });
+  if (/action\s*=\s*["']?\s*https?:\/\//i.test(html) || text.includes("@import url(")) {
+    findings.push({ code: "external_url", detail: "active external network reference" });
   }
   if (findings.length > 0) {
-    return { ok: false, code: "unsafe_html", message: "HTML contains active or external content", findings };
+    return { ok: false, code: "unsafe_html", message: "HTML contains active or unsafe content", findings };
   }
-  return { ok: true, warnings: [] };
+  return {
+    ok: true,
+    warnings: hasExternalReferences
+      ? ["HTTPS images and links are rendered inside the restricted review frame."]
+      : [],
+  };
 }
 
 export function inspectHtmlZipManifest(entries: HtmlZipEntry[]): UnsafeFileGateResult {
@@ -364,4 +399,318 @@ export async function recordReviewWorkspaceProcessingResult(
     .eq("id", assertUuid("reviewItemId", input.reviewItemId))
     .eq("shop_id", input.shopId);
   if (itemError) throw new Error(`Could not update review item processing result: ${itemError.message}`);
+}
+
+type SandboxCommandResult = {
+  exitCode: number;
+  stdout(): Promise<string>;
+  stderr(): Promise<string>;
+};
+
+export type ReviewWorkspaceSandbox = {
+  name: string;
+  fs: {
+    writeFile(path: string, data: Buffer | Uint8Array): Promise<void>;
+    readFile(path: string): Promise<Buffer>;
+    mkdir(path: string, options?: { recursive?: boolean }): Promise<string | undefined>;
+  };
+  runCommand(input: {
+    cmd: string;
+    args?: string[];
+    sudo?: boolean;
+    timeoutMs?: number;
+  }): Promise<SandboxCommandResult>;
+  updateNetworkPolicy(policy: "deny-all"): Promise<unknown>;
+  stop(): Promise<unknown>;
+};
+
+export type ReviewWorkspaceSandboxResult = {
+  data: Buffer;
+  contentType: string;
+  scanEngine: string;
+  converter: string | null;
+  sandboxId: string;
+};
+
+const LIBREOFFICE_VERSION = "26.2.5";
+const LIBREOFFICE_ARCHIVE = `LibreOffice_${LIBREOFFICE_VERSION}_Linux_x86-64_rpm.tar.gz`;
+const LIBREOFFICE_URL = `https://download.documentfoundation.org/libreoffice/stable/${LIBREOFFICE_VERSION}/rpm/x86_64/${LIBREOFFICE_ARCHIVE}`;
+
+function assertExpectedFileSignature(plan: ReviewWorkspaceFilePlan, data: Buffer): void {
+  const prefix = data.subarray(0, 8);
+  const matches = plan.fileKind === "pdf"
+    ? prefix.subarray(0, 5).toString("ascii") === "%PDF-"
+    : plan.fileKind === "doc"
+      ? prefix.equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))
+      : plan.fileKind === "docx"
+        ? prefix[0] === 0x50 && prefix[1] === 0x4b
+        : plan.fileKind === "image" && plan.normalizedMimeType === "image/png"
+          ? prefix.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+          : plan.fileKind === "image" && plan.normalizedMimeType === "image/jpeg"
+            ? prefix[0] === 0xff && prefix[1] === 0xd8 && prefix[2] === 0xff
+            : plan.fileKind === "image" && plan.normalizedMimeType === "image/webp"
+              ? prefix.subarray(0, 4).toString("ascii") === "RIFF" && data.subarray(8, 12).toString("ascii") === "WEBP"
+              : plan.fileKind === "text"
+                ? !data.includes(0)
+                : true;
+  if (!matches) throw new ReviewWorkspaceProcessingError(`The uploaded file content does not match its ${plan.fileKind.toUpperCase()} type`);
+}
+
+async function commandOutput(result: SandboxCommandResult): Promise<string> {
+  return (await result.stdout()).trim();
+}
+
+async function requireSuccessfulCommand(
+  sandbox: ReviewWorkspaceSandbox,
+  input: Parameters<ReviewWorkspaceSandbox["runCommand"]>[0],
+  label: string,
+): Promise<SandboxCommandResult> {
+  const result = await sandbox.runCommand(input);
+  if (result.exitCode !== 0) {
+    const error = (await result.stderr()).trim();
+    throw new ReviewWorkspaceProcessingError(`${label} failed${error ? `: ${error.slice(-600)}` : ""}`);
+  }
+  return result;
+}
+
+export async function processReviewFileInSandbox(
+  input: { fileName: string; contentType: string; data: Buffer },
+  deps: { createSandbox?: () => Promise<ReviewWorkspaceSandbox> } = {},
+): Promise<ReviewWorkspaceSandboxResult> {
+  const plan = classifyReviewWorkspaceFile({
+    fileName: input.fileName,
+    contentType: input.contentType,
+    byteSize: input.data.byteLength,
+  });
+  if (plan.fileKind === "html_zip") {
+    throw new ReviewWorkspaceProcessingError("HTML ZIP packages are not supported in this review workspace");
+  }
+  assertExpectedFileSignature(plan, input.data);
+  if (plan.fileKind === "html") {
+    const safety = inspectHtmlSafety(input.data.toString("utf8"));
+    if (!safety.ok) throw new ReviewWorkspaceProcessingError(safety.message);
+  }
+
+  const createSandbox = deps.createSandbox ?? (async () => {
+    const { Sandbox } = await import("@vercel/sandbox");
+    return await Sandbox.create({ runtime: "node24", timeout: 290_000, networkPolicy: "allow-all" }) as ReviewWorkspaceSandbox;
+  });
+  const sandbox = await createSandbox();
+  const extension = extensionOf(input.fileName);
+  const inputPath = `/vercel/sandbox/input/source.${extension}`;
+  const outputPath = "/vercel/sandbox/output/source.pdf";
+
+  try {
+    await sandbox.fs.mkdir("/vercel/sandbox/input", { recursive: true });
+    await sandbox.fs.mkdir("/vercel/sandbox/output", { recursive: true });
+    await sandbox.fs.writeFile(inputPath, input.data);
+
+    await requireSuccessfulCommand(
+      sandbox,
+      { cmd: "dnf", args: ["install", "-y", "clamav1.5", "clamav1.5-data"], sudo: true, timeoutMs: 120_000 },
+      "Malware scanner installation",
+    );
+
+    if (plan.fileKind === "doc" || plan.fileKind === "docx") {
+      const installScript = [
+        `curl --fail --location --silent --show-error '${LIBREOFFICE_URL}' -o /tmp/${LIBREOFFICE_ARCHIVE}`,
+        "rm -rf /tmp/libreoffice-rpms",
+        "mkdir -p /tmp/libreoffice-rpms",
+        `tar -xzf /tmp/${LIBREOFFICE_ARCHIVE} -C /tmp/libreoffice-rpms`,
+        "dnf install -y cairo cups-libs dbus-libs fontconfig freetype libX11-xcb libXinerama nss /tmp/libreoffice-rpms/LibreOffice_*/RPMS/*.rpm",
+      ].join(" && ");
+      await requireSuccessfulCommand(
+        sandbox,
+        { cmd: "bash", args: ["-lc", installScript], sudo: true, timeoutMs: 180_000 },
+        "Document converter installation",
+      );
+    }
+
+    await sandbox.updateNetworkPolicy("deny-all");
+    const scan = await sandbox.runCommand({ cmd: "clamscan", args: ["--no-summary", inputPath], timeoutMs: 120_000 });
+    if (scan.exitCode === 1) throw new ReviewWorkspaceProcessingError("The uploaded file did not pass the malware scan");
+    if (scan.exitCode !== 0) {
+      const error = (await scan.stderr()).trim();
+      throw new ReviewWorkspaceProcessingError(`Malware scan failed${error ? `: ${error.slice(-600)}` : ""}`);
+    }
+    const scanEngine = await commandOutput(await requireSuccessfulCommand(
+      sandbox,
+      { cmd: "clamscan", args: ["--version"] },
+      "Malware scanner version check",
+    ));
+
+    if (["pdf", "html", "image", "text"].includes(plan.fileKind)) {
+      return {
+        data: input.data,
+        contentType: plan.normalizedMimeType,
+        scanEngine,
+        converter: null,
+        sandboxId: sandbox.name,
+      };
+    }
+
+    const converterPath = "/opt/libreoffice26.2/program/soffice";
+    const converter = await commandOutput(await requireSuccessfulCommand(
+      sandbox,
+      { cmd: converterPath, args: ["--version"] },
+      "Document converter version check",
+    ));
+    await requireSuccessfulCommand(
+      sandbox,
+      {
+        cmd: converterPath,
+        args: ["--headless", "--convert-to", "pdf", "--outdir", "/vercel/sandbox/output", inputPath],
+        timeoutMs: 120_000,
+      },
+      "Document conversion",
+    );
+    const data = await sandbox.fs.readFile(outputPath);
+    if (!data.byteLength) throw new ReviewWorkspaceProcessingError("Document conversion produced an empty review copy");
+    return { data, contentType: "application/pdf", scanEngine, converter, sandboxId: sandbox.name };
+  } finally {
+    await sandbox.stop().catch(() => undefined);
+  }
+}
+
+export async function processReviewWorkspaceUploadedVersion(
+  input: { projectId: string; shopId: string; reviewItemId: string; versionId: string },
+  deps: { client?: SupabaseClient; createSandbox?: () => Promise<ReviewWorkspaceSandbox> } = {},
+): Promise<{ processingStatus: "ready"; processedContentType: string; processedStoragePath: string }> {
+  const projectId = assertUuid("projectId", input.projectId);
+  const shopId = assertUuid("shopId", input.shopId);
+  const reviewItemId = assertUuid("reviewItemId", input.reviewItemId);
+  const versionId = assertUuid("versionId", input.versionId);
+  if (!deps.client) throw new Error("Review workspace processing requires a service client");
+  const client = deps.client;
+
+  const { data: versionRow, error: versionError } = await client
+    .from("bsm_content_review_versions")
+    .select("id, review_item_id, project_id, shop_id, original_filename, content_type, byte_size, storage_bucket, storage_path, original_storage_bucket, original_storage_path")
+    .eq("id", versionId)
+    .eq("review_item_id", reviewItemId)
+    .eq("project_id", projectId)
+    .eq("shop_id", shopId)
+    .maybeSingle();
+  if (versionError) throw new Error(`Could not load uploaded review version: ${versionError.message}`);
+  if (!versionRow) throw new ReviewWorkspaceProcessingError("Uploaded review version was not found");
+  const version = versionRow as Record<string, unknown>;
+  const originalFilename = safeSegment("fileName", String(version.original_filename ?? ""));
+  const contentType = String(version.content_type ?? "application/octet-stream");
+  const byteSize = Number(version.byte_size ?? 0);
+  const plan = classifyReviewWorkspaceFile({ fileName: originalFilename, contentType, byteSize });
+  const originalBucket = String(version.original_storage_bucket ?? version.storage_bucket ?? "");
+  const originalPath = String(version.original_storage_path ?? version.storage_path ?? "");
+  if (originalBucket !== BSM_CONTENT_APPROVALS_BUCKET || !originalPath) {
+    throw new ReviewWorkspaceProcessingError("The uploaded original is not available for processing");
+  }
+
+  const idempotencyKey = buildProcessingIdempotencyKey({ shopId, versionId });
+  const now = new Date().toISOString();
+  const { data: job, error: jobError } = await client
+    .from("bsm_content_review_processing_jobs")
+    .upsert({
+      project_id: projectId,
+      shop_id: shopId,
+      review_item_id: reviewItemId,
+      version_id: versionId,
+      kind: "upload_scan",
+      job_type: "review_copy",
+      status: "running",
+      idempotency_key: idempotencyKey,
+      scan_status: "pending",
+      conversion_status: plan.conversionStatus,
+      sanitization_status: plan.sanitizationStatus,
+      requested_capabilities_jsonb: plan.requiredCapabilities,
+      worker_runtime: "vercel-sandbox-node24",
+      input_manifest_jsonb: { contractVersion: REVIEW_WORKSPACE_PROCESSING_CONTRACT_VERSION, originalPath, fileKind: plan.fileKind },
+      input_jsonb: { originalPath, fileKind: plan.fileKind },
+      attempts: 1,
+      attempt_count: 1,
+      started_at: now,
+      updated_at: now,
+    }, { onConflict: "idempotency_key", ignoreDuplicates: false })
+    .select("id")
+    .single();
+  if (jobError || !job) throw new Error(`Could not start review document processing: ${jobError?.message ?? "no job returned"}`);
+
+  await client
+    .from("bsm_content_review_items")
+    .update({ processing_status: "scanning", latest_processing_job_id: job.id, updated_at: now })
+    .eq("id", reviewItemId)
+    .eq("shop_id", shopId);
+
+  try {
+    const { data: original, error: downloadError } = await client.storage.from(BSM_CONTENT_APPROVALS_BUCKET).download(originalPath);
+    if (downloadError || !original) {
+      throw new ReviewWorkspaceProcessingError(`Could not read the uploaded original: ${downloadError?.message ?? "file not found"}`);
+    }
+    const result = await processReviewFileInSandbox(
+      { fileName: originalFilename, contentType, data: Buffer.from(await original.arrayBuffer()) },
+      { createSandbox: deps.createSandbox },
+    );
+    const processedExtension = result.contentType === "application/pdf"
+      ? "pdf"
+      : result.contentType === "text/html"
+        ? "html"
+        : result.contentType === "image/png"
+          ? "png"
+          : result.contentType === "image/jpeg"
+            ? "jpg"
+            : result.contentType === "image/webp"
+              ? "webp"
+              : "txt";
+    const processedStoragePath = reviewWorkspaceStoragePath({
+      shopId,
+      projectId,
+      documentId: reviewItemId,
+      versionId,
+      artifactKind: "review-copy",
+      fileName: `${originalFilename.replace(/\.[^.]+$/, "") || "review-copy"}.${processedExtension}`,
+    });
+    const { error: uploadError } = await client.storage
+      .from(BSM_CONTENT_APPROVALS_BUCKET)
+      .upload(processedStoragePath, result.data, { contentType: result.contentType, upsert: true });
+    if (uploadError) throw new ReviewWorkspaceProcessingError(`Could not save the processed review copy: ${uploadError.message}`);
+
+    const manifest = {
+      contractVersion: REVIEW_WORKSPACE_PROCESSING_CONTRACT_VERSION,
+      originalStoragePath: originalPath,
+      processedStoragePath,
+      processedContentType: result.contentType,
+      sourceKind: plan.fileKind,
+      scanEngine: result.scanEngine,
+      converter: result.converter,
+      sandboxId: result.sandboxId,
+      processedAt: new Date().toISOString(),
+    };
+    await recordReviewWorkspaceProcessingResult(client, {
+      shopId,
+      reviewItemId,
+      versionId,
+      idempotencyKey,
+      status: "succeeded",
+      scanStatus: "clean",
+      conversionStatus: plan.conversionStatus === "pending" ? "complete" : "not_needed",
+      sanitizationStatus: plan.sanitizationStatus === "pending" ? "complete" : "not_needed",
+      resultManifest: manifest,
+    });
+    return { processingStatus: "ready", processedContentType: result.contentType, processedStoragePath };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Document processing failed";
+    const infected = message.includes("did not pass the malware scan");
+    await recordReviewWorkspaceProcessingResult(client, {
+      shopId,
+      reviewItemId,
+      versionId,
+      idempotencyKey,
+      status: infected ? "quarantined" : "failed",
+      scanStatus: infected ? "infected" : "failed",
+      conversionStatus: plan.conversionStatus === "pending" ? "failed" : "not_needed",
+      sanitizationStatus: plan.sanitizationStatus === "pending" ? "failed" : "not_needed",
+      resultManifest: { contractVersion: REVIEW_WORKSPACE_PROCESSING_CONTRACT_VERSION, originalStoragePath: originalPath },
+      errorCode: infected ? "malware_detected" : "processing_failed",
+      errorMessage: message,
+    }).catch(() => undefined);
+    throw error;
+  }
 }
