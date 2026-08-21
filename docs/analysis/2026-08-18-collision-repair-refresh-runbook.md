@@ -381,6 +381,13 @@ in-progress backup passed. It reported 5.5 GiB free, the same 55 code-3, 22 code
 and 15 code-101 errors, and missing schedule disposition, restore evidence, and failure
 owner. No server state changed.
 
+At 3:00 AM on August 21, FileMaker deleted its `_InProgress` folder and aborted the
+secondary `Backup` schedule because the destination lacked free space. The midnight
+`FMS` schedule had completed with five files after deleting its August 18 retention
+folder. The readiness checker now rejects a recent older backup when Event.log records
+an aborted `FMS` or `Backup` run, so backup age cannot mask the failed schedule. The
+refresh timer remains disabled; no backup or server configuration was changed.
+
 - The server's midnight backup and 12:30–1:40 AM FileMaker script window were verified
   on 2026-08-19. The staged systemd timer runs at 4:30 AM America/Chicago with up to
   ten minutes of jitter.

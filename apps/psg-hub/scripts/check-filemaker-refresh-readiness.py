@@ -29,6 +29,10 @@ ERROR = re.compile(
     r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ [+-]\d{4}).*"
     r"scripting error \((\d+)\)"
 )
+BACKUP_FAILURE = re.compile(
+    r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ [+-]\d{4}).*"
+    r'Schedule "(FMS|Backup)" (?:was aborted|failed)'
+)
 
 
 def result(name: str, ok: bool, detail: str) -> dict[str, Any]:
@@ -100,6 +104,21 @@ def script_errors(path: Path, since: datetime) -> Counter[str]:
     return counts
 
 
+def backup_failures(path: Path, since: datetime) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    try:
+        for line in path.read_text(errors="replace").splitlines():
+            match = BACKUP_FAILURE.search(line)
+            if not match:
+                continue
+            observed = datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S.%f %z")
+            if observed >= since:
+                counts[match.group(2)] += 1
+    except FileNotFoundError:
+        counts["log_missing"] += 1
+    return counts
+
+
 def evidence(path: Path | None) -> dict[str, Any]:
     if path is None:
         return {}
@@ -135,6 +154,9 @@ def collect(
     total, used, free = disk or shutil.disk_usage(args.backup_root)
     used_percent = used / total * 100
     error_counts = script_errors(args.event_log, now - timedelta(hours=args.log_hours))
+    backup_failure_counts = backup_failures(
+        args.event_log, now - timedelta(hours=args.backup_hours)
+    )
     errors_ok = not error_counts or (
         "log_missing" not in error_counts and bool(gates.get("script_error_decision"))
     )
@@ -149,6 +171,11 @@ def collect(
         path_permissions(args.runtime_dir, 0o700, args.expected_user),
         latest_backup(args.backup_root, "FMS", now, timedelta(hours=args.backup_hours)),
         latest_backup(args.backup_root, "Backup", now, timedelta(hours=args.backup_hours)),
+        result(
+            "backup_schedule_runs",
+            not backup_failure_counts,
+            json.dumps(dict(sorted(backup_failure_counts.items()))),
+        ),
         result(
             "backup_in_progress",
             not any(path.is_dir() for path in args.backup_root.rglob("*_InProgress")),
@@ -200,6 +227,7 @@ def self_check() -> None:
         event_log = root / "Event.log"
         event_log.write_text(
             "2026-08-20 01:00:00.000 -0000 Information scripting error (101)\n"
+            '2026-08-20 03:00:00.000 -0000 Error Schedule "Backup" was aborted\n'
         )
         secret = root / "secret.env"
         secret.touch(mode=0o600)
@@ -224,6 +252,9 @@ def self_check() -> None:
         assert not collect(
             args, now=now, timer=("disabled", "inactive"), disk=healthy_disk
         )["ready"]
+        event_log.write_text(
+            "2026-08-20 01:00:00.000 -0000 Information scripting error (101)\n"
+        )
         evidence_file.write_text(
             json.dumps(
                 {

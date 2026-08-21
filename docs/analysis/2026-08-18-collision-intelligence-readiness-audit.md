@@ -28,6 +28,9 @@
   two still need explicit handling and processed-row evidence. No server state changed;
   restore proof, script disposition, capacity disposition, and alert ownership still
   gate the disabled refresh timer.
+- The capacity risk became an observed failure on August 21: the midnight `FMS`
+  backup completed, but the 3:00 AM `Backup` schedule aborted because the destination
+  lacked free space. The collision refresh timer remains disabled.
 - The superadmin Data Review page supports explicit source-shop mapping approval
   with target selection, written identity evidence, confirmation, and an atomic audit
   entry. This branch also adds repair freshness, storm-ledger reconciliation, KDOT
