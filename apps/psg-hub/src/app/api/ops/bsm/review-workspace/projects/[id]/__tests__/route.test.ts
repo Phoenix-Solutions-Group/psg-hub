@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   revokeReviewWorkspaceInvitation: vi.fn(),
   closeReviewWorkspaceRoundEarly: vi.fn(),
   addStaffThreadReply: vi.fn(),
+  addStaffReviewAnnotation: vi.fn(),
   setStaffThreadStatus: vi.fn(),
 }));
 
@@ -15,6 +16,7 @@ vi.mock("@/lib/auth/ops-access", () => ({
 vi.mock("@/lib/bsm/review-workspace", () => ({
   ReviewWorkspaceInputError: class extends Error { status = 400; },
   addStaffThreadReply: mocks.addStaffThreadReply,
+  addStaffReviewAnnotation: mocks.addStaffReviewAnnotation,
   closeReviewWorkspaceRoundEarly: mocks.closeReviewWorkspaceRoundEarly,
   getStaffReviewWorkspaceResult: vi.fn(),
   removeReviewWorkspaceProject: vi.fn(),
@@ -81,5 +83,30 @@ describe("review workspace admin actions", () => {
     expect(resolved.status).toBe(200);
     expect(mocks.addStaffThreadReply).toHaveBeenCalledWith(expect.objectContaining({ projectId: "22222222-2222-4222-8222-222222222222", body: "Updated proof is ready." }));
     expect(mocks.setStaffThreadStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "resolved" }));
+  });
+
+  it("routes PSG pin comments through the authorized project", async () => {
+    mocks.addStaffReviewAnnotation.mockResolvedValue({ id: "comment-1" });
+    const response = await PATCH(new Request("https://hub.example/api/project", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "add_annotation",
+        reviewItemId: "77777777-7777-4777-8777-777777777777",
+        versionId: "88888888-8888-4888-8888-888888888888",
+        body: "Move this callout higher.",
+        viewport: "desktop",
+        xRatio: 0.4,
+        yRatio: 0.6,
+      }),
+    }), context);
+
+    expect(response.status).toBe(201);
+    expect(mocks.addStaffReviewAnnotation).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: "22222222-2222-4222-8222-222222222222",
+      body: "Move this callout higher.",
+      xRatio: 0.4,
+      yRatio: 0.6,
+    }));
   });
 });

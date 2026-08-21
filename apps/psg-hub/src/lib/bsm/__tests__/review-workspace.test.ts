@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   addGuestReviewAnnotation,
   addGuestThreadReply,
+  addStaffReviewAnnotation,
   addStaffThreadReply,
   closeReviewWorkspaceRoundEarly,
   createInternalReviewWorkspaceSlice,
@@ -47,6 +48,10 @@ const PROCESSING_CONTRACT_MIGRATION = readFileSync(
 );
 const ANNOTATION_MIGRATION = readFileSync(
   join(process.cwd(), "supabase/migrations/20260810000000_bsm_review_workspace_highlight_annotations.sql"),
+  "utf8",
+);
+const STAFF_ANNOTATION_MIGRATION = readFileSync(
+  join(process.cwd(), "supabase/migrations/20260821203000_bsm_review_workspace_staff_annotations.sql"),
   "utf8",
 );
 
@@ -156,6 +161,7 @@ type FakeClientOptions = {
   currentRoundStatus?: string;
   currentRoundNumber?: number;
   itemVersionId?: string;
+  commentRows?: Array<Record<string, unknown>>;
 };
 
 class Query {
@@ -214,9 +220,10 @@ class Query {
         return { data: this.options.hasPin === false ? [] : [{ id: "comment-1" }], error: null };
       }
       return {
-        data: [
+        data: this.options.commentRows ?? [
           {
             id: "comment-1",
+            invitation_id: INVITATION_ID,
             review_item_id: REVIEW_ITEM_ID,
             version_id: VERSION_ID,
             round_id: ROUND_ID,
@@ -1028,6 +1035,56 @@ describe("BSM review workspace foundation service", () => {
     expect(workspace.reviewer.readOnly).toBe(false);
   });
 
+  it("shows PSG notes without exposing another reviewer's notes", async () => {
+    const { client } = createFakeClient({
+      commentRows: [
+        {
+          id: "comment-owner",
+          invitation_id: INVITATION_ID,
+          round_id: ROUND_ID,
+          review_item_id: REVIEW_ITEM_ID,
+          version_id: VERSION_ID,
+          thread_id: THREAD_ID,
+          author_profile_id: null,
+          body: "Owner note",
+          comment_kind: "pin",
+          draft_status: "draft",
+        },
+        {
+          id: "comment-other",
+          invitation_id: "55555555-5555-4555-8555-555555555556",
+          round_id: ROUND_ID,
+          review_item_id: REVIEW_ITEM_ID,
+          version_id: VERSION_ID,
+          thread_id: THREAD_ID,
+          author_profile_id: null,
+          body: "Other reviewer private note",
+          comment_kind: "pin",
+          draft_status: "draft",
+        },
+        {
+          id: "comment-psg",
+          invitation_id: null,
+          round_id: ROUND_ID,
+          review_item_id: REVIEW_ITEM_ID,
+          version_id: VERSION_ID,
+          thread_id: THREAD_ID,
+          author_profile_id: ACTOR_ID,
+          body: "PSG shared note",
+          comment_kind: "pin",
+          draft_status: "submitted",
+        },
+      ],
+    });
+
+    const workspace = await getGuestReviewWorkspace("session-hash", { client: client as never });
+
+    expect(workspace.comments.map((comment) => comment.body)).toEqual([
+      "Owner note",
+      "PSG shared note",
+    ]);
+  });
+
   it("falls back to version proof columns when metadata is empty", async () => {
     const { client } = createFakeClient({ emptyVersionMetadata: true });
 
@@ -1172,6 +1229,38 @@ describe("BSM review workspace foundation service", () => {
       draft_status: "draft",
       x_ratio: 0.4,
       y_ratio: 0.6,
+    });
+  });
+
+  it("stores a PSG pin comment on the active review round", async () => {
+    const { client, inserts } = createFakeClient();
+
+    await addStaffReviewAnnotation(
+      {
+        projectId: PROJECT_ID,
+        reviewItemId: REVIEW_ITEM_ID,
+        versionId: VERSION_ID,
+        body: "Move this headline higher.",
+        viewport: "desktop",
+        xRatio: 0.25,
+        yRatio: 0.5,
+        actorProfileId: ACTOR_ID,
+        actorRole: "psg_superadmin",
+      },
+      { client: client as never, now: new Date("2026-08-21T20:30:00.000Z") },
+    );
+
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_comment_threads")?.payload).toMatchObject({
+      round_id: ROUND_ID,
+      owner_invitation_id: null,
+      pin_number: 2,
+    });
+    expect(inserts.find((entry) => entry.table === "bsm_content_review_comments")?.payload).toMatchObject({
+      invitation_id: null,
+      author_profile_id: ACTOR_ID,
+      draft_status: "submitted",
+      x_ratio: 0.25,
+      y_ratio: 0.5,
     });
   });
 
@@ -1628,6 +1717,12 @@ describe("BSM review workspace foundation service", () => {
     expect(MIGRATION).toContain("revoke all on table public.bsm_content_review_processing_jobs from authenticated");
     expect(MIGRATION).not.toContain("grant select on table public.bsm_content_review_processing_jobs to authenticated");
     expect(MIGRATION).toContain("Guest reviewers are intentionally not granted anon database access");
+  });
+
+  it("allows PSG-owned comment threads before a reviewer invitation exists", () => {
+    expect(STAFF_ANNOTATION_MIGRATION).toContain("alter column round_id drop not null");
+    expect(STAFF_ANNOTATION_MIGRATION).toContain("alter column owner_invitation_id drop not null");
+    expect(STAFF_ANNOTATION_MIGRATION).toContain("bsm_content_review_comment_threads_staff_pin_uniq");
   });
 
   it("keeps processing-job migrations compatible with the enqueue service write contract", () => {

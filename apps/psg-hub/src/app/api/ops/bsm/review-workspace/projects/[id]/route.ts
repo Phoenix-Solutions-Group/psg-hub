@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireOpsFn, requireSuperadmin } from "@/lib/auth/ops-access";
 import {
   ReviewWorkspaceInputError,
+  addStaffReviewAnnotation,
   addStaffThreadReply,
   closeReviewWorkspaceRoundEarly,
   getStaffReviewWorkspaceResult,
@@ -88,6 +89,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         projectId: id,
         threadId: payload.threadId as string,
         body: payload.body as string,
+        actorProfileId: gate.userId,
+        actorRole: gate.access.role,
+      });
+      return NextResponse.json({ comment }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (payload?.action === "add_annotation") {
+      const comment = await addStaffReviewAnnotation({
+        projectId: id,
+        reviewItemId: payload.reviewItemId as string,
+        versionId: payload.versionId as string,
+        body: payload.body as string,
+        viewport: payload.viewport === "pdf_page" ? "pdf_page" : "desktop",
+        xRatio: Number(payload.xRatio),
+        yRatio: Number(payload.yRatio),
         actorProfileId: gate.userId,
         actorRole: gate.access.role,
       });
