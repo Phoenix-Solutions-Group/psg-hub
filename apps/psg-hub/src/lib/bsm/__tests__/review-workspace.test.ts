@@ -12,6 +12,7 @@ import {
   createReviewWorkspaceProject,
   enqueueReviewWorkspaceProcessingJob,
   getGuestReviewWorkspace,
+  getGuestReviewWorkspaceFileDownload,
   getStaffReviewWorkspaceResult,
   listStaffReviewWorkspaces,
   requireGuestReviewSession,
@@ -172,6 +173,7 @@ type FakeClientOptions = {
   commentRows?: Array<Record<string, unknown>>;
   roundlessStaffThread?: boolean;
   duplicateStaffThreadInsertOnce?: boolean;
+  deletedReviewItem?: boolean;
 };
 
 class Query {
@@ -217,6 +219,12 @@ class Query {
       const isInScope = this.options.roundDocumentInScope ?? true;
       if (!isInScope) return { data: [], error: null };
       if (
+        this.options.deletedReviewItem &&
+        this.filters["item.deleted_at"] === null
+      ) {
+        return { data: [], error: null };
+      }
+      if (
         this.options.roundDocumentTenantMismatch &&
         this.filters.project_id === PROJECT_ID &&
         this.filters.shop_id === SHOP_ID
@@ -254,6 +262,12 @@ class Query {
       };
     }
     if (this.table === "bsm_content_review_items") {
+      if (
+        this.options.deletedReviewItem &&
+        this.filters.deleted_at === null
+      ) {
+        return { data: [], error: null };
+      }
       return {
         data: [{
           id: REVIEW_ITEM_ID,
@@ -451,7 +465,10 @@ class Query {
         this.filters.project_id !== PROJECT_ID ||
         this.filters.shop_id !== SHOP_ID;
       return Promise.resolve({
-        data: isInScope && requestedInScope && tenantMatched
+        data: isInScope &&
+          requestedInScope &&
+          tenantMatched &&
+          !(this.options.deletedReviewItem && this.filters["item.deleted_at"] === null)
           ? { review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID }
           : null,
         error: null,
@@ -517,7 +534,9 @@ class Query {
     }
     if (this.table === "bsm_content_review_comment_threads") {
       return Promise.resolve({
-        data: {
+        data: this.options.deletedReviewItem && this.filters["item.deleted_at"] === null
+          ? null
+          : {
           id: THREAD_ID,
           project_id: PROJECT_ID,
           round_id: this.options.roundlessStaffThread ? null : ROUND_ID,
@@ -1048,6 +1067,37 @@ describe("BSM review workspace foundation service", () => {
       }),
     ]);
     expect(workspace.reviewer.readOnly).toBe(false);
+  });
+
+  it("removes deleted documents and their feedback from staff and client views", async () => {
+    const { client } = createFakeClient({
+      deletedReviewItem: true,
+      submitted: true,
+    });
+
+    const [guest, staff] = await Promise.all([
+      getGuestReviewWorkspace("session-hash", { client: client as never }),
+      getStaffReviewWorkspaceResult(PROJECT_ID, ACTOR_ID, {
+        client: client as never,
+      }),
+    ]);
+
+    expect(guest.documents).toEqual([]);
+    expect(guest.comments).toEqual([]);
+    expect(guest.decisions).toEqual([]);
+    expect(staff.documents).toEqual([]);
+    expect(staff.submittedComments).toEqual([]);
+    expect(staff.decisions).toEqual([]);
+    await expect(
+      getGuestReviewWorkspaceFileDownload(
+        {
+          sessionHash: "session-hash",
+          reviewItemId: REVIEW_ITEM_ID,
+          versionId: VERSION_ID,
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("not part of the active round");
   });
 
   it("shows PSG notes without exposing another reviewer's notes", async () => {

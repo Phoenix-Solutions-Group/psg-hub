@@ -1221,7 +1221,12 @@ export async function archiveBsmContentApproval(
 
   const { error: updateError } = await client
     .from("bsm_content_review_items")
-    .update({ status: "archived", archived_at: archivedAt, updated_at: archivedAt })
+    .update({
+      status: "archived",
+      archived_at: archivedAt,
+      deleted_at: archivedAt,
+      updated_at: archivedAt,
+    })
     .eq("id", itemId);
   if (updateError) throw new Error(`Could not archive review item: ${updateError.message}`);
 
@@ -1313,6 +1318,7 @@ export async function listBsmContentApprovals(
   let query = client
     .from("bsm_content_review_items")
     .select("id, shop_id, customer_profile_id, title, status, processing_status, content_type, admin_context_note, project_id, current_version_id, updated_at, metadata_jsonb")
+    .is("deleted_at", null)
     .is("archived_at", null)
     .neq("status", "archived")
     .order("updated_at", { ascending: false })

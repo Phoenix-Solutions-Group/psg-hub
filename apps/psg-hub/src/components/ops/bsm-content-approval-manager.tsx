@@ -1581,21 +1581,22 @@ export function BsmContentApprovalManager({
     }
   }
 
-  async function removeSelectedWorkspace() {
-    if (!selectedWorkspace) return;
+  async function removeWorkspace(
+    workspace: BsmContentApprovalWorkspaceOption,
+  ) {
     if (
       !confirm(
-        `Remove Review Workspace "${selectedWorkspace.title}"? It will be hidden now and kept recoverable for 30 days.`,
+        `Delete review "${workspace.title}"? It will disappear from the admin dashboard and client review now, and remain recoverable for 30 days.`,
       )
     ) {
       return;
     }
 
-    setRemovingWorkspaceId(selectedWorkspace.id);
+    setRemovingWorkspaceId(workspace.id);
     setPhase({ kind: "idle" });
     try {
       const response = await fetch(
-        `/api/ops/bsm/review-workspace/projects/${selectedWorkspace.id}`,
+        `/api/ops/bsm/review-workspace/projects/${workspace.id}`,
         {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
@@ -1613,7 +1614,7 @@ export function BsmContentApprovalManager({
         );
       }
 
-      const removedWorkspaceId = selectedWorkspace.id;
+      const removedWorkspaceId = workspace.id;
       setWorkspaceOptions((current) =>
         current.filter((workspace) => workspace.id !== removedWorkspaceId),
       );
@@ -1622,14 +1623,16 @@ export function BsmContentApprovalManager({
           (item) => item.reviewWorkspace?.projectId !== removedWorkspaceId,
         ),
       );
-      setReviewWorkspaceProjectId("");
+      setReviewWorkspaceProjectId((current) =>
+        current === removedWorkspaceId ? "" : current,
+      );
       setEditingWorkspaceId(null);
       setWorkspacePreview(null);
       setSelectedPreviewDocumentKey(null);
       setStartedReview(null);
       setPhase({
         kind: "success",
-        message: "The Review Workspace was removed from the active list.",
+        message: "The review was removed from the dashboard and client view.",
       });
     } catch (error) {
       setPhase({
@@ -1923,10 +1926,45 @@ export function BsmContentApprovalManager({
       setApprovals((current) =>
         current.filter((entry) => entry.id !== item.id),
       );
+      if (item.reviewWorkspace?.projectId) {
+        setWorkspaceOptions((current) =>
+          current.map((workspace) =>
+            workspace.id === item.reviewWorkspace?.projectId
+              ? {
+                  ...workspace,
+                  documentCount: Math.max(0, workspace.documentCount - 1),
+                }
+              : workspace,
+          ),
+        );
+        setWorkspacePreview((current) => {
+          if (
+            !current ||
+            current.project.id !== item.reviewWorkspace?.projectId
+          ) {
+            return current;
+          }
+          return {
+            ...current,
+            documents: current.documents.filter(
+              (document) => document.itemId !== item.id,
+            ),
+            submittedComments: current.submittedComments.filter(
+              (comment) => comment.reviewItemId !== item.id,
+            ),
+            decisions: current.decisions.filter(
+              (decision) => decision.reviewItemId !== item.id,
+            ),
+          };
+        });
+        setSelectedPreviewDocumentKey((current) =>
+          current?.startsWith(`${item.id}:`) ? null : current,
+        );
+      }
       setArchiveItemId(null);
       setPhase({
         kind: "success",
-        message: "The review item was removed from the active library.",
+        message: "The file was removed from the admin dashboard and client review.",
       });
     } catch (error) {
       setPhase({
@@ -2224,6 +2262,19 @@ export function BsmContentApprovalManager({
                             <Share2 className="size-4" aria-hidden="true" />
                             Share
                           </button>
+                          {canManageWorkspaces ? (
+                            <button
+                              type="button"
+                              onClick={() => removeWorkspace(workspace)}
+                              disabled={removingWorkspaceId === workspace.id}
+                              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-white/70 px-4 text-sm font-medium text-white hover:border-red-200 hover:bg-red-600/80 disabled:opacity-60"
+                            >
+                              <Trash2 className="size-4" aria-hidden="true" />
+                              {removingWorkspaceId === workspace.id
+                                ? "Deleting"
+                                : "Delete"}
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                       <div className="p-5">
@@ -3009,7 +3060,8 @@ export function BsmContentApprovalManager({
                                 />
                                 Edit
                               </button>
-                              {archiveItemId === item.id ? (
+                              {canManageWorkspaces &&
+                              archiveItemId === item.id ? (
                                 <>
                                   <span className="self-center text-xs text-muted-foreground">
                                     Remove this file?
@@ -3042,7 +3094,7 @@ export function BsmContentApprovalManager({
                                     Cancel
                                   </button>
                                 </>
-                              ) : (
+                              ) : canManageWorkspaces ? (
                                 <button
                                   type="button"
                                   onClick={() => setArchiveItemId(item.id)}
@@ -3060,7 +3112,7 @@ export function BsmContentApprovalManager({
                                   />
                                   Remove
                                 </button>
-                              )}
+                              ) : null}
                             </div>
                           )}
                         </article>
@@ -3397,7 +3449,7 @@ export function BsmContentApprovalManager({
                       </button>
                       <button
                         type="button"
-                        onClick={removeSelectedWorkspace}
+                        onClick={() => removeWorkspace(selectedWorkspace)}
                         disabled={removingWorkspaceId === selectedWorkspace.id}
                         className={cn(
                           buttonVariants({ variant: "outline", size: "sm" }),

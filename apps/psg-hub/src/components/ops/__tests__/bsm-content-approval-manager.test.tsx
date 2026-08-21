@@ -168,6 +168,34 @@ describe("BsmContentApprovalManager", () => {
     expect(html).not.toContain("Wallace review");
   });
 
+  it("puts the review delete action on the initial dashboard card for admins only", () => {
+    const props = {
+      initialApprovals: [],
+      activeShopId: "shop-a",
+      shops: [{ id: "shop-a", name: "Tracy's Collision" }],
+      workspaces: [
+        {
+          id: "workspace-a",
+          shopId: "shop-a",
+          title: "July proof review",
+          status: "active",
+          currentRoundId: "round-a",
+          documentCount: 1,
+        },
+      ],
+    };
+
+    const adminHtml = renderToStaticMarkup(
+      <BsmContentApprovalManager {...props} canManageWorkspaces />,
+    );
+    const staffHtml = renderToStaticMarkup(
+      <BsmContentApprovalManager {...props} />,
+    );
+
+    expect(adminHtml).toContain(">Delete</button>");
+    expect(staffHtml).not.toContain(">Delete</button>");
+  });
+
   it("preselects the linked Review Workspace from the Review Workspace upload entry point", () => {
     const html = renderToStaticMarkup(
       <BsmContentApprovalManager

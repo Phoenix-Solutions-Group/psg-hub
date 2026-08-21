@@ -3,7 +3,7 @@ export const maxDuration = 300;
 
 import { NextResponse } from "next/server";
 import { recordAuditEvent } from "@/lib/audit/access-audit";
-import { requireOpsFn } from "@/lib/auth/ops-access";
+import { requireOpsFn, requireSuperadmin } from "@/lib/auth/ops-access";
 import {
   ApprovalUploadInputError,
   attachBsmContentApprovalToWorkspace,
@@ -241,7 +241,7 @@ export async function PATCH(request: Request): Promise<Response> {
 }
 
 export async function DELETE(request: Request): Promise<Response> {
-  const gate = await requireOpsFn("manage_bsm_content_approvals");
+  const gate = await requireSuperadmin();
   if (!gate.ok) return gate.response;
 
   const url = new URL(request.url);
