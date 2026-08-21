@@ -30,7 +30,11 @@
   gate the disabled refresh timer.
 - The capacity risk became an observed failure on August 21: the midnight `FMS`
   backup completed, but the 3:00 AM `Backup` schedule aborted because the destination
-  lacked free space. The collision refresh timer remains disabled.
+  lacked free space. At 7:44 AM the user approved disabling the duplicate; `fmsadmin`
+  verified schedule ID 3 disabled while midnight schedule ID 1 remains enabled. No
+  backup folders were deleted. The user confirmed the existing FileMaker admin alert
+  path is active. Capacity, restore proof, and script outcomes still gate the disabled
+  collision refresh timer.
 - The superadmin Data Review page supports explicit source-shop mapping approval
   with target selection, written identity evidence, confirmation, and an atomic audit
   entry. This branch also adds repair freshness, storm-ledger reconciliation, KDOT
@@ -131,8 +135,12 @@ will cover exactly 80% of future weeks.
 PS229 is the recommended first live pilot because its current segment is continuous,
 its holdout contains more repair arrivals, and its error is materially lower at every
 horizon. The exact-address evidence makes it eligible for human mapping review, not
-automatic mapping. Before staging model evidence, PSG must confirm the target shop,
-establish the intended shop-member audience, and approve the mapping. A read-only
+automatic mapping. On August 21 the user confirmed that FileMaker PS229 is Tracy's
+Collision South Lincoln. The live database still reports PS229 unmapped, with the
+matching South Lincoln target at 1500 Center Park Road and zero customer-role members;
+the governed identity-evidence migration is still pending. Before staging model
+evidence, PSG must establish the intended shop-member audience and approve the mapping
+after that migration. A read-only
 2026-08-20 recheck found zero customer-role users on South Lincoln, North Lincoln,
 and their related demo shop, so there is no existing same-client customer audience to
 reuse without an explicit invite or assignment. Mapping, review
@@ -142,7 +150,7 @@ staging, model approval, scoring, and publication remain separate audited action
 
 | Goal requirement                                                    | Status                                                     | Current evidence                                                                                                                                                                                                                                                                                                                                        | Remaining work                                                                                                                                                                                                       |
 | ------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Clean, documented, privacy-safe data                                | First manual refresh reconciled; recurring operation gated | 330,533 FileMaker facts reconcile to 330,535 parsed rows and two recorded rejections; direct PII and raw identifiers are absent; the restricted export contains exactly 15 approved fields; hardened service is staged with timer disabled                                                                                                              | Resolve the duplicate backup schedule, name an alert owner, prove restore recovery, apply storm provenance reconciliation, then separately approve recurring refresh                                                 |
+| Clean, documented, privacy-safe data                                | First manual refresh reconciled; recurring operation gated | 330,533 FileMaker facts reconcile to 330,535 parsed rows and two recorded rejections; direct PII and raw identifiers are absent; the restricted export contains exactly 15 approved fields; hardened service is staged with timer disabled; duplicate 3:00 AM backup disabled and admin alert path confirmed                                                                                         | Recover backup capacity, prove restore recovery, resolve nightly script outcomes, apply storm provenance reconciliation, then separately approve recurring refresh                                                     |
 | Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; weather correction staged                     | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; 411,208 KDOT rows are count-verified with a 99.93% crash ZIP match; the corrected weather definition measures 99.36% repair-weighted boundary coverage rather than event presence                                                                                 | Apply the reviewed weather migration; review insurer candidates and approve shop mappings only after identity confirmation                                                                                           |
 | Operational dashboard                                               | Authenticated branch-preview QA passed; production pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build plus authenticated desktop/mobile Chromium checks pass     | Release only after the matching migrations are approved, then run a production authenticated smoke test                                                                                                              |
 | ZIP-level weather and market alerts                                 | Matched-control lifecycle staged; notifications remain off | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; historical proxy shows 4.89% follow-through versus 4.39% control; acknowledgement pre-registers the nearest eligible prior-year shop/ZIP control; closure snapshots exact 1–4 week signal and control evidence; descriptive paired monitoring excludes unevaluable cases | Apply the lifecycle migration, name the organization-level notification owner, approve a minimum sample, economic lift, and false-positive tolerance, then accrue prospective cases before authorizing notifications |

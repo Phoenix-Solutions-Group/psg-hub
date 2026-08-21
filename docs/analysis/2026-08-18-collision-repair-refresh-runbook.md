@@ -361,11 +361,11 @@ The evidence file is an operator-owned JSON object. Record decisions, not creden
 
 ```json
 {
-  "backup_schedule_decision": "approved change or retained-schedule rationale",
+  "backup_schedule_decision": "disabled_duplicate",
   "script_error_decision": "reviewed error remediation and outcome evidence",
   "restore_drill_result": "pass",
   "restore_drill_at": "2026-08-20T15:00:00-05:00",
-  "failure_owner": "named team or person"
+  "failure_owner": "FileMaker administrator"
 }
 ```
 
@@ -388,21 +388,27 @@ folder. The readiness checker now rejects a recent older backup when Event.log r
 an aborted `FMS` or `Backup` run, so backup age cannot mask the failed schedule. The
 refresh timer remains disabled; no backup or server configuration was changed.
 
+At 7:44 AM on August 21, the user authorized disabling the duplicate schedule.
+`fmsadmin` identified `FMS` as healthy schedule ID 1 and `Backup` as disk-full schedule
+ID 3. ID 3 was disabled and independently re-listed with `Next Run: Disabled`; ID 1
+remained scheduled for midnight. Event.log records `Schedule "Backup" disabled by
+"psg"`. All existing backup folders remained in place. The user also confirmed that
+the existing FileMaker administrator alert path is active. Capacity remains blocked
+at 93% used with 5.5 GiB free, and the refresh timer remains disabled.
+
 - The server's midnight backup and 12:30–1:40 AM FileMaker script window were verified
   on 2026-08-19. The staged systemd timer runs at 4:30 AM America/Chicago with up to
   ten minutes of jitter.
-- Two enabled FileMaker backup schedules currently target the same backup root. `FMS`
-  runs at midnight and `Backup` at 3:00 AM. Both August 20 runs completed and each
-  output contains all five hosted databases; backup existence is proven, but a restore
-  drill is not.
-- The backup root now contains 38 GB with only 5.6 GB free on a 93%-used filesystem.
-  The current risk is shared-root capacity, not a proven failure of the latest 3:00 AM
-  run.
+- The midnight `FMS` backup remains enabled. The duplicate 3:00 AM `Backup` schedule
+  was disabled on August 21 after its disk-full failure. Both August 20 outputs remain
+  in place; backup existence is proven, but a restore drill is not.
+- The backup root still has only 5.5 GiB free on a 93%-used filesystem. The August 21
+  3:00 AM failure proves the capacity risk; disabling the duplicate prevents another
+  run but does not itself reclaim space.
 - A separate persistent ext4 volume at `/mnt/HC_Volume_105029819` has about 75 GB free.
-  No backup configuration or files were changed. The FileMaker owner must either confirm
-  the 3:00 AM schedule is redundant and disable it, or move it to a FileMaker-owned
-  folder on that volume and prove a backup and restore. Do not delete the healthy
-  midnight backups to make room.
+  The duplicate schedule is now disabled. Do not delete healthy midnight backups to
+  make room; recover capacity through an approved FileMaker retention plan and prove a
+  backup and restore.
 - Install `apps/psg-hub/ops/systemd/psg-collision-refresh.{service,timer}` under
   `/etc/systemd/system/`. Keep the timer disabled until the first manual service run
   passes every acceptance check, the shared-root capacity risk and nightly scripting

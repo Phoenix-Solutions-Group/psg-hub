@@ -33,6 +33,10 @@ BACKUP_FAILURE = re.compile(
     r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ [+-]\d{4}).*"
     r'Schedule "(FMS|Backup)" (?:was aborted|failed)'
 )
+BACKUP_STATE = re.compile(
+    r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ [+-]\d{4}.*"
+    r'Schedule "(FMS|Backup)" (enabled|disabled)'
+)
 
 
 def result(name: str, ok: bool, detail: str) -> dict[str, Any]:
@@ -119,6 +123,17 @@ def backup_failures(path: Path, since: datetime) -> Counter[str]:
     return counts
 
 
+def backup_schedule_states(path: Path) -> dict[str, str]:
+    states: dict[str, str] = {}
+    try:
+        for line in path.read_text(errors="replace").splitlines():
+            if match := BACKUP_STATE.search(line):
+                states[match.group(1)] = match.group(2)
+    except FileNotFoundError:
+        pass
+    return states
+
+
 def evidence(path: Path | None) -> dict[str, Any]:
     if path is None:
         return {}
@@ -157,6 +172,11 @@ def collect(
     backup_failure_counts = backup_failures(
         args.event_log, now - timedelta(hours=args.backup_hours)
     )
+    backup_states = backup_schedule_states(args.event_log)
+    duplicate_disabled = backup_states.get("Backup") == "disabled"
+    blocking_backup_failures = Counter(backup_failure_counts)
+    if duplicate_disabled:
+        blocking_backup_failures.pop("Backup", None)
     errors_ok = not error_counts or (
         "log_missing" not in error_counts and bool(gates.get("script_error_decision"))
     )
@@ -170,11 +190,15 @@ def collect(
         path_permissions(args.secret_file, 0o600, args.expected_user),
         path_permissions(args.runtime_dir, 0o700, args.expected_user),
         latest_backup(args.backup_root, "FMS", now, timedelta(hours=args.backup_hours)),
-        latest_backup(args.backup_root, "Backup", now, timedelta(hours=args.backup_hours)),
+        result("backup_backup", True, "duplicate schedule disabled")
+        if duplicate_disabled
+        else latest_backup(
+            args.backup_root, "Backup", now, timedelta(hours=args.backup_hours)
+        ),
         result(
             "backup_schedule_runs",
-            not backup_failure_counts,
-            json.dumps(dict(sorted(backup_failure_counts.items()))),
+            not blocking_backup_failures,
+            json.dumps(dict(sorted(blocking_backup_failures.items()))),
         ),
         result(
             "backup_in_progress",
@@ -188,8 +212,12 @@ def collect(
         ),
         result(
             "backup_schedule_decision",
-            bool(gates.get("backup_schedule_decision")),
-            "recorded" if gates.get("backup_schedule_decision") else "missing",
+            duplicate_disabled
+            and gates.get("backup_schedule_decision") == "disabled_duplicate",
+            "disabled and recorded"
+            if duplicate_disabled
+            and gates.get("backup_schedule_decision") == "disabled_duplicate"
+            else "missing or not verified",
         ),
         result(
             "nightly_script_errors",
@@ -228,6 +256,7 @@ def self_check() -> None:
         event_log.write_text(
             "2026-08-20 01:00:00.000 -0000 Information scripting error (101)\n"
             '2026-08-20 03:00:00.000 -0000 Error Schedule "Backup" was aborted\n'
+            '2026-08-20 07:00:00.000 -0000 Information Schedule "Backup" disabled\n'
         )
         secret = root / "secret.env"
         secret.touch(mode=0o600)
@@ -252,13 +281,10 @@ def self_check() -> None:
         assert not collect(
             args, now=now, timer=("disabled", "inactive"), disk=healthy_disk
         )["ready"]
-        event_log.write_text(
-            "2026-08-20 01:00:00.000 -0000 Information scripting error (101)\n"
-        )
         evidence_file.write_text(
             json.dumps(
                 {
-                    "backup_schedule_decision": "approved",
+                    "backup_schedule_decision": "disabled_duplicate",
                     "script_error_decision": "approved",
                     "restore_drill_result": "pass",
                     "restore_drill_at": now.isoformat(),
@@ -267,6 +293,13 @@ def self_check() -> None:
             )
         )
         assert collect(
+            args, now=now, timer=("disabled", "inactive"), disk=healthy_disk
+        )["ready"]
+        event_log.write_text(
+            event_log.read_text()
+            + '2026-08-20 08:00:00.000 -0000 Error Schedule "FMS" was aborted\n'
+        )
+        assert not collect(
             args, now=now, timer=("disabled", "inactive"), disk=healthy_disk
         )["ready"]
 

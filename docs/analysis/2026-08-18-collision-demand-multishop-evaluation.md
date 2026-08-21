@@ -65,6 +65,11 @@ Lincoln, and the related demo shop. PSG must therefore invite the intended custo
 or explicitly assign an existing customer; PSG staff memberships do not clear the
 forecast audience gate.
 
+On 2026-08-21 the user confirmed FileMaker PS229 is Tracy's Collision South Lincoln.
+That identity decision does not auto-map the shop: the governed address-evidence
+migration, explicit mapping approval, and intended customer audience remain separate
+gates.
+
 Trailing-4 beats seasonal at all four aggregate horizons. For PS177 specifically,
 trailing-4 remains the shop champion for horizons 1–3; the seasonal/recent blend is
 the horizon-4 champion. The promoted PS177 intervals are therefore horizon-specific:
