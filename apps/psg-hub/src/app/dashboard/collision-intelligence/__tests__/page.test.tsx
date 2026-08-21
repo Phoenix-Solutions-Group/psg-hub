@@ -155,6 +155,12 @@ describe("participating-shop collision dashboard", () => {
     expect(html).toContain("Insurance-paid");
     expect(html).toContain("80.0%");
     expect(html).toContain("4 repair orders");
+    expect(html).toContain("Top insurers");
+    expect(html).toContain("State Farm");
+    expect(html).toContain("Leading customer ZIPs");
+    expect(html).toContain("ZIP 68512");
+    expect(html).toContain("Most common vehicles");
+    expect(html).toContain("Ford F-150");
     expect(html).toContain("NOAA SPC preliminary reports");
     expect(html).toContain("Review before acting");
     expect(html).toContain("stale source");
@@ -163,5 +169,55 @@ describe("participating-shop collision dashboard", () => {
     );
     expect(html).not.toContain("999.0 repairs");
     expect(html).toContain('href="/api/collision-intelligence/export"');
+  });
+
+  it("renders four governed forecasts and their decision guidance", async () => {
+    const operationalForecasts = [1, 2, 3, 4].map((horizonWeeks) => ({
+      originWeek: "2026-08-17",
+      horizonWeeks,
+      week: `2026-09-${String(horizonWeeks).padStart(2, "0")}`,
+      modelKey: "seasonal_recent_blend_v1",
+      predicted: 18 - horizonWeeks * 2,
+      lower: 16 - horizonWeeks * 2,
+      upper: 20 - horizonWeeks * 2,
+      intervalPct: 80,
+      sourceLatestArrivalDate: "2026-08-16",
+      sourceAgeDays: 1,
+      status: "published" as const,
+      reason: "Approved model and current source.",
+      generatedAt: "2026-08-17T06:00:00Z",
+    }));
+
+    getCollisionDashboard.mockResolvedValue({
+      ...dashboard,
+      operationalForecasts,
+      operationalForecast: operationalForecasts[0],
+      planningGuidance: [
+        {
+          area: "Staffing & scheduling",
+          status: "review" as const,
+          title: "Capacity pressure in week 1",
+          week: "2026-09-01",
+          detail: "Check booked slots and technician capacity now.",
+        },
+        {
+          area: "Marketing",
+          status: "review" as const,
+          title: "Demand gap in week 4",
+          week: "2026-09-04",
+          detail: "Confirm booked work before changing campaign timing.",
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      await CollisionIntelligencePage({ searchParams: Promise.resolve({}) }),
+    );
+
+    expect(html).toContain("Four-week operating forecast");
+    expect(html).toContain("16.0 repairs");
+    expect(html).toContain("Week 4");
+    expect(html).toContain("Capacity pressure in week 1");
+    expect(html).toContain("Demand gap in week 4");
   });
 });
