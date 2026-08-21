@@ -78,7 +78,7 @@ test.describe("focused BSM customer walkthrough", () => {
 
     await page.getByLabel("Decision note").fill("Please tighten the headline.");
     await page.getByRole("button", { name: "Request updates" }).click();
-    await expect(page.getByText("Request Updates")).toBeVisible();
+    await expect(page.getByText("Request Updates", { exact: true })).toBeVisible();
 
     await page.getByLabel("Decision note").fill("Approved for launch.");
     await page.getByRole("button", { name: "Approve" }).click();

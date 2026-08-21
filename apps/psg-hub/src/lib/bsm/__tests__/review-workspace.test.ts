@@ -28,7 +28,6 @@ import {
   setGuestThreadStatus,
   setStaffThreadStatus,
   startReviewWorkspaceRound,
-  submitAssignedReviewerRound,
   submitGuestReviewRound,
   updateReviewWorkspaceProject,
 } from "@/lib/bsm/review-workspace";
@@ -1253,7 +1252,7 @@ describe("BSM review workspace foundation service", () => {
     )?.columns).toContain("!bsm_content_review_versions_review_item_id_fkey!inner");
   });
 
-  it("records assigned reviewer comments and decisions as the logged-in customer", async () => {
+  it("records assigned reviewer comments and replies as the logged-in customer", async () => {
     const annotation = createFakeClient();
     await addAssignedReviewerAnnotation(
       {
@@ -1283,21 +1282,6 @@ describe("BSM review workspace foundation service", () => {
     expect(reply.inserts.find((entry) => entry.table === "bsm_content_review_comments")?.payload).toMatchObject({
       author_profile_id: ACTOR_ID,
       comment_kind: "clarification_reply",
-    });
-
-    const submission = createFakeClient({ hasPin: true });
-    await submitAssignedReviewerRound(
-      {
-        projectId: PROJECT_ID,
-        actorProfileId: ACTOR_ID,
-        decisions: [{ reviewItemId: REVIEW_ITEM_ID, versionId: VERSION_ID, decision: "approved", message: null }],
-      },
-      { client: submission.client as never, now: new Date("2026-07-28T20:00:00.000Z") },
-    );
-    expect(submission.inserts.find((entry) => entry.table === "bsm_content_review_decisions")?.payload).toMatchObject({
-      actor_profile_id: ACTOR_ID,
-      actor_role: "customer",
-      invitation_id: INVITATION_ID,
     });
   });
 
@@ -1851,6 +1835,35 @@ describe("BSM review workspace foundation service", () => {
     expect(result).toMatchObject({ roundCompleted: false, outcome: null });
     expect(updates.find((entry) => entry.table === "bsm_content_review_rounds")).toBeUndefined();
     expect(updates.find((entry) => entry.table === "bsm_content_review_projects")).toBeUndefined();
+  });
+
+  it("does not count comment-only assigned reviewers toward decision completion", async () => {
+    const { client, updates } = createFakeClient({
+      roundInvitations: [
+        { id: INVITATION_ID, reviewer_profile_id: null, status: "submitted", revoked_at: null, submitted_at: "2026-07-28T19:30:00.000Z" },
+        { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", reviewer_profile_id: ACTOR_ID, status: "sent", revoked_at: null, submitted_at: null },
+      ],
+      roundDecisionRows: [{
+        invitation_id: INVITATION_ID,
+        review_item_id: REVIEW_ITEM_ID,
+        decision: "approved",
+        submitted_at: "2026-07-28T19:30:00.000Z",
+      }],
+    });
+
+    const result = await submitGuestReviewRound(
+      {
+        sessionHash: "session-hash",
+        decisions: [{ reviewItemId: REVIEW_ITEM_ID, versionId: VERSION_ID, decision: "approved" }],
+      },
+      { client: client as never, now: new Date("2026-07-28T19:30:00.000Z") },
+    );
+
+    expect(result).toMatchObject({ roundCompleted: true, outcome: "approved" });
+    expect(updates.find((entry) => entry.table === "bsm_content_review_rounds")?.payload).toMatchObject({
+      status: "completed",
+      outcome: "approved",
+    });
   });
 
   it("ignores revoked reviewers when completing a round and requires unanimous active approval", async () => {

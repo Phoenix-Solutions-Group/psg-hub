@@ -23,14 +23,16 @@ describe("reviewer workspace annotations", () => {
     });
   });
 
-  it("keeps assigned reviewers in comment-and-decision mode without management controls", () => {
+  it("keeps assigned reviewers comment-only without decision or management controls", () => {
     expect(reviewWorkspaceCapabilities(true)).toEqual({
       canManageThreads: false,
       canReopenSubmission: false,
+      canSubmitDecisions: false,
     });
     expect(reviewWorkspaceCapabilities(false)).toEqual({
       canManageThreads: true,
       canReopenSubmission: true,
+      canSubmitDecisions: true,
     });
   });
 });
