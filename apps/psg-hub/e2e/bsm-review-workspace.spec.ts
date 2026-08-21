@@ -155,7 +155,7 @@ test("BSM content approvals release gate: admin creates, reviewer comments and s
   await screenshotEvidence(reviewer, "bsm-review-workspace-reviewer-submitted");
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Review Workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review Workspace", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Refresh status" }).click();
   await expect(page.getByText("1 of 1 submitted")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("Submitted feedback")).toBeVisible();
