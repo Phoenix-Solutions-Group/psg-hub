@@ -304,12 +304,12 @@ Postflight must prove:
    mutation RPCs deny browser roles, and shop mapping rejects missing or mismatched
    governed address evidence; and
 8. shop-insurance appetite evidence remains service-role-only, acronym matching treats
-   spaced carrier initials consistently without auto-approving an alias, and the
-   registry foreign key has a valid covering index;
+   spaced carrier initials consistently, expands full-name group initials without
+   auto-approving an alias, and the registry foreign key has a valid covering index;
 9. forecast staging and review RPCs require a confirmed mapping, four evaluated
    horizons, a PSG superadmin reviewer, written notes, and a real customer audience;
 10. payment classification preserves insurance, non-insurance, and unknown as separate
-   governed categories in `v_collision_repair_orders`;
+    governed categories in `v_collision_repair_orders`;
 11. weather cases can be acknowledged and closed only through service-role RPCs,
     retain their pre-registered control, and do not enable notifications; and
 12. the Supabase security advisor no longer reports the three collision/accident
@@ -324,11 +324,11 @@ psql "$SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 \
 ```
 
 The single result must report `ready = true` and an empty `failures` array. The
-2026-08-20 pre-release execution against `gylkkzmcmbdftxieyabw` now runs 80 checks and
-fails 73, including every missing migration name, governed relation, trigger,
+2026-08-20 pre-release execution against `gylkkzmcmbdftxieyabw` now runs 81 checks and
+fails 74, including every missing migration name, governed relation, trigger,
 service-only function, legacy browser grant, source sequence, the missing insurer
-foreign-key index, the insurer-evidence contract, both direct customer-role function
-contracts, and the unreconciled SPC source batch. KDOT source/import counts, completed
+foreign-key index, the insurer-evidence contract, the expanded insurer-acronym check,
+both direct customer-role function contracts, and the unreconciled SPC source batch. KDOT source/import counts, completed
 ZIP resolution, and both blocked-forecast invariants already pass. This is the expected
 before-state, not a release failure.
 
@@ -341,9 +341,10 @@ The first three release files were previously applied together in a local transa
 and rolled back. The expanded hardening file separately passed and rolled back with all
 three functions fixed, browser privileges removed from representative accident/storm
 relations, and all four source sequences service-only. The insurer acronym migration's
-covering index and `U S A A` normalization passed in an isolated transaction and rolled
-back. The weather correction passed a separate synthetic local transaction. The local
-database ledger itself remains intentionally unrepaired.
+covering index, `U S A A` normalization, expanded parent-group match, and non-mutation
+guarantee passed in an isolated transaction and rolled back. The weather correction
+passed a separate synthetic local transaction. The local database ledger itself remains
+intentionally unrepaired.
 
 ## Schedule and monitoring
 

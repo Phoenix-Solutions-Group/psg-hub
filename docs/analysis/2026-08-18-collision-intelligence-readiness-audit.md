@@ -51,6 +51,8 @@
   Authenticated desktop and mobile review passes. The insurer review was also checked
   against live data: searching `U S A A` returns its saved reporting name plus four
   official NAIC legal entities and never saves a fuzzy result automatically.
+  The pending acronym release also derives initials from expanded directory names,
+  so the USAA parent group appears as a separate brand-level option after release.
   Unauthenticated HTTP checks confirm the collision route redirects to login. The
   earlier draft PR [#18](https://github.com/Phoenix-Solutions-Group/psg-hub/pull/18)
   is closed; production release remains a separate gate.

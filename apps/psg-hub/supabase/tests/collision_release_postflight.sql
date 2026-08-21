@@ -346,6 +346,19 @@ with required_migrations(name) as (
           where membership.shop_id = forecast.shop_id
         )
     )
+
+  union all
+
+  select
+    'data',
+    'expanded_insurer_acronym_matches_group',
+    exists (
+      select 1
+      from public.collision_insurer_registry_matches(array['U S A A'], 5) match
+      where match.record_type = 'group'
+        and match.group_code = '200'
+        and match.match_score = 100
+    )
 ), checks as (
   select * from migration_checks
   union all select * from relation_checks

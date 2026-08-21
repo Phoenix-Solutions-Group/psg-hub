@@ -25,7 +25,7 @@
     {
       "file": "20260820155441_collision_insurer_acronym_matching.sql",
       "name": "collision_insurer_acronym_matching",
-      "sha256": "432f202a8867408230896337cf4213b745af522e72094e4f15d98c6782d2ed1c"
+      "sha256": "125f19654545499967aeebac79aef47b87d7731f68c77f8d1ccb98df5f01e605"
     },
     {
       "file": "20260820170404_stage_collision_forecast_model_review.sql",
