@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   addStaffThreadReply: vi.fn(),
   addStaffReviewAnnotation: vi.fn(),
   setStaffThreadStatus: vi.fn(),
+  addReviewWorkspaceCollaborator: vi.fn(),
+  listUsers: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/ops-access", () => ({
@@ -15,6 +17,7 @@ vi.mock("@/lib/auth/ops-access", () => ({
 }));
 vi.mock("@/lib/bsm/review-workspace", () => ({
   ReviewWorkspaceInputError: class extends Error { status = 400; },
+  addReviewWorkspaceCollaborator: mocks.addReviewWorkspaceCollaborator,
   addStaffThreadReply: mocks.addStaffThreadReply,
   addStaffReviewAnnotation: mocks.addStaffReviewAnnotation,
   closeReviewWorkspaceRoundEarly: mocks.closeReviewWorkspaceRoundEarly,
@@ -23,6 +26,9 @@ vi.mock("@/lib/bsm/review-workspace", () => ({
   revokeReviewWorkspaceInvitation: mocks.revokeReviewWorkspaceInvitation,
   setStaffThreadStatus: mocks.setStaffThreadStatus,
   updateReviewWorkspaceProject: mocks.updateReviewWorkspaceProject,
+}));
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => ({ auth: { admin: { listUsers: mocks.listUsers } } }),
 }));
 
 import { PATCH } from "@/app/api/ops/bsm/review-workspace/projects/[id]/route";
@@ -45,6 +51,28 @@ describe("review workspace admin actions", () => {
       projectId: "22222222-2222-4222-8222-222222222222",
       title: "Revised review",
       description: "Review these files.",
+    }));
+  });
+
+  it("resolves a PSG user by email and adds them as a workspace collaborator", async () => {
+    mocks.listUsers.mockResolvedValue({
+      data: { users: [{ id: "44444444-4444-4444-8444-444444444444", email: "teammate@psgweb.com" }] },
+      error: null,
+    });
+    mocks.addReviewWorkspaceCollaborator.mockResolvedValue({
+      profileId: "44444444-4444-4444-8444-444444444444",
+      role: "collaborator",
+    });
+
+    const response = await PATCH(new Request("https://hub.example/api/project", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "add_collaborator", email: "Teammate@PSGWeb.com" }),
+    }), context);
+
+    expect(response.status).toBe(201);
+    expect(mocks.addReviewWorkspaceCollaborator).toHaveBeenCalledWith(expect.objectContaining({
+      collaboratorProfileId: "44444444-4444-4444-8444-444444444444",
     }));
   });
 

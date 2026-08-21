@@ -27,6 +27,7 @@ export type BsmContentApprovalWorkspaceOption = {
   status: string;
   currentRoundId: string | null;
   documentCount: number;
+  role?: "owner" | "collaborator" | null;
 };
 
 const APPROVAL_FILE_EXTENSION_MIME_TYPES: Record<string, BsmApprovalUploadMimeType> = {

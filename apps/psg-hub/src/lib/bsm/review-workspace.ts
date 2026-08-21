@@ -753,6 +753,60 @@ export async function updateReviewWorkspaceProject(
   };
 }
 
+export async function addReviewWorkspaceCollaborator(
+  input: {
+    projectId: string;
+    collaboratorProfileId: string;
+    actorProfileId: string;
+    actorRole?: ReviewWorkspaceActorRole;
+  },
+  deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},
+): Promise<{ profileId: string; role: "collaborator" }> {
+  const client = resolveClient(deps.client);
+  const projectId = assertUuid("projectId", input.projectId);
+  const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
+  const collaboratorProfileId = assertUuid("collaboratorProfileId", input.collaboratorProfileId);
+  const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, input.actorRole);
+  if (access.role !== "owner" && access.role !== "superadmin") {
+    throw new ReviewWorkspaceInputError(403, "Only the Review Workspace owner can add collaborators");
+  }
+  const { data: profile, error: profileError } = await client
+    .from("profiles")
+    .select("id")
+    .eq("id", collaboratorProfileId)
+    .maybeSingle();
+  if (profileError) throw new Error(`Could not load PSG collaborator: ${profileError.message}`);
+  if (!profile) throw new ReviewWorkspaceInputError(404, "PSG collaborator not found");
+  const { data: existing, error: existingError } = await client
+    .from("bsm_content_review_project_collaborators")
+    .select("profile_id, role")
+    .eq("project_id", access.projectId)
+    .eq("profile_id", collaboratorProfileId)
+    .is("removed_at", null)
+    .maybeSingle();
+  if (existingError) throw new Error(`Could not check Review Workspace collaborator: ${existingError.message}`);
+  if (!existing) {
+    const { error } = await client.from("bsm_content_review_project_collaborators").insert({
+      id: randomUUID(),
+      project_id: access.projectId,
+      shop_id: access.shopId,
+      profile_id: collaboratorProfileId,
+      role: "collaborator",
+      added_by_profile_id: actorProfileId,
+      added_at: (deps.now ?? new Date()).toISOString(),
+    });
+    if (error) throw new Error(`Could not add Review Workspace collaborator: ${error.message}`);
+    await insertEvent(client, {
+      shop_id: access.shopId,
+      review_item_id: null,
+      event_type: "review_workspace_collaborator_added",
+      actor_profile_id: actorProfileId,
+      payload_jsonb: { projectId: access.projectId, collaboratorProfileId },
+    });
+  }
+  return { profileId: collaboratorProfileId, role: "collaborator" };
+}
+
 export async function startReviewWorkspaceRound(
   input: StartReviewWorkspaceInput,
   deps: { client?: ReviewWorkspaceDbClient; now?: Date } = {},

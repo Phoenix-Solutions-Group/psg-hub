@@ -1,4 +1,10 @@
 export const CONTENT_WIREFRAME_CONTRACT_VERSION = 1;
+export const CONTENT_FEEDBACK_DISPOSITIONS = ["resolved", "declined", "needs_clarification"] as const;
+export type ContentFeedbackDisposition = (typeof CONTENT_FEEDBACK_DISPOSITIONS)[number];
+
+export function isContentFeedbackDisposition(value: string): value is ContentFeedbackDisposition {
+  return CONTENT_FEEDBACK_DISPOSITIONS.includes(value as ContentFeedbackDisposition);
+}
 
 export type ContentWireframeDiagnostic = {
   code: string;

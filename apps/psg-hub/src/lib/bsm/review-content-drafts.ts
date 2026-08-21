@@ -15,11 +15,13 @@ import {
 } from "@/lib/bsm/review-workspace";
 import {
   buildMarkdownDiff,
+  isContentFeedbackDisposition,
   parseContentWireframe,
   type ContentWireframeDiagnostic,
   type ContentWireframeManifest,
   type MarkdownDiffLine,
 } from "@/lib/bsm/content-wireframe";
+import type { ContentDraftFeedbackReference, ReviewContentAsset, ReviewContentDraft } from "@/lib/bsm/content-draft-contract";
 
 export const CONTENT_DRAFT_MAX_BYTES = 256 * 1024;
 
@@ -36,31 +38,6 @@ type ContentDraftClient = ReviewWorkspaceDbClient & {
     functionName: string,
     args: Record<string, unknown>,
   ): Promise<{ data: unknown; error: { code?: string; message: string } | null }>;
-};
-
-export type ReviewContentDraft = {
-  id: string;
-  projectId: string;
-  shopId: string;
-  documentId: string;
-  markdown: string;
-  revision: number;
-  baseVersionId: string | null;
-  createdByProfileId: string;
-  lastWriterProfileId: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type ReviewContentAsset = {
-  id: string;
-  projectId: string;
-  shopId: string;
-  documentId: string;
-  originalFilename: string;
-  contentType: "image/png" | "image/jpeg" | "image/webp";
-  byteSize: number;
-  createdAt: string;
 };
 
 export class ContentDraftConflictError extends ReviewWorkspaceInputError {
@@ -116,9 +93,7 @@ export function prepareContentDraftPublication(input: {
     documentId: input.documentId,
     assets: input.assets,
   });
-  const blockingFeedback = input.feedbackStatuses.filter(
-    (status) => status !== "resolved" && status !== "declined" && status !== "needs_clarification",
-  );
+  const blockingFeedback = input.feedbackStatuses.filter((status) => !isContentFeedbackDisposition(status));
   const hasDiagnosticErrors = diagnostics.some((item) => item.severity === "error");
   if (hasDiagnosticErrors || blockingFeedback.length) {
     throw new ContentDraftPublishError(
@@ -221,6 +196,30 @@ async function requireDocument(
   return { id: data.id as string, currentVersionId: (data.current_version_id as string | null) ?? null };
 }
 
+async function requireMarkdownDocument(
+  client: ReviewWorkspaceDbClient,
+  projectId: string,
+  shopId: string,
+  documentId: string,
+): Promise<{ id: string; currentVersionId: string }> {
+  const document = await requireDocument(client, projectId, shopId, documentId);
+  if (!document.currentVersionId) throw new ReviewWorkspaceInputError(409, "Content Drafts require a Markdown Review Document");
+  const { data: version, error } = await client
+    .from("bsm_content_review_versions")
+    .select("content_type, original_filename, preview_type")
+    .eq("id", document.currentVersionId)
+    .eq("project_id", projectId)
+    .eq("shop_id", shopId)
+    .eq("review_item_id", documentId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not check Review Document type: ${error.message}`);
+  const isMarkdown = version?.content_type === "text/markdown" ||
+    version?.preview_type === "content_wireframe" ||
+    /\.(?:md|markdown)$/i.test(String(version?.original_filename ?? ""));
+  if (!isMarkdown) throw new ReviewWorkspaceInputError(409, "Content Drafts require a Markdown Review Document");
+  return { ...document, currentVersionId: document.currentVersionId };
+}
+
 async function loadDraftRow(
   client: ReviewWorkspaceDbClient,
   projectId: string,
@@ -297,6 +296,51 @@ async function loadFeedbackStatuses(
   return ((data ?? []) as Array<Record<string, unknown>>).map((row) => row.status as string);
 }
 
+async function loadFeedbackReferences(
+  client: ReviewWorkspaceDbClient,
+  input: { projectId: string; shopId: string; documentId: string; versionId: string | null },
+): Promise<ContentDraftFeedbackReference[]> {
+  if (!input.versionId) return [];
+  const [{ data: threads, error: threadsError }, { data: comments, error: commentsError }] = await Promise.all([
+    client
+      .from("bsm_content_review_comment_threads")
+      .select("id, status")
+      .eq("project_id", input.projectId)
+      .eq("shop_id", input.shopId)
+      .eq("review_item_id", input.documentId)
+      .eq("version_id", input.versionId),
+    client
+      .from("bsm_content_review_comments")
+      .select("id, thread_id, body, comment_kind, pin_number, selection_jsonb, created_at")
+      .eq("project_id", input.projectId)
+      .eq("shop_id", input.shopId)
+      .eq("review_item_id", input.documentId)
+      .eq("version_id", input.versionId)
+      .in("comment_kind", ["pin", "highlight"])
+      .order("created_at", { ascending: true }),
+  ]);
+  if (threadsError) throw new Error(`Could not load feedback dispositions: ${threadsError.message}`);
+  if (commentsError) throw new Error(`Could not load feedback references: ${commentsError.message}`);
+  const statuses = new Map(((threads ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row.status as string]));
+  return ((comments ?? []) as Array<Record<string, unknown>>).flatMap((row) => {
+    const threadId = row.thread_id as string | null;
+    if (!threadId || !statuses.has(threadId)) return [];
+    const selection = row.selection_jsonb && typeof row.selection_jsonb === "object"
+      ? row.selection_jsonb as Record<string, unknown>
+      : {};
+    return [{
+      id: row.id as string,
+      threadId,
+      kind: row.comment_kind === "highlight" ? "highlight" as const : "pin" as const,
+      pinNumber: typeof row.pin_number === "number" ? row.pin_number : null,
+      body: row.body as string,
+      selectedText: typeof selection.text === "string" ? selection.text : null,
+      status: statuses.get(threadId) ?? "open",
+      createdAt: row.created_at as string,
+    }];
+  });
+}
+
 async function recordDraftEvent(
   client: ReviewWorkspaceDbClient,
   input: { shopId: string; documentId: string; actorProfileId: string; eventType: string; payload: Record<string, unknown> },
@@ -309,6 +353,42 @@ async function recordDraftEvent(
     payload_jsonb: input.payload,
   });
   if (error) throw new Error(`Could not record Content Draft event: ${error.message}`);
+}
+
+async function recordSupportAccess(
+  client: ReviewWorkspaceDbClient,
+  input: {
+    role: string;
+    shopId: string;
+    projectId: string;
+    documentId: string;
+    actorProfileId: string;
+    operation: string;
+    draftId?: string | null;
+  },
+): Promise<void> {
+  if (input.role !== "superadmin") return;
+  const payload = {
+    projectId: input.projectId,
+    documentId: input.documentId,
+    draftId: input.draftId ?? null,
+    operation: input.operation,
+  };
+  await Promise.all([
+    recordDraftEvent(client, {
+      shopId: input.shopId,
+      documentId: input.documentId,
+      actorProfileId: input.actorProfileId,
+      eventType: "content_draft_support_accessed",
+      payload,
+    }),
+    recordAuditEvent({
+      actorProfileId: input.actorProfileId,
+      action: "bsm_content_draft.support_access",
+      targetShopId: input.shopId,
+      payload,
+    }),
+  ]);
 }
 
 export async function createReviewContentDraft(
@@ -328,7 +408,8 @@ export async function createReviewContentDraft(
   const documentId = assertUuid("documentId", input.documentId);
   const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
   const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, input.actorRole);
-  const document = await requireDocument(client, access.projectId, access.shopId, documentId);
+  const document = await requireMarkdownDocument(client, access.projectId, access.shopId, documentId);
+  await recordSupportAccess(client, { ...access, documentId, actorProfileId, operation: input.source });
   const existing = await loadDraftRow(client, access.projectId, access.shopId, documentId);
   if (existing) {
     if (input.source === "blank") return readDraft(existing);
@@ -395,14 +476,14 @@ export async function getReviewContentDraftWorkspace(
   const documentId = assertUuid("documentId", input.documentId);
   const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
   const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, input.actorRole);
-  const document = await requireDocument(client, access.projectId, access.shopId, documentId);
+  const document = await requireMarkdownDocument(client, access.projectId, access.shopId, documentId);
   const [draftRow, assetRows] = await Promise.all([
     loadDraftRow(client, access.projectId, access.shopId, documentId),
     loadAssets(client, access.projectId, access.shopId, documentId),
   ]);
   const draft = draftRow ? readDraft(draftRow) : null;
   const assets = assetRows.map(readAsset);
-  const [baseMarkdown, feedbackStatuses] = draft
+  const [baseMarkdown, feedbackStatuses, feedbackReferences] = draft
     ? await Promise.all([
         loadVersionMarkdown(client, {
           projectId: access.projectId,
@@ -416,8 +497,14 @@ export async function getReviewContentDraftWorkspace(
           documentId,
           versionId: draft.baseVersionId,
         }),
+        loadFeedbackReferences(client, {
+          projectId: access.projectId,
+          shopId: access.shopId,
+          documentId,
+          versionId: draft.baseVersionId,
+        }),
       ])
-    : ["", [] as string[]];
+    : ["", [] as string[], [] as ContentDraftFeedbackReference[]];
   const parsed = draft
     ? parseContentWireframe(draft.markdown, {
         documentId,
@@ -425,23 +512,13 @@ export async function getReviewContentDraftWorkspace(
       })
     : null;
 
-  if (access.role === "superadmin") {
-    await Promise.all([
-      recordDraftEvent(client, {
-        shopId: access.shopId,
-        documentId,
-        actorProfileId,
-        eventType: "content_draft_support_accessed",
-        payload: { projectId: access.projectId, documentId, draftId: draft?.id ?? null },
-      }),
-      recordAuditEvent({
-        actorProfileId,
-        action: "bsm_content_draft.support_access",
-        targetShopId: access.shopId,
-        payload: { projectId: access.projectId, documentId, draftId: draft?.id ?? null },
-      }),
-    ]);
-  }
+  await recordSupportAccess(client, {
+    ...access,
+    documentId,
+    actorProfileId,
+    operation: "read",
+    draftId: draft?.id ?? null,
+  });
 
   return {
     draft,
@@ -452,6 +529,7 @@ export async function getReviewContentDraftWorkspace(
     baseMarkdown,
     diff: draft ? buildMarkdownDiff(baseMarkdown, draft.markdown) : [],
     feedbackStatuses,
+    feedbackReferences,
     approvalStatement: "Approval covers copy, hierarchy, CTA intent, selected images or placeholders, and block order only. It does not approve final design or production launch.",
   };
 }
@@ -495,7 +573,8 @@ export async function uploadReviewContentAsset(
   }
   const fileName = normalizeApprovalFileName(input.fileName);
   const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, input.actorRole);
-  await requireDocument(client, access.projectId, access.shopId, documentId);
+  await requireMarkdownDocument(client, access.projectId, access.shopId, documentId);
+  await recordSupportAccess(client, { ...access, documentId, actorProfileId, operation: "upload_asset" });
   const id = randomUUID();
   const storagePath = `${access.shopId}/${access.projectId}/${documentId}/assets/${id}/${fileName}`;
   const checksum = createHash("sha256").update(input.bytes).digest("hex");
@@ -561,7 +640,8 @@ export async function deleteReviewContentAsset(
   const assetId = assertUuid("assetId", input.assetId);
   const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
   const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, input.actorRole);
-  await requireDocument(client, access.projectId, access.shopId, documentId);
+  await requireMarkdownDocument(client, access.projectId, access.shopId, documentId);
+  await recordSupportAccess(client, { ...access, documentId, actorProfileId, operation: "delete_asset" });
   const { data: asset, error: assetError } = await client
     .from("bsm_content_review_assets")
     .select("id")
@@ -613,7 +693,8 @@ export async function getAdminContentAsset(
   const assetId = assertUuid("assetId", input.assetId);
   const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
   const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, input.actorRole);
-  await requireDocument(client, access.projectId, access.shopId, documentId);
+  await requireMarkdownDocument(client, access.projectId, access.shopId, documentId);
+  await recordSupportAccess(client, { ...access, documentId, actorProfileId, operation: "read_asset" });
   const { data: asset, error } = await client
     .from("bsm_content_review_assets")
     .select("storage_bucket, storage_path, original_filename, content_type")
@@ -650,11 +731,44 @@ export async function publishReviewContentDraft(
     throw new ReviewWorkspaceInputError(400, "expectedRevision must be a non-negative integer");
   }
   const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, input.actorRole);
-  await requireDocument(client, access.projectId, access.shopId, documentId);
+  await requireMarkdownDocument(client, access.projectId, access.shopId, documentId);
   const draftRow = await loadDraftRow(client, access.projectId, access.shopId, documentId);
   if (!draftRow) throw new ReviewWorkspaceInputError(404, "Content Draft not found");
   const draft = readDraft(draftRow);
+  await recordSupportAccess(client, { ...access, documentId, actorProfileId, operation: "publish", draftId: draft.id });
   if (draft.revision !== input.expectedRevision) throw new ContentDraftConflictError(draft.markdown, draft);
+
+  const bytes = new TextEncoder().encode(draft.markdown);
+  const checksum = createHash("sha256").update(bytes).digest("hex");
+  const { data: existingVersion, error: existingVersionError } = await client
+    .from("bsm_content_review_versions")
+    .select("id, version_number, checksum_sha256, source_metadata_jsonb, artifact_manifest_jsonb")
+    .eq("id", versionId)
+    .eq("project_id", access.projectId)
+    .eq("shop_id", access.shopId)
+    .eq("review_item_id", documentId)
+    .maybeSingle();
+  if (existingVersionError) throw new Error(`Could not check publication identity: ${existingVersionError.message}`);
+  if (existingVersion) {
+    const metadata = (existingVersion.source_metadata_jsonb as Record<string, unknown> | null) ?? {};
+    const manifest = existingVersion.artifact_manifest_jsonb as ContentWireframeManifest | null;
+    const identityMatches = existingVersion.checksum_sha256 === checksum &&
+      metadata.sourceKind === "content_draft" &&
+      metadata.draftId === draft.id &&
+      metadata.draftRevision === draft.revision &&
+      manifest?.contractVersion === 1 && Array.isArray(manifest.blocks) && Array.isArray(manifest.assetIds);
+    if (!identityMatches) throw new ReviewWorkspaceInputError(409, "Publication identity is not available");
+    return {
+      versionId,
+      versionNumber: typeof existingVersion.version_number === "number" ? existingVersion.version_number : null,
+      status: "ready" as const,
+      manifest,
+      diff: Array.isArray(metadata.markdownDiff) ? metadata.markdownDiff as MarkdownDiffLine[] : [],
+      versionNote: typeof metadata.versionNote === "string" ? metadata.versionNote : "",
+      sentInvitations: 0,
+      activeRoundChanged: false,
+    };
+  }
 
   const [assetRows, feedbackStatuses, baseMarkdown] = await Promise.all([
     loadAssets(client, access.projectId, access.shopId, documentId),
@@ -681,8 +795,6 @@ export async function publishReviewContentDraft(
     assets: assets.map((asset) => ({ id: asset.id, documentId: asset.documentId })),
     feedbackStatuses,
   });
-  const bytes = new TextEncoder().encode(draft.markdown);
-  const checksum = createHash("sha256").update(bytes).digest("hex");
   const storagePath = `${access.shopId}/${documentId}/${versionId}/content.md`;
   const upload = await client.storage.from(BSM_CONTENT_APPROVALS_BUCKET).upload(storagePath, bytes, {
     contentType: "text/plain; charset=utf-8",
@@ -758,9 +870,16 @@ export async function saveContentDraft(
   }
 
   const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, input.actorRole);
-  await requireDocument(client, access.projectId, access.shopId, documentId);
+  await requireMarkdownDocument(client, access.projectId, access.shopId, documentId);
   const current = await loadDraftRow(client, access.projectId, access.shopId, documentId);
   if (!current) throw new ReviewWorkspaceInputError(404, "Content Draft not found");
+  await recordSupportAccess(client, {
+    ...access,
+    documentId,
+    actorProfileId,
+    operation: "save",
+    draftId: current.id as string,
+  });
 
   const updatedAt = (deps.now ?? new Date()).toISOString();
   const { data, error } = await client

@@ -375,6 +375,12 @@ class WorkspaceListSelect {
         error: null,
       }).then(resolve);
     }
+    if (this.table === "bsm_content_review_project_collaborators") {
+      return Promise.resolve({
+        data: [{ project_id: PROJECT_ID, role: "owner" }],
+        error: null,
+      }).then(resolve);
+    }
     throw new Error(`Unexpected table ${this.table}`);
   }
 }
@@ -437,7 +443,7 @@ describe("BSM content approval upload helpers", () => {
     );
   });
 
-  it("lists active shop workspaces for authorized staff without requiring collaborator rows", async () => {
+  it("lists active shop workspaces with the current staff role", async () => {
     const { client, selectedTables } = createWorkspaceListFakeClient();
 
     const result = await listBsmContentApprovalWorkspaces(client as never, {
@@ -453,11 +459,13 @@ describe("BSM content approval upload helpers", () => {
         status: "active",
         currentRoundId: ROUND_ID,
         documentCount: 2,
+        role: "owner",
       },
     ]);
     expect(selectedTables).toEqual([
       "bsm_content_review_projects",
       "bsm_content_review_items",
+      "bsm_content_review_project_collaborators",
     ]);
   });
 

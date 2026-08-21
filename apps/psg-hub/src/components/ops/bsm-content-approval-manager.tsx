@@ -1034,6 +1034,8 @@ export function BsmContentApprovalManager({
   const [workspaceEditInstructions, setWorkspaceEditInstructions] =
     useState("");
   const [savingWorkspace, setSavingWorkspace] = useState(false);
+  const [collaboratorEmail, setCollaboratorEmail] = useState("");
+  const [addingCollaborator, setAddingCollaborator] = useState(false);
   const [removingWorkspaceId, setRemovingWorkspaceId] = useState<string | null>(
     null,
   );
@@ -1344,6 +1346,27 @@ export function BsmContentApprovalManager({
         message: error instanceof Error ? error.message : "The feedback disposition could not be saved.",
       });
       return false;
+    }
+  }
+
+  async function addWorkspaceCollaborator() {
+    if (!reviewWorkspaceProjectId || !collaboratorEmail.trim()) return;
+    setAddingCollaborator(true);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch(`/api/ops/bsm/review-workspace/projects/${reviewWorkspaceProjectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add_collaborator", email: collaboratorEmail.trim() }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "The PSG collaborator could not be added.");
+      setCollaboratorEmail("");
+      setPhase({ kind: "success", message: "PSG Workspace Collaborator added." });
+    } catch (error) {
+      setPhase({ kind: "error", message: error instanceof Error ? error.message : "The PSG collaborator could not be added." });
+    } finally {
+      setAddingCollaborator(false);
     }
   }
 
@@ -3231,6 +3254,29 @@ export function BsmContentApprovalManager({
                 </div>
 
                 <aside className="space-y-4">
+                  {canManageWorkspaces || selectedWorkspace.role === "owner" ? (
+                    <div className="rounded-2xl border border-border bg-[#f7f8f9] p-4">
+                      <div className="font-heading font-semibold text-[#142838]">PSG Workspace Collaborators</div>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">Owners can grant another PSG user access to edit Content Drafts in this workspace.</p>
+                      <label className="mt-3 block text-sm font-medium" htmlFor="bsm-workspace-collaborator-email">PSG collaborator email</label>
+                      <input
+                        id="bsm-workspace-collaborator-email"
+                        type="email"
+                        value={collaboratorEmail}
+                        onChange={(event) => setCollaboratorEmail(event.target.value)}
+                        className="mt-2 w-full rounded-md border border-input bg-white px-3 py-2 text-sm"
+                        placeholder="teammate@psgweb.com"
+                      />
+                      <button
+                        type="button"
+                        disabled={addingCollaborator || !collaboratorEmail.trim()}
+                        onClick={() => void addWorkspaceCollaborator()}
+                        className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-3 bg-white")}
+                      >
+                        {addingCollaborator ? "Adding" : "Add collaborator"}
+                      </button>
+                    </div>
+                  ) : null}
                   <div className="rounded-2xl border border-border bg-[#f7f8f9] p-4">
                     <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                       Review activity

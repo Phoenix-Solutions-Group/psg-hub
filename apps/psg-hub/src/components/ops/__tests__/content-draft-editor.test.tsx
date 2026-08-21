@@ -29,6 +29,16 @@ const workspace: ContentDraftWorkspacePayload = {
   baseMarkdown: "",
   diff: [],
   feedbackStatuses: [],
+  feedbackReferences: [{
+    id: "66666666-6666-4666-8666-666666666666",
+    threadId: "77777777-7777-4777-8777-777777777777",
+    kind: "pin",
+    status: "needs_clarification",
+    body: "Confirm the warranty language.",
+    selectedText: "Lifetime warranty",
+    pinNumber: 2,
+    createdAt: "2026-08-21T09:00:00.000Z",
+  }],
   approvalStatement: "Content and structure only.",
 };
 
@@ -77,6 +87,8 @@ describe("ContentDraftEditor", () => {
     ));
 
     const textarea = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Markdown source']")!;
+    expect(container.textContent).toContain("Prior-version feedback (1)");
+    expect(container.textContent).toContain("Confirm the warranty language.");
     await act(async () => {
       changeTextarea(textarea, "# First edit");
     });

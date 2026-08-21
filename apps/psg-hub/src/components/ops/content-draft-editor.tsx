@@ -4,48 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ContentWireframeRenderer } from "@/components/bsm/content-wireframe-renderer";
 import {
   buildMarkdownDiff,
+  isContentFeedbackDisposition,
   parseContentWireframe,
-  type ContentWireframeDiagnostic,
-  type ContentWireframeManifest,
-  type MarkdownDiffLine,
 } from "@/lib/bsm/content-wireframe";
-
-type Draft = {
-  id: string;
-  projectId: string;
-  shopId: string;
-  documentId: string;
-  markdown: string;
-  revision: number;
-  baseVersionId: string | null;
-  createdByProfileId: string;
-  lastWriterProfileId: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type Asset = {
-  id: string;
-  projectId: string;
-  shopId: string;
-  documentId: string;
-  originalFilename: string;
-  contentType: "image/png" | "image/jpeg" | "image/webp";
-  byteSize: number;
-  createdAt: string;
-};
-
-export type ContentDraftWorkspacePayload = {
-  draft: Draft | null;
-  currentVersionId: string | null;
-  assets: Asset[];
-  manifest: ContentWireframeManifest | null;
-  diagnostics: ContentWireframeDiagnostic[];
-  baseMarkdown: string;
-  diff: MarkdownDiffLine[];
-  feedbackStatuses: string[];
-  approvalStatement: string;
-};
+import type { ContentDraftWorkspacePayload, ReviewContentAsset, ReviewContentDraft } from "@/lib/bsm/content-draft-contract";
+export type { ContentDraftWorkspacePayload } from "@/lib/bsm/content-draft-contract";
 
 type SaveState = "idle" | "saving" | "saved" | "conflict" | "error";
 
@@ -60,24 +23,28 @@ export function ContentDraftEditor({
 }: {
   projectId: string;
   documentId: string;
-  initialWorkspace?: ContentDraftWorkspacePayload;
+  initialWorkspace: ContentDraftWorkspacePayload;
   autosaveDelayMs?: number;
 }) {
   const endpoint = `/api/ops/bsm/review-workspace/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(documentId)}/draft`;
-  const [workspace, setWorkspace] = useState<ContentDraftWorkspacePayload | null>(initialWorkspace ?? null);
-  const [draft, setDraft] = useState<Draft | null>(initialWorkspace?.draft ?? null);
-  const [markdown, setMarkdown] = useState(initialWorkspace?.draft?.markdown ?? "");
-  const [saveState, setSaveState] = useState<SaveState>(initialWorkspace?.draft ? "saved" : "idle");
-  const [conflict, setConflict] = useState<{ localMarkdown: string; latest: Draft } | null>(null);
+  const [workspace, setWorkspace] = useState<ContentDraftWorkspacePayload>(initialWorkspace);
+  const [draft, setDraft] = useState<ReviewContentDraft | null>(initialWorkspace.draft);
+  const [markdown, setMarkdown] = useState(initialWorkspace.draft?.markdown ?? "");
+  const [saveState, setSaveState] = useState<SaveState>(initialWorkspace.draft ? "saved" : "idle");
+  const [conflict, setConflict] = useState<{ localMarkdown: string; latest: ReviewContentDraft } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"editor" | "preview">("editor");
   const [publishOpen, setPublishOpen] = useState(false);
   const [versionNote, setVersionNote] = useState("");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [publicationMessage, setPublicationMessage] = useState<string | null>(null);
+  const [publicationId, setPublicationId] = useState<string | null>(null);
   const [saveAttempt, setSaveAttempt] = useState(0);
   const markdownRef = useRef(markdown);
-  markdownRef.current = markdown;
+
+  useEffect(() => {
+    markdownRef.current = markdown;
+  }, [markdown]);
 
   async function loadWorkspace() {
     const response = await fetch(endpoint, { cache: "no-store" });
@@ -88,22 +55,11 @@ export function ContentDraftEditor({
     setDraft(next.draft);
     setMarkdown(next.draft?.markdown ?? "");
     setSaveState(next.draft ? "saved" : "idle");
+    setPublicationId(null);
   }
 
   useEffect(() => {
-    if (initialWorkspace) return;
-    void loadWorkspace().catch((cause) => {
-      setError(cause instanceof Error ? cause.message : "Could not load this Content Draft.");
-      setSaveState("error");
-    });
-    // The route identities are immutable for this mounted editor.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialWorkspace, projectId, documentId]);
-
-  useEffect(() => {
     if (!draft || conflict || markdown === draft.markdown) return;
-    setSaveState("saving");
-    setError(null);
     const localMarkdown = markdown;
     const expectedRevision = draft.revision;
     const timer = window.setTimeout(async () => {
@@ -115,14 +71,15 @@ export function ContentDraftEditor({
         });
         const body = await response.json().catch(() => null);
         if (response.status === 409 && body?.conflict) {
-          setConflict(body.conflict as { localMarkdown: string; latest: Draft });
+          setConflict(body.conflict as { localMarkdown: string; latest: ReviewContentDraft });
           setSaveState("conflict");
           return;
         }
         if (!response.ok) throw new Error(body?.error ?? "Could not save this Content Draft.");
-        const saved = body.draft as Draft;
+        const saved = body.draft as ReviewContentDraft;
         setDraft(saved);
         setWorkspace((current) => current ? { ...current, draft: saved } : current);
+        setPublicationId(null);
         setSaveState(markdownRef.current === localMarkdown ? "saved" : "saving");
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "Could not save this Content Draft.");
@@ -137,7 +94,7 @@ export function ContentDraftEditor({
     assets: (workspace?.assets ?? []).map((asset) => ({ id: asset.id, documentId: asset.documentId })),
   }), [documentId, markdown, workspace?.assets]);
   const diff = useMemo(() => buildMarkdownDiff(workspace?.baseMarkdown ?? "", markdown), [markdown, workspace?.baseMarkdown]);
-  const feedbackBlockers = (workspace?.feedbackStatuses ?? []).filter((status) => !["resolved", "declined", "needs_clarification"].includes(status));
+  const feedbackBlockers = (workspace?.feedbackStatuses ?? []).filter((status) => !isContentFeedbackDisposition(status));
   const diagnosticBlockers = parsed.diagnostics.filter((item) => item.severity === "error");
   const canPublish = Boolean(
     draft &&
@@ -147,6 +104,11 @@ export function ContentDraftEditor({
     !diagnosticBlockers.length &&
     !feedbackBlockers.length,
   );
+
+  function openPublishCheck() {
+    setPublicationId((current) => current ?? crypto.randomUUID());
+    setPublishOpen(true);
+  }
 
   async function createDraft(action: "create" | "import" | "clone", importedMarkdown?: string) {
     setPendingAction(action);
@@ -163,11 +125,12 @@ export function ContentDraftEditor({
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error ?? "Could not create this Content Draft.");
-      const nextDraft = body.draft as Draft;
+      const nextDraft = body.draft as ReviewContentDraft;
       setDraft(nextDraft);
       setMarkdown(nextDraft.markdown);
       setWorkspace((current) => current ? { ...current, draft: nextDraft, baseMarkdown: action === "clone" ? nextDraft.markdown : current.baseMarkdown } : current);
       setSaveState("saved");
+      setPublicationId(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not create this Content Draft.");
     } finally {
@@ -190,6 +153,7 @@ export function ContentDraftEditor({
       if (!window.confirm("Replace the current editor text with this Markdown file? The change will autosave.")) return;
       setMarkdown(text);
       setSaveState("saving");
+      setPublicationId(null);
     } else {
       await createDraft("import", text);
     }
@@ -205,9 +169,11 @@ export function ContentDraftEditor({
       const response = await fetch(endpoint, { method: "POST", body: form });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error ?? "Could not upload this Content Asset.");
-      const upload = body.upload as { asset: Asset; markdownReference: string };
+      const upload = body.upload as { asset: ReviewContentAsset; markdownReference: string };
       setWorkspace((current) => current ? { ...current, assets: [...current.assets, upload.asset] } : current);
       setMarkdown((current) => `${current}${current.endsWith("\n") || !current ? "" : "\n\n"}${upload.markdownReference}\n`);
+      setSaveState("saving");
+      setPublicationId(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not upload this Content Asset.");
     } finally {
@@ -231,7 +197,7 @@ export function ContentDraftEditor({
   }
 
   async function publish() {
-    if (!draft || !canPublish) return;
+    if (!draft || !canPublish || !publicationId) return;
     setPendingAction("publish");
     setError(null);
     setPublicationMessage(null);
@@ -239,12 +205,13 @@ export function ContentDraftEditor({
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "publish", expectedRevision: draft.revision, versionId: crypto.randomUUID(), versionNote: versionNote.trim() }),
+        body: JSON.stringify({ action: "publish", expectedRevision: draft.revision, versionId: publicationId, versionNote: versionNote.trim() }),
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error ?? "Could not publish this Content Draft.");
       setPublicationMessage(`Published immutable version ${body.publication.versionNumber ?? "ready"}. No Review Invitations were sent.`);
       setPublishOpen(false);
+      setPublicationId(null);
       setVersionNote("");
       await loadWorkspace();
     } catch (cause) {
@@ -293,7 +260,7 @@ export function ContentDraftEditor({
           <span role="status" aria-live="polite" className="rounded-full bg-[#f0f3f5] px-3 py-2 text-sm font-medium text-[#142838]">{statusText}</span>
           <a className={buttonClass} href={`${endpoint}?export=markdown`}>Export .md</a>
           <label className={buttonClass}>Import .md<input type="file" accept=".md,.markdown,text/markdown,text/plain" className="sr-only" onChange={(event) => void importMarkdown(event.target.files?.[0])} /></label>
-          <button type="button" className={primaryButtonClass} onClick={() => setPublishOpen(true)} disabled={saveState === "saving" || saveState === "conflict"}>Publish check</button>
+          <button type="button" className={primaryButtonClass} onClick={openPublishCheck} disabled={saveState === "saving" || saveState === "conflict"}>Publish check</button>
         </div>
       </header>
 
@@ -314,6 +281,7 @@ export function ContentDraftEditor({
               setMarkdown(conflict.latest.markdown);
               setConflict(null);
               setSaveState("saved");
+              setPublicationId(null);
             }}>Reload latest</button>
             <button type="button" className={buttonClass} onClick={() => void navigator.clipboard.writeText(markdown)}>Copy local</button>
             <a className={buttonClass} href={`data:text/markdown;charset=utf-8,${encodeURIComponent(markdown)}`} download="conflicted-content-draft.md">Download local .md</a>
@@ -335,7 +303,11 @@ export function ContentDraftEditor({
               value={markdown}
               onChange={(event) => {
                 setMarkdown(event.target.value);
-                if (!conflict) setSaveState("saving");
+                if (!conflict) {
+                  setSaveState("saving");
+                  setError(null);
+                  setPublicationId(null);
+                }
               }}
               spellCheck
               className="mt-3 min-h-[620px] w-full resize-y rounded-lg border border-input bg-[#fbfcfc] p-4 font-mono text-sm leading-6 outline-none focus-visible:ring-2 focus-visible:ring-ember"
@@ -360,6 +332,26 @@ export function ContentDraftEditor({
               {!parsed.diagnostics.length ? <li className="text-sm text-green-800">No structural or security diagnostics.</li> : null}
             </ul>
           </section>
+
+          <details className="rounded-xl border border-border bg-white p-4 shadow-sm">
+            <summary className="cursor-pointer font-heading text-lg font-semibold text-[#142838]">
+              Prior-version feedback ({workspace.feedbackReferences.length})
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">Read-only annotations anchored to the immutable base version.</p>
+            <ul className="mt-3 space-y-2">
+              {workspace.feedbackReferences.map((reference) => (
+                <li key={reference.id} className="rounded-md border border-border p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2 font-medium capitalize">
+                    <span>{reference.kind}{reference.pinNumber ? ` ${reference.pinNumber}` : ""}</span>
+                    <span>{reference.status.replaceAll("_", " ")}</span>
+                  </div>
+                  {reference.selectedText ? <blockquote className="mt-2 border-l-2 border-warning pl-2 text-xs italic text-muted-foreground">“{reference.selectedText}”</blockquote> : null}
+                  <p className="mt-2 leading-5">{reference.body}</p>
+                </li>
+              ))}
+              {!workspace.feedbackReferences.length ? <li className="text-sm text-muted-foreground">No feedback is anchored to the base version.</li> : null}
+            </ul>
+          </details>
         </div>
 
         <div className={`${view === "preview" ? "block" : "hidden"} min-w-0 md:block`}>

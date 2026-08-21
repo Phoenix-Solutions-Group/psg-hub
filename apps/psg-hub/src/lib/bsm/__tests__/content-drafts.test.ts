@@ -51,6 +51,8 @@ class DraftClient {
   events: Array<Record<string, unknown>> = [];
   uploads: Array<{ bucket: string; path: string; contentType: string }> = [];
   rpcCalls: Array<{ functionName: string; args: Record<string, unknown> }> = [];
+  publishedVersion: Record<string, unknown> | null = null;
+  currentContentType = "text/markdown";
   tables = new Set<string>();
 
   storage = {
@@ -67,6 +69,13 @@ class DraftClient {
 
   rpc = async (functionName: string, args: Record<string, unknown>) => {
     this.rpcCalls.push({ functionName, args });
+    this.publishedVersion = {
+      id: args.p_version_id,
+      version_number: 2,
+      checksum_sha256: args.p_checksum_sha256,
+      source_metadata_jsonb: args.p_source_metadata,
+      artifact_manifest_jsonb: args.p_artifact_manifest,
+    };
     return {
       data: { id: args.p_version_id, version_number: 2 },
       error: null,
@@ -113,13 +122,18 @@ class DraftQuery {
     }
     if (this.table === "bsm_content_review_versions") {
       if (single) {
+        if (this.filters.id === PUBLICATION_ID) {
+          return { data: this.client.publishedVersion, error: null };
+        }
         return {
           data: {
             id: VERSION_ID,
             project_id: PROJECT_ID,
             shop_id: SHOP_ID,
             review_item_id: DOCUMENT_ID,
-            content_type: "text/markdown",
+            content_type: this.client.currentContentType,
+            original_filename: this.client.currentContentType === "text/markdown" ? "content.md" : "proof.pdf",
+            preview_type: null,
             storage_bucket: "bsm-content-approvals",
             storage_path: `${SHOP_ID}/${DOCUMENT_ID}/${VERSION_ID}/content.md`,
           },
@@ -313,7 +327,7 @@ describe("Content Draft service", () => {
       activeRoundChanged: false,
     });
     expect(client.uploads).toHaveLength(1);
-    expect(client.rpcCalls).toHaveLength(2);
+    expect(client.rpcCalls).toHaveLength(1);
     expect(client.rpcCalls[0]).toMatchObject({
       functionName: "publish_bsm_content_draft_version",
       args: {
@@ -329,6 +343,23 @@ describe("Content Draft service", () => {
     expect(client.tables.has("bsm_content_review_rounds")).toBe(false);
     expect(client.tables.has("bsm_content_review_round_documents")).toBe(false);
     expect(client.tables.has("bsm_content_review_invitations")).toBe(false);
+  });
+
+  it("rejects draft creation for a non-Markdown Review Document", async () => {
+    const client = new DraftClient();
+    client.currentContentType = "application/pdf";
+    client.draft = null;
+
+    await expect(createReviewContentDraft({
+      projectId: PROJECT_ID,
+      documentId: DOCUMENT_ID,
+      actorProfileId: ACTOR_ID,
+      actorRole: "psg_internal",
+      source: "import",
+      markdown: "# This must not become a PDF draft",
+    }, { client: client as never })).rejects.toMatchObject({ status: 409 });
+
+    expect(client.draft).toBeNull();
   });
 
   it("denies deletion when an immutable published manifest references the asset", async () => {

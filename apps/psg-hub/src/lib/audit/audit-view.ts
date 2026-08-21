@@ -101,7 +101,8 @@ export function auditCategory(action: string): AuditCategory {
   if (
     action.startsWith("approval") ||
     action.startsWith("review_response_restore") ||
-    action.startsWith("bsm_content_approval")
+    action.startsWith("bsm_content_approval") ||
+    action.startsWith("bsm_content_draft")
   ) {
     return "approvals";
   }

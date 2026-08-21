@@ -87,9 +87,9 @@ begin
       or v_existing.review_item_id <> p_review_item_id
       or v_existing.shop_id <> p_shop_id
       or v_existing.checksum_sha256 is distinct from p_checksum_sha256
-      or v_existing.source_metadata_jsonb ->> 'sourceKind' <> 'content_draft'
-      or v_existing.source_metadata_jsonb ->> 'draftId' <> p_draft_id::text
-      or v_existing.source_metadata_jsonb ->> 'draftRevision' <> p_expected_revision::text
+      or (v_existing.source_metadata_jsonb ->> 'sourceKind') is distinct from 'content_draft'
+      or (v_existing.source_metadata_jsonb ->> 'draftId') is distinct from p_draft_id::text
+      or (v_existing.source_metadata_jsonb ->> 'draftRevision') is distinct from p_expected_revision::text
     then
       raise exception using errcode = '42501', message = 'Publication identity is not available';
     end if;

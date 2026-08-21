@@ -762,11 +762,13 @@ describe("BsmContentApprovalManager", () => {
           status: "draft",
           currentRoundId: null,
           documentCount: 1,
+          role: "owner",
         }]}
       />,
     );
 
     expect(html).toContain("Edit Markdown");
+    expect(html).toContain("Add collaborator");
     expect(html).toContain('/ops/bsm-content-approvals/project-a/documents/item-markdown/edit');
   });
 });
