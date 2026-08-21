@@ -1320,6 +1320,7 @@ export function BsmContentApprovalManager({
         );
       }
       setStartedReview(body.review);
+      setWorkspacePreview(null);
       setWorkspaceOptions((current) =>
         current.map((workspace) =>
           workspace.id === reviewWorkspaceProjectId
