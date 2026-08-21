@@ -9,8 +9,8 @@
   330,535 rows across 34 pages with exactly 15 allowlisted fields and zero direct
   customer or agent PII fields. Supabase accepted 330,533 rows, rejected two with
   recorded reasons, superseded the prior snapshot, and retained no old-source facts.
-- A read-only 2026-08-20 FileMaker preflight now reports 330,709 available rows,
-  exactly 15 allowlisted fields, and zero direct PII fields. The 174-row source delta
+- The latest read-only 2026-08-20 FileMaker preflight reports 330,778 available rows,
+  exactly 15 allowlisted fields, and zero direct PII fields. The 243-row source delta
   was not exported or imported. An exact mapped-shop-name query still returns 3,420
   rows through 2025-12-24, so the new source rows do not unblock the pilot forecast.
 - The refresh service is staged with its timer disabled. The imported feed is current,

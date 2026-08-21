@@ -84,6 +84,10 @@ ownership remain separately controlled actions.
 - The source delta does not unblock the mapped pilot's forecast. A future approved
   import would update the governed snapshot, but this shop still fails the 14-day
   repair-arrival gate.
+- A second read-only probe at 21:08 CT reports 330,778 rows, 243 beyond the governed
+  snapshot and 69 beyond the earlier probe. An exact Shelton Collision Repair query
+  still returns 3,420 rows with latest arrival 2025-12-24. The added source rows belong
+  elsewhere and do not unblock the current mapped pilot. No export or import ran.
 
 ## FileMaker operations recheck — 2026-08-20
 
