@@ -126,8 +126,10 @@ type StormSourceHealth = {
 type CrashSourceHealth = {
   min_source_year: number;
   max_source_year: number;
+  source_row_count: number;
   imported_row_count: number;
   zip_matched_row_count: number;
+  imported_at: string | null;
   last_sync_status: string;
 };
 
@@ -346,7 +348,7 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
     service
       .from("ksdot_crash_sources")
       .select(
-        "min_source_year,max_source_year,imported_row_count,zip_matched_row_count,last_sync_status",
+        "min_source_year,max_source_year,source_row_count,imported_row_count,zip_matched_row_count,imported_at,last_sync_status",
       )
       .order("imported_at", { ascending: false })
       .limit(1),
@@ -813,6 +815,10 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
       ? (crashSource.zip_matched_row_count / crashSource.imported_row_count) *
         100
       : null;
+  const crashCountsReconciled = Boolean(
+    crashSource &&
+    crashSource.source_row_count === crashSource.imported_row_count,
+  );
   const result = searchValue(params.result);
   const notice = result ? notices[result] : null;
 
@@ -974,12 +980,24 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
 
           <SourceHealthCard
             title="KDOT crashes"
-            status={crashSource?.last_sync_status ?? "Not loaded"}
-            healthy={crashSource?.last_sync_status === "loaded"}
+            status={
+              crashSource?.last_sync_status === "loaded" &&
+              !crashCountsReconciled
+                ? "Count mismatch"
+                : (crashSource?.last_sync_status ?? "Not loaded")
+            }
+            healthy={
+              crashSource?.last_sync_status === "loaded" &&
+              crashCountsReconciled
+            }
           >
             <ReviewMetric
-              label="Imported rows"
-              value={crashSource?.imported_row_count.toLocaleString() ?? "—"}
+              label="Source / imported rows"
+              value={
+                crashSource
+                  ? `${crashSource.source_row_count.toLocaleString()} / ${crashSource.imported_row_count.toLocaleString()}`
+                  : "—"
+              }
             />
             <ReviewMetric
               label="ZIP matched"
@@ -994,6 +1012,14 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
               value={
                 crashSource
                   ? `${crashSource.min_source_year}–${crashSource.max_source_year}`
+                  : "—"
+              }
+            />
+            <ReviewMetric
+              label="Last refreshed"
+              value={
+                crashSource?.imported_at
+                  ? dateTime.format(new Date(crashSource.imported_at))
                   : "—"
               }
             />
