@@ -821,6 +821,14 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
   );
   const result = searchValue(params.result);
   const notice = result ? notices[result] : null;
+  const pendingDatabaseReleases = [
+    stormHealthUnavailable ? "Storm source reconciliation" : null,
+    forecastHealthUnavailable ? "Forecast readiness summary" : null,
+    identityEvidenceReleasePending ? "Governed shop address evidence" : null,
+    candidateEvidenceReleasePending
+      ? "Stored candidate forecast evidence"
+      : null,
+  ].filter((item): item is string => Boolean(item));
 
   return (
     <div className="space-y-6">
@@ -881,6 +889,46 @@ export default async function CollisionDataReviewPage({ searchParams }: Props) {
         >
           {notice}
         </div>
+      ) : null}
+
+      {pendingDatabaseReleases.length ? (
+        <aside
+          aria-labelledby="database-release-heading"
+          className="rounded-lg border border-warning/50 bg-warning/10 p-4"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2
+                id="database-release-heading"
+                className="font-heading font-semibold"
+              >
+                Database release incomplete
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-foreground/75">
+                This preview includes reviewed features whose matching Supabase
+                contracts are not live yet. Safe fallbacks remain read-only, and
+                actions that require governed evidence stay blocked.
+              </p>
+            </div>
+            <Badge variant="warning">
+              {pendingDatabaseReleases.length} pending
+            </Badge>
+          </div>
+          <ul className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+            {pendingDatabaseReleases.map((item) => (
+              <li
+                key={item}
+                className="rounded-md border border-warning/30 bg-background/60 px-3 py-2"
+              >
+                {item}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs leading-5 text-muted-foreground">
+            No migration is applied from this page. Production release remains a
+            separate reviewed operation.
+          </p>
+        </aside>
       ) : null}
 
       <section aria-labelledby="source-health-heading" className="space-y-3">

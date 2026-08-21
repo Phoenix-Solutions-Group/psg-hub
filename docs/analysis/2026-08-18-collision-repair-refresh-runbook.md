@@ -240,9 +240,12 @@ approval, apply these reviewed files in order through the migration runner:
 5. `20260821012506_collision_forecast_candidate_evaluations.sql`
 6. `20260821013156_collision_shop_identity_evidence.sql`
 
-The current production preconditions are: 3,986 provisional events and no matching
-source-ledger row for `noaa_spc_preliminary-20260801-20260817`; neither new view exists;
-and both legacy example RPCs have mutable search paths and browser-role execution.
+The current production preconditions were rechecked read-only on 2026-08-20: 3,986
+provisional events still lack a matching source-ledger row for
+`noaa_spc_preliminary-20260801-20260817`; neither new view nor either governed evidence
+table exists; the weather view still uses event-presence coverage; and both legacy
+example RPCs retain mutable search paths and browser-role execution. None of the six
+migration names appears in the live migration ledger.
 
 Postflight must prove:
 
