@@ -878,6 +878,9 @@ describe("BSM content approval upload helpers", () => {
     expect(updates).toHaveLength(1);
     expect(updates[0].payload).toMatchObject({ status: "archived" });
     expect(updates[0].payload.archived_at).toEqual(expect.any(String));
+    expect(updates[0].payload.deleted_at).toBe(
+      updates[0].payload.archived_at,
+    );
     expect(inserts).toEqual([
       {
         table: "bsm_content_review_events",

@@ -1083,8 +1083,13 @@ export async function getStaffReviewWorkspaceResult(
   if (eventError) throw new Error(`Could not load review workspace activity: ${eventError.message}`);
 
   const itemRecords = (itemRows ?? []) as Array<Record<string, unknown>>;
-  const comments = (commentRows ?? []) as Array<Record<string, unknown>>;
-  const decisionRecords = (decisionRows ?? []) as Array<Record<string, unknown>>;
+  const activeItemIds = new Set(itemRecords.map((row) => row.id as string));
+  const comments = ((commentRows ?? []) as Array<Record<string, unknown>>).filter(
+    (row) => activeItemIds.has(row.review_item_id as string),
+  );
+  const decisionRecords = ((decisionRows ?? []) as Array<Record<string, unknown>>).filter(
+    (row) => activeItemIds.has(row.review_item_id as string),
+  );
   const events = (eventRows ?? []) as Array<Record<string, unknown>>;
   const roundVersionByItem = new Map(((roundDocumentRows ?? []) as Array<Record<string, unknown>>).map(
     (row) => [row.review_item_id as string, row.version_id as string],
@@ -1644,12 +1649,13 @@ async function requireRoundDocumentAccess(
 ) {
   const { data, error } = await client
     .from("bsm_content_review_round_documents")
-    .select("review_item_id")
+    .select("review_item_id, item:bsm_content_review_items!inner(id)")
     .eq("round_id", access.roundId)
     .eq("project_id", access.projectId)
     .eq("shop_id", access.shopId)
     .eq("review_item_id", reviewItemId)
     .eq("version_id", versionId)
+    .is("item.deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(`Could not verify review document assignment: ${error.message}`);
   if (!data) {
@@ -1676,12 +1682,13 @@ async function requireGuestThread(
 ): Promise<ReviewWorkspaceThreadRow> {
   const { data, error } = await client
     .from("bsm_content_review_comment_threads")
-    .select("id, project_id, round_id, shop_id, review_item_id, version_id, owner_invitation_id, pin_number, status")
+    .select("id, project_id, round_id, shop_id, review_item_id, version_id, owner_invitation_id, pin_number, status, item:bsm_content_review_items!inner(id)")
     .eq("id", assertUuid("threadId", threadId))
     .eq("project_id", access.projectId)
     .eq("round_id", access.roundId)
     .eq("shop_id", access.shopId)
     .eq("owner_invitation_id", access.invitationId)
+    .is("item.deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(`Could not load review comment thread: ${error.message}`);
   if (!data) throw new ReviewWorkspaceInputError(404, "Review comment thread not found");
@@ -1698,10 +1705,11 @@ async function requireStaffThread(
   const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, actorRole);
   const { data, error } = await client
     .from("bsm_content_review_comment_threads")
-    .select("id, project_id, round_id, shop_id, review_item_id, version_id, owner_invitation_id, pin_number, status")
+    .select("id, project_id, round_id, shop_id, review_item_id, version_id, owner_invitation_id, pin_number, status, item:bsm_content_review_items!inner(id)")
     .eq("id", assertUuid("threadId", threadId))
     .eq("project_id", access.projectId)
     .eq("shop_id", access.shopId)
+    .is("item.deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(`Could not load review comment thread: ${error.message}`);
   if (!data) throw new ReviewWorkspaceInputError(404, "Review comment thread not found");
@@ -2251,16 +2259,25 @@ export async function getGuestReviewWorkspace(
       .order("submitted_at", { ascending: true }),
   ]);
 
-  const itemIds = ((docs ?? []) as Array<Record<string, unknown>>)
+  const documentRows = (docs ?? []) as Array<Record<string, unknown>>;
+  const itemIds = documentRows
     .map((row) => row.review_item_id)
     .filter((value): value is string => typeof value === "string");
-  const versionIds = ((docs ?? []) as Array<Record<string, unknown>>)
-    .map((row) => row.version_id)
-    .filter((value): value is string => typeof value === "string");
   const { data: items } = itemIds.length
-    ? await client.from("bsm_content_review_items").select("id, title, admin_context_note, processing_status, section_id").in("id", itemIds)
+    ? await client
+        .from("bsm_content_review_items")
+        .select("id, title, admin_context_note, processing_status, section_id")
+        .in("id", itemIds)
+        .is("deleted_at", null)
     : { data: [] };
   const itemsById = new Map(((items ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
+  const activeDocumentRows = documentRows.filter((row) =>
+    itemsById.has(row.review_item_id as string),
+  );
+  const activeItemIds = new Set(activeDocumentRows.map((row) => row.review_item_id as string));
+  const versionIds = activeDocumentRows
+    .map((row) => row.version_id)
+    .filter((value): value is string => typeof value === "string");
   const { data: versions } = versionIds.length
     ? await client
         .from("bsm_content_review_versions")
@@ -2270,7 +2287,7 @@ export async function getGuestReviewWorkspace(
   const versionsById = new Map(((versions ?? []) as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
   const commentRows = ((comments ?? []) as Array<Record<string, unknown>>).filter(
     (row) =>
-      itemIds.includes(row.review_item_id as string) &&
+      activeItemIds.has(row.review_item_id as string) &&
       versionIds.includes(row.version_id as string) &&
       ((row.invitation_id === access.invitationId && row.round_id === access.roundId) ||
         (row.invitation_id == null && typeof row.author_profile_id === "string" &&
@@ -2306,7 +2323,7 @@ export async function getGuestReviewWorkspace(
       submittedAt: access.submittedAt,
       readOnly: access.invitationStatus === "submitted" || Boolean(access.submittedAt),
     },
-    documents: await Promise.all(((docs ?? []) as Array<Record<string, unknown>>).map(async (row) => {
+    documents: await Promise.all(activeDocumentRows.map(async (row) => {
       const item = itemsById.get(row.review_item_id as string) ?? null;
       const version = versionsById.get(row.version_id as string) ?? null;
       const metadata = (version?.source_metadata_jsonb as Record<string, unknown> | null) ?? {};
@@ -2368,13 +2385,15 @@ export async function getGuestReviewWorkspace(
       selection: readTextSelection(row.selection_jsonb),
       }];
     }),
-    decisions: ((decisions ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      reviewItemId: row.review_item_id as string,
-      versionId: row.version_id as string,
-      decision: row.decision as string,
-      message: (row.message as string | null) ?? null,
-      submittedAt: (row.submitted_at as string | null) ?? null,
-    })),
+    decisions: ((decisions ?? []) as Array<Record<string, unknown>>)
+      .filter((row) => activeItemIds.has(row.review_item_id as string))
+      .map((row) => ({
+        reviewItemId: row.review_item_id as string,
+        versionId: row.version_id as string,
+        decision: row.decision as string,
+        message: (row.message as string | null) ?? null,
+        submittedAt: (row.submitted_at as string | null) ?? null,
+      })),
   };
 }
 
@@ -2499,11 +2518,12 @@ export async function submitGuestReviewRound(
 
   const { data: requiredDocuments, error: requiredDocumentsError } = await client
     .from("bsm_content_review_round_documents")
-    .select("review_item_id, version_id")
+    .select("review_item_id, version_id, item:bsm_content_review_items!inner(id)")
     .eq("round_id", access.roundId)
     .eq("project_id", access.projectId)
     .eq("shop_id", access.shopId)
-    .eq("decision_required", true);
+    .eq("decision_required", true)
+    .is("item.deleted_at", null);
   if (requiredDocumentsError) throw new Error(`Could not load required review documents: ${requiredDocumentsError.message}`);
   const requiredKeys = new Set(((requiredDocuments ?? []) as Array<Record<string, unknown>>).map(
     (row) => `${row.review_item_id}:${row.version_id}`,
