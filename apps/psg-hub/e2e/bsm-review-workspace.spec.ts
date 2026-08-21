@@ -158,8 +158,8 @@ test("BSM content approvals release gate: admin creates, reviewer comments and s
   await expect(page.getByRole("heading", { name: "Review Workspace", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Open review workspace" }).click();
   await expect(page.getByText("Review notes", { exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("Please update the warranty offer wording before approval.")).toBeVisible();
-  await expect(page.getByText("changes requested", { exact: true })).toBeVisible();
-  await expect(page.getByText("The page is close, but the warranty offer needs clearer wording.")).toBeVisible();
+  await expect(page.getByText("Please update the warranty offer wording before approval.").first()).toBeVisible();
+  await expect(page.getByText("changes requested", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("The page is close, but the warranty offer needs clearer wording.").first()).toBeVisible();
   await checkA11y(page, "bsm-content-approvals-admin-result");
 });
