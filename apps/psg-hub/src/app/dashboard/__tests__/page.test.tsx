@@ -7,11 +7,7 @@ let mockUser: { id: string; email?: string } | null = {
   email: "owner@example.com",
 };
 let mockActiveShopId: string | null = "shop_1";
-let mockCounts = {
-  all: 0,
-  pending_review: 0,
-  published: 0,
-};
+let mockPendingContentCount = 0;
 let mockLatestAudit: { report: ShopAuditReport } | null = null;
 const recordBsmPilotEvent = vi.fn();
 
@@ -23,38 +19,8 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-class CountQuery {
-  private status: string | null = null;
-
-  select() {
-    return this;
-  }
-
-  eq(column: string, value: string) {
-    if (column === "status") {
-      this.status = value;
-    }
-    return this;
-  }
-
-  then<TResult1 = { count: number }, TResult2 = never>(
-    onfulfilled?:
-      | ((value: { count: number }) => TResult1 | PromiseLike<TResult1>)
-      | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-  ) {
-    const key = this.status ?? "all";
-    return Promise.resolve({ count: mockCounts[key as keyof typeof mockCounts] }).then(
-      onfulfilled,
-      onrejected,
-    );
-  }
-}
-
 vi.mock("@/lib/supabase/service", () => ({
-  createServiceClient: vi.fn(() => ({
-    from: vi.fn(() => new CountQuery()),
-  })),
+  createServiceClient: vi.fn(() => ({})),
 }));
 
 vi.mock("@/lib/shop/context", () => ({
@@ -70,6 +36,52 @@ vi.mock("@/lib/seo-audit/run", () => ({
 
 vi.mock("@/lib/bsm/pilot-events", () => ({
   recordBsmPilotEvent: (...a: unknown[]) => recordBsmPilotEvent(...a),
+}));
+
+function dashboardPortfolio() {
+  const shop = { id: "shop_1", name: "Tracy's Collision", role: "owner" };
+  const tool = (
+    id: "content" | "reviews" | "analytics" | "ads",
+    name: string,
+    href: string,
+  ) => ({
+    id,
+    name,
+    description: `${name} description`,
+    href,
+    locations: [
+      {
+        ...shop,
+        href,
+        status: "ready" as const,
+        attentionCount: id === "content" ? mockPendingContentCount : 0,
+      },
+    ],
+    statusCounts: {
+      ready: 1,
+      partial: 0,
+      setup: 0,
+      upgrade: 0,
+      unavailable: 0,
+    },
+    attentionCount: id === "content" ? mockPendingContentCount : 0,
+    ...(id === "content" ? { attentionLabel: "awaiting review" } : {}),
+  });
+
+  return {
+    shops: [shop],
+    tools: [
+      tool("content", "Content Approvals", "/dashboard/content"),
+      tool("reviews", "Reviews & Reputation", "/dashboard/reviews"),
+      tool("analytics", "Marketing Analytics", "/dashboard/analytics"),
+      tool("ads", "Google Ads", "/dashboard/ads"),
+    ],
+    canRequestPortfolioAccess: true,
+  };
+}
+
+vi.mock("@/lib/dashboard/tools", () => ({
+  getDashboardPortfolio: vi.fn(async () => dashboardPortfolio()),
 }));
 
 const DashboardPage = (await import("@/app/dashboard/page")).default;
@@ -102,34 +114,24 @@ function report(overrides: Partial<ShopAuditReport> = {}): ShopAuditReport {
 beforeEach(() => {
   mockUser = { id: "user_1", email: "owner@example.com" };
   mockActiveShopId = "shop_1";
-  mockCounts = {
-    all: 0,
-    pending_review: 0,
-    published: 0,
-  };
+  mockPendingContentCount = 0;
   mockLatestAudit = null;
   recordBsmPilotEvent.mockReset();
 });
 
 describe("DashboardPage first-login trust state", () => {
-  it("shows a useful setup state before empty activity metrics", async () => {
+  it("shows the first-login trust state before the portfolio tools", async () => {
     const html = renderToStaticMarkup(await DashboardPage());
 
-    expect(html).toContain("Welcome, owner.");
-    expect(html).not.toContain("Welcome back");
+    expect(html).toContain("Welcome back, owner.");
+    expect(html).toContain("Your PSG tools");
     expect(html).toContain("Your first check has not run yet.");
     expect(html).toContain(
       "Run a quick, free shop check first. This does not connect Google, publish anything, or change your public listing.",
     );
     expect(html).toContain("Start free check");
-    expect(html).toContain("Not started yet");
-    expect(html).toContain("None waiting");
-    expect(html).toContain("Nothing live yet");
-    expect(html).toContain(
-      "Drafts will appear after BSM has enough shop signals to create them.",
-    );
     expect(html.indexOf("Your first check has not run yet.")).toBeLessThan(
-      html.indexOf("Content Items"),
+      html.indexOf("Content Approvals"),
     );
     expect(recordBsmPilotEvent).toHaveBeenCalledWith(
       expect.anything(),
@@ -142,20 +144,14 @@ describe("DashboardPage first-login trust state", () => {
     );
   });
 
-  it("keeps showing real counts after activity exists", async () => {
-    mockCounts = {
-      all: 4,
-      pending_review: 1,
-      published: 2,
-    };
+  it("keeps showing actionable portfolio counts after activity exists", async () => {
+    mockPendingContentCount = 1;
     mockLatestAudit = { report: report() };
 
     const html = renderToStaticMarkup(await DashboardPage());
 
     expect(html).toContain("1 page needs attention.");
-    expect(html).toContain(">4<");
-    expect(html).toContain(">1<");
-    expect(html).toContain(">2<");
-    expect(html).not.toContain("Not started yet");
+    expect(html).toContain("1 item is waiting for your review.");
+    expect(html).toContain("1 awaiting review");
   });
 });
