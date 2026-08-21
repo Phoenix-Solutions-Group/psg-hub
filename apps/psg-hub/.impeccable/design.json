@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-06T00:35:22Z",
+  "title": "Design System: PSG Hub",
+  "extensions": {
+    "colorMeta": {
+      "midnight": {
+        "role": "primary",
+        "displayName": "PSG Midnight",
+        "canonical": "#1E3A52",
+        "tonalRamp": ["#0A1822", "#142838", "#1E3A52", "#2A4A63", "#4F6A82", "#8FA1B2", "#DCE3EA", "#F1F4F7"]
+      },
+      "ember": {
+        "role": "secondary",
+        "displayName": "PSG Ember",
+        "canonical": "#B8483E",
+        "tonalRamp": ["#4A1C18", "#6E2923", "#8C362D", "#B8483E", "#C0594D", "#D88378", "#ECC8C2", "#FAEEEC"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "PSG Paper",
+        "canonical": "#FAFAFA",
+        "tonalRamp": ["#161616", "#2A2A2A", "#707070", "#949494", "#C4C4C4", "#E0E0E0", "#F0F0F0", "#FAFAFA"]
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "Success Sage",
+        "canonical": "#526B51",
+        "tonalRamp": ["#1A241A", "#293929", "#3A4E3A", "#526B51", "#718870", "#9AAE99", "#CDD8CC", "#F1F5F1"]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "Warning Amber",
+        "canonical": "#C28E3A",
+        "tonalRamp": ["#3B2A10", "#5B4019", "#7B5925", "#9B7130", "#C28E3A", "#D9B36B", "#ECD6AA", "#FAF3E5"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Dashboard Display",
+        "purpose": "The single page title and strongest orientation cue."
+      },
+      "headline": {
+        "displayName": "Section Headline",
+        "purpose": "Major dashboard regions such as Your services."
+      },
+      "title": {
+        "displayName": "Tool Title",
+        "purpose": "Tool names and card headings."
+      },
+      "body": {
+        "displayName": "Operational Body",
+        "purpose": "Descriptions, status explanations, and helper copy."
+      },
+      "label": {
+        "displayName": "Action Label",
+        "purpose": "Buttons, navigation, and compact utility labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "hairline",
+        "value": "0 0 0 1px rgba(30, 58, 82, 0.08)",
+        "purpose": "Extra separation for a Paper or white surface when a border alone is insufficient."
+      },
+      {
+        "name": "surface-small",
+        "value": "0 1px 2px rgba(22, 21, 20, 0.04), 0 1px 1px rgba(22, 21, 20, 0.03)",
+        "purpose": "Featured tool and opportunity cards at rest."
+      },
+      {
+        "name": "panel-medium",
+        "value": "0 4px 12px rgba(22, 21, 20, 0.06), 0 1px 2px rgba(22, 21, 20, 0.04)",
+        "purpose": "Temporary panels and dialogs only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.22, 0.61, 0.36, 1)",
+        "purpose": "Default hover and state transition."
+      },
+      {
+        "name": "duration-fast",
+        "value": "140ms",
+        "purpose": "Hover and focus response."
+      },
+      {
+        "name": "duration-base",
+        "value": "220ms",
+        "purpose": "Panel and state changes."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The default action for opening, choosing, setting up, or requesting access.",
+      "html": "<button class=\"ds-btn-primary\">Choose location <span aria-hidden=\"true\">→</span></button>",
+      "css": ".ds-btn-primary { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 6px; padding: 8px 16px; background: #1E3A52; color: #FAFAFA; font: 500 14px/1.25 Gotham, 'Helvetica Neue', system-ui, sans-serif; letter-spacing: .02em; transition: background 140ms cubic-bezier(.22,.61,.36,1), transform 140ms cubic-bezier(.22,.61,.36,1); } .ds-btn-primary:hover { background: #142838; } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 2px solid #B8483E; outline-offset: 2px; }"
+    },
+    {
+      "name": "Accent Button",
+      "kind": "button",
+      "refersTo": "button-accent",
+      "description": "The single priority action on the featured tool.",
+      "html": "<button class=\"ds-btn-accent\">Review 7 items <span aria-hidden=\"true\">→</span></button>",
+      "css": ".ds-btn-accent { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 6px; padding: 8px 16px; background: #B8483E; color: #FFFFFF; font: 500 14px/1.25 Gotham, 'Helvetica Neue', system-ui, sans-serif; letter-spacing: .02em; transition: background 140ms cubic-bezier(.22,.61,.36,1), transform 140ms cubic-bezier(.22,.61,.36,1); } .ds-btn-accent:hover { background: #8C362D; } .ds-btn-accent:active { transform: translateY(1px); } .ds-btn-accent:focus-visible { outline: 2px solid #B8483E; outline-offset: 2px; }"
+    },
+    {
+      "name": "Ready Badge",
+      "kind": "chip",
+      "refersTo": "badge-ready",
+      "description": "A compact status reinforcement that always includes explicit text.",
+      "html": "<span class=\"ds-badge-ready\">Ready</span>",
+      "css": ".ds-badge-ready { min-height: 20px; display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 8px; background: #526B51; color: #FFFFFF; font: 500 12px/1.25 Gotham, 'Helvetica Neue', system-ui, sans-serif; }"
+    },
+    {
+      "name": "Featured Tool Card",
+      "kind": "card",
+      "refersTo": "card-featured",
+      "description": "The user's most likely next useful action with outcome, action, and portfolio status.",
+      "html": "<article class=\"ds-tool-card\"><div class=\"ds-tool-icon\" aria-hidden=\"true\">✓</div><div><h3>Content Approvals</h3><p>Review and approve PSG-created content before it goes live.</p></div><button>Review items →</button><footer><strong>2 ready</strong><span>Across 2 visible locations</span></footer></article>",
+      "css": ".ds-tool-card { display: grid; grid-template-columns: 48px minmax(0,1fr) auto; gap: 16px; align-items: start; border: 1px solid #E0E0E0; border-radius: 6px; padding: 32px; background: #FFFFFF; color: #161616; box-shadow: 0 1px 2px rgba(22,21,20,.04), 0 1px 1px rgba(22,21,20,.03); font-family: 'Didact Gothic', Gotham, system-ui, sans-serif; } .ds-tool-card h3 { margin: 0; color: #161616; font: 700 20px/1.25 Gotham, 'Helvetica Neue', system-ui, sans-serif; } .ds-tool-card p { margin: 8px 0 0; max-width: 38rem; color: #707070; font-size: 16px; line-height: 1.65; } .ds-tool-card button { min-height: 44px; border: 0; border-radius: 6px; padding: 8px 16px; background: #B8483E; color: #fff; font: 500 14px Gotham, sans-serif; } .ds-tool-card button:hover { background: #8C362D; } .ds-tool-card button:focus-visible { outline: 2px solid #B8483E; outline-offset: 2px; } .ds-tool-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 6px; background: #1E3A52; color: #FAFAFA; } .ds-tool-card footer { grid-column: 1 / -1; display: flex; gap: 16px; border-top: 1px solid #E0E0E0; padding-top: 16px; color: #707070; font-size: 14px; } .ds-tool-card footer strong { color: #161616; font-family: Gotham, sans-serif; }"
+    },
+    {
+      "name": "Growth Opportunity Card",
+      "kind": "card",
+      "refersTo": "card-opportunity",
+      "description": "A single, calm growth opportunity with honest upgrade status and an inverse action.",
+      "html": "<aside class=\"ds-opportunity\"><span>Growth opportunity</span><h3>Google Ads</h3><p>View and manage paid search campaigns built for collision repair.</p><strong>2 need upgrade</strong><button>Contact PSG →</button></aside>",
+      "css": ".ds-opportunity { border: 1px solid #1E3A52; border-radius: 6px; padding: 24px; background: #1E3A52; color: #FAFAFA; box-shadow: 0 1px 2px rgba(22,21,20,.04), 0 1px 1px rgba(22,21,20,.03); font-family: 'Didact Gothic', Gotham, system-ui, sans-serif; } .ds-opportunity > span { color: #DCE3EA; font-size: 14px; } .ds-opportunity h3 { margin: 8px 0; font: 700 20px/1.25 Gotham, sans-serif; } .ds-opportunity p { margin: 0 0 24px; color: #DCE3EA; font-size: 14px; line-height: 1.6; } .ds-opportunity strong { display: block; border-top: 1px solid #2A4A63; padding-top: 16px; font: 500 14px Gotham, sans-serif; } .ds-opportunity button { min-height: 44px; margin-top: 24px; border: 1px solid #FAFAFA; border-radius: 6px; padding: 8px 16px; background: #FFFFFF; color: #1E3A52; font: 500 14px Gotham, sans-serif; } .ds-opportunity button:hover { background: #F1F4F7; } .ds-opportunity button:focus-visible { outline: 2px solid #B8483E; outline-offset: 2px; }"
+    },
+    {
+      "name": "Location Search",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "A focused search field for filtering visible locations within an inline chooser.",
+      "html": "<label class=\"ds-field\"><span>Find a location</span><input type=\"search\" placeholder=\"Search locations\"></label>",
+      "css": ".ds-field { display: grid; gap: 8px; color: #161616; font: 500 14px Gotham, 'Helvetica Neue', system-ui, sans-serif; } .ds-field input { min-height: 44px; border: 1px solid #E0E0E0; border-radius: 6px; padding: 8px 12px; background: #FFFFFF; color: #161616; font: 400 16px/1.5 'Didact Gothic', Gotham, system-ui, sans-serif; transition: border-color 140ms cubic-bezier(.22,.61,.36,1), box-shadow 140ms cubic-bezier(.22,.61,.36,1); } .ds-field input::placeholder { color: #707070; } .ds-field input:focus-visible { border-color: #B8483E; outline: 2px solid #B8483E; outline-offset: 2px; }"
+    },
+    {
+      "name": "Sidebar Navigation Item",
+      "kind": "nav",
+      "description": "The persistent, understated route control inside the Midnight app shell.",
+      "html": "<a class=\"ds-nav-item ds-nav-item-active\" href=\"#\">Dashboard</a>",
+      "css": ".ds-nav-item { min-height: 40px; display: flex; align-items: center; border-left: 3px solid transparent; border-radius: 0 6px 6px 0; padding: 8px 12px; background: #1E3A52; color: #DCE3EA; text-decoration: none; font: 500 14px/1.25 Gotham, 'Helvetica Neue', system-ui, sans-serif; letter-spacing: .02em; transition: background 140ms cubic-bezier(.22,.61,.36,1), color 140ms cubic-bezier(.22,.61,.36,1); } .ds-nav-item:hover { background: #2A4A63; color: #FFFFFF; } .ds-nav-item-active { border-left-color: #B8483E; background: #2A4A63; color: #FFFFFF; } .ds-nav-item:focus-visible { outline: 2px solid #B8483E; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The PSG Control Desk",
+    "overview": "PSG Hub is a premium-editorial operational workspace: calm enough for routine use, authoritative enough to establish trust, and explicit enough to guide a busy collision repair owner to the next useful action. Midnight structure, Paper surfaces, precise hairlines, and rare Ember signals create hierarchy without turning the product into a marketing site.",
+    "keyCharacteristics": [
+      "Persistent Midnight navigation with a light Paper workspace",
+      "One featured next action and one distinct growth opportunity",
+      "Honest portfolio and per-location availability",
+      "Precise 6px geometry and subtle tonal depth",
+      "Premium editorial typography with operational density"
+    ],
+    "rules": [
+      {
+        "name": "The Rare Signal Rule",
+        "body": "Ember communicates priority, state, or focus and should occupy less than roughly 10% of a screen.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Editorial Voice Rule",
+        "body": "Gotham creates hierarchy and action; Didact Gothic explains. Gotham Rounded stays out of the Hub.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tonal-First Rule",
+        "body": "Use color fields and borders before adding shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Make the first useful action dominant while keeping every customer tool reachable.",
+      "Explain plan, setup, data, role, and location availability in plain language.",
+      "Use official PSG SVG assets with correct lockup, minimum size, and clear space.",
+      "Maintain WCAG 2.2 AA contrast, keyboard access, visible focus, and textual status."
+    ],
+    "donts": [
+      "Do not build a generic grid of equal SaaS cards.",
+      "Do not present decorative metrics or unavailable features as live.",
+      "Do not scatter Ember across decorative elements.",
+      "Do not show internal Agents or staff workflows to customer users.",
+      "Do not redraw, distort, recolor, crop, or append HUB to the PSG logo."
+    ]
+  }
+}
