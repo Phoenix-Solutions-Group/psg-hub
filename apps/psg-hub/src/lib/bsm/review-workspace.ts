@@ -1782,11 +1782,12 @@ async function updateRoundCompletionAfterSubmission(
       .order("submitted_at", { ascending: false }),
     client
       .from("bsm_content_review_round_documents")
-      .select("review_item_id")
+      .select("review_item_id, item:bsm_content_review_items!inner(id)")
       .eq("round_id", input.roundId)
       .eq("project_id", input.projectId)
       .eq("shop_id", input.shopId)
-      .eq("decision_required", true),
+      .eq("decision_required", true)
+      .is("item.deleted_at", null),
   ]);
   if (decisionsError) throw new Error(`Could not load review round decisions: ${decisionsError.message}`);
   if (roundDocumentsError) throw new Error(`Could not load required review documents: ${roundDocumentsError.message}`);
@@ -2446,12 +2447,14 @@ async function downloadReviewWorkspaceFile(
       storage_path,
       processed_storage_bucket,
       processed_storage_path,
-      processed_content_type
+      processed_content_type,
+      item:bsm_content_review_items!inner(id)
     `)
     .eq("id", input.versionId)
     .eq("review_item_id", input.reviewItemId)
     .eq("project_id", input.projectId)
     .eq("shop_id", input.shopId)
+    .is("item.deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(`Could not load review document file: ${error.message}`);
   if (!version) throw new ReviewWorkspaceInputError(404, "Review document file not found");

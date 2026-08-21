@@ -13,6 +13,7 @@ import {
   enqueueReviewWorkspaceProcessingJob,
   getGuestReviewWorkspace,
   getGuestReviewWorkspaceFileDownload,
+  getStaffReviewWorkspaceFileDownload,
   getStaffReviewWorkspaceResult,
   listStaffReviewWorkspaces,
   requireGuestReviewSession,
@@ -174,6 +175,7 @@ type FakeClientOptions = {
   roundlessStaffThread?: boolean;
   duplicateStaffThreadInsertOnce?: boolean;
   deletedReviewItem?: boolean;
+  deletedReviewItemIds?: string[];
 };
 
 class Query {
@@ -231,7 +233,13 @@ class Query {
       ) {
         return { data: [], error: null };
       }
-      return { data: this.options.roundDocuments ?? [{ review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID }], error: null };
+      const rows = this.options.roundDocuments ?? [{ review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID }];
+      return {
+        data: this.filters["item.deleted_at"] === null
+          ? rows.filter((row) => !this.options.deletedReviewItemIds?.includes(row.review_item_id as string))
+          : rows,
+        error: null,
+      };
     }
     if (this.table === "bsm_content_review_comments") {
       if (this.filters.limit === 1) {
@@ -468,8 +476,32 @@ class Query {
         data: isInScope &&
           requestedInScope &&
           tenantMatched &&
-          !(this.options.deletedReviewItem && this.filters["item.deleted_at"] === null)
+          !(this.options.deletedReviewItem && this.filters["item.deleted_at"] === null) &&
+          !(this.filters["item.deleted_at"] === null && this.options.deletedReviewItemIds?.includes(reviewItemId))
           ? { review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID }
+          : null,
+        error: null,
+      });
+    }
+    if (this.table === "bsm_content_review_versions") {
+      const hidden = this.filters["item.deleted_at"] === null && (
+        this.options.deletedReviewItem ||
+        this.options.deletedReviewItemIds?.includes(String(this.filters.review_item_id))
+      );
+      return Promise.resolve({
+        data: this.options.uploadedFileProof && !hidden
+          ? {
+              id: VERSION_ID,
+              project_id: PROJECT_ID,
+              original_filename: "homepage-proof.pdf",
+              content_type: "application/pdf",
+              byte_size: 1024,
+              storage_bucket: "bsm-content-approvals",
+              storage_path: `${SHOP_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/homepage-proof.pdf`,
+              processed_storage_bucket: "bsm-content-approvals",
+              processed_storage_path: `${SHOP_ID}/${PROJECT_ID}/${REVIEW_ITEM_ID}/${VERSION_ID}/review-copy/homepage-proof.pdf`,
+              processed_content_type: "application/pdf",
+            }
           : null,
         error: null,
       });
@@ -1098,6 +1130,17 @@ describe("BSM review workspace foundation service", () => {
         { client: client as never },
       ),
     ).rejects.toThrow("not part of the active round");
+    await expect(
+      getStaffReviewWorkspaceFileDownload(
+        {
+          projectId: PROJECT_ID,
+          actorProfileId: ACTOR_ID,
+          reviewItemId: REVIEW_ITEM_ID,
+          versionId: VERSION_ID,
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("Review document file not found");
   });
 
   it("shows PSG notes without exposing another reviewer's notes", async () => {
@@ -1561,6 +1604,32 @@ describe("BSM review workspace foundation service", () => {
         { client: client as never },
       ),
     ).rejects.toThrow("Submit exactly one decision for every required document");
+  });
+
+  it("completes a round after all active documents are approved when another document was deleted", async () => {
+    const { client } = createFakeClient({
+      deletedReviewItemIds: [SECOND_REVIEW_ITEM_ID],
+      roundDocuments: [
+        { review_item_id: REVIEW_ITEM_ID, version_id: VERSION_ID },
+        { review_item_id: SECOND_REVIEW_ITEM_ID, version_id: SECOND_VERSION_ID },
+      ],
+      roundDecisionRows: [{
+        invitation_id: INVITATION_ID,
+        review_item_id: REVIEW_ITEM_ID,
+        decision: "approved",
+        submitted_at: "2026-07-28T19:30:00.000Z",
+      }],
+    });
+
+    await expect(
+      submitGuestReviewRound(
+        {
+          sessionHash: "session-hash",
+          decisions: [{ reviewItemId: REVIEW_ITEM_ID, versionId: VERSION_ID, decision: "approved" }],
+        },
+        { client: client as never, now: new Date("2026-07-28T19:30:00.000Z") },
+      ),
+    ).resolves.toMatchObject({ roundCompleted: true, outcome: "approved" });
   });
 
   it("does not complete a round until every active reviewer has submitted", async () => {
