@@ -120,10 +120,11 @@ test("BSM content approvals release gate: admin creates, reviewer comments and s
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: "Send review" }).click();
 
-  const inviteLink = page.getByRole("link", { name: /\/review-workspace\?invite=/ });
-  await expect(inviteLink).toBeVisible({ timeout: 15_000 });
-  const invitePath = await inviteLink.textContent();
-  const code = await page.getByText(/^\d{6}$/).last().textContent();
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.getByRole("button", { name: "Copy link and code" }).click();
+  const invitation = await page.evaluate(() => navigator.clipboard.readText());
+  const [invitePath, codeLine] = invitation.split("\n");
+  const code = codeLine?.match(/^One-time code: (\d{6})$/)?.[1] ?? null;
   expect(invitePath).toContain("/review-workspace?invite=");
   expect(code).toMatch(/^\d{6}$/);
   await screenshotEvidence(page, "bsm-content-approvals-admin");
