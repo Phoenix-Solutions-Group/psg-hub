@@ -20,6 +20,7 @@ import {
   type CollisionSpcSourceRow,
   type CollisionVehicleRow,
   type CollisionWeatherRow,
+  type CollisionWeatherAlertMonitoringRow,
   type CollisionWeeklyRow,
   type CollisionZipRow,
 } from "./aggregate";
@@ -39,6 +40,7 @@ export async function getCollisionDashboard(shopId: string) {
     crashes,
     alerts,
     alertCases,
+    alertMonitoring,
     forecastStatus,
     spcSource,
     insurers,
@@ -95,11 +97,17 @@ export async function getCollisionDashboard(shopId: string) {
     service
       .from("v_collision_weather_alert_case_evidence")
       .select(
-        "id,zip_code,event_type,event_date,alert_level,threshold_basis,latest_event_at,peak_magnitude,magnitude_unit,historical_repair_orders,report_count,owner_profile_id,status,acknowledged_at,outcome,outcome_notes,closed_at,evidence_source_latest_arrival_date,evidence_baseline_source_span_complete,evidence_follow_up_weeks_complete,evidence_prior_52_week_repair_orders,evidence_week_1_repair_orders,evidence_week_2_repair_orders,evidence_week_3_repair_orders,evidence_week_4_repair_orders,evidence_mature_for_close",
+        "id,zip_code,event_type,event_date,alert_level,threshold_basis,latest_event_at,peak_magnitude,magnitude_unit,historical_repair_orders,report_count,control_match_status,control_event_date,control_match_years_back,owner_profile_id,status,acknowledged_at,outcome,outcome_notes,closed_at,evidence_source_latest_arrival_date,evidence_baseline_source_span_complete,evidence_follow_up_weeks_complete,evidence_prior_52_week_repair_orders,evidence_week_1_repair_orders,evidence_week_2_repair_orders,evidence_week_3_repair_orders,evidence_week_4_repair_orders,evidence_control_baseline_source_span_complete,evidence_control_follow_up_weeks_complete,evidence_control_prior_52_week_repair_orders,evidence_control_week_1_repair_orders,evidence_control_week_2_repair_orders,evidence_control_week_3_repair_orders,evidence_control_week_4_repair_orders,evidence_signal_mature_for_close,evidence_control_mature_for_close,evidence_mature_for_close",
       )
       .eq("shop_id", shopId)
       .order("event_date", { ascending: false })
       .limit(20),
+    service
+      .from("v_collision_weather_alert_monitoring")
+      .select(
+        "cohort,matched_case_count,signal_follow_through_count,control_follow_through_count,signal_follow_through_rate_pct,control_follow_through_rate_pct,lift_pct_points",
+      )
+      .eq("shop_id", shopId),
     service
       .from("collision_demand_forecasts")
       .select(
@@ -187,9 +195,13 @@ export async function getCollisionDashboard(shopId: string) {
       .limit(1),
   ]);
 
-  const alertReviewUnavailable = Boolean(
-    alertCases.error &&
-    (alertCases.error.code === "PGRST205" || alertCases.error.code === "42P01"),
+  const missingAlertReviewRelation = (error: { code?: string } | null) =>
+    Boolean(error && (error.code === "PGRST205" || error.code === "42P01"));
+  const alertReviewUnavailable =
+    missingAlertReviewRelation(alertCases.error) ||
+    missingAlertReviewRelation(alertMonitoring.error);
+  const alertReviewError = [alertCases.error, alertMonitoring.error].find(
+    (candidate) => candidate && !missingAlertReviewRelation(candidate),
   );
   const error =
     weekly.error ??
@@ -197,7 +209,7 @@ export async function getCollisionDashboard(shopId: string) {
     forecast.error ??
     crashes.error ??
     alerts.error ??
-    (alertReviewUnavailable ? null : alertCases.error) ??
+    alertReviewError ??
     forecastStatus.error ??
     spcSource.error ??
     insurers.error ??
@@ -289,5 +301,6 @@ export async function getCollisionDashboard(shopId: string) {
     nationalCrashSourceRows,
     (alertCases.data ?? []) as CollisionAlertCaseRow[],
     !alertReviewUnavailable,
+    (alertMonitoring.data ?? []) as CollisionWeatherAlertMonitoringRow[],
   );
 }

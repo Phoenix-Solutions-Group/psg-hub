@@ -40,7 +40,7 @@ const weatherReviewNotices: Record<string, string> = {
   release_pending:
     "Weather review decisions stay read-only until the reviewed database migration is applied.",
   evidence_incomplete:
-    "Keep this follow-up open. Four complete weeks and repair history spanning the prior 52 weeks are required before an observed outcome can be recorded.",
+    "Keep this follow-up open. Four complete signal weeks, a prior 52-week baseline, and a complete pre-registered matched control are required before an observed outcome can be recorded.",
   stale:
     "That weather signal or follow-up changed before it could be saved. The dashboard has been refreshed.",
   error: "The weather review could not be saved. No review state changed.",
@@ -89,6 +89,9 @@ export default async function CollisionIntelligencePage({
   );
   const closedWeatherReviewCases = dashboard.weatherReviewCases.filter(
     (reviewCase) => reviewCase.status === "closed",
+  );
+  const overallWeatherMonitoring = dashboard.weatherAlertMonitoring.find(
+    (cohort) => cohort.cohort === "all",
   );
 
   return (
@@ -556,9 +559,10 @@ export default async function CollisionIntelligencePage({
                       Owned follow-ups
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      Compare the next four weeks of repair arrivals with this
-                      ZIP&apos;s prior 52 weeks, then record what PSG observed.
-                      This does not prove the weather caused the repairs.
+                      Each acknowledgement locks a comparable prior-year period
+                      for the same shop and ZIP before follow-up results are
+                      known. Compare both four-week windows, then record what
+                      PSG observed. This does not prove causation.
                     </p>
                   </div>
                   {openWeatherReviewCases.map((reviewCase) => (
@@ -591,45 +595,95 @@ export default async function CollisionIntelligencePage({
                         </div>
                         <Badge variant="outline">Acknowledged</Badge>
                       </div>
-                      <div className="space-y-2 rounded-md bg-secondary/40 p-3 text-sm">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="font-medium">
-                            {reviewCase.evidence.followUpWeeksComplete} of 4
-                            follow-up weeks complete
-                          </p>
-                          <span className="text-xs text-muted-foreground">
-                            Repair data through{" "}
-                            {formatDate(
-                              reviewCase.evidence.sourceLatestArrivalDate,
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        <div className="space-y-2 rounded-md bg-secondary/40 p-3 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="font-medium">
+                              Signal ·{" "}
+                              {reviewCase.evidence.followUpWeeksComplete}
+                              of 4 weeks complete
+                            </p>
+                            <span className="text-xs text-muted-foreground">
+                              Data through{" "}
+                              {formatDate(
+                                reviewCase.evidence.sourceLatestArrivalDate,
+                              )}
+                            </span>
+                          </div>
+                          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                            {reviewCase.evidence.weeklyRepairOrders.map(
+                              (repairOrders, index) => (
+                                <div key={index}>
+                                  <dt className="text-xs text-muted-foreground">
+                                    Week {index + 1}
+                                  </dt>
+                                  <dd className="font-heading font-semibold">
+                                    {index <
+                                    reviewCase.evidence.followUpWeeksComplete
+                                      ? `${repairOrders} repairs`
+                                      : "Waiting"}
+                                  </dd>
+                                </div>
+                              ),
                             )}
-                          </span>
+                          </dl>
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            Prior 52 weeks:{" "}
+                            {reviewCase.evidence.baselineSourceSpanComplete
+                              ? `${reviewCase.evidence.prior52WeekRepairOrders} repairs`
+                              : "source span incomplete"}
+                            . Same-day arrivals are excluded.
+                          </p>
                         </div>
-                        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-                          {reviewCase.evidence.weeklyRepairOrders.map(
-                            (repairOrders, index) => (
-                              <div key={index}>
-                                <dt className="text-xs text-muted-foreground">
-                                  Week {index + 1}
-                                </dt>
-                                <dd className="font-heading font-semibold">
-                                  {index <
-                                  reviewCase.evidence.followUpWeeksComplete
-                                    ? `${repairOrders} repairs`
-                                    : "Waiting for data"}
-                                </dd>
-                              </div>
-                            ),
-                          )}
-                        </dl>
-                        <p className="text-xs leading-5 text-muted-foreground">
-                          Prior 52 weeks:{" "}
-                          {reviewCase.evidence.baselineSourceSpanComplete
-                            ? `${reviewCase.evidence.prior52WeekRepairOrders} repairs (${(
-                                reviewCase.evidence.prior52WeekRepairOrders / 52
-                              ).toFixed(1)} per week)`
-                            : "repair history does not span the prior 52 weeks; observed outcomes cannot be evaluated"}
-                          . Same-day arrivals are excluded.
-                        </p>
+                        {reviewCase.control.matchStatus === "matched" ? (
+                          <div className="space-y-2 rounded-md border border-border p-3 text-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="font-medium">
+                                Matched control ·{" "}
+                                {formatDate(reviewCase.control.eventDate)}
+                              </p>
+                              <Badge variant="outline">
+                                {reviewCase.control.yearsBack} year
+                                {reviewCase.control.yearsBack === 1 ? "" : "s"}
+                                prior
+                              </Badge>
+                            </div>
+                            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                              {reviewCase.control.weeklyRepairOrders.map(
+                                (repairOrders, index) => (
+                                  <div key={index}>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Week {index + 1}
+                                    </dt>
+                                    <dd className="font-heading font-semibold">
+                                      {repairOrders} repairs
+                                    </dd>
+                                  </div>
+                                ),
+                              )}
+                            </dl>
+                            <p className="text-xs leading-5 text-muted-foreground">
+                              Prior 52 weeks:{" "}
+                              {reviewCase.control.baselineSourceSpanComplete
+                                ? `${reviewCase.control.prior52WeekRepairOrders} repairs`
+                                : "source span incomplete"}
+                              . Official NCEI years are loaded and no severe
+                              threshold overlaps this comparison window.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm">
+                            <p className="font-medium">
+                              No eligible matched control
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              None of the prior five years had complete repair
+                              and official weather coverage without another
+                              severe threshold. This case cannot enter the
+                              prospective comparison.
+                            </p>
+                          </div>
+                        )}
                       </div>
                       {canReviewWeather ? (
                         <div className="grid gap-3 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)_auto] md:items-end">
@@ -664,6 +718,24 @@ export default async function CollisionIntelligencePage({
                                 }{" "}
                                 or more.
                               </p>
+                              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                Matched control:{" "}
+                                {reviewCase.control.derivedOutcome ===
+                                "observed_follow_through"
+                                  ? "above its historical pace"
+                                  : "at or below its historical pace"}
+                                ;{" "}
+                                {
+                                  reviewCase.control
+                                    .observedFourWeekRepairOrders
+                                }{" "}
+                                repairs versus a{" "}
+                                {
+                                  reviewCase.control
+                                    .followThroughThresholdRepairOrders
+                                }
+                                -repair threshold.
+                              </p>
                             </div>
                           ) : (
                             <label className="flex items-start gap-2 text-sm leading-5">
@@ -679,8 +751,8 @@ export default async function CollisionIntelligencePage({
                                 <strong className="block font-medium">
                                   Close as not evaluable
                                 </strong>
-                                Use only when the missing source span cannot be
-                                recovered.
+                                Use when no eligible control exists or the
+                                missing source span cannot be recovered.
                               </span>
                             </label>
                           )}
@@ -709,8 +781,10 @@ export default async function CollisionIntelligencePage({
                             className="text-xs leading-5 text-muted-foreground md:col-span-3"
                           >
                             {reviewCase.evidence.matureForClose
-                              ? "The four-week window and 52-week baseline are complete. The database derives the outcome from repair arrivals; use the note for booked-work context and limitations."
-                              : "Keep this follow-up open until all four weeks are complete. Close it only if the missing source span cannot be recovered."}
+                              ? "The signal and matched-control windows are complete. The database derives the signal outcome from repair arrivals; use the note for booked-work context and limitations."
+                              : reviewCase.control.matchStatus === "unavailable"
+                                ? "No leakage-safe comparison period was available. Close as not evaluable; it will not enter prospective monitoring."
+                                : "Keep this follow-up open until the signal and control evidence are complete. Close it only if the missing source span cannot be recovered."}
                           </p>
                         </div>
                       ) : (
@@ -720,6 +794,68 @@ export default async function CollisionIntelligencePage({
                       )}
                     </form>
                   ))}
+                </div>
+              ) : null}
+              {overallWeatherMonitoring ? (
+                <div className="mt-4 rounded-md border border-border p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-heading text-sm font-semibold">
+                        Prospective matched-control evidence
+                      </h3>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Closed, evaluable cases only. Each signal is compared
+                        with the control locked when the alert was acknowledged.
+                      </p>
+                    </div>
+                    <Badge variant="warning">Descriptive only</Badge>
+                  </div>
+                  <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div>
+                      <dt className="text-xs text-muted-foreground">
+                        Matched cases
+                      </dt>
+                      <dd className="font-heading text-lg font-semibold">
+                        {overallWeatherMonitoring.matchedCaseCount}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted-foreground">
+                        Signal follow-through
+                      </dt>
+                      <dd className="font-heading text-lg font-semibold">
+                        {overallWeatherMonitoring.signalFollowThroughRatePct.toFixed(
+                          1,
+                        )}
+                        %
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted-foreground">
+                        Control follow-through
+                      </dt>
+                      <dd className="font-heading text-lg font-semibold">
+                        {overallWeatherMonitoring.controlFollowThroughRatePct.toFixed(
+                          1,
+                        )}
+                        %
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted-foreground">
+                        Difference
+                      </dt>
+                      <dd className="font-heading text-lg font-semibold">
+                        {overallWeatherMonitoring.liftPctPoints > 0 ? "+" : ""}
+                        {overallWeatherMonitoring.liftPctPoints.toFixed(1)} pts
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                    No minimum sample or economic decision threshold is
+                    approved. These rates cannot enable notifications or justify
+                    staffing, purchasing, or marketing changes.
+                  </p>
                 </div>
               ) : null}
               {closedWeatherReviewCases.length ? (
@@ -742,6 +878,17 @@ export default async function CollisionIntelligencePage({
                         {reviewCase.evidence.weeklyRepairOrders.join(" / ")}{" "}
                         repairs · four-week threshold{" "}
                         {reviewCase.evidence.followThroughThresholdRepairOrders}
+                        {reviewCase.control.matchStatus === "matched" ? (
+                          <>
+                            {" "}
+                            · matched control{" "}
+                            {formatDate(reviewCase.control.eventDate)}:{" "}
+                            {reviewCase.control.weeklyRepairOrders.join(" / ")}{" "}
+                            repairs
+                          </>
+                        ) : (
+                          " · no eligible matched control"
+                        )}
                       </li>
                     ))}
                   </ul>

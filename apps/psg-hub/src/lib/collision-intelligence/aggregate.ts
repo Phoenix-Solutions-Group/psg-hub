@@ -80,6 +80,9 @@ export type CollisionAlertCaseRow = {
   magnitude_unit: string | null;
   historical_repair_orders: Numeric;
   report_count: Numeric;
+  control_match_status: "matched" | "unavailable";
+  control_event_date: string | null;
+  control_match_years_back: Numeric;
   owner_profile_id: string;
   status: "acknowledged" | "closed";
   acknowledged_at: string;
@@ -98,7 +101,26 @@ export type CollisionAlertCaseRow = {
   evidence_week_2_repair_orders: Numeric;
   evidence_week_3_repair_orders: Numeric;
   evidence_week_4_repair_orders: Numeric;
+  evidence_control_baseline_source_span_complete: boolean | null;
+  evidence_control_follow_up_weeks_complete: Numeric;
+  evidence_control_prior_52_week_repair_orders: Numeric;
+  evidence_control_week_1_repair_orders: Numeric;
+  evidence_control_week_2_repair_orders: Numeric;
+  evidence_control_week_3_repair_orders: Numeric;
+  evidence_control_week_4_repair_orders: Numeric;
+  evidence_signal_mature_for_close: boolean;
+  evidence_control_mature_for_close: boolean;
   evidence_mature_for_close: boolean;
+};
+
+export type CollisionWeatherAlertMonitoringRow = {
+  cohort: "all" | "tornado" | "hail" | "thunderstorm wind";
+  matched_case_count: Numeric;
+  signal_follow_through_count: Numeric;
+  control_follow_through_count: Numeric;
+  signal_follow_through_rate_pct: Numeric;
+  control_follow_through_rate_pct: Numeric;
+  lift_pct_points: Numeric;
 };
 
 export type CollisionForecastStatusRow = {
@@ -514,6 +536,7 @@ export function buildCollisionDashboard(
   nationalCrashSourceRows: CollisionNationalCrashSourceRow[] = [],
   alertCaseRows: CollisionAlertCaseRow[] = [],
   alertReviewAvailable = true,
+  weatherAlertMonitoringRows: CollisionWeatherAlertMonitoringRow[] = [],
 ) {
   const weekly = [...weeklyRows].sort((a, b) =>
     a.week_start.localeCompare(b.week_start),
@@ -609,6 +632,25 @@ export function buildCollisionDashboard(
     null,
   );
   const weatherAlerts = summarizeWeatherAlerts(alertRows);
+  const weatherAlertMonitoring = [...weatherAlertMonitoringRows]
+    .sort((left, right) =>
+      left.cohort === "all"
+        ? -1
+        : right.cohort === "all"
+          ? 1
+          : left.cohort.localeCompare(right.cohort),
+    )
+    .map((row) => ({
+      cohort: row.cohort,
+      matchedCaseCount: numberOf(row.matched_case_count),
+      signalFollowThroughCount: numberOf(row.signal_follow_through_count),
+      controlFollowThroughCount: numberOf(row.control_follow_through_count),
+      signalFollowThroughRatePct: numberOf(row.signal_follow_through_rate_pct),
+      controlFollowThroughRatePct: numberOf(
+        row.control_follow_through_rate_pct,
+      ),
+      liftPctPoints: numberOf(row.lift_pct_points),
+    }));
   const alertCasesBySignal = new Map(
     alertCaseRows.map((reviewCase) => [
       `${reviewCase.zip_code}:${reviewCase.event_type}:${reviewCase.event_date}`,
@@ -757,6 +799,7 @@ export function buildCollisionDashboard(
       };
     }),
     alertReviewAvailable,
+    weatherAlertMonitoring,
     weatherReviewCases: [...alertCaseRows]
       .sort((left, right) => right.event_date.localeCompare(left.event_date))
       .map((reviewCase) => {
@@ -782,6 +825,29 @@ export function buildCollisionDashboard(
             ? ("observed_follow_through" as const)
             : ("no_observed_follow_through" as const)
           : null;
+        const controlPrior52WeekRepairOrders = numberOf(
+          reviewCase.evidence_control_prior_52_week_repair_orders,
+        );
+        const controlWeeklyRepairOrders = [
+          numberOf(reviewCase.evidence_control_week_1_repair_orders),
+          numberOf(reviewCase.evidence_control_week_2_repair_orders),
+          numberOf(reviewCase.evidence_control_week_3_repair_orders),
+          numberOf(reviewCase.evidence_control_week_4_repair_orders),
+        ];
+        const controlObservedFourWeekRepairOrders =
+          controlWeeklyRepairOrders.reduce((sum, count) => sum + count, 0);
+        const controlFollowThroughThresholdRepairOrders = Math.max(
+          2,
+          Math.floor(controlPrior52WeekRepairOrders / 13) + 1,
+        );
+        const controlDerivedOutcome =
+          reviewCase.control_match_status === "matched" &&
+          reviewCase.evidence_control_mature_for_close
+            ? controlObservedFourWeekRepairOrders >=
+              controlFollowThroughThresholdRepairOrders
+              ? ("observed_follow_through" as const)
+              : ("no_observed_follow_through" as const)
+            : null;
 
         return {
           id: reviewCase.id,
@@ -797,6 +863,23 @@ export function buildCollisionDashboard(
           magnitudeUnit: reviewCase.magnitude_unit,
           historicalRepairOrders: numberOf(reviewCase.historical_repair_orders),
           reportCount: numberOf(reviewCase.report_count),
+          control: {
+            matchStatus: reviewCase.control_match_status,
+            eventDate: reviewCase.control_event_date,
+            yearsBack: numberOf(reviewCase.control_match_years_back),
+            baselineSourceSpanComplete:
+              reviewCase.evidence_control_baseline_source_span_complete,
+            followUpWeeksComplete: numberOf(
+              reviewCase.evidence_control_follow_up_weeks_complete,
+            ),
+            prior52WeekRepairOrders: controlPrior52WeekRepairOrders,
+            weeklyRepairOrders: controlWeeklyRepairOrders,
+            observedFourWeekRepairOrders: controlObservedFourWeekRepairOrders,
+            followThroughThresholdRepairOrders:
+              controlFollowThroughThresholdRepairOrders,
+            derivedOutcome: controlDerivedOutcome,
+            matureForClose: reviewCase.evidence_control_mature_for_close,
+          },
           ownerProfileId: reviewCase.owner_profile_id,
           status: reviewCase.status,
           acknowledgedAt: reviewCase.acknowledged_at,
@@ -816,6 +899,7 @@ export function buildCollisionDashboard(
             observedFourWeekRepairOrders,
             followThroughThresholdRepairOrders,
             derivedOutcome,
+            signalMatureForClose: reviewCase.evidence_signal_mature_for_close,
             matureForClose: reviewCase.evidence_mature_for_close,
           },
         };

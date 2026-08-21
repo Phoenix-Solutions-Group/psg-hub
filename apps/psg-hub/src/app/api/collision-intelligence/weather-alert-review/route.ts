@@ -114,7 +114,7 @@ export async function POST(request: Request) {
     const evidenceIncomplete =
       parsed.data.action === "close" &&
       error.code === "55000" &&
-      (error.message.includes("Four complete follow-up weeks") ||
+      (error.message.includes("Four complete signal weeks") ||
         error.message.includes("Repair-arrival evidence"));
     return redirectToDashboard(
       request,

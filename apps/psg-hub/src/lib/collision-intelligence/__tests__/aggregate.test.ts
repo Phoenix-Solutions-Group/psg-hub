@@ -238,6 +238,9 @@ describe("collision intelligence aggregation", () => {
           magnitude_unit: "IN",
           historical_repair_orders: 14,
           report_count: 2,
+          control_match_status: "matched",
+          control_event_date: "2025-08-18",
+          control_match_years_back: 1,
           owner_profile_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
           status: "acknowledged",
           acknowledged_at: "2026-08-18T03:00:00Z",
@@ -252,10 +255,30 @@ describe("collision intelligence aggregation", () => {
           evidence_week_2_repair_orders: 0,
           evidence_week_3_repair_orders: 0,
           evidence_week_4_repair_orders: 0,
+          evidence_control_baseline_source_span_complete: true,
+          evidence_control_follow_up_weeks_complete: 4,
+          evidence_control_prior_52_week_repair_orders: 14,
+          evidence_control_week_1_repair_orders: 0,
+          evidence_control_week_2_repair_orders: 0,
+          evidence_control_week_3_repair_orders: 0,
+          evidence_control_week_4_repair_orders: 0,
+          evidence_signal_mature_for_close: true,
+          evidence_control_mature_for_close: true,
           evidence_mature_for_close: true,
         },
       ],
       true,
+      [
+        {
+          cohort: "all",
+          matched_case_count: 1,
+          signal_follow_through_count: 1,
+          control_follow_through_count: 0,
+          signal_follow_through_rate_pct: 100,
+          control_follow_through_rate_pct: 0,
+          lift_pct_points: 100,
+        },
+      ],
     );
 
     expect(dashboard.summary).toMatchObject({
@@ -299,6 +322,15 @@ describe("collision intelligence aggregation", () => {
       zipCode: "67037",
       status: "acknowledged",
       outcome: "pending",
+      control: {
+        matchStatus: "matched",
+        eventDate: "2025-08-18",
+        yearsBack: 1,
+        prior52WeekRepairOrders: 14,
+        weeklyRepairOrders: [0, 0, 0, 0],
+        derivedOutcome: "no_observed_follow_through",
+        matureForClose: true,
+      },
       evidence: {
         followUpWeeksComplete: 4,
         prior52WeekRepairOrders: 14,
@@ -308,6 +340,15 @@ describe("collision intelligence aggregation", () => {
         derivedOutcome: "observed_follow_through",
         matureForClose: true,
       },
+    });
+    expect(dashboard.weatherAlertMonitoring[0]).toEqual({
+      cohort: "all",
+      matchedCaseCount: 1,
+      signalFollowThroughCount: 1,
+      controlFollowThroughCount: 0,
+      signalFollowThroughRatePct: 100,
+      controlFollowThroughRatePct: 0,
+      liftPctPoints: 100,
     });
     expect(dashboard.operationalForecast).toMatchObject({
       week: "2026-08-17",

@@ -75,23 +75,24 @@ enough for automated outreach.
    alone. Confirm booked work and governed repair-demand forecasts first.
 5. Before notifications can be authorized, name an alert owner and lifecycle,
    pre-register an economically meaningful lift and false-positive tolerance, and
-   validate exact 1–4 week outcomes from live preliminary SPC alerts against matched
-   controls. Statistical significance without useful effect size is insufficient.
+   accrue enough exact 1–4 week outcomes from live preliminary SPC alerts and their
+   pre-registered matched controls. Statistical significance without useful effect
+   size is insufficient.
 
-The staged dashboard lifecycle now covers the manual-review portion: a current shop
-owner or manager can acknowledge and own a severe-threshold signal, then close it as
-observed follow-through, no observed follow-through, or not evaluable with written
-evidence. The governed case view measures the same shop/customer-ZIP arrivals in four
-non-overlapping seven-day windows after the event date, excludes same-day arrivals,
-and shows the prior 364-day baseline. Observed outcomes stay blocked until all four
-weeks are complete and repair history spans the prior 364 days; closure snapshots the counts and
-source freshness in the case and audit event. The database classifies follow-through
-when the four-week total reaches `max(2, floor(prior_52_week_repairs / 13) + 1)`;
-operators confirm context but cannot contradict the repair-arrival result. This
-measurement rule is not an economic notification threshold. The lifecycle remains
-unapplied in production, sends nothing externally, and does not replace the
-still-missing organization-level notification owner, economic threshold, or
-prospective matched-control validation.
+The staged dashboard lifecycle now covers prospective matched-control measurement. A
+current shop owner or manager can acknowledge and own a severe-threshold signal; that
+transaction locks the nearest eligible same-shop/customer-ZIP period one to five years
+earlier before signal outcomes are known. Eligibility requires complete repair span,
+loaded final NCEI years, a loaded ZIP boundary, and no overlapping final severe
+threshold. The governed case view measures four non-overlapping seven-day windows and
+the prior 364-day baseline for both periods. Closure snapshots both evidence windows in
+the case and audit event. The database classifies signal and control follow-through at
+`max(2, floor(prior_52_week_repairs / 13) + 1)` and rejects a contradictory signal
+outcome. The service-only monitoring view reports paired rates and percentage-point
+difference for closed evaluable cases only. This measurement rule is not an economic
+notification threshold. The lifecycle remains unapplied in production, sends nothing
+externally, and does not replace the still-missing organization-level notification
+owner, approved sample, lift threshold, or false-positive tolerance.
 
 ## Limitations
 

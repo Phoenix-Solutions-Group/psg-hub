@@ -95,19 +95,22 @@ the prior completed month so that training does not learn from future weather to
 
 ### Severe-weather alert candidates
 
-| Metric             | Definition                                                                                             |
-| ------------------ | ------------------------------------------------------------------------------------------------------ |
-| Candidate window   | NOAA SPC preliminary tornado, hail, and thunderstorm-wind reports from the last 72 hours               |
-| ZIP match          | Event point covered by a stored ZIP polygon and present in the company's repair-customer ZIP portfolio |
-| High signal        | Any tornado report, hail at least 1 inch, or wind at least 58 mph                                      |
-| Review signal      | A preliminary report below or without a measured NWS severe threshold                                  |
-| Notification state | Disabled; the dashboard is a review queue, not an automated alert sender                               |
-| Review case        | One shop, ZIP, event type, and UTC event date acknowledged by a current shop owner or manager          |
-| Demand outcome     | `observed_follow_through`, `no_observed_follow_through`, or `not_evaluable`, with 20–2,000 character evidence |
-| Follow-up weeks    | Four non-overlapping seven-day windows after the UTC event date; same-day arrivals are excluded                         |
-| Follow-up baseline | Repair arrivals for the same shop and customer ZIP during the 364 calendar days before the event                       |
-| Mature outcome     | Four complete follow-up weeks plus repair history spanning from at least 364 days before the event through the event date; otherwise only `not_evaluable` may close the case |
-| Follow-through classification | The four-week total is `observed_follow_through` at `max(2, floor(prior_52_week_repairs / 13) + 1)` repairs; otherwise it is `no_observed_follow_through`. The database derives and validates this outcome |
+| Metric                        | Definition                                                                                                                                                                                                      |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Candidate window              | NOAA SPC preliminary tornado, hail, and thunderstorm-wind reports from the last 72 hours                                                                                                                        |
+| ZIP match                     | Event point covered by a stored ZIP polygon and present in the company's repair-customer ZIP portfolio                                                                                                          |
+| High signal                   | Any tornado report, hail at least 1 inch, or wind at least 58 mph                                                                                                                                               |
+| Review signal                 | A preliminary report below or without a measured NWS severe threshold                                                                                                                                           |
+| Notification state            | Disabled; the dashboard is a review queue, not an automated alert sender                                                                                                                                        |
+| Review case                   | One shop, ZIP, event type, and UTC event date acknowledged by a current shop owner or manager                                                                                                                   |
+| Demand outcome                | `observed_follow_through`, `no_observed_follow_through`, or `not_evaluable`, with 20–2,000 character evidence                                                                                                   |
+| Follow-up weeks               | Four non-overlapping seven-day windows after the UTC event date; same-day arrivals are excluded                                                                                                                 |
+| Follow-up baseline            | Repair arrivals for the same shop and customer ZIP during the 364 calendar days before the event                                                                                                                |
+| Matched control               | Nearest eligible same-calendar-date period one to five years earlier for the same shop and ZIP, selected when the signal is acknowledged                                                                        |
+| Control eligibility           | Repair coverage from 364 days before through 28 days after the control date; loaded final NCEI source years; a loaded ZIP boundary; and no overlapping tornado, hail at least 1 inch, or wind at least 50 knots |
+| Mature outcome                | Four complete signal weeks, both trailing 364-day source baselines, and a pre-registered matched control; otherwise only `not_evaluable` may close the case                                                     |
+| Follow-through classification | The four-week total is `observed_follow_through` at `max(2, floor(prior_52_week_repairs / 13) + 1)` repairs; otherwise it is `no_observed_follow_through`. The database derives and validates this outcome      |
+| Prospective monitoring        | Closed evaluable signals versus their pre-registered controls, reported as follow-through rates and percentage-point difference; descriptive until PSG approves a sample and economic threshold                 |
 
 SPC reports are preliminary and may be revised. A candidate indicates weather in a
 historical customer market; it is not evidence of a damaged vehicle, repair order, or
@@ -123,7 +126,9 @@ and keeps notification state off. Full method and limitations are in
 
 The staged `collision_weather_alert_cases` lifecycle accepts only current
 severe-threshold candidates. A shop owner or manager becomes the case owner when
-acknowledging it; closure requires an explicit repair-demand outcome and evidence.
+acknowledging it; that transaction also locks the nearest eligible prior-year control
+without looking at later signal outcomes. Closure requires an explicit repair-demand
+outcome and snapshots both signal and control evidence.
 The RPCs re-check the active shop membership and source candidate, append access-audit
 events, and never send a notification. `No observed follow-through` describes PSG's
 repair-arrival data, not whether the preliminary weather report was true or false.
@@ -283,12 +288,17 @@ Before dashboard publication or model retraining:
 16. Evaluation excludes pre-gap history after an internal run longer than 26
     zero-repair weeks and reports insufficient post-gap history instead of calibrating
     a zero-width interval.
-17. Observed weather follow-through cannot be recorded until all four seven-day
-    windows and the prior 52-week source baseline are complete. The close transaction
-    snapshots week-level counts and source freshness in both the case and audit event.
+17. Observed weather follow-through cannot be recorded until all four signal weeks,
+    both prior 52-week source baselines, and the pre-registered control are complete.
+    The close transaction snapshots signal and control week-level counts and source
+    freshness in both the case and audit event.
 18. The database derives the observed outcome from the registered four-week threshold
     and rejects a contradictory selection. This validation threshold measures repair
     follow-through; it is not authorization for notifications or operational changes.
+19. A matched control is selected at acknowledgement from the nearest eligible one-
+    to-five-year prior period using only then-available repair span, final NCEI source
+    coverage, ZIP coverage, and severe-threshold exclusion. Monitoring includes only
+    closed evaluable pairs and cannot enable notifications.
 
 ## Known limitations
 
@@ -306,6 +316,9 @@ Before dashboard publication or model retraining:
 - Event-level SPC reports support same-day review but remain preliminary and
   point-based. The daily schedule is configured locally but is not a confirmed damage
   or claim feed and is not production-active until deployment is separately approved.
+- Prospective matched-control monitoring has no production cases yet. PSG has not
+  approved a minimum sample, economically meaningful lift, or false-positive
+  tolerance, so the scorecard is descriptive and notifications remain disabled.
 - KDOT is a submitted police-report source, not real-time, and the current year is
   partial. Official NHTSA systems remain national safety context, not local repair
   demand counts.

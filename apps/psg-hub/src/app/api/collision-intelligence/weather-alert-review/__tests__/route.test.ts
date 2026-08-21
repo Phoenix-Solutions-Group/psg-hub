@@ -142,7 +142,7 @@ describe("POST collision weather alert review", () => {
       error: {
         code: "55000",
         message:
-          "Four complete follow-up weeks and repair history spanning the prior 52 weeks are required",
+          "Four complete signal weeks, a prior 52-week baseline, and a complete pre-registered matched control are required",
       },
     });
 
