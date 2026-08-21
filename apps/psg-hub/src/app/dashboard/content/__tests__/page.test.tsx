@@ -117,6 +117,14 @@ vi.mock("@/lib/shop/context", () => ({
   })),
 }));
 
+vi.mock("@/lib/bsm/approved-content-archive", () => ({
+  listApprovedContentArchiveRows: vi.fn(async () => []),
+}));
+
+vi.mock("@/components/dashboard/approved-content-archive-table", () => ({
+  ApprovedContentArchiveTable: () => null,
+}));
+
 vi.mock("@/components/dashboard/content-table", () => ({
   ContentTable: ({
     items,

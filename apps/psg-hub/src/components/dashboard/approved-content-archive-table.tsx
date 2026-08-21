@@ -1,5 +1,3 @@
-import { Badge } from "@/components/ui/badge";
-
 export type ApprovedContentArchiveRow = {
   id: string;
   title: string;
@@ -43,14 +41,12 @@ export function ApprovedContentArchiveTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto rounded-md border border-border">
+      <table className="w-full min-w-[42rem] text-sm">
         <thead className="bg-muted/40 text-left font-heading text-xs uppercase text-muted-foreground">
           <tr>
             <th className="px-4 py-3">Content</th>
             <th className="px-4 py-3">Version</th>
-            <th className="px-4 py-3">Decision</th>
-            <th className="px-4 py-3">Approver</th>
             <th className="px-4 py-3">Approved</th>
             <th className="px-4 py-3">Source</th>
           </tr>
@@ -64,12 +60,6 @@ export function ApprovedContentArchiveTable({
               </td>
               <td className="px-4 py-3 text-muted-foreground">
                 {row.versionLabel ?? `Version ${row.versionNumber}`}
-              </td>
-              <td className="px-4 py-3">
-                <Badge variant="success">{formatLabel(row.decision)}</Badge>
-              </td>
-              <td className="px-4 py-3 text-muted-foreground">
-                {row.approver ?? "Recorded customer"}
               </td>
               <td className="px-4 py-3 text-muted-foreground">{formatDate(row.approvedAt)}</td>
               <td className="px-4 py-3 text-muted-foreground">

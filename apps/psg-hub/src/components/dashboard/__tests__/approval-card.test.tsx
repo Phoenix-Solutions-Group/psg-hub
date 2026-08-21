@@ -19,12 +19,13 @@ const pendingRow: ApprovalCardRow = {
 };
 
 describe("ApprovalCard publish guardrail", () => {
-  it("starts with preview only, not a direct publish button", () => {
+  it("starts on the exact preview before showing the publish button", () => {
     const html = renderToStaticMarkup(<ApprovalCard row={pendingRow} />);
 
-    expect(html).toContain("Preview post");
-    expect(html).not.toContain("Approve &amp; publish");
-    expect(html).not.toContain("Confirm and publish publicly now");
+    expect(html).toContain("Post preview");
+    expect(html).toContain("Continue to confirmation");
+    expect(html).toContain("Reject request");
+    expect(html).not.toContain("Approve and publish on Google");
   });
 
   it("keeps failed publishes visible with a retry entry point", () => {
@@ -40,7 +41,30 @@ describe("ApprovalCard publish guardrail", () => {
 
     expect(html).toContain("Publish failed");
     expect(html).toContain("Google rejected the post");
-    expect(html).toContain("Review before retry");
-    expect(html).not.toContain("Reject");
+    expect(html).toContain("Continue to retry");
+    expect(html).not.toContain("Reject request");
+  });
+
+  it("shows the exact email and text-message drafts for a customer review request", () => {
+    const html = renderToStaticMarkup(
+      <ApprovalCard
+        row={{
+          ...pendingRow,
+          actionType: "review_solicitation",
+          payload: {
+            draft: {
+              email: { subject: "How did we do?", text: "Please share your experience." },
+              sms: { body: "Would you leave us a review?" },
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(html).toContain("Subject: How did we do?");
+    expect(html).toContain("Please share your experience.");
+    expect(html).toContain("Would you leave us a review?");
+    expect(html).toContain("Customer review request");
+    expect(html).toContain("Continue to confirmation");
   });
 });

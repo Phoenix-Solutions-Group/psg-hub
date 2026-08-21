@@ -20,4 +20,18 @@ describe("dashboardNav", () => {
       insuranceHref,
     );
   });
+
+  it("uses distinct customer navigation terms for requests, artifacts, and reputation", () => {
+    const nav = dashboardNav(null, false);
+
+    expect(nav.find(({ href }) => href === "/dashboard/approvals")?.label).toBe(
+      "Review Requests",
+    );
+    expect(nav.find(({ href }) => href === "/dashboard/content")?.label).toBe(
+      "Content Library",
+    );
+    expect(nav.find(({ href }) => href === "/dashboard/reviews")?.label).toBe(
+      "Reputation",
+    );
+  });
 });

@@ -39,17 +39,13 @@ function formatType(type: string) {
   return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function customerPublicationStatus(status: string) {
-  return status === "published" ? "Published" : "Draft";
-}
-
 export function ContentTable({ items }: { items: ContentItem[] }) {
   if (items.length === 0) {
     return (
       <div className="rounded-lg border border-dashed p-12 text-center">
-        <p className="text-muted-foreground">No content yet.</p>
+        <p className="text-muted-foreground">Your content library is empty.</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Content will appear here once your agents start producing.
+          PSG-created content will appear here when it is ready to browse.
         </p>
       </div>
     );
@@ -84,7 +80,7 @@ export function ContentTable({ items }: { items: ContentItem[] }) {
                 variant="secondary"
                 className={statusColors[item.status] || ""}
               >
-                {customerPublicationStatus(item.status)}
+                {item.status === "published" ? "Published" : "Draft"}
               </Badge>
             </TableCell>
             <TableCell className="text-muted-foreground">

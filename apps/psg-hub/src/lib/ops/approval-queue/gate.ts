@@ -30,6 +30,7 @@ export const APPROVAL_STATUSES = [
   "rejected",
   "published",
   "publish_failed",
+  "superseded",
 ] as const;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 

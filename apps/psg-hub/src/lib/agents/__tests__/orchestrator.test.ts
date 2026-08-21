@@ -101,7 +101,11 @@ describe("defaultDraftGenerator", () => {
     expect(out).toHaveLength(1);
     expect(out[0].actionType).toBe("gbp_post");
     expect(out[0].title).toContain(isoWeekStamp(NOW));
-    expect(out[0].payload).toMatchObject({ cadence: "weekly", shopUrl: "https://x.test" });
+    expect(out[0].payload).toMatchObject({
+      cadence: "weekly",
+      reviewRequestSeriesKey: "weekly_gbp_update",
+      shopUrl: "https://x.test",
+    });
   });
 });
 

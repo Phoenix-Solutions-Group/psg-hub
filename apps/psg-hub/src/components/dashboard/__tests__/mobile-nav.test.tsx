@@ -10,7 +10,7 @@ vi.mock("@/components/dashboard/shop-switcher", () => ({
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/reviews", label: "Reviews" },
+  { href: "/dashboard/reviews", label: "Reputation" },
 ];
 
 describe("MobileNavPanel render branches", () => {
@@ -19,7 +19,7 @@ describe("MobileNavPanel render branches", () => {
       <MobileNavPanel nav={NAV} shops={[]} activeShopId={null} />
     );
     expect(html).toContain("Dashboard");
-    expect(html).toContain("Reviews");
+    expect(html).toContain("Reputation");
     expect(html).toContain('href="/dashboard/reviews"');
   });
 

@@ -30,7 +30,7 @@ export default async function AssignedReviewWorkspacePage({
   return (
     <div className="space-y-4">
       <Link href="/dashboard/approvals" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-        Back to approvals
+        Back to Review Requests
       </Link>
       <ReviewerWorkspace projectId={projectId} />
     </div>

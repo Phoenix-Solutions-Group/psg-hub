@@ -64,7 +64,7 @@ describe("validateApprovalDecision", () => {
   });
 
   it("rejects deciding an already-resolved row", () => {
-    for (const s of ["approved", "rejected", "published", "publish_failed"] as const) {
+    for (const s of ["approved", "rejected", "published", "publish_failed", "superseded"] as const) {
       const v = validateApprovalDecision(s);
       expect(v.ok).toBe(false);
       if (!v.ok) expect(v.reason).toContain(s);

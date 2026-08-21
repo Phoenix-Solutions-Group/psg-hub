@@ -169,6 +169,7 @@ export function defaultDraftGenerator(
       payload: {
         kind: "gbp_post",
         cadence: "weekly",
+        reviewRequestSeriesKey: "weekly_gbp_update",
         period: week,
         shopUrl: shop.url ?? null,
         generatedBy: ORCHESTRATOR_PROPOSED_BY,
