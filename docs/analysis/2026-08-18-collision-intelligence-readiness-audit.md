@@ -16,10 +16,28 @@
   warnings are cleared. Remaining collision security-advisor notices are the expected
   service-only RLS/no-policy information notices; the postflight proves their browser
   privileges are denied.
-- No shop mapping, customer membership, model approval, forecast scoring,
-  publication, notification, FileMaker refresh, or application deployment was implied
-  by the schema release. PS229 remains unmapped and South Lincoln still has zero
-  customer-role members.
+- The schema release itself did not map a shop, assign a customer, approve a model,
+  score or publish a forecast, send a notification, refresh FileMaker, or deploy the
+  application. A later separately governed pilot action recorded PS229 address
+  evidence and approved the exact PS229 to South Lincoln mapping; South Lincoln still
+  has zero customer-role members and zero forecast rows.
+
+## 2026-08-21 PS229 pilot governance
+
+- The authenticated local review session resolved to the production
+  `psg_superadmin` profile `BSM Demo Admin`.
+- Farm Bureau Financial Services lists `TRACY'S BODY SHOP SOUTH` at
+  `1500 Center Park Rd, Lincoln, NE 68512-1226`. That address was recorded as
+  governed identity evidence and matches the Hub `South Lincoln` shop at
+  `1500 Center Park Road, Lincoln, NE 68512` under the approved Road/Rd
+  normalization.
+- The user-confirmed PS229 to South Lincoln mapping was approved with the
+  `superadmin_identity_review` method. The target had no prior FileMaker mapping, and
+  both the evidence-review and mapping-approval audit events are present.
+- The reproducible PS229 candidate evaluation remains stored for all four horizons.
+  No model rows or forecast rows were created. Model review remains blocked until PSG
+  creates or identifies a real Tracy's customer account and explicitly grants it
+  South Lincoln membership.
 
 ## 2026-08-20 update
 
@@ -165,31 +183,28 @@ will cover exactly 80% of future weeks.
 | Source                                 | Exact Hub target                                         | Current history                                       | Holdout repairs | Four-horizon MAE improvement | Four-horizon WAPE | Held-out-shop interval coverage | Result and gate                                         |
 | -------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------- | --------------: | ---------------------------: | ----------------: | ------------------------------: | ------------------------------------------------------- |
 | PS228 · Tracy's Collision Center North | North Lincoln · 4538 Cornhusker Hwy, Lincoln, NE 68504   | Through 2026-08-12; one 46-week internal gap excluded |             531 |                  16.5%–21.0% |       27.5%–29.1% |                     80.4%–85.1% | All four horizons pass; unmapped; 0 target-shop members |
-| PS229 · Tracy's Collision Center South | South Lincoln · 1500 Center Park Road, Lincoln, NE 68512 | Through 2026-08-12; no long internal gap              |             844 |                  20.1%–24.1% |       17.7%–18.7% |                     80.4%–85.1% | All four horizons pass; unmapped; 0 target-shop members |
+| PS229 · Tracy's Collision Center South | South Lincoln · 1500 Center Park Road, Lincoln, NE 68512 | Through 2026-08-12; no long internal gap              |             844 |                  20.1%–24.1% |       17.7%–18.7% |                     80.4%–85.1% | All four horizons pass; mapped; 0 target-shop members   |
 
 PS229 is the recommended first live pilot because its current segment is continuous,
 its holdout contains more repair arrivals, and its error is materially lower at every
-horizon. The exact-address evidence makes it eligible for human mapping review, not
-automatic mapping. On August 21 the user confirmed that FileMaker PS229 is Tracy's
-Collision South Lincoln. The live database still reports PS229 unmapped, with the
-matching South Lincoln target at 1500 Center Park Road and zero customer-role members;
-the governed identity-evidence migration is still pending. Before staging model
-evidence, PSG must establish the intended shop-member audience and approve the mapping
-after that migration. A read-only
-2026-08-20 recheck found zero customer-role users on South Lincoln, North Lincoln,
-and their related demo shop, so there is no existing same-client customer audience to
-reuse without an explicit invite or assignment. Mapping, review
-staging, model approval, scoring, and publication remain separate audited actions.
+horizon. On August 21 the user confirmed that FileMaker PS229 is Tracy's Collision
+South Lincoln. A current Farm Bureau directory address was governed first, then the
+authenticated superadmin approved the exact mapping to South Lincoln at 1500 Center
+Park Road. The live Tracy's tenant still has zero customer-role users on South
+Lincoln, North Lincoln, and its related demo shop, and no `tracysbodyshop.com` account
+exists to reuse. PSG must therefore create or identify the intended customer account
+before staging model review. Audience assignment, review staging, model approval,
+scoring, and publication remain separate audited actions.
 
 ## Requirement status
 
 | Goal requirement                                                    | Status                                                     | Current evidence                                                                                                                                                                                                                                                                                                                                        | Remaining work                                                                                                                                                                                                       |
 | ------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Clean, documented, privacy-safe data                                | First manual refresh reconciled; recurring operation gated | 330,533 FileMaker facts reconcile to 330,535 parsed rows and two recorded rejections; direct PII and raw identifiers are absent; the restricted export contains exactly 15 approved fields; hardened service is staged with timer disabled; duplicate 3:00 AM backup disabled; admin alert owner recorded; known letter/survey errors separated from the collision gate                                | Recover backup capacity, prove restore recovery, apply storm provenance reconciliation, then separately approve recurring refresh                                                                                   |
-| Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; weather correction staged                     | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; 411,208 KDOT rows are count-verified with a 99.93% crash ZIP match; the corrected weather definition measures 99.36% repair-weighted boundary coverage rather than event presence                                                                                 | Apply the reviewed weather migration; review insurer candidates and approve shop mappings only after identity confirmation                                                                                           |
-| Operational dashboard                                               | Authenticated branch-preview QA passed; production pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build plus authenticated desktop/mobile Chromium checks pass     | Release only after the matching migrations are approved, then run a production authenticated smoke test                                                                                                              |
-| ZIP-level weather and market alerts                                 | Matched-control lifecycle staged; notifications remain off | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; historical proxy shows 4.89% follow-through versus 4.39% control; acknowledgement pre-registers the nearest eligible prior-year shop/ZIP control; closure snapshots exact 1–4 week signal and control evidence; descriptive paired monitoring excludes unevaluable cases | Apply the lifecycle migration, name the organization-level notification owner, approve a minimum sample, economic lift, and false-positive tolerance, then accrue prospective cases before authorizing notifications |
-| Weekly forecasts outperform a seasonal baseline                     | Two fresh candidates pass; publication gated               | PS228 and PS229 each beat the seasonal baseline across four horizons; PS229 improves MAE 20.1%–24.1% with 17.7%–18.7% WAPE and 80.4%–85.1% held-out-shop interval coverage; the existing mapped run remains correctly blocked as stale                                                                                                                  | Confirm memberships and one exact shop mapping, stage and approve its four models, score a current forecast, then accrue observed forecasts and review live error/coverage                                           |
+| Clean, documented, privacy-safe data                                | First manual refresh reconciled; recurring operation gated | 330,533 FileMaker facts reconcile to 330,535 parsed rows and two recorded rejections; direct PII and raw identifiers are absent; the restricted export contains exactly 15 approved fields; hardened service is staged with timer disabled; duplicate 3:00 AM backup disabled; admin alert owner recorded; known letter/survey errors separated from the collision gate                                | Recover backup capacity, prove restore recovery without changing FileMaker data, then separately approve recurring refresh                                                                                           |
+| Consistent repair, insurance, geography, crash, and weather metrics | Pilot-ready; production migrations applied                 | Shop, carrier, ZIP, vehicle, seasonality, value, payment, and quality views are live; 411,208 KDOT rows are count-verified with a 99.93% crash ZIP match; the corrected weather definition measures 99.36% repair-weighted boundary coverage rather than event presence                                                                                 | Review insurer candidates and approve further shop mappings only after identity confirmation                                                                                                                         |
+| Operational dashboard                                               | Authenticated branch-preview QA passed; production pending | `/dashboard/collision-intelligence` includes repair, insurer, ZIP, vehicle, quality, 13-week period comparisons, complete-year seasonality, KDOT crash, weather, baseline, recent SPC signals, four-week forecasts, evidence-bound planning guidance, and a live scorecard; production build plus authenticated desktop/mobile Chromium checks pass     | Separately approve the production application deployment, then run an authenticated production smoke test                                                                                                            |
+| ZIP-level weather and market alerts                                 | Matched-control lifecycle live; notifications remain off   | Service-only `v_collision_zip_alert_candidates`; atomic three-day SPC refresh; historical proxy shows 4.89% follow-through versus 4.39% control; acknowledgement pre-registers the nearest eligible prior-year shop/ZIP control; closure snapshots exact 1–4 week signal and control evidence; descriptive paired monitoring excludes unevaluable cases | Name the organization-level notification owner, approve a minimum sample, economic lift, and false-positive tolerance, then accrue prospective cases before authorizing notifications                               |
+| Weekly forecasts outperform a seasonal baseline                     | PS229 mapped with passing evidence; publication gated       | PS228 and PS229 each beat the seasonal baseline across four horizons; PS229 improves MAE 20.1%–24.1% with 17.7%–18.7% WAPE and 80.4%–85.1% held-out-shop interval coverage; PS229 is mapped with governed address evidence but has no customer audience or model rows                                                                                   | Create or identify the Tracy's customer account, assign South Lincoln membership, stage and approve its four models, score a current forecast, then review live error/coverage                                       |
 | Clear confidence and limitations                                    | Implemented for dashboard and CSV pilot                    | Dashboard and active-shop CSV include freshness, promotion evidence, interval coverage, model scope, unknown-payment disclosure, matched weather controls, descriptive paired rates, metric contract, and evaluation reports                                                                                                                            | Add and verify the same disclosures if scheduled alerts are later authorized                                                                                                                                         |
 
 ## Live data coverage
@@ -416,33 +431,26 @@ staging, model approval, scoring, and publication remain separate audited action
 
 ## Next execution order
 
-1. Finish the remaining FileMaker operations gate: safely archive and reconcile the
-   disabled duplicate backup before removing its source folder and prove restore
-   recovery. The duplicate 3:00 AM schedule is disabled, the existing admin alert path
+1. Keep FileMaker untouched: do not archive, move, remove, or rewrite its files or
+   records. The duplicate 3:00 AM schedule is disabled, the existing admin alert path
    is confirmed, and the 92 known letter/survey errors are outside the collision
    export boundary while any new pattern remains blocking. Keep the daily refresh
-   timer disabled until the remaining controls are approved and verified.
-2. After separate production approval, apply the storm source-reconciliation,
-   forecast-readiness, example-function hardening, weather-coverage, governed shop
-   identity, and forecast-candidate evidence migrations, then deploy the matching
-   cron health checks. Because
-   the shared migration ledger is divergent, use
-   individually reviewed migration execution after approval rather than `db push`,
-   `migration repair`, or `db pull`. Confirm every NCEI/SPC batch is reconciled, every
-   mapped shop/horizon has an explainable state, weather coverage equals loaded
-   boundary coverage, and browser roles cannot read the service-only views or RPCs.
-   Separately approve and run the idempotent KDOT refresh when its read-only probe
-   differs from the governed source ledger; reconcile the new exact source count,
-   ZIP resolution, and monthly rollups before calling crash data current.
+   timer disabled until backup capacity and restore recovery can be proven without a
+   destructive FileMaker change.
+2. Keep the reviewed 13-file Supabase production release pinned to its manifest and
+   81-check postflight. Separately approve and run the idempotent KDOT refresh only
+   when its read-only probe differs from the governed source ledger; reconcile the new
+   exact source count, ZIP resolution, and monthly rollups before calling crash data
+   current.
 3. Use `/dashboard/collision-intelligence/review` as a superadmin to review the
    highest-volume insurer aliases and source-shop mappings. First record an
    authoritative physical address in the governed evidence form; mapping approval
    then requires an exact Hub address, written identity notes, and explicit
    confirmation, and it is committed with its audit entry in one transaction. For
-   the first current forecast pilot, verify the intended member audience for South
-   Lincoln, then review PS229 against its exact 1500 Center Park Road address. After
-   mapping approval, rerun the evaluator, record the reproducible snapshot, stage the
-   four passing horizons, and review model approval as a separate action. PS773 to
+   the first current forecast pilot, the governed PS229 to South Lincoln mapping and
+   reproducible four-horizon snapshot are complete. Create or identify the intended
+   Tracy's customer account and explicitly assign South Lincoln membership; only then
+   stage the four passing horizons and review model approval as a separate action. PS773 to
    Tedesco Auto Body remains ineligible because only 62 weeks remain after a
    multi-year coverage gap. Never infer a mapping or insurer alias from name
    similarity alone.
