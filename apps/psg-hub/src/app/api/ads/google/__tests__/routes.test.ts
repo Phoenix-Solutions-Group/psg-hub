@@ -60,6 +60,7 @@ let mockCampaign:
   | null = null;
 let rateLimitCount = 0;
 let mockCampaignsList: Array<{ id: string; external_id: string }> = [];
+let mockOpsAllowed = true;
 
 function builder<T>(data: T) {
   return {
@@ -184,6 +185,17 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: vi.fn(() => serviceClient()),
 }));
+vi.mock("@/lib/auth/ops-access", () => ({
+  requireOpsFn: vi.fn(async () => {
+    if (!mockUser) {
+      return { ok: false, response: Response.json({ error: "Unauthorized" }, { status: 401 }) };
+    }
+    if (!mockOpsAllowed) {
+      return { ok: false, response: Response.json({ error: "Forbidden" }, { status: 403 }) };
+    }
+    return { ok: true, userId: mockUser.id, access: {} };
+  }),
+}));
 
 const { POST: authorizePOST } = await import(
   "@/app/api/ads/google/authorize/route"
@@ -191,7 +203,7 @@ const { POST: authorizePOST } = await import(
 const { POST: campaignsPOST, GET: campaignsGET } = await import(
   "@/app/api/ads/google/campaigns/route"
 );
-const { PUT: campaignPUT } = await import(
+const { PUT: campaignPUT, DELETE: campaignDELETE } = await import(
   "@/app/api/ads/google/campaigns/[id]/route"
 );
 const { POST: syncPOST } = await import(
@@ -226,6 +238,7 @@ beforeEach(() => {
   mockCampaign = null;
   rateLimitCount = 0;
   mockCampaignsList = [];
+  mockOpsAllowed = true;
   process.env.SHOP_ADS_TIER_OVERRIDE = "";
 });
 
@@ -265,10 +278,18 @@ describe("GET /api/ads/google/campaigns", () => {
 
   it("402 when not tiered", async () => {
     mockUser = { id: "u1" };
+    mockMembership = { role: "owner" };
     mockShop = { id: "s1", slug: "acme" };
     mockSub = null;
     const res = await campaignsGET(getReq("http://localhost/x?shop_id=s1"));
     expect(res.status).toBe(402);
+  });
+
+  it("403 when a user requests another shop's campaigns", async () => {
+    mockUser = { id: "u1" };
+    mockMembership = null;
+    const res = await campaignsGET(getReq("http://localhost/x?shop_id=other-shop"));
+    expect(res.status).toBe(403);
   });
 });
 
@@ -412,9 +433,12 @@ describe("POST /api/ads/google/campaigns (create)", () => {
     expect(createCampaignMock).not.toHaveBeenCalled();
   });
 
-  it("403 when viewer tries to create", async () => {
+  it.each(["owner", "manager"] as const)(
+    "403 when authenticated customer %s tries to create; Google is not called",
+    async (role) => {
     setupBaseline();
-    mockMembership = { role: "viewer" };
+    mockMembership = { role };
+    mockOpsAllowed = false;
     const res = await campaignsPOST(
       req({
         shop_id: "s1",
@@ -424,7 +448,8 @@ describe("POST /api/ads/google/campaigns (create)", () => {
     );
     expect(res.status).toBe(403);
     expect(createCampaignMock).not.toHaveBeenCalled();
-  });
+    },
+  );
 });
 
 describe("PUT /api/ads/google/campaigns/[id]", () => {
@@ -443,22 +468,27 @@ describe("PUT /api/ads/google/campaigns/[id]", () => {
     };
   }
 
-  it("403 when manager tries to enable (first-enable requires owner)", async () => {
+  it.each(["owner", "manager"] as const)(
+    "403 when authenticated customer %s tries to update; Google is not called",
+    async (role) => {
     setupBaseline();
+    mockMembership = { role };
+    mockOpsAllowed = false;
     const res = await campaignPUT(req({ status: "enabled" }), {
       params: Promise.resolve({ id: "camp-1" }),
     });
     expect(res.status).toBe(403);
     expect(updateCampaignMock).not.toHaveBeenCalled();
-  });
+    },
+  );
 
-  it("409 when budget delta exceeds 50%", async () => {
+  it("400 and no Google call when a direct budget change is requested", async () => {
     setupBaseline();
     const res = await campaignPUT(
       req({ daily_budget_micros: 200_000_000 }), // 50M → 200M = 300% increase
       { params: Promise.resolve({ id: "camp-1" }) }
     );
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(400);
     expect(updateCampaignMock).not.toHaveBeenCalled();
   });
 
@@ -475,6 +505,20 @@ describe("PUT /api/ads/google/campaigns/[id]", () => {
     expect(res.status).toBe(400);
     expect(updateCampaignMock).not.toHaveBeenCalled();
   });
+
+  it.each(["owner", "manager"] as const)(
+    "403 when authenticated customer %s tries to delete; Google is not called",
+    async (role) => {
+      setupBaseline();
+      mockMembership = { role };
+      mockOpsAllowed = false;
+      const res = await campaignDELETE(req(), {
+        params: Promise.resolve({ id: "camp-1" }),
+      });
+      expect(res.status).toBe(403);
+      expect(updateCampaignMock).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("POST /api/ads/google/campaigns/sync", () => {

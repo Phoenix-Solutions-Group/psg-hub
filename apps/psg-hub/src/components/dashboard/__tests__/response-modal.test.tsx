@@ -30,4 +30,21 @@ describe("ResponseModal team comments", () => {
     expect(html).toContain("Approve");
     expect(html).toContain("Reject");
   });
+
+  it("keeps tall popup content scrollable within the available screen", () => {
+    const html = renderToStaticMarkup(
+      <ResponseModal
+        review={{ id: "review-1", author: "Taylor", rating: 5, body: "Great work", platform: "google" }}
+        userRole="manager"
+        existing={null}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+
+    expect(html).toContain("overflow-y-auto bg-black/50");
+    expect(html).toContain("max-h-[calc(100dvh-2rem)]");
+    expect(html).toContain("overflow-y-auto overscroll-contain");
+    expect(html).toContain('aria-label="Close"');
+  });
 });

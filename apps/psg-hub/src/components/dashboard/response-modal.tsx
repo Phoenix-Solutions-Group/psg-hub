@@ -89,6 +89,7 @@ export function ResponseModal({
   const [comments, setComments] = useState<ReviewResponseComment[]>([]);
   const [commentBody, setCommentBody] = useState("");
   const [commentsLoading, setCommentsLoading] = useState(true);
+  const [commentsExpanded, setCommentsExpanded] = useState(true);
   const [commentMessage, setCommentMessage] = useState<string | null>(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -98,6 +99,8 @@ export function ResponseModal({
   // Capture opener for focus return + initial focus + ESC key.
   useEffect(() => {
     openerRef.current = document.activeElement as HTMLElement | null;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     firstFocusableRef.current?.focus();
 
     function onKey(e: KeyboardEvent) {
@@ -109,6 +112,7 @@ export function ResponseModal({
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousBodyOverflow;
       openerRef.current?.focus();
     };
   }, [onClose]);
@@ -262,7 +266,7 @@ export function ResponseModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
       onClick={onClose}
     >
       <div
@@ -272,7 +276,7 @@ export function ResponseModal({
         aria-labelledby="response-modal-title"
         onKeyDown={onKeyDown}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl rounded-md border bg-background p-6 shadow-lg"
+        className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-md border bg-background p-6 shadow-lg"
       >
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
@@ -369,69 +373,82 @@ export function ResponseModal({
           className="mt-4 rounded-md border p-3"
           aria-labelledby="team-comments-heading"
         >
-          <h3 id="team-comments-heading" className="text-sm font-semibold">
-            Team comments
-          </h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Internal only. Adding a comment does not approve, reject,
-            regenerate, or publish this response.
-          </p>
-          <div className="mt-3 space-y-2" aria-live="polite">
-            {commentsLoading ? (
-              <p className="text-sm text-muted-foreground">Loading comments…</p>
-            ) : comments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No team comments yet.
-              </p>
-            ) : (
-              comments.map((comment) => (
-                <div
-                  key={comment.id}
-                  className="rounded-md bg-muted/40 p-2 text-sm"
-                >
-                  <p className="whitespace-pre-wrap break-words">
-                    {comment.body}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {comment.author_name} ·{" "}
-                    {new Date(comment.created_at).toLocaleString()}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-          <label
-            htmlFor="team-comment-body"
-            className="mt-3 block text-sm font-medium"
-          >
-            Add comment
-          </label>
-          <textarea
-            id="team-comment-body"
-            value={commentBody}
-            onChange={(event) => setCommentBody(event.target.value)}
-            maxLength={2000}
-            rows={3}
-            className="mt-1 w-full rounded-md border bg-background p-2 text-sm"
-          />
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <span className="text-xs text-muted-foreground">
-              {commentBody.length} / 2,000
-            </span>
+          <div className="flex items-center justify-between gap-3">
+            <h3 id="team-comments-heading" className="text-sm font-semibold">
+              Team comments
+            </h3>
             <Button
               type="button"
               variant="outline"
-              onClick={addComment}
-              disabled={pending || !commentBody.trim()}
+              aria-expanded={commentsExpanded}
+              aria-controls="team-comments-content"
+              onClick={() => setCommentsExpanded((expanded) => !expanded)}
             >
-              {pending ? "Adding…" : "Add comment"}
+              {commentsExpanded ? "Collapse comments" : "Expand comments"}
             </Button>
           </div>
-          {commentMessage && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              {commentMessage}
+          <div id="team-comments-content" hidden={!commentsExpanded}>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Internal only. Adding a comment does not approve, reject,
+              regenerate, or publish this response.
             </p>
-          )}
+            <div className="mt-3 space-y-2" aria-live="polite">
+              {commentsLoading ? (
+                <p className="text-sm text-muted-foreground">Loading comments…</p>
+              ) : comments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No team comments yet.
+                </p>
+              ) : (
+                comments.map((comment) => (
+                  <div
+                    key={comment.id}
+                    className="rounded-md bg-muted/40 p-2 text-sm"
+                  >
+                    <p className="whitespace-pre-wrap break-words">
+                      {comment.body}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {comment.author_name} ·{" "}
+                      {new Date(comment.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+            <label
+              htmlFor="team-comment-body"
+              className="mt-3 block text-sm font-medium"
+            >
+              Add comment
+            </label>
+            <textarea
+              id="team-comment-body"
+              value={commentBody}
+              onChange={(event) => setCommentBody(event.target.value)}
+              maxLength={2000}
+              rows={3}
+              className="mt-1 w-full rounded-md border bg-background p-2 text-sm"
+            />
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <span className="text-xs text-muted-foreground">
+                {commentBody.length} / 2,000
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addComment}
+                disabled={pending || !commentBody.trim()}
+              >
+                {pending ? "Adding…" : "Add comment"}
+              </Button>
+            </div>
+            {commentMessage && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {commentMessage}
+              </p>
+            )}
+          </div>
         </section>
 
         <div className="mt-4 flex flex-wrap gap-2">
