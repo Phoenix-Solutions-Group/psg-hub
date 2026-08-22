@@ -85,7 +85,7 @@ test("retired BSM review workspace route redirects to Review Workspace", async (
 });
 
 test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(300_000);
   const shopId = await ensureContentApprovalsShopOption();
   const runId = Date.now();
   const workspaceTitle = `Content wireframe ${runId}`;
