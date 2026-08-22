@@ -164,11 +164,9 @@ test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
   await page.getByLabel(/Name/).fill("Wireframe Reviewer");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: "Send review" }).click();
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.getByRole("button", { name: "Copy link and code" }).click();
-  const firstInvitation = await page.evaluate(() => navigator.clipboard.readText());
-  const [firstInvitePath, firstCodeLine] = firstInvitation.split("\n");
-  const firstCode = firstCodeLine?.match(/^One-time code: (\d{6})$/)?.[1];
+  const firstInvitation = page.getByRole("group", { name: "Invitation for Wireframe Reviewer" });
+  const firstInvitePath = await firstInvitation.getByRole("link", { name: "Private review link" }).getAttribute("href");
+  const firstCode = (await firstInvitation.getByLabel("One-time code").textContent())?.trim();
   expect(firstCode).toMatch(/^\d{6}$/);
 
   const reviewerContext = await browser.newContext();
@@ -225,10 +223,9 @@ test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
     await page.getByRole("button", { name: "Manage files" }).click();
     await page.getByRole("button", { name: "Share", exact: true }).click();
     await page.getByRole("button", { name: "Send next round" }).click();
-    await page.getByRole("button", { name: "Copy link and code" }).click();
-    const secondInvitation = await page.evaluate(() => navigator.clipboard.readText());
-    const [secondInvitePath, secondCodeLine] = secondInvitation.split("\n");
-    const secondCode = secondCodeLine?.match(/^One-time code: (\d{6})$/)?.[1];
+    const secondInvitation = page.getByRole("group", { name: "Invitation for Wireframe Reviewer" });
+    const secondInvitePath = await secondInvitation.getByRole("link", { name: "Private review link" }).getAttribute("href");
+    const secondCode = (await secondInvitation.getByLabel("One-time code").textContent())?.trim();
     const laterReviewer = await reviewerContext.newPage();
     await laterReviewer.goto(secondInvitePath!);
     await laterReviewer.getByLabel("One-time code").fill(secondCode!);

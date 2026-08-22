@@ -3323,6 +3323,8 @@ export function BsmContentApprovalManager({
                         {startedReview.invitations.map((invitation) => (
                           <div
                             key={invitation.invitationId}
+                            role="group"
+                            aria-label={`Invitation for ${invitation.reviewerName ?? invitation.reviewerEmail}`}
                             className="rounded-xl border border-border bg-white p-3"
                           >
                             <div className="font-medium">
@@ -3334,9 +3336,15 @@ export function BsmContentApprovalManager({
                                 ? "Share manually"
                                 : "Invitation sent"}
                             </div>
-                            <div className="mt-2 font-mono text-base tracking-[0.22em]">
+                            <div aria-label="One-time code" className="mt-2 font-mono text-base tracking-[0.22em]">
                               {invitation.inviteCode}
                             </div>
+                            <a
+                              href={`/review-workspace?invite=${encodeURIComponent(invitation.inviteToken)}`}
+                              className="mt-2 block text-xs font-semibold text-ember underline"
+                            >
+                              Private review link
+                            </a>
                             <button
                               type="button"
                               onClick={() => copyInvitation(invitation)}
