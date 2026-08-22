@@ -141,7 +141,7 @@ begin
     sanitization_status, created_by_profile_id, created_at
   ) values (
     p_version_id, p_review_item_id, p_project_id, p_shop_id, v_version_number, 'current',
-    'bsm-content-approvals', p_storage_path, 'bsm-content-approvals', p_storage_path,
+    'bsm-content-approvals', p_storage_path, null, null,
     'content-v' || v_version_number || '.md', 'text/markdown', p_byte_size,
     p_checksum_sha256, 'content_wireframe', coalesce(p_source_metadata, '{}'::jsonb),
     coalesce(p_artifact_manifest, '{}'::jsonb), 'clean', 'not_needed', 'not_needed',
