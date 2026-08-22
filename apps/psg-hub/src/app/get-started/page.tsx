@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
 import { Card, CardContent } from "@/components/ui/card";
 import { InboundLeadForm } from "@/components/leads/inbound-lead-form";
 
-// PSG-500 — Public, UNAUTHENTICATED inbound lead-capture page (parent PSG-493).
-// Excluded from the Supabase auth middleware matcher (see src/middleware.ts) so
-// it is reachable on production without a login. Interim capture surface: it will
-// be reused/restyled when a fuller marketing site lands.
+// This route stays unavailable unless an operator explicitly enables it for a
+// private deployment preview. The flag is server-only, so visitors cannot turn
+// the page on with a query string, cookie, or browser-side environment value.
+const PREVIEW_ENABLED = process.env.GET_STARTED_PREVIEW === "1";
 
 export const metadata: Metadata = {
   title: "Get a demo — Phoenix Solutions Group",
@@ -23,6 +24,8 @@ const VALUE_PROPS = [
 ];
 
 export default function GetStartedPage() {
+  if (!PREVIEW_ENABLED) notFound();
+
   return (
     <main className="flex min-h-screen flex-col bg-background lg:flex-row">
       {/* Brand / value panel. Mobile padding is tighter and only the first bullet
