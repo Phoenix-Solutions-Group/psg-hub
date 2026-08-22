@@ -176,7 +176,7 @@ test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
     await reviewer.goto(firstInvitePath!);
     await reviewer.getByLabel("One-time code").fill(firstCode!);
     await reviewer.getByRole("button", { name: "Open review" }).click();
-    await expect(reviewer.getByText("Collision repair with clear updates")).toBeVisible();
+    await expect(reviewer.getByRole("heading", { name: "Collision repair with clear updates", exact: true })).toBeVisible();
     await expect(reviewer.getByText("Clarified the hero and added the selected shop image.")).toBeVisible();
     await expect(reviewer.getByText("Content and structure review only")).toBeVisible();
 
@@ -234,7 +234,7 @@ test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
     await laterReviewer.getByRole("button", { name: "Open review" }).click();
     await expect(laterReviewer.getByText("Adds the single point-of-contact promise.")).toBeVisible();
     await expect(laterReviewer.getByText("Markdown changes from the base version")).toBeVisible();
-    await expect(laterReviewer.getByText("with one point of contact.")).toBeVisible();
+    await expect(laterReviewer.getByText("Know what happens from estimate through delivery, with one point of contact.", { exact: true })).toBeVisible();
 
     const rounds = await admin.from("bsm_content_review_rounds").select("id, round_number").eq("project_id", projectId!).order("round_number");
     expect(rounds.error, rounds.error?.message).toBeNull();
