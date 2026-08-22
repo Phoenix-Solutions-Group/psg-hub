@@ -3,6 +3,7 @@ import {
   ContentDraftPublishError,
   createReviewContentDraft,
   deleteReviewContentAsset,
+  getAdminContentAsset,
   prepareContentDraftPublication,
   publishReviewContentDraft,
   saveContentDraft,
@@ -151,7 +152,8 @@ class DraftQuery {
         this.client.asset = { ...this.client.asset, ...this.payload };
         return { data: this.client.asset, error: null };
       }
-      return { data: single ? this.client.asset : this.client.asset ? [this.client.asset] : [], error: null };
+      const asset = this.filters.deleted_at === null && this.client.asset?.deleted_at ? null : this.client.asset;
+      return { data: single ? asset : asset ? [asset] : [], error: null };
     }
     if (this.table === "bsm_content_review_comment_threads") {
       return { data: [], error: null };
@@ -382,6 +384,29 @@ describe("Content Draft service", () => {
       actorRole: "psg_internal",
     }, { client: client as never })).rejects.toMatchObject({ status: 409 });
     expect(client.asset.deleted_at).toBeNull();
+  });
+
+  it("does not return a soft-deleted Content Asset", async () => {
+    const client = new DraftClient();
+    client.asset = {
+      id: ASSET_ID,
+      project_id: PROJECT_ID,
+      shop_id: SHOP_ID,
+      review_item_id: DOCUMENT_ID,
+      deleted_at: "2026-08-21T12:00:00.000Z",
+      storage_bucket: "bsm-content-approvals",
+      storage_path: `${SHOP_ID}/${DOCUMENT_ID}/assets/${ASSET_ID}`,
+      original_filename: "deleted.png",
+      content_type: "image/png",
+    };
+
+    await expect(getAdminContentAsset({
+      projectId: PROJECT_ID,
+      documentId: DOCUMENT_ID,
+      assetId: ASSET_ID,
+      actorProfileId: ACTOR_ID,
+      actorRole: "psg_internal",
+    }, { client: client as never })).rejects.toMatchObject({ status: 404 });
   });
 
   it("rejects an asset whose bytes do not match its declared image type", async () => {

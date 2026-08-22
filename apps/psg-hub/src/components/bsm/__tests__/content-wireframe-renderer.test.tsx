@@ -36,4 +36,24 @@ describe("ContentWireframeRenderer", () => {
     expect(html).toContain("Content and structure review only");
     expect(html).toContain("does not approve final design or production launch");
   });
+
+  it("keeps inline links and highlight offsets aligned in reviewer rendering", () => {
+    const html = renderToStaticMarkup(
+      <ContentWireframeRenderer
+        manifest={{
+          contractVersion: 1,
+          assetIds: [],
+          blocks: [
+            { id: "paragraph:1", kind: "paragraph", ordinal: 1, text: "Read our [policy](https://example.com/policy) first.", links: [{ text: "policy", href: "https://example.com/policy" }] },
+            { id: "faq:1", kind: "faq", ordinal: 2, question: "Question?", answer: "Answer." },
+          ],
+        }}
+        renderText={(blockId, text, offset) => <mark data-block={blockId} data-offset={offset}>{text}</mark>}
+      />,
+    );
+
+    expect(html).toContain('href="https://example.com/policy"');
+    expect(html).toContain('<mark data-block="paragraph:1" data-offset="9">policy</mark>');
+    expect(html).toContain('<mark data-block="faq:1" data-offset="9">Answer.</mark>');
+  });
 });

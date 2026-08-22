@@ -106,12 +106,60 @@ describe("ContentDraftEditor", () => {
     expect(container.textContent).toContain("# Saved elsewhere");
     expect(container.textContent).toContain("Reload latest");
     expect(container.textContent).toContain("Copy local");
+    expect(Array.from(container.querySelectorAll<HTMLInputElement>('input[type="file"]')).every((input) => input.disabled)).toBe(true);
 
     await act(async () => {
       changeTextarea(textarea, "# More local edits");
       await vi.advanceTimersByTimeAsync(50);
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    await act(async () => root.unmount());
+  });
+
+  it("serializes autosaves so rapid edits do not conflict with the same session", async () => {
+    let finishFirstSave!: (response: Response) => void;
+    const firstSave = new Promise<Response>((resolve) => { finishFirstSave = resolve; });
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockReturnValueOnce(firstSave)
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        draft: { ...workspace.draft, markdown: "# Second edit", revision: 3 },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const root = createRoot(container);
+    await act(async () => root.render(
+      <ContentDraftEditor
+        projectId={workspace.draft!.projectId}
+        documentId={workspace.draft!.documentId}
+        initialWorkspace={workspace}
+        autosaveDelayMs={20}
+      />,
+    ));
+    const textarea = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Markdown source']")!;
+
+    await act(async () => {
+      changeTextarea(textarea, "# First edit");
+      await vi.advanceTimersByTimeAsync(25);
+      changeTextarea(textarea, "# Second edit");
+      await vi.advanceTimersByTimeAsync(25);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finishFirstSave(new Response(JSON.stringify({
+        draft: { ...workspace.draft, markdown: "# First edit", revision: 2 },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+      await firstSave;
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(25);
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({
+      expectedRevision: 2,
+      markdown: "# Second edit",
+    });
+    expect(container.textContent).not.toContain("Conflict — autosave stopped");
+    expect(container.querySelector("[role='status']")?.textContent).toContain("Saved");
     await act(async () => root.unmount());
   });
 

@@ -41,6 +41,7 @@ export function ContentDraftEditor({
   const [publicationId, setPublicationId] = useState<string | null>(null);
   const [saveAttempt, setSaveAttempt] = useState(0);
   const markdownRef = useRef(markdown);
+  const saveInFlightRef = useRef(false);
 
   useEffect(() => {
     markdownRef.current = markdown;
@@ -63,6 +64,8 @@ export function ContentDraftEditor({
     const localMarkdown = markdown;
     const expectedRevision = draft.revision;
     const timer = window.setTimeout(async () => {
+      if (saveInFlightRef.current) return;
+      saveInFlightRef.current = true;
       try {
         const response = await fetch(endpoint, {
           method: "PUT",
@@ -84,6 +87,9 @@ export function ContentDraftEditor({
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "Could not save this Content Draft.");
         setSaveState("error");
+      } finally {
+        saveInFlightRef.current = false;
+        if (markdownRef.current !== localMarkdown) setSaveAttempt((value) => value + 1);
       }
     }, autosaveDelayMs);
     return () => window.clearTimeout(timer);
@@ -98,6 +104,7 @@ export function ContentDraftEditor({
   const diagnosticBlockers = parsed.diagnostics.filter((item) => item.severity === "error");
   const canPublish = Boolean(
     draft &&
+    publicationId &&
     saveState === "saved" &&
     markdown === draft.markdown &&
     versionNote.trim() &&
@@ -139,7 +146,7 @@ export function ContentDraftEditor({
   }
 
   async function importMarkdown(file: File | undefined) {
-    if (!file) return;
+    if (!file || conflict) return;
     if (!/\.(?:md|markdown)$/i.test(file.name) && !["text/markdown", "text/plain", ""].includes(file.type)) {
       setError("Choose a Markdown (.md) file.");
       return;
@@ -160,7 +167,7 @@ export function ContentDraftEditor({
   }
 
   async function uploadAsset(file: File | undefined) {
-    if (!file) return;
+    if (!file || conflict) return;
     setPendingAction("asset");
     setError(null);
     try {
@@ -259,7 +266,7 @@ export function ContentDraftEditor({
         <div className="flex flex-wrap items-center gap-2">
           <span role="status" aria-live="polite" className="rounded-full bg-[#f0f3f5] px-3 py-2 text-sm font-medium text-[#142838]">{statusText}</span>
           <a className={buttonClass} href={`${endpoint}?export=markdown`}>Export .md</a>
-          <label className={buttonClass}>Import .md<input type="file" accept=".md,.markdown,text/markdown,text/plain" className="sr-only" onChange={(event) => void importMarkdown(event.target.files?.[0])} /></label>
+          <label className={buttonClass}>Import .md<input type="file" accept=".md,.markdown,text/markdown,text/plain" className="sr-only" disabled={Boolean(conflict)} onChange={(event) => void importMarkdown(event.target.files?.[0])} /></label>
           <button type="button" className={primaryButtonClass} onClick={openPublishCheck} disabled={saveState === "saving" || saveState === "conflict"}>Publish check</button>
         </div>
       </header>
@@ -317,7 +324,7 @@ export function ContentDraftEditor({
           <section aria-labelledby="asset-heading" className="rounded-xl border border-border bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div><h2 id="asset-heading" className="font-heading text-lg font-semibold text-[#142838]">Content Assets</h2><p className="text-sm text-muted-foreground">Private PNG, JPEG, or WebP images up to 25 MB.</p></div>
-              <label className={buttonClass}>Upload image<input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" disabled={pendingAction === "asset"} onChange={(event) => void uploadAsset(event.target.files?.[0])} /></label>
+              <label className={buttonClass}>Upload image<input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" disabled={Boolean(conflict) || pendingAction === "asset"} onChange={(event) => void uploadAsset(event.target.files?.[0])} /></label>
             </div>
             <ul className="mt-3 space-y-2">
               {workspace.assets.map((asset) => <li key={asset.id} className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm"><span className="truncate">{asset.originalFilename}</span><button type="button" className={buttonClass} disabled={pendingAction === asset.id} onClick={() => void deleteAsset(asset.id)}>Delete</button></li>)}

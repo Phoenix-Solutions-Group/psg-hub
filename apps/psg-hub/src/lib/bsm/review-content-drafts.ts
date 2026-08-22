@@ -702,6 +702,7 @@ export async function getAdminContentAsset(
     .eq("project_id", access.projectId)
     .eq("shop_id", access.shopId)
     .eq("review_item_id", documentId)
+    .is("deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(`Could not load Content Asset: ${error.message}`);
   if (!asset) throw new ReviewWorkspaceInputError(404, "Content Asset not found");
