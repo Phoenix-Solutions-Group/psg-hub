@@ -116,6 +116,7 @@ export const AUDIT_ACTIONS = [
   "bsm_content_approval.create",
   "bsm_content_approval.update",
   "bsm_content_approval.archive",
+  "bsm_content_draft.support_access",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

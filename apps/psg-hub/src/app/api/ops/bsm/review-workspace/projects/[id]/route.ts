@@ -2,8 +2,10 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { requireOpsFn, requireSuperadmin } from "@/lib/auth/ops-access";
+import { createServiceClient } from "@/lib/supabase/service";
 import {
   ReviewWorkspaceInputError,
+  addReviewWorkspaceCollaborator,
   addStaffReviewAnnotation,
   addStaffThreadReply,
   closeReviewWorkspaceRoundEarly,
@@ -64,6 +66,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
   const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   try {
+    if (payload?.action === "add_collaborator") {
+      const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new ReviewWorkspaceInputError(400, "Enter a valid PSG collaborator email");
+      }
+      const service = createServiceClient();
+      // ponytail: one auth page covers current PSG scale; paginate when the account directory exceeds 1,000 users.
+      const { data, error } = await service.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (error) throw new Error(`Could not resolve PSG collaborator: ${error.message}`);
+      const user = data.users.find((candidate) => candidate.email?.trim().toLowerCase() === email);
+      if (!user) throw new ReviewWorkspaceInputError(404, "PSG collaborator not found");
+      const collaborator = await addReviewWorkspaceCollaborator({
+        projectId: id,
+        collaboratorProfileId: user.id,
+        actorProfileId: gate.userId,
+        actorRole: gate.access.role,
+      });
+      return NextResponse.json({ collaborator }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
+    }
     if (payload?.action === "update_workspace") {
       const workspace = await updateReviewWorkspaceProject({
         projectId: id,
@@ -112,7 +133,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const thread = await setStaffThreadStatus({
         projectId: id,
         threadId: payload.threadId as string,
-        status: payload.status as "open" | "resolved",
+        status: payload.status as "open" | "resolved" | "declined" | "needs_clarification",
         actorProfileId: gate.userId,
         actorRole: gate.access.role,
       });

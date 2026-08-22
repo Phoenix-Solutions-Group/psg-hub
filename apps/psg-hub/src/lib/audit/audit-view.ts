@@ -73,6 +73,7 @@ const ACTION_LABELS: Record<AuditAction, string> = {
   "bsm_content_approval.create": "Created BSM content approval",
   "bsm_content_approval.update": "Updated BSM content approval",
   "bsm_content_approval.archive": "Archived BSM content approval",
+  "bsm_content_draft.support_access": "Used break-glass Content Draft access",
   "intake.signed_upload.mint": "Minted pilot-intake upload link",
 };
 
@@ -100,7 +101,8 @@ export function auditCategory(action: string): AuditCategory {
   if (
     action.startsWith("approval") ||
     action.startsWith("review_response_restore") ||
-    action.startsWith("bsm_content_approval")
+    action.startsWith("bsm_content_approval") ||
+    action.startsWith("bsm_content_draft")
   ) {
     return "approvals";
   }

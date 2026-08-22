@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { ContentWireframeRenderer } from "@/components/bsm/content-wireframe-renderer";
+import type { ContentWireframeManifest, MarkdownDiffLine } from "@/lib/bsm/content-wireframe";
 
 type Decision = "approved" | "changes_requested";
 type TextSelectionAnchor = {
@@ -42,6 +44,9 @@ type WorkspaceDocument = {
     cta: string;
     sourceUrl: string | null;
   } | null;
+  wireframe: ContentWireframeManifest | null;
+  versionNote: string | null;
+  markdownDiff: MarkdownDiffLine[];
 };
 
 type WorkspaceComment = {
@@ -253,8 +258,13 @@ function rangeForHtmlAnchor(document: Document, anchor: TextSelectionAnchor): Ra
   return range;
 }
 
-function highlightedText(text: string, selections: TextSelectionAnchor[]): ReactNode {
-  return buildHighlightSegments(text, selections).map((segment, index) =>
+function highlightedText(text: string, selections: TextSelectionAnchor[], blockOffset = 0): ReactNode {
+  const localSelections = selections.map((selection) => ({
+    ...selection,
+    startOffset: selection.startOffset - blockOffset,
+    endOffset: selection.endOffset - blockOffset,
+  }));
+  return buildHighlightSegments(text, localSelections).map((segment, index) =>
     segment.highlighted ? (
       <mark key={`${index}:${segment.text}`} className="rounded-sm bg-warning/35 px-0.5 text-inherit">
         {segment.text}
@@ -300,7 +310,7 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
   const activeDecision = decisions[activeKey];
   const activeDecisionNote = decisionNotes[activeKey] ?? "";
   const nextAnnotationNumber = threadRoots.length + 1;
-  const canHighlightActiveDocument = Boolean(activeDocument?.proofContent) || isHtmlProof(activeDocument?.contentType ?? null);
+  const canHighlightActiveDocument = Boolean(activeDocument?.proofContent || activeDocument?.wireframe) || isHtmlProof(activeDocument?.contentType ?? null);
 
   async function verifyInvite() {
     setPending(true);
@@ -368,7 +378,7 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
   }
 
   function captureHighlight() {
-    if (annotationMode !== "highlight" || !activeDocument?.proofContent) return;
+    if (annotationMode !== "highlight" || (!activeDocument?.proofContent && !activeDocument?.wireframe)) return;
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
     const range = selection.getRangeAt(0);
@@ -703,6 +713,13 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
                     <Badge>{workspace.round.status}</Badge>
                   </div>
                   {activeDocument.note ? <p className="pt-2 text-sm leading-6 text-muted-foreground">{activeDocument.note}</p> : null}
+                  {activeDocument.versionNote ? <p className="pt-2 text-sm leading-6"><strong>What changed:</strong> {activeDocument.versionNote}</p> : null}
+                  {activeDocument.markdownDiff?.length ? (
+                    <details className="mt-3 rounded-md border border-border bg-muted/30 p-3 text-sm">
+                      <summary className="cursor-pointer font-medium">View changes from the prior reviewed version</summary>
+                      <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap text-xs">{(activeDocument.markdownDiff ?? []).map((line, index) => <span key={`${index}:${line.kind}`} className={`block ${line.kind === "added" ? "text-success" : line.kind === "removed" ? "text-destructive" : "text-muted-foreground"}`}>{line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}{line.line}</span>)}</pre>
+                    </details>
+                  ) : null}
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-hidden rounded-md border border-border bg-background">
@@ -719,7 +736,13 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
                       ) : null}
                     </div>
                     <div className="relative" onMouseUp={captureHighlight}>
-                      {activeDocument.proofContent ? (
+                      {activeDocument.wireframe ? (
+                        <ContentWireframeRenderer
+                          manifest={activeDocument.wireframe}
+                          assetUrl={(assetId) => `/api/bsm/review-workspace/asset?${assignedReviewer ? `projectId=${encodeURIComponent(projectId ?? "")}` : `sessionHash=${encodeURIComponent(sessionHash ?? "")}`}&reviewItemId=${encodeURIComponent(activeDocument.itemId)}&versionId=${encodeURIComponent(activeDocument.versionId)}&assetId=${encodeURIComponent(assetId)}`}
+                          renderText={(blockId, text, blockOffset) => highlightedText(text, selectionsForBlock(blockId), blockOffset)}
+                        />
+                      ) : activeDocument.proofContent ? (
                         <article className="min-h-80 bg-white p-5 text-foreground sm:p-8">
                           <div data-review-block="eyebrow" className="text-xs font-semibold uppercase text-ember">{highlightedText(activeDocument.proofContent.eyebrow, selectionsForBlock("eyebrow"))}</div>
                           <h3 data-review-block="headline" className="mt-2 font-heading text-2xl font-semibold">{highlightedText(activeDocument.proofContent.headline, selectionsForBlock("headline"))}</h3>
@@ -799,8 +822,8 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
                     <div className="space-y-2 border-t border-border pt-4">
                       <Label>Anchor a private comment</Label>
                       <div className="grid grid-cols-2 gap-2">
-                        <Button type="button" variant={annotationMode === "pin" ? "default" : "outline"} onClick={() => { setAnnotationMode("pin"); setPendingAnchor(null); setError(null); }} disabled={!activeDocument}><MapPin className="size-4" aria-hidden="true" />Place pin</Button>
-                        <Button type="button" variant={annotationMode === "highlight" ? "default" : "outline"} onClick={() => { setAnnotationMode("highlight"); setPendingAnchor(null); setError(null); }} disabled={!canHighlightActiveDocument} title={canHighlightActiveDocument ? "Select text in the proof" : "This review copy does not expose selectable text"}><Highlighter className="size-4" aria-hidden="true" />Highlight text</Button>
+                        <Button type="button" variant={annotationMode === "pin" ? "default" : "outline"} onClick={() => { setAnnotationMode("pin"); setPendingAnchor(null); setError(null); }} disabled={pending || !activeDocument}><MapPin className="size-4" aria-hidden="true" />Place pin</Button>
+                        <Button type="button" variant={annotationMode === "highlight" ? "default" : "outline"} onClick={() => { setAnnotationMode("highlight"); setPendingAnchor(null); setError(null); }} disabled={pending || !canHighlightActiveDocument} title={canHighlightActiveDocument ? "Select text in the proof" : "This review copy does not expose selectable text"}><Highlighter className="size-4" aria-hidden="true" />Highlight text</Button>
                       </div>
                       <p className="text-xs leading-5 text-muted-foreground">
                         {annotationMode === "pin" ? "Click the exact spot in the proof." : annotationMode === "highlight" ? "Select text within one paragraph, heading, table cell, bullet, or button." : pendingAnchor?.kind === "pin" ? `Pin ${nextAnnotationNumber} is placed.` : pendingAnchor?.kind === "highlight" ? `Highlighted: “${pendingAnchor.selection.text}”` : canHighlightActiveDocument ? "Use a pin or select text before writing your comment." : "Text highlighting is unavailable for this review copy; use a pin."}
@@ -809,7 +832,7 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
 
                     <div className="space-y-2">
                       <Label htmlFor="private-comment">Private comment</Label>
-                      <textarea id="private-comment" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Describe the change you want PSG to make." className="min-h-24 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
+                      <textarea id="private-comment" value={comment} onChange={(event) => setComment(event.target.value)} disabled={pending} placeholder="Describe the change you want PSG to make." className="min-h-24 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
                     </div>
                     <Button type="button" variant="outline" onClick={saveComment} disabled={pending || !activeDocument || !pendingAnchor || !comment.trim()}><MapPin className="size-4" aria-hidden="true" />Save private comment</Button>
 

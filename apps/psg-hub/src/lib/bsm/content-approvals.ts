@@ -1273,6 +1273,22 @@ export async function listBsmContentApprovalWorkspaces(
     documentCounts.set(projectId, (documentCounts.get(projectId) ?? 0) + 1);
   }
 
+  const roles = new Map<string, "owner" | "collaborator">();
+  if (opts.actorProfileId) {
+    const { data: collaborators, error: collaboratorError } = await client
+      .from("bsm_content_review_project_collaborators")
+      .select("project_id, role")
+      .eq("profile_id", opts.actorProfileId)
+      .is("removed_at", null)
+      .in("project_id", projectIds);
+    if (collaboratorError) throw new Error(`Could not load Review Workspace roles: ${collaboratorError.message}`);
+    for (const collaborator of (collaborators ?? []) as Array<Record<string, unknown>>) {
+      if (collaborator.role === "owner" || collaborator.role === "collaborator") {
+        roles.set(collaborator.project_id as string, collaborator.role);
+      }
+    }
+  }
+
   return rows
     .map((row) => ({
       id: row.id as string,
@@ -1281,6 +1297,7 @@ export async function listBsmContentApprovalWorkspaces(
       status: row.status as string,
       currentRoundId: (row.current_round_id as string | null) ?? null,
       documentCount: documentCounts.get(row.id as string) ?? 0,
+      role: roles.get(row.id as string) ?? null,
     }));
 }
 

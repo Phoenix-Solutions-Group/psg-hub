@@ -39,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { StaffReviewWorkspaceResult } from "@/lib/bsm/review-workspace";
+import { ContentWireframeRenderer } from "@/components/bsm/content-wireframe-renderer";
 
 type UploadResponse =
   | {
@@ -261,6 +262,7 @@ function canFramePreviewProof(url: string | null): url is string {
 export function workspacePreviewDocumentKindLabel(
   document: WorkspacePreviewDocument,
 ): string {
+  if (document.wireframe) return "Content Wireframe";
   if (isPreviewGeneratedPageProof(document)) return "Generated page";
   if (isPreviewPdfProof(document)) return "PDF";
   if (isPreviewHtmlProof(document)) return "Website proof";
@@ -292,7 +294,7 @@ function workspacePreviewDocumentUrl(
 export function workspacePreviewDocumentNeedsPreparation(
   document: WorkspacePreviewDocument,
 ): boolean {
-  return !document.proofContent && !workspacePreviewDocumentUrl(document);
+  return !document.wireframe && !document.proofContent && !workspacePreviewDocumentUrl(document);
 }
 
 function workspacePreviewDocumentIcon(
@@ -305,7 +307,7 @@ function workspacePreviewDocumentIcon(
   );
   if (isPreviewImageProof(document))
     return <ImageIcon className={className} aria-hidden="true" />;
-  if (isPreviewGeneratedPageProof(document) || document.proofContent)
+  if (isPreviewGeneratedPageProof(document) || document.proofContent || document.wireframe)
     return <Monitor className={className} aria-hidden="true" />;
   return <FileText className={className} aria-hidden="true" />;
 }
@@ -318,6 +320,7 @@ export function WorkspacePreviewProof({
   pendingPin = null,
   pendingPinNumber = null,
   onPlacePin,
+  assetUrl,
 }: {
   document: WorkspacePreviewDocument;
   comments?: WorkspacePreviewComment[];
@@ -326,6 +329,7 @@ export function WorkspacePreviewProof({
   pendingPin?: { xRatio: number; yRatio: number } | null;
   pendingPinNumber?: number | null;
   onPlacePin?: (point: { xRatio: number; yRatio: number }) => void;
+  assetUrl?: (assetId: string) => string | null;
 }) {
   const proofUrl = workspacePreviewDocumentUrl(document);
   const canFrame = canFramePreviewProof(proofUrl);
@@ -363,7 +367,9 @@ export function WorkspacePreviewProof({
         ) : null}
       </div>
       <div className="relative">
-        {document.proofContent ? (
+        {document.wireframe ? (
+          <ContentWireframeRenderer manifest={document.wireframe} assetUrl={assetUrl} />
+        ) : document.proofContent ? (
           <article
             className={cn(
               "bg-white p-5 text-foreground sm:p-8",
@@ -485,10 +491,12 @@ export function WorkspacePreviewScreen({
   selectedDocumentKey,
   onSelectDocument,
   onAddPinComment,
+  onSetThreadStatus,
   comments = [],
   decisions = [],
   reviewers = [],
   immersive = false,
+  projectId,
 }: {
   documents: WorkspacePreviewDocument[];
   selectedDocumentKey: string | null;
@@ -499,10 +507,15 @@ export function WorkspacePreviewScreen({
     xRatio: number;
     yRatio: number;
   }) => Promise<boolean>;
+  onSetThreadStatus?: (
+    threadId: string,
+    status: "resolved" | "declined" | "needs_clarification",
+  ) => Promise<boolean>;
   comments?: StaffReviewWorkspaceResult["submittedComments"];
   decisions?: StaffReviewWorkspaceResult["decisions"];
   reviewers?: StaffReviewWorkspaceResult["reviewers"];
   immersive?: boolean;
+  projectId?: string;
 }) {
   const selectedDocument =
     documents.find(
@@ -516,6 +529,7 @@ export function WorkspacePreviewScreen({
   const [pendingPin, setPendingPin] = useState<{ xRatio: number; yRatio: number } | null>(null);
   const [commentBody, setCommentBody] = useState("");
   const [savingComment, setSavingComment] = useState(false);
+  const [updatingThreadId, setUpdatingThreadId] = useState<string | null>(null);
   const selectedComments = selectedDocument
     ? comments.filter((comment) => comment.reviewItemId === selectedDocument.itemId)
     : [];
@@ -655,6 +669,13 @@ export function WorkspacePreviewScreen({
             </div>
           ) : null}
         </div>
+        {selectedDocument.versionNote ? <p className="rounded-lg border border-border bg-white p-3 text-sm"><strong>Version note:</strong> {selectedDocument.versionNote}</p> : null}
+        {selectedDocument.markdownDiff.length ? (
+          <details className="rounded-lg border border-border bg-white p-3 text-sm">
+            <summary className="cursor-pointer font-medium">Markdown changes from the base version</summary>
+            <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs">{selectedDocument.markdownDiff.map((line, index) => <span key={`${index}:${line.kind}`} className={`block ${line.kind === "added" ? "text-success" : line.kind === "removed" ? "text-destructive" : "text-muted-foreground"}`}>{line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}{line.line}</span>)}</pre>
+          </details>
+        ) : null}
         <WorkspacePreviewProof
           document={selectedDocument}
           comments={selectedComments}
@@ -663,6 +684,7 @@ export function WorkspacePreviewScreen({
           pendingPin={pendingPin}
           pendingPinNumber={pendingPinNumber}
           onPlacePin={onAddPinComment ? setPendingPin : undefined}
+          assetUrl={projectId ? (assetId) => `/api/ops/bsm/review-workspace/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(selectedDocument.itemId)}/draft?assetId=${encodeURIComponent(assetId)}` : undefined}
         />
       </div>
       {immersive ? (
@@ -756,6 +778,32 @@ export function WorkspacePreviewScreen({
                       {comment.createdAt ? formatDate(comment.createdAt) : ""}
                     </span>
                   </div>
+                  {onSetThreadStatus && (comment.commentKind === "pin" || comment.commentKind === "highlight") ? (
+                    <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+                      {([
+                        ["resolved", "Resolved"],
+                        ["declined", "Declined"],
+                        ["needs_clarification", "Needs clarification"],
+                      ] as const).map(([status, label]) => (
+                        <button
+                          key={status}
+                          type="button"
+                          className={buttonVariants({ variant: comment.threadStatus === status ? "default" : "outline", size: "sm" })}
+                          disabled={updatingThreadId === comment.threadId}
+                          onClick={async () => {
+                            setUpdatingThreadId(comment.threadId);
+                            try {
+                              await onSetThreadStatus(comment.threadId, status);
+                            } finally {
+                              setUpdatingThreadId(null);
+                            }
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </article>
               ))
             )}
@@ -986,6 +1034,8 @@ export function BsmContentApprovalManager({
   const [workspaceEditInstructions, setWorkspaceEditInstructions] =
     useState("");
   const [savingWorkspace, setSavingWorkspace] = useState(false);
+  const [collaboratorEmail, setCollaboratorEmail] = useState("");
+  const [addingCollaborator, setAddingCollaborator] = useState(false);
   const [removingWorkspaceId, setRemovingWorkspaceId] = useState<string | null>(
     null,
   );
@@ -1266,6 +1316,57 @@ export function BsmContentApprovalManager({
         message: error instanceof Error ? error.message : "The comment could not be saved.",
       });
       return false;
+    }
+  }
+
+  async function setWorkspaceThreadStatus(
+    threadId: string,
+    status: "resolved" | "declined" | "needs_clarification",
+  ): Promise<boolean> {
+    if (!reviewWorkspaceProjectId) return false;
+    try {
+      const response = await fetch(`/api/ops/bsm/review-workspace/projects/${reviewWorkspaceProjectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set_thread_status", threadId, status }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "The feedback disposition could not be saved.");
+      setWorkspacePreview((current) => current ? {
+        ...current,
+        submittedComments: current.submittedComments.map((comment) =>
+          comment.threadId === threadId ? { ...comment, threadStatus: status } : comment,
+        ),
+      } : current);
+      setPhase({ kind: "success", message: "Feedback disposition saved." });
+      return true;
+    } catch (error) {
+      setPhase({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The feedback disposition could not be saved.",
+      });
+      return false;
+    }
+  }
+
+  async function addWorkspaceCollaborator() {
+    if (!reviewWorkspaceProjectId || !collaboratorEmail.trim()) return;
+    setAddingCollaborator(true);
+    setPhase({ kind: "idle" });
+    try {
+      const response = await fetch(`/api/ops/bsm/review-workspace/projects/${reviewWorkspaceProjectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add_collaborator", email: collaboratorEmail.trim() }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "The PSG collaborator could not be added.");
+      setCollaboratorEmail("");
+      setPhase({ kind: "success", message: "PSG Workspace Collaborator added." });
+    } catch (error) {
+      setPhase({ kind: "error", message: error instanceof Error ? error.message : "The PSG collaborator could not be added." });
+    } finally {
+      setAddingCollaborator(false);
     }
   }
 
@@ -2286,7 +2387,7 @@ export function BsmContentApprovalManager({
                                 ? "bg-[#dff2e6] text-[#27623e]"
                                 : workspace.status === "active"
                                   ? "bg-ember/10 text-ember"
-                                  : "bg-muted text-muted-foreground",
+                                  : "bg-muted text-foreground",
                             )}
                           >
                             {workspace.status === "active"
@@ -2381,7 +2482,7 @@ export function BsmContentApprovalManager({
                           ? "bg-[#dff2e6] text-[#27623e]"
                           : selectedWorkspace.status === "active"
                             ? "bg-ember/10 text-ember"
-                            : "bg-muted text-muted-foreground",
+                            : "bg-muted text-foreground",
                       )}
                     >
                       {selectedWorkspace.status === "active"
@@ -2794,10 +2895,12 @@ export function BsmContentApprovalManager({
               {workspacePreview?.documents.length ? (
                 <div className="mt-5">
                   <WorkspacePreviewScreen
+                    projectId={workspacePreview.project.id}
                     documents={workspacePreview.documents}
                     selectedDocumentKey={selectedPreviewDocumentKey}
                     onSelectDocument={setSelectedPreviewDocumentKey}
                     onAddPinComment={addWorkspacePinComment}
+                    onSetThreadStatus={setWorkspaceThreadStatus}
                     comments={workspacePreview.submittedComments}
                     decisions={workspacePreview.decisions}
                     reviewers={workspacePreview.reviewers}
@@ -3060,6 +3163,24 @@ export function BsmContentApprovalManager({
                                 />
                                 Edit
                               </button>
+                              {(item.currentVersion?.contentType === "text/markdown" ||
+                                item.currentVersion?.previewType === "content_wireframe" ||
+                                /\.md$/i.test(item.currentVersion?.originalFilename ?? "")) &&
+                              item.reviewWorkspace?.projectId ? (
+                                <a
+                                  href={`/ops/bsm-content-approvals/${encodeURIComponent(item.reviewWorkspace.projectId)}/documents/${encodeURIComponent(item.id)}/edit`}
+                                  className={cn(
+                                    buttonVariants({
+                                      variant: "outline",
+                                      size: "sm",
+                                    }),
+                                    "gap-1",
+                                  )}
+                                >
+                                  <FilePenLine className="size-3.5" aria-hidden="true" />
+                                  Edit Markdown
+                                </a>
+                              ) : null}
                               {canManageWorkspaces &&
                               archiveItemId === item.id ? (
                                 <>
@@ -3123,6 +3244,7 @@ export function BsmContentApprovalManager({
                   {workspacePreview?.documents.length ? (
                     <div className="mt-6 rounded-2xl border border-border bg-[#f7f8f9] p-4">
                       <WorkspacePreviewScreen
+                        projectId={workspacePreview.project.id}
                         documents={workspacePreview.documents}
                         selectedDocumentKey={selectedPreviewDocumentKey}
                         onSelectDocument={setSelectedPreviewDocumentKey}
@@ -3132,6 +3254,29 @@ export function BsmContentApprovalManager({
                 </div>
 
                 <aside className="space-y-4">
+                  {canManageWorkspaces || selectedWorkspace.role === "owner" ? (
+                    <div className="rounded-2xl border border-border bg-[#f7f8f9] p-4">
+                      <div className="font-heading font-semibold text-[#142838]">PSG Workspace Collaborators</div>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">Owners can grant another PSG user access to edit Content Drafts in this workspace.</p>
+                      <label className="mt-3 block text-sm font-medium" htmlFor="bsm-workspace-collaborator-email">PSG collaborator email</label>
+                      <input
+                        id="bsm-workspace-collaborator-email"
+                        type="email"
+                        value={collaboratorEmail}
+                        onChange={(event) => setCollaboratorEmail(event.target.value)}
+                        className="mt-2 w-full rounded-md border border-input bg-white px-3 py-2 text-sm"
+                        placeholder="teammate@psgweb.com"
+                      />
+                      <button
+                        type="button"
+                        disabled={addingCollaborator || !collaboratorEmail.trim()}
+                        onClick={() => void addWorkspaceCollaborator()}
+                        className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-3 bg-white")}
+                      >
+                        {addingCollaborator ? "Adding" : "Add collaborator"}
+                      </button>
+                    </div>
+                  ) : null}
                   <div className="rounded-2xl border border-border bg-[#f7f8f9] p-4">
                     <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                       Review activity
@@ -3178,6 +3323,8 @@ export function BsmContentApprovalManager({
                         {startedReview.invitations.map((invitation) => (
                           <div
                             key={invitation.invitationId}
+                            role="group"
+                            aria-label={`Invitation for ${invitation.reviewerName ?? invitation.reviewerEmail}`}
                             className="rounded-xl border border-border bg-white p-3"
                           >
                             <div className="font-medium">
@@ -3189,9 +3336,15 @@ export function BsmContentApprovalManager({
                                 ? "Share manually"
                                 : "Invitation sent"}
                             </div>
-                            <div className="mt-2 font-mono text-base tracking-[0.22em]">
+                            <div aria-label="One-time code" className="mt-2 font-mono text-base tracking-[0.22em]">
                               {invitation.inviteCode}
                             </div>
+                            <a
+                              href={`/review-workspace?invite=${encodeURIComponent(invitation.inviteToken)}`}
+                              className="mt-2 block text-xs font-semibold text-ember underline"
+                            >
+                              Private review link
+                            </a>
                             <button
                               type="button"
                               onClick={() => copyInvitation(invitation)}
