@@ -172,7 +172,8 @@ test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
   const reviewerContext = await browser.newContext();
   try {
     const reviewer = await reviewerContext.newPage();
-    await reviewer.goto(firstInvitePath!);
+    await reviewer.goto(new URL(firstInvitePath!, page.url()).toString(), { waitUntil: "domcontentloaded", timeout: 15_000 });
+    await expect(reviewer.getByLabel("One-time code")).toBeVisible({ timeout: 15_000 });
     await reviewer.getByLabel("One-time code").fill(firstCode!);
     await reviewer.getByRole("button", { name: "Open review" }).click();
     await expect(reviewer.getByRole("heading", { name: "Collision repair with clear updates", exact: true })).toBeVisible();
@@ -227,7 +228,8 @@ test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
     const secondInvitePath = await secondInvitation.getByRole("link", { name: "Private review link" }).getAttribute("href");
     const secondCode = (await secondInvitation.getByLabel("One-time code").textContent())?.trim();
     const laterReviewer = await reviewerContext.newPage();
-    await laterReviewer.goto(secondInvitePath!);
+    await laterReviewer.goto(new URL(secondInvitePath!, page.url()).toString(), { waitUntil: "domcontentloaded", timeout: 15_000 });
+    await expect(laterReviewer.getByLabel("One-time code")).toBeVisible({ timeout: 15_000 });
     await laterReviewer.getByLabel("One-time code").fill(secondCode!);
     await laterReviewer.getByRole("button", { name: "Open review" }).click();
     await expect(laterReviewer.getByText("Adds the single point-of-contact promise.")).toBeVisible();
