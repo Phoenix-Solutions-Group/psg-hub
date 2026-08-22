@@ -142,7 +142,9 @@ test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
 
   await page.getByRole("button", { name: "Publish check" }).click();
   await page.getByLabel(/Version note/).fill("Clarified the hero and added the selected shop image.");
-  await expect(page.getByText("does not approve final design or production launch")).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Publish check" }).locator("p").filter({ hasText: "does not approve final design or production launch" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Publish immutable version" }).click();
   await expect(page.getByText(/No Review Invitations were sent/)).toBeVisible({ timeout: 15_000 });
 
@@ -260,6 +262,10 @@ test("BSM content approvals release gate: admin creates, reviewer comments and s
   await page.goto("/ops/bsm-content-approvals");
   await expect(page.getByRole("heading", { name: "Review Workspace", exact: true })).toBeVisible();
   await checkA11y(page, "bsm-content-approvals-admin-empty");
+
+  if (!(await page.getByLabel("Review name").isVisible())) {
+    await page.getByRole("button", { name: "New review" }).click();
+  }
 
   const manualShopInput = page.locator("input#bsm-approval-shop");
   if (await manualShopInput.isVisible()) {
