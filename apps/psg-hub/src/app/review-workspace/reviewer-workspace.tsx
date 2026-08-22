@@ -822,8 +822,8 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
                     <div className="space-y-2 border-t border-border pt-4">
                       <Label>Anchor a private comment</Label>
                       <div className="grid grid-cols-2 gap-2">
-                        <Button type="button" variant={annotationMode === "pin" ? "default" : "outline"} onClick={() => { setAnnotationMode("pin"); setPendingAnchor(null); setError(null); }} disabled={!activeDocument}><MapPin className="size-4" aria-hidden="true" />Place pin</Button>
-                        <Button type="button" variant={annotationMode === "highlight" ? "default" : "outline"} onClick={() => { setAnnotationMode("highlight"); setPendingAnchor(null); setError(null); }} disabled={!canHighlightActiveDocument} title={canHighlightActiveDocument ? "Select text in the proof" : "This review copy does not expose selectable text"}><Highlighter className="size-4" aria-hidden="true" />Highlight text</Button>
+                        <Button type="button" variant={annotationMode === "pin" ? "default" : "outline"} onClick={() => { setAnnotationMode("pin"); setPendingAnchor(null); setError(null); }} disabled={pending || !activeDocument}><MapPin className="size-4" aria-hidden="true" />Place pin</Button>
+                        <Button type="button" variant={annotationMode === "highlight" ? "default" : "outline"} onClick={() => { setAnnotationMode("highlight"); setPendingAnchor(null); setError(null); }} disabled={pending || !canHighlightActiveDocument} title={canHighlightActiveDocument ? "Select text in the proof" : "This review copy does not expose selectable text"}><Highlighter className="size-4" aria-hidden="true" />Highlight text</Button>
                       </div>
                       <p className="text-xs leading-5 text-muted-foreground">
                         {annotationMode === "pin" ? "Click the exact spot in the proof." : annotationMode === "highlight" ? "Select text within one paragraph, heading, table cell, bullet, or button." : pendingAnchor?.kind === "pin" ? `Pin ${nextAnnotationNumber} is placed.` : pendingAnchor?.kind === "highlight" ? `Highlighted: “${pendingAnchor.selection.text}”` : canHighlightActiveDocument ? "Use a pin or select text before writing your comment." : "Text highlighting is unavailable for this review copy; use a pin."}
@@ -832,7 +832,7 @@ export function ReviewerWorkspace({ inviteToken = "", projectId }: { inviteToken
 
                     <div className="space-y-2">
                       <Label htmlFor="private-comment">Private comment</Label>
-                      <textarea id="private-comment" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Describe the change you want PSG to make." className="min-h-24 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
+                      <textarea id="private-comment" value={comment} onChange={(event) => setComment(event.target.value)} disabled={pending} placeholder="Describe the change you want PSG to make." className="min-h-24 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
                     </div>
                     <Button type="button" variant="outline" onClick={saveComment} disabled={pending || !activeDocument || !pendingAnchor || !comment.trim()}><MapPin className="size-4" aria-hidden="true" />Save private comment</Button>
 
