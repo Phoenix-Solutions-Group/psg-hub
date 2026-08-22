@@ -797,7 +797,7 @@ export async function publishReviewContentDraft(
   });
   const storagePath = `${access.shopId}/${documentId}/${versionId}/content.md`;
   const upload = await client.storage.from(BSM_CONTENT_APPROVALS_BUCKET).upload(storagePath, bytes, {
-    contentType: "text/plain; charset=utf-8",
+    contentType: "text/plain",
     upsert: false,
   });
   if (upload.error && !/already exists|duplicate/i.test(upload.error.message)) {

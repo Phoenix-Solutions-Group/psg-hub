@@ -327,6 +327,7 @@ describe("Content Draft service", () => {
       activeRoundChanged: false,
     });
     expect(client.uploads).toHaveLength(1);
+    expect(client.uploads[0]?.contentType).toBe("text/plain");
     expect(client.rpcCalls).toHaveLength(1);
     expect(client.rpcCalls[0]).toMatchObject({
       functionName: "publish_bsm_content_draft_version",
