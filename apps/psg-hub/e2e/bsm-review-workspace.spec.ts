@@ -208,7 +208,13 @@ test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
     await page.getByRole("button", { name: "Open review workspace" }).click();
     for (const comment of ["Pin: strengthen the CTA placement.", "Highlight: use more customer-centered wording."]) {
       const note = page.locator("article").filter({ hasText: comment });
+      const dispositionResponse = page.waitForResponse((response) =>
+        response.request().method() === "PATCH" &&
+        response.url().includes(`/api/ops/bsm/review-workspace/projects/${projectId}`),
+      );
       await note.getByRole("button", { name: "Resolved" }).click();
+      const response = await dispositionResponse;
+      expect(response.ok(), await response.text()).toBe(true);
       await expect(note).toContainText("resolved");
     }
     await page.getByRole("button", { name: "Manage files" }).click();
