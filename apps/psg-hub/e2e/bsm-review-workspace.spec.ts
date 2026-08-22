@@ -86,6 +86,7 @@ test("retired BSM review workspace route redirects to Review Workspace", async (
 
 test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
   test.setTimeout(300_000);
+  context.setDefaultTimeout(15_000);
   const shopId = await ensureContentApprovalsShopOption();
   const runId = Date.now();
   const workspaceTitle = `Content wireframe ${runId}`;
@@ -170,6 +171,7 @@ test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
   expect(firstCode).toMatch(/^\d{6}$/);
 
   const reviewerContext = await browser.newContext();
+  reviewerContext.setDefaultTimeout(15_000);
   try {
     const reviewer = await reviewerContext.newPage();
     await reviewer.goto(new URL(firstInvitePath!, page.url()).toString(), { waitUntil: "domcontentloaded", timeout: 15_000 });
