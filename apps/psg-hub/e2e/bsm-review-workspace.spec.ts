@@ -241,7 +241,7 @@ test("Content Wireframe Round Trip", async ({ page, context, browser }) => {
     await laterReviewer.getByLabel("One-time code").fill(secondCode!);
     await laterReviewer.getByRole("button", { name: "Open review" }).click();
     await expect(laterReviewer.getByText("Adds the single point-of-contact promise.")).toBeVisible();
-    await expect(laterReviewer.getByText("Markdown changes from the base version")).toBeVisible();
+    await expect(laterReviewer.getByText("View changes from the prior reviewed version")).toBeVisible();
     await expect(laterReviewer.getByText("Know what happens from estimate through delivery, with one point of contact.", { exact: true })).toBeVisible();
 
     const rounds = await admin.from("bsm_content_review_rounds").select("id, round_number").eq("project_id", projectId!).order("round_number");
