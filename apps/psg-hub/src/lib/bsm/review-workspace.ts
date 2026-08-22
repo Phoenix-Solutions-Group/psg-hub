@@ -1885,6 +1885,7 @@ async function requireStaffThread(
   actorProfileId: string,
   actorRole: ReviewWorkspaceActorRole,
   threadId: string,
+  requireOpenRound = true,
 ): Promise<ReviewWorkspaceThreadRow> {
   const access = await requireReviewWorkspaceStaffAccess(client, projectId, actorProfileId, actorRole);
   const { data, error } = await client
@@ -1898,7 +1899,7 @@ async function requireStaffThread(
   if (error) throw new Error(`Could not load review comment thread: ${error.message}`);
   if (!data) throw new ReviewWorkspaceInputError(404, "Review comment thread not found");
 
-  if (!data.round_id) return data as ReviewWorkspaceThreadRow;
+  if (!data.round_id || !requireOpenRound) return data as ReviewWorkspaceThreadRow;
 
   const { data: round, error: roundError } = await client
     .from("bsm_content_review_rounds")
@@ -2431,7 +2432,7 @@ export async function setStaffThreadStatus(
   const client = resolveClient(deps.client);
   const projectId = assertUuid("projectId", input.projectId);
   const actorProfileId = assertUuid("actorProfileId", input.actorProfileId);
-  const thread = await requireStaffThread(client, projectId, actorProfileId, input.actorRole ?? null, input.threadId);
+  const thread = await requireStaffThread(client, projectId, actorProfileId, input.actorRole ?? null, input.threadId, false);
   return persistThreadStatus(client, thread, cleanStaffThreadStatus(input.status), actorProfileId, "psg", deps.now ?? new Date());
 }
 

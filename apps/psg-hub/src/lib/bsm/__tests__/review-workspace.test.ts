@@ -1781,6 +1781,21 @@ describe("BSM review workspace foundation service", () => {
     expect(staff.inserts.find((entry) => entry.table === "bsm_content_review_events")?.payload).toMatchObject({ event_type: "review_workspace_thread_reopened", actor_profile_id: ACTOR_ID });
   });
 
+  it("lets PSG disposition submitted feedback after the round closes while keeping replies closed", async () => {
+    const disposition = createFakeClient({ currentRoundStatus: "completed" });
+    await setStaffThreadStatus(
+      { projectId: PROJECT_ID, threadId: THREAD_ID, status: "resolved", actorProfileId: ACTOR_ID },
+      { client: disposition.client as never },
+    );
+    expect(disposition.updates.find((entry) => entry.table === "bsm_content_review_comment_threads")?.payload).toMatchObject({ status: "resolved" });
+
+    const reply = createFakeClient({ currentRoundStatus: "completed" });
+    await expect(addStaffThreadReply(
+      { projectId: PROJECT_ID, threadId: THREAD_ID, body: "Late reply.", actorProfileId: ACTOR_ID },
+      { client: reply.client as never },
+    )).rejects.toMatchObject({ status: 409 });
+  });
+
   it("records the three explicit PSG feedback dispositions on the version-bound thread", async () => {
     for (const disposition of ["resolved", "declined", "needs_clarification"] as const) {
       const result = createFakeClient();
